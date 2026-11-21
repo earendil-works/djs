@@ -13769,3 +13769,109 @@ Parked (work/research/0287/for-of-strings.patch): finishing the tier-0 loop's de
 cache): for-of over a 10-character string 22.9k → 17.3k (11.2k), +243 B gz.
 Ceilings (from the owner's allowance, D3510): shipped 430,951 → 431,032, slim 364,897 →
 364,977.
+
+## D3550: A primitive's builtin method from the cache slot; the first write to a builtin changes the epoch
+date: 2026-11-22 · by: pcall · issue: 0286
+`s.trim`, `n.toFixed`: the loop's hit for a string or number receiver read the realm,
+its prototype for that primitive, walked to the holder and checked the holder's entry,
+about 100 machine instructions.
+- **The slot keeps the function.** A prototype-read slot filled for a string or a number
+  receiver whose value is an object of the builtin prefix, while the builtins are
+  untouched or frozen (`Heap::gated`), has that object in word 3 (a primitive has no
+  shape word) and `DIRECT_STRING` or `DIRECT_NUMBER` in word 4. `ic::hot_get` answers
+  with it after the slot's kind and epoch checks: −45 instructions per lookup. Only the
+  loop's slice read uses it; `cached_get` reads the prototype as before.
+- **Validity by the epoch.** `Heap::set_prefix_written` (the first write to any object
+  of the builtin prefix, D3290) bumps the prototype epoch once, so every such slot is
+  stale from then on, and later fills find the builtins touched. The hit therefore needs
+  no test of its own (with a test of `ROOT_PREFIX_WRITTEN` in the hit, V8 spilled more).
+- **`field_slow` reads its instruction again.** The arm passed the opcode, the key and
+  the cache index to `field_slow`; it now passes the pc, and `field_slow` decodes the
+  three. With the direct hit added, V8 spilled `ip` (and with the first version three
+  values) at the head of the arm, on every property read: an own-property hit went from
+  66 to 72 machine instructions (prop.js +1.1%, sixteen workloads +0.1..+2.9% for the
+  first version alone). With the three values dead after the slice read, the hit is 66
+  again with one stack access less, and V8 keeps the short forms (`get_loc0`, `push1`,
+  ...) one instruction shorter; conditional jumps are 2–3 longer and an instruction
+  that goes to `step` 3. Net, steady state: empty `for` −1.7%, `s += i` −1.6%, property
+  get and put −0.8%. Passing `ip` itself instead of the pc put four instructions on
+  every arm; a primitive's path as a second out-of-line call in the arm cost property
+  reads 3%.
+- `COMPAT_VERSION` 13: words 3 and 4 of a prototype-read slot.
+- Tools: `v8arm.py --paths` (every call-free path of an arm with its length: the
+  summary's one static path did not show the spill) and `slope.py --qjs2` (Bellard's
+  QuickJS as the engine comparison builds it; quickjs-wasi, which `--qjs` counts, is
+  15–35% slower on builtin calls, so ratios to it flattered djs).
+
+## D3551: A `@fast` builtin's call without leaving the loop; the fused call measured and dropped
+date: 2026-11-22 · by: pcall · issue: 0286
+- **In the call arm.** A callee with `FAST` in its template's flags is called by
+  `Exec::loop_leaf_call` from inside `run_hot` (the generated leaf, `arr.push`, or the
+  `FAST` entry: the code `fast_leaf_call` had, of which there is now one copy; the
+  decline path asks the same function). The loop skips the exit, `decline_fast` and
+  `load_frame!`: −55 instructions per builtin call. What made it possible where D3265
+  and D3301 lost 1–2% on everything else, each found with `hotcode.sh`:
+  - nothing of the arm's is live across the call: the function answers with what to take
+    from sp and the instruction's size in one word (with `base`, `argc` and the size kept
+    across it: +4 instructions on every arm; with sp assigned from the result: +1);
+  - no opcode after the call: a declined call leaves by `Exit::General`, so `step` runs
+    it. `decline_fast` would run the builtin's entry a second time, which a failing leaf
+    that allocated before its error makes visible in the image;
+  - the `FAST` test reads the flags again: on the frame's copy LLVM split the load into
+    two bytes on the closure path (+3).
+  The closure path is 3 instructions longer (a call 179 → 182).
+- **The stack.** The loop keeps the stack's address in a local, and a leaf's intrinsic
+  (`n_leaf`: `Math.pow`) may grow the stack. Within `LEAF_ROOM` (8) slots of the stack's
+  end the arm declines as before. The every-stop test runs `Math.pow` on the way down a
+  recursion with every alignment of the frames to the stack's end; without the test of
+  the room a debug assertion in the arm fires.
+- **Not adopted: the whole call from `get_method`'s out-of-line path.** A slot bit for
+  sites of the form `get_method; up to three plain pushes; call` with a `@fast` value;
+  `field_slow` then wrote the stack as the instructions would, ran the call and
+  returned bytes to skip and fuel to charge. Correct (equal bytes at every stop) but 400
+  instructions slower per call than leaving the loop: the trip through `field_slow` and
+  `cached_get` and the decoding cost more than the dispatches it saved. Its `continue`
+  in the arm also made V8 keep the loop's values in memory (+32 on every arm); written
+  without a jump it did not. Patch: work/scratch/0286/fused-prototype.patch of the
+  primary checkout.
+- **The test.** `hot_loop_paths_are_invisible_at_every_stop` now stops after every 1, 2,
+  3, 5, 7 and 11 units of fuel for the whole run (it stopped finely only for the first
+  600 stops), with builtin calls that succeed, throw, convert an object, meet a
+  replaced and restored builtin, and run at the stack's end.
+Measured, steady state, instructions per operation, main 2cdf8aa5 → branch; ratio to
+Bellard's QuickJS 2026-06-04 (`slope.py --qjs2`) before → after:
+
+| operation | main | branch | x QuickJS |
+| --- | ---: | ---: | --- |
+| `s.trim()` | 1,194 | 1,091 | 1.14 → 1.04 |
+| `s.trim()`, nothing to trim | 821 | 717 | 1.10 → 0.96 |
+| `s.slice(1)` | 1,254 | 1,145 | 1.06 → 0.97 |
+| `s.slice(a, b)` | 1,304 | 1,198 | 1.09 → 1.00 |
+| `s.padStart(5)` | 1,197 | 1,091 | 0.98 → 0.89 |
+| `s.charCodeAt(k)` | 910 | 803 | 1.16 → 1.02 |
+| `s.indexOf("f")` | 1,214 | 1,111 | 1.17 → 1.07 |
+| `s.startsWith("abc")` | 1,791 | 1,678 | 1.80 → 1.69 |
+| `x.toFixed(2)` | 1,952 | 1,856 | 1.19 → 1.13 |
+| `x.toString()` | 1,391 | 1,291 | 1.30 → 1.21 |
+| `String(x)` | 1,109 | 1,060 | 1.21 → 1.15 |
+| `Math.floor(x)` | 709 | 656 | 0.89 → 0.83 |
+| `m.get(1)` | 955 | 901 | 1.20 → 1.13 |
+| `xs.push(1)` | 770 | 705 | 0.97 → 0.89 |
+| `xs.includes(2)` | 1,113 | 1,059 | 1.06 → 1.00 |
+| own `o.c` | 83 | 84 | 0.54 |
+| `p.m()` | 551 | 552 | 0.93 |
+| `f()` | 426 | 428 | 1.17 → 1.18 |
+| `m.size` (a fast getter) | 621 | 627 | 1.12 → 1.13 |
+
+What is left above QuickJS is the builtins' own work, not the call: `toFixed`,
+`toString` and `String(x)` (number formatting), `startsWith`, `indexOf`.
+slope.py's ten loops: call −0.3%, empty −1.7%, local −1.6%, mathf −5.9%, method −0.6%,
+prop −0.8%, push −6.1%, strm −9.0%, tight −0.9%, trim −7.3%. wmeasure (n=3, default
+tiering, load 8–11): all sixteen workloads faster, −0.2..−6.1% (pushpop −6.1%, arrays
+−3.4%, json −2.3%, loop −1.3%, pi-like −1.3%); with `--wasm-sync-tier-up` the short
+workloads vary by ±2% between runs. V8's shared path: dispatch 14, tail 4, the simple
+arms unchanged or one shorter (hotcode.sh).
+Size: shipped 431,032 → 431,435 B gz (+403), slim 364,977 → 365,364 (+387): `run_hot`
++551 B of wasm (the two arms, and 326 of it LLVM's code for the exits after `field_slow`
+lost three arguments), `ic_proto_fill` +209, the fast call's code +171 net. Ceilings
+raised to those; 595 B of the owner's allowance (D3510) remain.

@@ -294,9 +294,13 @@ faster loop in front of it:
   sees what the first one saw. Anything
   else, and any case it declines (an int overflow, an object operand), goes to the
   general path (`step_once`), which runs that one instruction after the locals have been
-  written back. Some declined cases are finished on the way out instead, by one call that
-  keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
-  `arr.push(x)` appended straight to the array), `+` of a string with a primitive, the
+  written back. A call whose callee is a `@fast` or `@rust` builtin (`s.trim()`,
+  `Math.floor(x)`, `arr.push(x)`, which is appended straight to the array) runs the
+  builtin's entry by one call out of the loop's code and goes on with the next
+  instruction; only when the entry declines, or within the last few slots of the stack,
+  where an entry might have to move it, does the call go the general way. Some declined
+  cases are finished on the way out instead, by one call that
+  keeps the loop's own code as small as it is: `+` of a string with a primitive, the
   parts of a template literal, `<` of two strings, `in` with a string key, the call of a
   getter that a cache slot found, and the instructions of `new`: the construct itself,
   the return into a plain function's constructing frame, `new.target`, the derived
@@ -345,7 +349,11 @@ faster loop in front of it:
   receiver's own or on its prototype chain: the slot leads to the getter, which is then
   called without the lookup, or, for a builtin getter with a fast entry such as
   `map.size`, answered inside the loop. A typed array takes part like any object for its
-  named keys (`bytes.length`, its methods); only its numeric keys are its own business. The collector empties the slots that hold
+  named keys (`bytes.length`, its methods); only its numeric keys are its own business.
+  For a method of a string or a number (`s.trim`, `n.toFixed`) the slot keeps the
+  builtin function itself while the builtins are untouched, and the loop's hit is that
+  function, without a look at the prototype; the first write to any builtin makes all
+  such slots stale at once. The collector empties the slots that hold
   heap offsets, so a VM restored with warm caches behaves exactly like one with cold
   caches.
 - **Known builtins.** `Math.floor(x)`, `String(x)`, `Number.isInteger(x)` and a few

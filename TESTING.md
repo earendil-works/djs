@@ -499,6 +499,16 @@ values are live around the inner loop, such as a second way from the exit path b
 it, a value kept across a call in an arm (D2441), or a per-instruction value used after a
 call. A new arm, with or without an out-of-line call, left it unchanged.
 
+An arm with data-dependent branches (`get_field`) has many paths, and the summary shows
+one. `v8arm.py code-NAME.txt --paths GetField SIG` lists the length and the stack
+traffic of every call-free path of the arm; with a signature of the hit you mean (its
+tag constants) you see what that hit costs. D3550 found a spill of `ip` on every
+own-property read that way (66 → 72 instructions), which the summary's line did not show.
+
+Ratios to QuickJS: `slope.py --qjs2` counts the same body in Bellard's QuickJS as the
+engine comparison builds it (the fastest QuickJS build, which the ops table's ratios are
+against); `--qjs` is quickjs-wasi, which is 15–35% slower on builtin calls.
+
 ## The prefix write barrier (D2065)
 
 The builtin prefix (the base image's cells below `Roots::BASE_END`, D022) must not change

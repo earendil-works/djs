@@ -1,6 +1,6 @@
 # 0286: Builtin method calls on primitives, outside the loop's shared path
 
-status: in-progress
+status: done
 agent: pcall
 branch: issue/0286-primitive-method-calls
 depends-on: 0282
@@ -21,33 +21,75 @@ for 0-2 argument string methods, or a compile-time call form for `x.m(...)`. Mea
 slope.py per op and the hotcode.sh check; report the design with numbers before a big build.
 
 ## Acceptance criteria
-- [ ] per-op instructions vs QuickJS 2026 before/after for the red rows; workloads; run_hot's shared path unchanged
-- [ ] the every-stop equivalence test covers the new path
-- [ ] size reported (~1 KB of the owner's allowance left, shared with 0285 and 0287); gate green; decisions recorded
+- [x] per-op instructions vs QuickJS 2026 before/after for the red rows; workloads; run_hot's shared path unchanged
+- [x] the every-stop equivalence test covers the new path
+- [x] size reported (~1 KB of the owner's allowance left, shared with 0285 and 0287); gate green; decisions recorded
 ## Log
-- Design (prototype on the branch, dev build and tests only: wasm builds and benchmarks
-  were on hold for 0284's recording):
-  1. **The method from the slot.** A prototype-read slot filled for a string or number
-     receiver while the builtins are pristine keeps the function itself in word 3 (a
-     primitive has no shape word) and a kind bit in word 4; the loop's slice read answers
-     with it while `ROOT_PREFIX_WRITTEN` is clear, without the realm, the prototype, the
-     chain walk and the entry check. Arm-local to `get_field`/`get_method`.
-  2. **The whole call from `field_slow`.** The `get_method` arm already has one
-     out-of-line call (`field_slow`, where 0282's getters run). A slot whose value is a
-     `@fast` builtin and whose site is `get_method; up to three plain pushes (local,
-     argument, small int, constant); call` gets a bit at fill time; the slice read
-     leaves such a slot to `field_slow`, which writes the stack as the instructions
-     would, runs `fast_leaf_call` itself and returns bytes to skip and fuel to charge
-     (`Hit::Call`). No exit from the loop, no dispatch of the pushes and the call, no
-     failed closure attempt, no `load_frame`. The shared path of run_hot is untouched;
-     the arm gets one more cold match arm.
-     Equal bytes at every stop: only when the fuel reaches the call (no stop in
-     between); a declined attempt is remembered (`fused_miss`) so that the call
-     instruction does not make it a second time; near the stack's end it is not tried
-     (a leaf's intrinsic may ask for slots).
-- `hot_loop_paths_are_invisible_at_every_stop` covers it: fuel 1, 2, 3, 5, 7, 11, calls
-  that succeed, throw and convert an object, and counters that the fused path ran and
-  declined.
+- First design (prototype while builds and benchmarks were on hold for 0284): (1) the
+  method from the slot for string and number receivers; (2) the whole call made from
+  `get_method`'s out-of-line path (`field_slow`) for sites `get_method; plain pushes;
+  call`. Measured when the hold was lifted: (2) is 400 instructions slower per call than
+  leaving the loop (the trip through `field_slow` and `cached_get`, the decoding), and its
+  `continue` in the arm put 32 instructions on every arm. Dropped; patch in
+  work/scratch/0286/fused-prototype.patch.
+- The yardstick: `slope.py --qjs` counts quickjs-wasi, against which main was already at
+  0.73–1.00 on the red rows. The ops table's ratios are against Bellard's QuickJS built
+  with -O2; `slope.py --qjs2` counts that one, and gives the table's ratios (trim 1.14,
+  charCodeAt 1.16, String(i) 1.21, toFixed 1.19).
+- Second design, landed: the call arm calls a `@fast` builtin's entry itself
+  (`loop_leaf_call`, D3551), −55 per builtin call. D3265 and D3301 had lost to V8's
+  register allocation with this; three things found with hotcode.sh made the shared path
+  stay as it is (nothing of the arm's live across the call, no opcode after it, the flags
+  read again).
+- (1) alone cost every property read 6 instructions (V8 spilled three loop values at
+  the head of the `get_field` arm; found with the new `v8arm.py --paths`, the summary's
+  static path does not show it) and made the workloads slower. With the validity moved
+  into the epoch (the first write to a builtin bumps it) and `field_slow` given the pc
+  instead of opcode, key and cache index, the own-property hit is 66 instructions as on
+  main and the short forms are one shorter (D3550).
+- `fast_leaf_call` (the decline path, now only for calls at the stack's end and the
+  tests' run without the loop) asks `loop_leaf_call`: one copy of the code, −784 B of
+  wasm in `decline_fast`.
+- Tests: `hot_loop_paths_are_invisible_at_every_stop` now stops finely through the whole
+  run (it had only for the first 600 stops) at fuel 1, 2, 3, 5, 7, 11, with builtin calls
+  that succeed, throw, convert an object, meet a replaced and restored builtin, and
+  `Math.pow` (a leaf that uses the stack) at every alignment to the stack's end; removing
+  the arm's test of the room makes it fail. Corpus case builtins/fast-calls.js (from
+  qjs): receivers of nine kinds at one site, builtins replaced, shadowed, deleted and
+  turned into getters with warm caches, throwing and converting arguments, deep frames.
+- Checked: lib tests (631), e2e in four modes, difftest (whole corpus plain; builtins/,
+  codemode/, language/, dquickts/ with suspension, GC stress and determinism; codemode/
+  and builtins/fast-* lazy with plain dumps), test262 built-ins and language (39,251
+  active, no new failures).
+- Outside `touches:`: heap/frozen.rs (`set_prefix_written` bumps the prototype epoch,
+  3 lines), vm/compat.rs (COMPAT_VERSION 13), vm/tests.rs, tests/scores/size.tsv,
+  scripts/perf (slope.py `--qjs2`, qjs-built-run.mjs, v8arm.py `--paths`), TESTING.md.
+- Guide: interpreter.md (the tier-0 loop: builtin calls; inline caches: a primitive's
+  builtin method).
+
+## Follow-ups
+- What is left above QuickJS 2026 on these rows is the builtins' own work: number
+  formatting (`toFixed` 1.13, `toString` 1.21, `String(x)` 1.15), `startsWith` 1.69
+  (700 instructions more than QuickJS: the regexp check of its argument and the generic
+  leaf), `indexOf` 1.07.
+- Measured on the way, against QuickJS 2026 (worse than against quickjs-wasi): a getter
+  `o.g` 1.82 and a class getter 1.71 (a frame inside the loop, 0276's follow-up),
+  `o.missing` 1.70, a typed array's `length` 1.48, a closure call `f()` 1.18,
+  `Map.get` 1.13.
+- `String(x)` and other calls of globals pay the global lookup (`get_global`), which
+  the known-builtins table does not cover for `String` itself.
+- The published ops table and the guide's ratios that came from `--qjs` (D3530's table)
+  are against quickjs-wasi; a refresh would use `--qjs2`.
+
+## Result
+Merged with this commit; D3550, D3551. Builtin calls run inside the tier-0 loop and a
+string's or number's builtin method comes from the cache slot. Against Bellard's
+QuickJS 2026 (instructions per operation, steady state): trim 1.14 → 1.04, slice 1.06 →
+0.97, padStart 0.98 → 0.89, charCodeAt 1.16 → 1.02, String(i) 1.21 → 1.15, toFixed
+1.19 → 1.13; also Math.floor 0.89 → 0.83, push 0.97 → 0.89, Map.get 1.20 → 1.13.
+Simple loops −1..−1.7%, all sixteen workloads faster (−0.2..−6.1%). run_hot's shared
+path unchanged (dispatch 14, tail 4). Shipped 431,032 → 431,435 B gz (+403), slim +387;
+595 B of the owner's allowance remain.
 
 ## Shared context (all of 0256-0260)
 The owner asked to push both memory and speed as far as they go (2026-11-21). Background,

@@ -7,6 +7,11 @@ section counts) and prints what every bytecode pays:
 - without names, one line per opcode: the length of the straight path from its
   jump-table target back to the loop header, with its calls, stack loads/stores and moves;
 - with names (`Drop GetLoc0 Add`), those paths instruction by instruction.
+- with `--paths OpName [SIG]`, the lengths (and stack loads and stores) of every
+  call-free path of that arm back to the loop header, shortest first, over all outcomes
+  of its conditional branches; SIG keeps the paths whose text has each `;`-separated
+  part (`!part`: lacks it), e.g. `'#0x900000000;!#0x800000000'` for `get_field`'s hits
+  on an object receiver. This is how to see what a data-dependent arm's hit costs.
 The path follows unconditional branches and takes a conditional one only when it goes
 back to the loop, so for arms with data-dependent branches (`lt`, `get_field`) it is one
 static path, not the hot one: compare builds with it, measure with slope.py."""
@@ -107,6 +112,37 @@ def trace(start, limit=400):
         off += 4
     return n, out, 'limit'
 names = sys.argv[2:]
+if names and names[0] == '--paths':
+    sys.setrecursionlimit(10000)
+    start = tables[tab + 4 * ops.index(names[1])]
+    sig = names[2].split(';') if len(names) > 2 else []
+    res = []
+    def walk(off, n, text, sp, seen, depth):
+        while True:
+            if be <= off <= hdr:
+                n += (hdr - off) // 4
+                t = "\n".join(text)
+                if all((p[1:] not in t) if p.startswith('!') else (p in t) for p in sig):
+                    res.append((n, sp))
+                return
+            if off in seen or off not in ins or n > 160: return
+            seen = seen | {off}
+            mn, a, _ = ins[off]
+            n += 1; text = text + [mn + " " + a]; sp += '[sp' in a
+            if mn == 'b':
+                off = target(a); continue
+            if mn in ('br', 'ret', 'brk', 'udf', 'bl', 'blr'): return
+            if mn.startswith('b.') or mn in ('cbz', 'cbnz', 'tbz', 'tbnz'):
+                t = target(a)
+                if t is not None and depth < 26:
+                    walk(t, n, text, sp, seen, depth + 1)
+                    depth += 1
+            off += 4
+    walk(start, 0, [], 0, frozenset(), 0)
+    res.sort()
+    print(f"{names[1]}: {len(res)} call-free paths to the loop; (instructions, stack loads and stores):")
+    print("  " + " ".join(f"({n}, {sp})" for n, sp in res[:16]))
+    sys.exit(0)
 hn = (br_off - hdr) // 4 + 1
 if not names:
     print(f"dispatch (header..br): {hn} instr")
