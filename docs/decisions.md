@@ -12772,3 +12772,16 @@ straight into a new Str16 cell (one-byte pieces widened in place, narrowed if no
 wide) removed it, but fanout's memory rose 1,472 → 1,664 KiB: the result's cell is in the
 arena now while the buffer had been dlmalloc's transient room, and the arena grew past a
 collection's threshold. Patch: work/scratch/0265/join-attempt.patch.
+
+## D3366: dlmalloc's floor drops to 87 KiB
+date: 2026-11-21 · by: pstart · issue: 0265
+With the tables out of dlmalloc (D3364), the room sweep (the seed shrunk to give exact
+room with one primed page; warm and first instances, 6 perturbed first runs each): 89.9 KB
+(today's seed of 24.4 KB plus one page) and 87.0 KiB keep every row; 86 KB moves text's
+arena (1,024 → 1,408 KiB: its compile's Rust heap peaks at ~71 KB); 82 KB the same; 74 KB
+also json (1,216 → 1,728). So `FLOOR` = 87 KiB, which today's layout meets with one page.
+Against main (FLOOR 100 KiB, two pages), wasm memory per row: idle 448 → 384 KiB,
+sequential 576 → 512, inspect 512 → 448, media 832 → 768, fanout 1,536 → 1,472, loop
+768 → 704, text 1,088 → 1,024, json 1,280 → 1,216, heavy 3,776 → 3,776; first instances
+the same. The margin to text's move is 1-3 KB of compile peak: the compile's memory (0265
+part 2) is what can widen it.

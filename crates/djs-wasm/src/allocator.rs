@@ -368,10 +368,10 @@ pub(crate) mod pages {
     /// page (`PageAlloc::seed`) and the pages `PageAlloc::prime` adds (D3362). Whatever
     /// dlmalloc needs beyond it becomes a segment at memory's end, right behind the arena,
     /// which then cannot grow in place and moves. Measured on the codemode workloads, warm
-    /// and first instances: 102.4 KB keeps every row as with D3360's 104.3 KB; 94 KB put
-    /// a collection's tables of heavy into page runs (+64 KiB), 84 KB moved text's arena
-    /// (+384 KiB), 76 KB also fanout's and json's.
-    pub(crate) const FLOOR: usize = 100 * 1024;
+    /// and first instances, with a collection's tables behind the arena (D3364): 87 KiB
+    /// keeps every row; 86 KB moves text's arena (its compile peaks at ~71 KB, +384 KiB),
+    /// 74 KB also json's (D3366; D3362 had 100 KiB with the tables in dlmalloc).
+    pub(crate) const FLOOR: usize = 87 * 1024;
 
     /// Whether a block of `layout` is huge (its own pages).
     fn huge(size: usize, align: usize) -> bool {
