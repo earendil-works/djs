@@ -7,6 +7,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
+| 0289 | Builtins charge fuel for the work they do (GitHub #3) | pidle | .worktrees/pidle |
+| 0290 | Trace frames named by own `name`; continuations by origin (GitHub PR #2) | pcall | .worktrees/pcall |
 
 ## Open (ready)
 
