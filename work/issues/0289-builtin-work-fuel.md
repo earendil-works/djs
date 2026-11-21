@@ -1,6 +1,6 @@
 # 0289: Builtins charge fuel for the work they do (GitHub issue #3)
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0289-builtin-work-fuel
 depends-on: -
