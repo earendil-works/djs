@@ -167,6 +167,9 @@ pub(crate) static FAST: &[FastFn] = &[
     f("MapPrototypeSet", map_set),
     f("SetPrototypeHas", set_has),
     f("SetPrototypeAdd", set_add),
+    // (The `size` getters, 0282: as bytecode they were 4.7x QuickJS.)
+    f("MapPrototypeSize", |h, this, _| size(h, this, ObjectClass::Map)),
+    f("SetPrototypeSize", |h, this, _| size(h, this, ObjectClass::Set)),
     // ---- Promises (0232b, D3156: `new Promise` and `then` were 4-6x QuickJS) ----
     // (GetPrototypeFromConstructor is the hot loop's leaf %ConstructorPrototype, 0236.)
     f("PromiseResolveFunction", |h, this, a| {
@@ -735,6 +738,11 @@ fn map_get(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
 /// Map.prototype.has ( key ) and Set.prototype.has ( value ).
 fn has(heap: &Heap, this: Value, args: &[Value], c: ObjectClass) -> Fast {
     Ok(this_collection(heap, this, c).map(|m| Value::bool(heap.collection_has(m, arg(args, 0)))))
+}
+
+/// get Map.prototype.size and get Set.prototype.size.
+fn size(heap: &Heap, this: Value, c: ObjectClass) -> Fast {
+    Ok(this_collection(heap, this, c).map(|m| Value::int(heap.collection_size(m) as i32)))
 }
 
 fn map_has(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {

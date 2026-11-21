@@ -125,6 +125,7 @@ function SetPrototypeHas(this: Value, value: Value): boolean {
 /**
  * get Set.prototype.size, 24.2.4.14.
  * @getter Set.prototype.size
+ * @fast
  */
 function SetPrototypeSize(this: Value): f64 {
   return CollectionSize(ThisSet(this));

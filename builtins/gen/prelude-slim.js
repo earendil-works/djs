@@ -3158,27 +3158,27 @@ function MapPrototypeSet(key, value) {
   return this;
 }
 
-// builtins/map.ts:244 get Map.prototype.size
+// builtins/map.ts:245 get Map.prototype.size
 function MapPrototypeSize() {
   return %CollectionSize(ThisMap(this));
 }
 
-// builtins/map.ts:252 Map.prototype.values
+// builtins/map.ts:253 Map.prototype.values
 function MapPrototypeValues() {
   return %CollectionIterator(ThisMap(this), 1);
 }
 
-// builtins/map.ts:261 value Map.prototype[Symbol.toStringTag]
+// builtins/map.ts:262 value Map.prototype[Symbol.toStringTag]
 function MapPrototypeToStringTag() {
   return "Map";
 }
 
-// builtins/map.ts:270 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
+// builtins/map.ts:271 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
 function MapIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, false);
 }
 
-// builtins/map.ts:279 value %MapIteratorPrototype%[Symbol.toStringTag]
+// builtins/map.ts:280 value %MapIteratorPrototype%[Symbol.toStringTag]
 function MapIteratorToStringTag() {
   return "Map Iterator";
 }
@@ -6204,32 +6204,32 @@ function SetPrototypeHas(value) {
   return %CollectionHas(ThisSet(this), value);
 }
 
-// builtins/set.ts:129 get Set.prototype.size
+// builtins/set.ts:130 get Set.prototype.size
 function SetPrototypeSize() {
   return %CollectionSize(ThisSet(this));
 }
 
-// builtins/set.ts:139 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
+// builtins/set.ts:140 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
 function SetPrototypeValues() {
   return %CollectionIterator(ThisSet(this), 0);
 }
 
-// builtins/set.ts:148 value Set.prototype[Symbol.toStringTag]
+// builtins/set.ts:149 value Set.prototype[Symbol.toStringTag]
 function SetPrototypeToStringTag() {
   return "Set";
 }
 
-// builtins/set.ts:157 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
+// builtins/set.ts:158 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
 function SetIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, true);
 }
 
-// builtins/set.ts:166 value %SetIteratorPrototype%[Symbol.toStringTag]
+// builtins/set.ts:167 value %SetIteratorPrototype%[Symbol.toStringTag]
 function SetIteratorToStringTag() {
   return "Set Iterator";
 }
 
-// builtins/set.ts:176
+// builtins/set.ts:177
 function GetSetRecord(obj) {
   if (!%IsObject(obj)) {
     throw %NewTypeError("not an object");
@@ -6260,17 +6260,17 @@ function GetSetRecord(obj) {
   return rec;
 }
 
-// builtins/set.ts:207
+// builtins/set.ts:208
 function RecordSize(rec) {
   return %AsNumber(%Get(rec, "size"));
 }
 
-// builtins/set.ts:212
+// builtins/set.ts:213
 function RecordHas(rec, value) {
   return %ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), value));
 }
 
-// builtins/set.ts:217
+// builtins/set.ts:218
 function RecordKeys(rec) {
   const iterator = %Call(%Get(rec, "keys"), %Get(rec, "set"));
   if (!%IsObject(iterator)) {
@@ -6279,7 +6279,7 @@ function RecordKeys(rec) {
   return %AsObj(iterator);
 }
 
-// builtins/set.ts:226
+// builtins/set.ts:227
 function SetCopy(s) {
   const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
   const it = %CollectionIterator(s, 0);
@@ -6289,7 +6289,7 @@ function SetCopy(s) {
   return result;
 }
 
-// builtins/set.ts:239
+// builtins/set.ts:240
 function KeysNext(iterator, next, out) {
   const result = IteratorNextResult(iterator, next);
   if (%ToBoolean(%Get(result, "done"))) {
@@ -6299,7 +6299,7 @@ function KeysNext(iterator, next, out) {
   return true;
 }
 
-// builtins/set.ts:252 Set.prototype.union
+// builtins/set.ts:253 Set.prototype.union
 function SetPrototypeUnion(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -6313,7 +6313,7 @@ function SetPrototypeUnion(other) {
   return result;
 }
 
-// builtins/set.ts:269 Set.prototype.intersection
+// builtins/set.ts:270 Set.prototype.intersection
 function SetPrototypeIntersection(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -6340,7 +6340,7 @@ function SetPrototypeIntersection(other) {
   return result;
 }
 
-// builtins/set.ts:299 Set.prototype.difference
+// builtins/set.ts:300 Set.prototype.difference
 function SetPrototypeDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -6364,7 +6364,7 @@ function SetPrototypeDifference(other) {
   return result;
 }
 
-// builtins/set.ts:326 Set.prototype.symmetricDifference
+// builtins/set.ts:327 Set.prototype.symmetricDifference
 function SetPrototypeSymmetricDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -6383,7 +6383,7 @@ function SetPrototypeSymmetricDifference(other) {
   return result;
 }
 
-// builtins/set.ts:348 Set.prototype.isSubsetOf
+// builtins/set.ts:349 Set.prototype.isSubsetOf
 function SetPrototypeIsSubsetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -6399,7 +6399,7 @@ function SetPrototypeIsSubsetOf(other) {
   return true;
 }
 
-// builtins/set.ts:367 Set.prototype.isSupersetOf
+// builtins/set.ts:368 Set.prototype.isSupersetOf
 function SetPrototypeIsSupersetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -6418,7 +6418,7 @@ function SetPrototypeIsSupersetOf(other) {
   return true;
 }
 
-// builtins/set.ts:389 Set.prototype.isDisjointFrom
+// builtins/set.ts:390 Set.prototype.isDisjointFrom
 function SetPrototypeIsDisjointFrom(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8019,6 +8019,7 @@ function GlobalAtob(...args) {
 %MarkFast(MapPrototypeGet);
 %MarkFast(MapPrototypeHas);
 %MarkFast(MapPrototypeSet);
+%MarkFast(MapPrototypeSize);
 %MarkFast(MathAbs);
 %MarkFast(MathAcos);
 %MarkFast(MathAcosh);
@@ -8066,6 +8067,7 @@ function GlobalAtob(...args) {
 %MarkFast(SetConstructor);
 %MarkFast(SetPrototypeAdd);
 %MarkFast(SetPrototypeHas);
+%MarkFast(SetPrototypeSize);
 %MarkFast(StringPrototypeReplace);
 %MarkFast(StringPrototypeReplaceAll);
 %MarkFast(StringPrototypeSplit);

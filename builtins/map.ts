@@ -240,6 +240,7 @@ function MapPrototypeSet(this: Value, key: Value, value: Value): Value {
 /**
  * get Map.prototype.size, 24.1.3.10.
  * @getter Map.prototype.size
+ * @fast
  */
 function MapPrototypeSize(this: Value): f64 {
   return CollectionSize(ThisMap(this));
