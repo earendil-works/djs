@@ -808,7 +808,7 @@ fn one_byte_search_agrees_with_units() {
 }
 
 /// Literal runs are one node (0267): forward and backward (lookbehind), case-insensitive,
-/// with escaped characters in the run and a quantifier on its last character.
+/// next to escaped characters, and with a quantifier on its last character.
 #[test]
 fn literal_runs() {
     assert_eq!(first("ab\\.c", "", "xab.c"), Some("ab.c".into()));

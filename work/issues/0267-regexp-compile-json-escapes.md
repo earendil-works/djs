@@ -80,10 +80,11 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   zone keyed by something djs-wasm sees) would make it worth −8% of `new RegExp`.
 
 ## Result
-Landed (D3380): regexp literal runs are one parser node (same matcher program), the
-compiler's buffer sized from the pattern. Distinct-pattern compile (wasm instructions of
-`new RegExp`, 16 codemode-like patterns): 41.6K → 38.8K per pattern (−7%; QuickJS 22.1K,
-1.88x → 1.75x); size +253 B gz (427,531 → 427,784). Workloads (instructions, n=3): no
+Landed (D3380): regexp literal runs are one parser node (same matcher program), their
+characters in one buffer of the parse, the compiler's buffer sized from the pattern.
+Distinct-pattern compile (wasm instructions of `new RegExp`, 16 codemode-like patterns, on
+main 2fec34fb): 41.0K → 36.9K per pattern (−10%; QuickJS 22.1K, 1.85x → 1.67x); size
++275 B gz (428,410 → 428,685). Workloads (instructions, n=3): no
 change beyond noise (±3-5% on small bodies). test262 built-ins/RegExp, the regexp unit
 tests (new: literal runs forward, backward, case-insensitive, escaped, quantified), the
 corpus pass.

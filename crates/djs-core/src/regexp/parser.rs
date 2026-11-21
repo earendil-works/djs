@@ -429,7 +429,7 @@ impl Parser<'_> {
                 self.pos = end;
                 terms.push_out(self.literal_run(start, end));
             } else if let Some(t) = self.term(backward)? {
-                self.push_term(&mut terms, t);
+                terms.push_out(t);
             }
         }
         Ok(match terms.len() {
@@ -460,41 +460,6 @@ impl Parser<'_> {
             len: (end - start) as u32,
             icase: self.icase,
         }
-    }
-
-    /// Appends a term to an alternative, a character to the literal run before it.
-    #[inline(never)]
-    fn push_term(&mut self, terms: &mut Vec<Node>, t: Node) {
-        if let Node::Char { c, icase } = t {
-            let end = self.lits.len() as u32;
-            match terms.last_mut() {
-                // (Only a run that ends the literals: nothing was parsed after it.)
-                Some(Node::Str {
-                    at, len, icase: i, ..
-                }) if *i == icase && *at + *len == end => {
-                    self.lits.push_out(c);
-                    *len += 1;
-                    return;
-                }
-                Some(last @ Node::Char { .. }) => {
-                    if let Node::Char { c: c0, icase: i } = *last
-                        && i == icase
-                    {
-                        self.lits.push_out(c0);
-                        self.lits.push_out(c);
-                        *last = Node::Str {
-                            first: c0,
-                            at: end,
-                            len: 2,
-                            icase,
-                        };
-                        return;
-                    }
-                }
-                _ => {}
-            }
-        }
-        terms.push_out(t);
     }
 
     /// Whether the unit at `i` is a literal ASCII character no quantifier follows.
