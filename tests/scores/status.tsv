@@ -1,9 +1,10 @@
 # Measured status numbers (D2101): `scripts/status.py` writes this file, and the
 # `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.
 key	value	commit	date
-bounds/gzip	7599	31c4587e31	2026-11-05
-bounds/instructions-max-pct	19.6	31c4587e31	2026-11-05
-bounds/instructions-median-pct	12.1	31c4587e31	2026-11-05
+bounds/gzip	9222	9041ad864d	2026-11-21
+bounds/instructions-max-pct	31.4	9041ad864d	2026-11-21
+bounds/instructions-median-pct	23.5	9041ad864d	2026-11-21
+bounds/load	3.3	9041ad864d	2026-11-21
 compile/typescript-lazy-time-pct	56	35ed5ab789	2026-11-05
 dump/bytes	1884014	f8cb1e7924	2026-11-21
 dump/extra-gzip	344745	f8cb1e7924	2026-11-21
