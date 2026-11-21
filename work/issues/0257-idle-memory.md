@@ -1,6 +1,6 @@
 # 0257: Idle memory: elastic shadow stack, data padding, dlmalloc's first segment
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0257-idle-memory
 depends-on: -
