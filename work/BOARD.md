@@ -9,8 +9,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0265 | Allocator placement effects; the resolver re-emit | pstart | .worktrees/pstart |
 | 0266 | Promise construction, then, async without await, new Error | pidle | .worktrees/pidle |
 | 0258 | GC: minor collections skip the builtin prefix; headroom, big-string survivors | pgc | .worktrees/pgc |
-| 0259 | Builtin calls without finding the callee | pcall | .worktrees/pcall |
-| 0264 | Cold Unicode tables out of the data segment (stack + data in two pages) | pscan | .worktrees/pscan |
+| 0268 | run_hot sensitivity, receiver method calls, the general path | pcall | .worktrees/pcall |
+| 0267 | Regexp compile speed; escape-dense JSON | pscan | .worktrees/pscan |
 
 ## Open (ready)
 
@@ -50,6 +50,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0264 | Cold Unicode tables out of linear memory | eed09e26 (agent pscan; D3350, ABI 7; data 92->41 KB, 2 initial pages; -64 KiB/row waits for dlmalloc need <= 88 KB) |
+| 0259 | Known builtins skip the lookup | 6dcf06cb (agent pcall; D3300, D3301; Math.floor/isInteger/max/isArray -20..-25% instr; +648 B gz; FastCall and int cases measured, dropped) |
 | 0262 | Object and collection ops | 2ea5091f (agent pidle; D3330-D3332; spread 0.32x QJS, fromEntries 1.02x, padEnd 1.09x, comparator sort 2.56->1.55x, Map/Set ~1.4x; +803 B gz) |
 | 0263 | Compile speed; intrinsic names out of the shipped module | 45bb0280 (agent pstart; D3340-D3343; compile -5..-8%, small runs -2..-3%, -4,078 B gz; compile zone dropped: memory) |
 | 0260 | Byte kernels: JSON scans, escapes, find tails, regexp first bytes | 43679e13 (agent pscan; D3310-D3313; media -17%, fanout -12%, heavy -8%, text -4%; +628 B gz net; simd128 flag alone -764 B gz, owner) |
