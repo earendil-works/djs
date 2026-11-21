@@ -715,21 +715,24 @@ fn parse_other(s: &[u8], f: &mut [i64; 9], local: &mut bool) -> bool {
 
 /// Date.parse of a string (its code units, as qjs maps them to bytes).
 pub(crate) fn parse(units: impl Iterator<Item = u16>, offset: i64) -> f64 {
-    let mut buf = alloc::vec::Vec::new();
+    // (On the stack: a Vec grown byte by byte was most of a short parse, 0270.)
+    let mut bytes = [0u8; 127];
+    let mut len = 0;
     for c in units.take(127) {
         let c = c as u32;
-        let b = if c != 0x2028 && c != 0x2029 && is_space(c) {
+        bytes[len] = if c != 0x2028 && c != 0x2029 && is_space(c) {
             b' '
         } else if c > 255 {
             if c == 0x2212 { b'-' } else { b'x' }
         } else {
             c as u8
         };
-        buf.push_out(b);
+        len += 1;
     }
+    let buf = &bytes[..len];
     let mut f = [0i64; 9];
     let mut local = false;
-    if !(parse_iso(&buf, &mut f, &mut local) || parse_other(&buf, &mut f, &mut local)) {
+    if !(parse_iso(buf, &mut f, &mut local) || parse_other(buf, &mut f, &mut local)) {
         return f64::NAN;
     }
     let max = [0, 11, 31, 24, 59, 59];
