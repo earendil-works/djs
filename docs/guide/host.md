@@ -325,7 +325,7 @@ string-keyed data properties, arrays with their holes, typed arrays as copies, B
 > takes less time than the VM alone needs to turn it into JSON, before the host has
 > parsed anything: <!--n wire/read-vs-json-objects .1-->1.6<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
 > non-ASCII characters, and a 1 MiB string reads at memory-copy speed. Against the
-> engines that read values out as JSON text, that is an order of magnitude ([the
+> engines that read values out as JSON text, that is six to nine times as fast ([the
 > benchmarks](benchmarks.md#passing-data-through-the-bridge)). The cost: the reader depends on the heap
 > layout (made safe by generating it from the engine's own table), the VM must not run
 > while a read is in progress (a collection moves cells), and sharing is not preserved,

@@ -11,10 +11,10 @@ WebAssembly, the way a host runs them, and says how to re-run every number.
 > lowest run time over the set; it is ahead where scripts move JSON, strings and tool
 > results, and behind on the smallest bodies and on some single string and number builtins. Passing
 > data through the host bridge, each engine its best way, djs takes values in about twice
-> as fast and reads them out about ten times as fast; it is behind on bytes coming in and
+> as fast and reads them out six to nine times as fast; it is behind on bytes coming in and
 > on many tiny calls. Its
-> module is the largest of the JavaScript engines and it takes more memory than the
-> QuickJS releases built here, and its dumps of a paused run are kilobytes, written or
+> module is the largest of the JavaScript engines, it takes about a tenth more memory
+> than the QuickJS releases built here over the set, and its dumps of a paused run are kilobytes, written or
 > loaded in under a millisecond for most workloads. `scripts/bench-engines.sh` fetches,
 > builds and runs everything; the tables and charts are generated from the recorded
 > results.
@@ -145,10 +145,9 @@ A new djs VM is ready in <!--n engines/djs/startup-ms .2-->0.07<!--/n--> ms, aga
 <!--n engines/quickjs-ng/startup-ms .2-->0.26<!--/n--> ms for QuickJS-NG: the realm
 comes from the base image in the module, so creating a VM copies an image instead of
 running the code that builds every builtin (the [snapshots page](snapshots.md) says
-how). Its idle memory is above the QuickJS releases': the base image is larger than the
-heap a fresh QuickJS context allocates, and djs reserves a larger native stack, which
-sets how deeply its parser may nest. The emscripten builds start at 16 MiB, emscripten's
-initial heap, whatever runs in them.
+how). Its idle memory equals QuickJS-NG's and is one 64 KiB page above QuickJS's: the
+base image is larger than the heap a fresh QuickJS context allocates. The emscripten
+builds start at 16 MiB, emscripten's initial heap, whatever runs in them.
 
 ## Run time
 
@@ -214,12 +213,14 @@ Linear memory after the run, MiB; the last row is the geometric mean of each eng
 over djs's; measured at d0bc2eef16, 2026-11-21, load 3.1.
 <!-- /gen -->
 
-djs needs more memory than the QuickJS releases built here and less than quickjs-wasi,
-monty and the emscripten builds. Part of the gap is constant: the larger idle footprint
-above. The rest comes from the garbage collector. djs's collector traces the live heap
-when the allocation since the last collection crosses a threshold, about as large again
-as what survived, so garbage stays until then; QuickJS counts references and frees most
-garbage the moment it is dropped. `heavy`, which allocates a few megabytes of
+Over the set djs needs about a tenth more memory than the QuickJS releases built here,
+and half of quickjs-wasi's or less, a fraction of monty's and the emscripten builds'. Where
+a body holds large tool results (`fanout`, `media`) djs needs less than the QuickJS
+releases; on the small bodies it is level or a page above, the idle footprint. The gap
+on `text` and `heavy` comes from the garbage collector. djs's collector traces the live
+heap when the allocation since the last collection crosses a threshold, about as large
+again as what survived, so garbage stays until then; QuickJS counts references and frees
+most garbage the moment it is dropped. `heavy`, which allocates a few megabytes of
 short-lived lines and strings, shows it most.
 
 ## Operation by operation
@@ -268,11 +269,12 @@ subtracted; QuickJS: the faster of the two latest releases; measured at d0bc2eef
 2026-11-21, load 2.9.
 <!-- /gen -->
 
-JSON, splitting and joining, `toLowerCase`, regular expression matching, sorting
-strings, `await` and `Promise.all` are faster in djs; `includes`, `replace`, `map`,
-`push` and `new RegExp` are at about parity. The hot string and number builtins run as
-Rust that is generated from their TypeScript source, so what is left of the gap in
-`trim`, `slice`, `Math.floor` and the `charCodeAt` loop is mostly the call itself:
+JSON, splitting and joining, `toLowerCase`, regular expression matching, `includes`,
+`map`, `new RegExp`, object spread, `await` and `Promise.all` are faster in djs;
+`replace`, sorting strings, `push`, `Math.max` and `Math.floor` are at about parity. The
+hot string and number builtins run as Rust that is generated from their TypeScript
+source, so what is left of the gap in `trim`, `slice` and the `charCodeAt` loop is
+mostly the call itself:
 finding the function and leaving the interpreter's loop to run it cost more than a call
 of QuickJS's C functions, which shows when the operation is tiny. `String(i)`,
 `toFixed` and template literals come within about a quarter of QuickJS: integers are
@@ -468,8 +470,8 @@ are slower than djs). monty stops and resumes its run for every call, which cost
 
 In short, djs's two halves pay off differently. The wire format makes the way in about
 twice as fast as JSON text for structured data and a single copy for long ASCII strings.
-The reader makes the way out an order of magnitude faster, because no engine work and
-no text happen in between. Bytes coming in and many tiny calls are the places where the
+The reader makes the way out six to nine times as fast for structured data and more for
+strings, because no engine work and no text happen in between. Bytes coming in and many tiny calls are the places where the
 simpler paths of the C embedding are still ahead.
 
 ## Dumps
@@ -497,8 +499,8 @@ Medians over a workload's idle points; load: a new sandbox with the run loaded; 
 at d0bc2eef16, 2026-11-21, load 3.1.
 <!-- /gen -->
 
-Most dumps are a few kilobytes, and gzip takes the larger ones to between a fifth and a
-third; they hold the run's live state, so a dump taken while `json` holds 600 query
+Most dumps are a few kilobytes, and gzip takes the larger ones to between a sixth and a
+quarter; they hold the run's live state, so a dump taken while `json` holds 600 query
 rows, or while `fanout` holds the file texts it has read, is as large as that data.
 Writing one and loading it into a new sandbox takes about as long as starting a VM and
 running a small body; the `json` dumps take longest, as they encode and decode the most

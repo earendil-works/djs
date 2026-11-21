@@ -57,7 +57,8 @@ persistence format.
 **Interrupts.** pi's contract polls `shouldInterrupt`; the adapter runs the script in
 slices of 10,000 fuel and polls between them. A tight loop then polls about
 <!--n pi/bench/polls/djs ~1000-->108,000<!--/n--> times a second, against <!--n pi/bench/polls/qjs ~1000-->61,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
-mean somewhat less CPU time on djs ([limits](limits.md#fuel)). Code that allocates or calls builtins
+mean a little over half the CPU time on djs: a slice of 10,000 fuel runs faster than
+QuickJS's poll interval ([limits](limits.md#fuel)). Code that allocates or calls builtins
 polls more often than on QuickJS, since djs charges fuel for that work too. When the
 poll says stop, the adapter abandons the run, which the script cannot catch.
 
