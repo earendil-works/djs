@@ -279,7 +279,31 @@ fn resolve_names(node: &mut Node, names: &[GroupName]) {
     }
 }
 
+/// Sets of ASCII characters from 0x20 to 0x7F: bit `c - 0x20` of each half's word.
+const fn ascii_set(s: &[u8]) -> [u64; 2] {
+    let mut m = [0; 2];
+    let mut i = 0;
+    while i < s.len() {
+        let b = (s[i] - 0x20) as usize;
+        m[b / 64] |= 1 << (b % 64);
+        i += 1;
+    }
+    m
+}
+
+/// The characters `term` must see: `^$\\.*+?()[]{}|` (the rest of ASCII is literal).
+const SPECIAL: [u64; 2] = ascii_set(b"^$\\.*+?()[]{}|");
+/// What starts a quantifier.
+const QUANT: [u64; 2] = ascii_set(b"*+?{");
+
+#[inline(always)]
+fn in_set(m: [u64; 2], c: u32) -> bool {
+    let b = c.wrapping_sub(0x20);
+    b < 0x60 && m[b as usize / 64] >> (b % 64) & 1 != 0
+}
+
 /// Appends a term to an alternative, a character to the literal run before it.
+#[inline(never)]
 fn push_term(terms: &mut Vec<Node>, t: Node) {
     if let Node::Char { c, icase } = t {
         match terms.last_mut() {
@@ -407,10 +431,8 @@ impl Parser<'_> {
     }
 
     fn alternative(&mut self, backward: bool) -> Result<Node, SyntaxError> {
-        // Few terms once literal runs are one each (0267): grown as needed, none for an
-        // alternative that is one term.
+        // Few terms once literal runs are one each (0267): grown as needed.
         let mut terms: Vec<Node> = Vec::new();
-        let mut one: Option<Node> = None;
         while !self.at_end() && self.cur() != '|' as u32 && self.cur() != ')' as u32 {
             // A run of literal ASCII characters that no quantifier follows: what `term`
             // would make of each, without its dispatch, as one node (literal runs
@@ -420,66 +442,41 @@ impl Parser<'_> {
             while end < self.src.len() && self.literal_at(end) {
                 end += 1;
             }
-            let t = if end > start {
+            if end > start {
                 self.pos = end;
-                if end - start == 1 {
-                    self.char_node(self.src[start] as u32)
-                } else {
-                    let mut chars = crate::buf::vec_with_capacity(end - start);
-                    for &u in &self.src[start..end] {
-                        chars.push_out(self.canonical(u as u32));
-                    }
-                    Node::Str {
-                        chars,
-                        icase: self.icase,
-                    }
-                }
-            } else {
-                match self.term(backward)? {
-                    Some(t) => t,
-                    None => continue,
-                }
-            };
-            match one.take() {
-                None if terms.is_empty() => one = Some(t),
-                prev => {
-                    if let Some(p) = prev {
-                        terms = crate::buf::vec_with_capacity(8);
-                        terms.push_out(p);
-                    }
-                    push_term(&mut terms, t);
-                }
+                terms.push_out(self.literal_run(start, end));
+            } else if let Some(t) = self.term(backward)? {
+                push_term(&mut terms, t);
             }
         }
-        Ok(match one {
-            Some(t) => t,
-            None if terms.is_empty() => Node::Empty,
-            None => Node::Concat(terms),
+        Ok(match terms.len() {
+            0 => Node::Empty,
+            1 => terms.pop().unwrap(),
+            _ => Node::Concat(terms),
         })
+    }
+
+    /// The literal characters `start..end` as one node.
+    #[inline(never)]
+    fn literal_run(&self, start: usize, end: usize) -> Node {
+        if end - start == 1 {
+            return self.char_node(self.src[start] as u32);
+        }
+        let mut chars = crate::buf::vec_with_capacity(end - start);
+        for &u in &self.src[start..end] {
+            chars.push_out(self.canonical(u as u32));
+        }
+        Node::Str {
+            chars,
+            icase: self.icase,
+        }
     }
 
     /// Whether the unit at `i` is a literal ASCII character no quantifier follows.
     #[inline(always)]
     fn literal_at(&self, i: usize) -> bool {
-        // `^$\.*+?()[]{}|` (bits of 0x20..0x7F), then the quantifier starts `*+?{`.
-        const SPECIAL: u128 = 1 << b'^'
-            | 1 << b'$'
-            | 1 << b'\\'
-            | 1 << b'.'
-            | 1 << b'*'
-            | 1 << b'+'
-            | 1 << b'?'
-            | 1 << b'('
-            | 1 << b')'
-            | 1 << b'['
-            | 1 << b']'
-            | 1 << b'{'
-            | 1 << b'}'
-            | 1 << b'|';
-        const QUANT: u128 = 1 << b'*' | 1 << b'+' | 1 << b'?' | 1 << b'{';
-        let c = self.src[i];
-        let next = self.at(i + 1);
-        c < 0x80 && SPECIAL >> c & 1 == 0 && (next >= 0x80 || QUANT >> next & 1 == 0)
+        let c = self.src[i] as u32;
+        c < 0x80 && !in_set(SPECIAL, c) && !in_set(QUANT, self.at(i + 1))
     }
 
     /// Parses one term (an assertion, or an atom with an optional quantifier).
