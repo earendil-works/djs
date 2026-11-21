@@ -13234,3 +13234,29 @@ with a collection at every safepoint found an unlatched write within minutes. So
   with all cores at load ~45, slowest remaining 14 s, no new failures (the 40 expected
   ones). Wall-clock timeouts were the only failures before the skip list (31 at 20 s),
   which is why the leg keeps a 60 s hang guard and a 10 min deadline per mode instead.
+## D3450: pi's prelude image key names the prelude by a number
+date: 2026-11-21 · by: pstart · issue: 0274
+The image cache key was the JSON of `[prelude, tools, globals, store, limit, deterministic,
+frozen]`. pi passes a new `data` object per run, so the per-`data` WeakMap missed and every
+start stringified the whole prelude (17 KB of text) and hashed that key: a third of a cached
+start. js/pi/vm.ts keeps each prelude text seen (by content, up to 64) with a number and its
+JSON length; the key is that number and the JSON of the rest. `MAX_CACHE_KEY` still limits
+the length the full JSON would have had. Cached start 1,077K → 853K wasm+JS instructions.
+
+## D3451: djs_image_staging leaves the bytes the host writes to the host
+date: 2026-11-21 · by: pstart · issue: 0274
+`djs_image_staging` zero-filled the `len` bytes the host overwrites with the image right
+after (`resize`). It now sets the length over the reserved capacity (`set_len`, the
+reasoning of D3271: wasm memory has no uninitialized state, and a host that does not write
+the bytes breaks only its instance). −28K instructions per cached pi start, +36 B gz.
+
+## D3452: A pooled instance leaves the image's bytes to the image
+date: 2026-11-21 · by: pstart · issue: 0274
+Renewing a pooled instance (D3023) zeroed all memory past the module's initial size (1.1 MB
+after pi's cold start), and the restored image then overwrote ~470 KB of it. Where a
+renewed instance stages an image is a function of its memory size, the image length and the
+heap limit, so `Engine.restore` remembers it per pool and the next renew skips that range.
+If staging lands elsewhere, the instance is dropped and a new one used: the skipped bytes
+could hold the earlier session's. Nothing of an earlier session is left either way
+(js/test/pi-pool.test.ts fails if the skip leaves the image range unzeroed when not
+overwritten). −19K instructions, a 470 KB memset less per cached start.
