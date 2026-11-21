@@ -13492,3 +13492,89 @@ The change is work/research/0278/object-rest.patch (branch issue/0278-object-res
 (`copy_data_props` with excluded keys, the excluded strings as existing atoms), else the
 builtin runs. `const {id, ...rest} = o5`: 48.0k → 13.6k wasm instructions (QuickJS 2026
 9.5k); +851 B raw.
+
+## D3470: Cache kinds for absent properties and for accessors; a getter is called from the loop's exit
+date: 2026-11-21 · by: pcall · issue: 0276
+Measured in steady state against quickjs-wasi (slope.py `--qjs`), the reads the caches
+did not cover were the largest gaps left in the property path: `o.missing` 1,005
+machine instructions (3.4x QuickJS), a class getter 1,601 (1.5x), an own getter 1,230
+(1.8x), `map.size` 3,557 (5.1x). Each went through `step` with a full lookup.
+- **Absent reads.** A read whose lookup finds the key nowhere fills a slot of kind
+  `KIND_ABSENT` (61, as a depth more than any chain a slot is filled for): the
+  receiver's shape word, its prototype, the epoch. The fill needs a shape-mode receiver
+  with a prototype and a chain without proxies and typed arrays, and marks every object
+  of the chain `OBJ_IS_PROTO` (`chain_lacks_marked`, which the addition slots use too),
+  so that a key added anywhere on it bumps the epoch. A hit walks to the end of the
+  chain, which is where that depth leads, and is `undefined`.
+- **Accessors.** A prototype-read slot may point at an accessor (`ic_proto_fill` with
+  `accessor`), and an own accessor of a shape-mode receiver gets a slot of kind
+  `KIND_OWN_ACCESSOR` (62). `cached_get` returns a `Hit`: the value, or the getter
+  (`accessor_at` reads the pair of the remembered slot; an accessor without a getter
+  reads as undefined).
+- **Where they are answered.** The loop's slice read (`ic::hot_get`) is as it was and
+  treats the new kinds as a miss; `field_slow`, out of line, answers them. Read from
+  the slice as well, they cost every data hit: a prototype hit +6 machine instructions,
+  `p.m()` +1.4%, `a.push(i)` +1.0%. Out of line an absent read is 266 instead of 115,
+  still below QuickJS's 299, and the data hits are unchanged (own 92 → 83, prototype
+  150 → 149).
+- **The getter call.** `field_slow` leaves the getter in `Exec::hot_getter` and the arm
+  declines with `GETTER`, a code that is no opcode; `decline_fast` then calls
+  `decline_getter`, which does what `step` does for a `get_field` that found a getter
+  (`call_accessor`: the frame, a `@fast` entry or a native frame), without `step`'s
+  lookup. If the call fails it restores `pc`, `sp` and fuel and `step` runs the
+  instruction and throws. `get_method` of an accessor stays `step`'s. A getter is not
+  called inside the loop: a third copy of the frame push is ~400 B gz.
+- Two shapes mattered to V8 (hotcode.sh): the arm must not store the getter itself
+  (`self.hot_getter = g` in the arm put 1–4 instructions on nineteen simple arms; the
+  store in `field_slow` costs nothing), and the decline is written with the opcode's
+  test (`if op == GET_FIELD { Decline(GETTER) } Decline(GET_METHOD)`): with the bare
+  constant V8 moved the arithmetic arms by ±1–2 (`s += i` +0.5%).
+- Both kinds change nothing a program can see: the fills are in `lookup_ic`, on the
+  general path, so a VM with the loop off fills the same slots; debug builds assert the
+  getter against `Heap::lookup_property` at every such call; tests/corpus/language/
+  ic-absent-accessor.js reads one site while keys appear and disappear at every level,
+  prototypes are replaced, accessors are redefined, become data, lose their getter and
+  are deleted, with suspension, GC stress, lazy functions and plain dumps. It found
+  what no other test did: a `get_method` of a cached accessor taking the `get_field`
+  path.
+Measured (steady state, instructions per operation, main fd3d5759 → branch; ratio to
+quickjs-wasi before → after): `o.missing` 1,005 → 266 (3.37x → 0.89x), `o.missing ?? 1`
+1,169 → 430 (1.58x → 0.58x), class getter 1,601 → 1,285 (1.52x → 1.22x), own getter
+1,230 → 942 (1.84x → 1.41x), `map.size` 3,557 → 3,272 (5.12x → 4.71x: its getter is a
+bytecode builtin with two intrinsic calls; it needs a `@fast` entry).
+
+## D3471: `exec` and `json_regexp_intrinsic` read their operands once
+date: 2026-11-21 · by: pcall · issue: 0276
+As D3394 did for `call_intrinsic`. `Exec::exec` reads the top three operands before
+its `match` (`t0`, `t1`, `t2`), and an arm uses them until it first does anything else
+with `self` than read operands, immediates and plain fields (a pop becomes `sp -= 1`
+and the next name). The rewrite was made by a script that stops at the first such use
+in each arm (work/scratch/0276/preload.py): 69 reads and 25 pops of 222 stack accesses.
+`json_regexp_intrinsic` reads arguments 1–3 once (13 sites).
+- Bytes: `step_once` 29.5 → 25.6 KB of wasm, the module −718 B gz; json_regexp −75 B.
+  That pays for D3470 and D3472: the issue as a whole is −118 B gz (429,537 →
+  429,419), slim −112.
+- Cost: every instruction that goes through `step` reads three operands whether it
+  needs them or not, about 15 machine instructions. props, whose loop sends three
+  instructions per iteration through `step` (an object literal, `delete`, a string
+  constant by atom), is +1.5% (5173.2 → 5249.7 M); the other workloads are within ±0.3%.
+
+## D3472: `typeof`, string comparisons and string equality without `step`
+date: 2026-11-21 · by: pcall · issue: 0276
+- **`typeof x`** is an arm of the loop with one out-of-line call (`typeof_hit`: the
+  type's atom and its string, as `step` computes them): 419 → 159 instructions
+  (1.64x → 0.62x QuickJS).
+- **`===` of two flat one-byte strings** is read from the loop's slice (`hot_str_eq`,
+  out of line: the kinds, the lengths, eight bytes at a time with the last word
+  masked; a cell's size is a multiple of 8). `Heap::str_eq` took 480 instructions for
+  six bytes. `s === "string"` 575 → 140 (1.12x → 0.27x); `typeof o.name === "string"`
+  1,085 → 385 (1.10x → 0.39x). Other strings (two-byte, slices, ropes) go to the heap
+  as before; debug builds compare the two answers.
+- **`<`, `<=`, `>`, `>=` of two strings** finish in `decline_fast`
+  (`decline_compare`, `Heap::str_cmp`): 688 → 472 (1.52x → 1.04x).
+- `decline_fast` keeps its old cases in line and takes the new ones (`GETTER`, the
+  comparisons) as out-of-line calls: with them inside, a `@fast` builtin call, which
+  runs in `decline_fast` itself, was 8 instructions longer, and with `+` out of line
+  strbuild was 3% slower.
+V8's shared path is unchanged (dispatch 14, tail 4); run_hot's code is 18,696 B of
+arm64 (18,232).

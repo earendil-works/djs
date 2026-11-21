@@ -297,7 +297,8 @@ faster loop in front of it:
   written back. Some declined cases are finished on the way out instead, by one call that
   keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
   `arr.push(x)` appended straight to the array), `+` of a string with a primitive, the
-  parts of a template literal, `in` with a string key, and the instructions of `new`: the construct itself, the return into the constructing frame,
+  parts of a template literal, `<` of two strings, `in` with a string key, the call of a
+  getter that a cache slot found, and the instructions of `new`: the construct itself, the return into the constructing frame,
   `new.target`, the class constructor checks and `super()`. A trip through `step` costs
   more than most of these instructions do, and one `new C()` meets several of them.
   Nothing the tier-0 loop does itself can collect or run user code, which
@@ -331,7 +332,13 @@ faster loop in front of it:
   each of these reads with the heap's functions and compare. An element access with a
   string key (`counts[word]`) is answered without running code or allocating where that
   is possible: a data property anywhere on the chain, a key no object has, a store into
-  an own writable property. The collector empties the slots that hold
+  an own writable property. The caches also remember two things that are not data
+  properties. A key that nothing on the chain has: the slot holds the receiver's shape and
+  its prototype, every object of the chain is marked so that a key added to it makes the
+  slot stale, and `o.missing ?? 1` reads the slot instead of looking the key up on every
+  object of the chain. And an accessor, the
+  receiver's own or on its prototype chain: the slot leads to the getter, which is then
+  called without the lookup. The collector empties the slots that hold
   heap offsets, so a VM restored with warm caches behaves exactly like one with cold
   caches.
 - **Known builtins.** `Math.floor(x)`, `String(x)`, `Number.isInteger(x)` and a few
