@@ -437,7 +437,6 @@ mod alloc_stats {
 /// nonzero restarts the peak at the live size and the count and largest at 0. Leaves the
 /// out buffer alone.
 #[cfg(feature = "alloc-stats")]
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_alloc_stats(reset: u32) -> usize {
     use alloc_stats::*;
     use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
@@ -462,7 +461,6 @@ pub extern "C" fn djs_alloc_stats(reset: u32) -> usize {
 // ---- Buffers -------------------------------------------------------------------------
 
 /// The ABI version ([`ABI_VERSION`]).
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_abi_version() -> u32 {
     ABI_VERSION
 }
@@ -471,7 +469,6 @@ pub extern "C" fn djs_abi_version() -> u32 {
 /// and djs-libm's sources and cargo features, so a host can tell builds apart (journals,
 /// pi's deterministic fingerprint, 0049; djs-prelude's base check). Images are keyed on
 /// their dependency descriptor instead (D2265).
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_build_hash() -> u32 {
     djs_core::vm::BUILD_HASH
 }
@@ -482,7 +479,6 @@ pub extern "C" fn djs_build_hash() -> u32 {
 /// next `vm_new`, which takes the bytes as its arena (D2060): a host that keeps the base
 /// reads it first (a later call decodes it again). 0 if the instance has no base and no
 /// coded base to decode (`djs_base_coded_ptr`).
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_base_ptr() -> usize {
     base_ptr()
 }
@@ -491,7 +487,6 @@ pub extern "C" fn djs_base_ptr() -> usize {
 /// module): the host writes its bytes there and calls `djs_base_inject`, and the instance
 /// never decodes its own (D2252). 0 if this instance already has its base or `len` is not
 /// the base's length.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_base_inject_ptr(len: usize) -> usize {
     if BASE.with(|b| b.borrow().is_some()) || len != djs_prelude::base_len() {
         return 0;
@@ -509,7 +504,6 @@ pub extern "C" fn djs_base_inject_ptr(len: usize) -> usize {
 /// Takes the bytes written at `djs_base_inject_ptr` as this instance's base if they are
 /// the base (`djs_prelude::is_base`: its length and a sample of its bytes, D3271): 1, or
 /// 0 (refused: the instance decodes its own at the first use).
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_base_inject() -> u32 {
     let Some(mut buf) = INJECTED.with(|i| i.borrow_mut().take()) else {
         return 0;
@@ -541,7 +535,6 @@ pub extern "C" fn djs_base_inject() -> u32 {
 /// to inject. The host writes the section's `len` bytes there; the instance decodes them
 /// when it needs the base (checking them) and drops them once it keeps a decoded copy. 0
 /// if the instance has its base or the coded one, or `len` is not the section's length.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_base_coded_ptr(len: usize) -> usize {
     if BASE.with(|b| b.borrow().is_some())
         || CODED.with(|c| c.borrow().is_some())
@@ -558,7 +551,6 @@ pub extern "C" fn djs_base_coded_ptr(len: usize) -> usize {
 }
 
 /// The length of the base snapshot in bytes (see `djs_base_ptr`).
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_base_len() -> usize {
     djs_prelude::base_len()
 }
@@ -567,7 +559,6 @@ pub extern "C" fn djs_base_len() -> usize {
 /// cap of `memory_limit`: the buffer gets the capacity the restored arena will reserve, so
 /// handing it over grows nothing. Restoring through `djs_staging` copies the arena once
 /// more and leaves the staging block behind as a hole (D1942).
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
     let cap = djs_core::heap::Heap::image_capacity(len, options(memory_limit).memory_limit);
     with(|s| {
@@ -584,7 +575,6 @@ pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
 
 /// Makes the staging buffer at least `len` bytes and returns its address. Valid until the
 /// next call.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_staging(len: usize) -> usize {
     with(|s| {
         if len >= BIG_STAGING {
@@ -612,29 +602,24 @@ pub extern "C" fn djs_staging(len: usize) -> usize {
 /// page allocator's medium blocks, which may be page runs.
 const BIG_STAGING: usize = 16 << 10;
 
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_out_ptr() -> usize {
     with(|s| s.out.as_ptr() as usize)
 }
 
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_out_len() -> usize {
     with(|s| s.out.len())
 }
 
 /// The message of the last panic (after a trap), UTF-8.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_panic_ptr() -> usize {
     PANIC.with(|p| p.borrow().as_ptr() as usize)
 }
 
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_panic_len() -> usize {
     PANIC.with(|p| p.borrow().len())
 }
 
 /// Panics on purpose, so hosts can test their trap handling.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_debug_panic() {
     init();
     panic!("djs_debug_panic called");
@@ -659,7 +644,6 @@ fn options(memory_limit: u32) -> VmOptions {
 /// A new VM with a heap cap of `memory_limit` bytes (0: the default): a copy of the base
 /// snapshot (djs-prelude, D1321). Returns its number, or 0 if the cap is too small for
 /// the realm.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
     add_new_vm(new_from_base(options(memory_limit), 0))
 }
@@ -668,7 +652,6 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 /// threshold and slack) from the start: for a host that knows how big the heap will be
 /// after its setup (pi's cold start runs its prelude next). Growing later would move the
 /// arena and leave its old block behind as a hole in wasm memory.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
     add_new_vm(new_from_base(options(memory_limit), live))
 }
@@ -678,7 +661,6 @@ pub const VM_FROZEN_BUILTINS: u32 = 1;
 
 /// Like `vm_new_reserved`, with creation options in `flags`: [`VM_FROZEN_BUILTINS`].
 /// Returns 0 with the reason in the out buffer for an unknown flag.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_with(memory_limit: u32, live: u32, flags: u32) -> u32 {
     if flags & !VM_FROZEN_BUILTINS != 0 {
         return with(|s| {
@@ -694,7 +676,6 @@ pub extern "C" fn vm_new_with(memory_limit: u32, live: u32, flags: u32) -> u32 {
 }
 
 /// Whether the builtins of `vm` are frozen (`vm_new_with`, D2304): 1 or 0.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_frozen_builtins(vm: u32) -> u32 {
     with(|s| s.slot(vm).vm.frozen_builtins() as u32)
 }
@@ -703,7 +684,6 @@ pub extern "C" fn vm_frozen_builtins(vm: u32) -> u32 {
 /// base (about 150x slower). For checking the base against the realm built in wasm; only
 /// with the `compiled-prelude` feature.
 #[cfg(feature = "compiled-prelude")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
     // Made into an image like djs-prelude's build makes the base, so that the two can be
     // compared byte for byte.
@@ -729,7 +709,6 @@ fn add_new_vm(vm: Result<Vm, &str>) -> u32 {
 /// transport, pi's prelude images). They are not a persistence format (D2700), so only the
 /// header and the descriptor are checked, not every cell (`Vm::from_bytes_trusted`).
 /// Returns its number, or 0 with the reason in the out buffer.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
     with(|s| {
         staged(&s.staging, 0, len);
@@ -751,7 +730,6 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
 /// (`Vm::replace_image`, D2701): a host that dumps through a dump module keeps one VM
 /// there for all its dumps. Handles of the old state are gone. 0: done; 1: refused, the
 /// reason in out (the VM keeps its old state).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_replace_image(vm: u32, len: usize) -> i32 {
     with(|s| {
         staged(&s.staging, 0, len);
@@ -772,7 +750,6 @@ pub extern "C" fn vm_replace_image(vm: u32, len: usize) -> i32 {
     })
 }
 
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_free(vm: u32) {
     with(|s| {
         s.slot(vm);
@@ -785,18 +762,15 @@ pub extern "C" fn vm_free(vm: u32) {
 
 /// The address of the VM's arena (its offset 0). Changes when the arena grows: re-read it
 /// after every call that may run or allocate.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_arena_ptr(vm: u32) -> usize {
     with(|s| s.slot(vm).vm.bytes().as_ptr() as usize)
 }
 
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_arena_len(vm: u32) -> usize {
     with(|s| s.slot(vm).vm.bytes().len())
 }
 
 /// Collects garbage. Returns 0, or -1 if the heap could not reserve the to-space.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_collect(vm: u32) -> i32 {
     with(|s| {
         if s.slot(vm).vm.collect().is_ok() {
@@ -810,7 +784,6 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
 /// Collects garbage and makes everything live old (D2041): later collections while
 /// scripts run neither trace nor move it. For the end of the embedder's setup (pi's
 /// prelude). Returns 0, or -1 if the heap could not reserve the side tables.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_seal(vm: u32) -> i32 {
     with(|s| if s.slot(vm).vm.seal().is_ok() { 0 } else { -1 })
 }
@@ -825,7 +798,6 @@ pub extern "C" fn vm_seal(vm: u32) -> i32 {
 /// (D3050; the dump module only: elsewhere the bit is ignored). Returns a handle to the closure, or 0 with the error (`SyntaxError: ... at
 /// line:col`) in the out buffer. Stack traces name the code `sandbox.js`;
 /// `vm_compile_file` names it.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usize) -> u32 {
     compile(vm, goal, 0, params_len, src_len)
 }
@@ -833,7 +805,6 @@ pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usi
 /// `vm_compile` with a file name for stack traces (0049: pi's codemode reports
 /// `codemode.js:2`): staging holds the name (`name_len` bytes, UTF-8), then the parameter
 /// names, then the source.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_compile_file(
     vm: u32,
     goal: u32,
@@ -847,7 +818,6 @@ pub extern "C" fn vm_compile_file(
 /// Whether `vm_dump` refers to the codemode bodies the host ran by
 /// `$djs.source(name, hash)` (1, the default, D2882) or writes their text (0).
 #[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
     with(|s| s.slot(vm).source_refs = on != 0);
 }
@@ -857,7 +827,6 @@ pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
 /// the dump's loader name for code a dump carries). Returns its length, 0 when nothing
 /// waits on the call at a known position. Dump builds only, for the docs site's pauses.
 #[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
     with(|s| {
         let text = s
@@ -876,7 +845,6 @@ pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
 /// the host to give the next VM of this module (`vm_dump_maps_import`). Returns their
 /// length.
 #[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_dump_maps_export(vm: u32) -> usize {
     with(|s| {
         let bytes = s.slot(vm).vm.export_dump_maps();
@@ -889,7 +857,6 @@ pub extern "C" fn vm_dump_maps_export(vm: u32) -> usize {
 /// dumps take them instead of compiling those scripts again. 1, or 0 for bytes of another
 /// build.
 #[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_dump_maps_import(vm: u32, len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -903,7 +870,6 @@ pub extern "C" fn vm_dump_maps_import(vm: u32, len: usize) -> u32 {
 /// closure's handle; the out buffer then holds this compile's blob for the host to keep
 /// (empty when the blob was taken, or for a plain dump), or the error as for `vm_compile`.
 #[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_compile_cached(
     vm: u32,
     goal: u32,
@@ -1001,7 +967,6 @@ fn compile_with(
 /// VM. Returns 1 with the listing in the out buffer, or 0 with the compile error. Only
 /// with the `docs` feature, so the shipping module does not carry the disassembler.
 #[cfg(feature = "docs")]
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u32 {
     use djs_core::bytecode::template::disasm_template;
     with(|s| {
@@ -1050,7 +1015,6 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
 // ---- Values in -----------------------------------------------------------------------
 
 /// A handle to the global object.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_global(vm: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1060,7 +1024,6 @@ pub extern "C" fn vm_global(vm: u32) -> u32 {
 }
 
 /// A handle to a new ordinary object (0 if out of memory).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_object(vm: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1076,7 +1039,6 @@ pub extern "C" fn vm_new_object(vm: u32) -> u32 {
 /// does not carry it), for the host to add its hooks to and define as `$djs` while a plain
 /// dump loads. 0 if it fails (out of memory, or not the runtime's text). Runs the VM: call
 /// it before the load.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_dump_runtime(vm: u32, len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1089,7 +1051,6 @@ pub extern "C" fn vm_dump_runtime(vm: u32, len: usize) -> u32 {
 }
 
 /// A handle to a new host function `fn_id` named staging[0..name_len].
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_host_function(vm: u32, fn_id: u32, name_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1103,7 +1064,6 @@ pub extern "C" fn vm_new_host_function(vm: u32, fn_id: u32, name_len: usize) -> 
 
 /// A handle to a new async host function `fn_id` named staging[0..name_len] (D1374):
 /// calling it returns a promise and adds a pending call (`vm_new_host_calls`).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1118,7 +1078,6 @@ pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usiz
 /// Defines property staging[0..name_len] of object `obj` (a handle) as `value` (a handle),
 /// writable and configurable but not enumerable, like builtins. Returns 0, or -1 if `obj`
 /// is not an object or the heap is full.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1152,7 +1111,6 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
 /// (one per line). (2, no base image, is not returned any more: the module has its base's
 /// names, 0215.)
 #[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     // (No base needed: the dump has the base's names from the module, 0215.)
     with(|s| {
@@ -1253,7 +1211,6 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
 
 /// Decodes the wire buffer staging[0..len] (docs/wire.md) into a handle. 0 on error, with
 /// the reason in the out buffer.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_decode_wire(vm: u32, len: usize) -> u32 {
     with(|s| {
         // Decodes straight from staging (no copy); `out` is written after the borrow ends.
@@ -1280,7 +1237,6 @@ pub extern "C" fn vm_decode_wire(vm: u32, len: usize) -> u32 {
 /// A handle to the value of the JSON text (UTF-8) in staging[0..len], parsed like
 /// `JSON.parse` (objects and arrays get the realm's prototypes); 0 on failure (the
 /// SyntaxError or "out of memory" in `out`). For hosts that already hold JSON text.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_parse_json(vm: u32, len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1307,7 +1263,6 @@ pub extern "C" fn vm_parse_json(vm: u32, len: usize) -> u32 {
 /// A handle to `JSON.stringify(value)` as a heap string, for plain data (objects, arrays,
 /// primitives without getters, proxies or toJSON); 0 on failure with the reason in `out`
 /// ("not plain data" for anything else, "undefined" when the result is undefined).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_json_stringify(vm: u32, h: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1332,7 +1287,6 @@ pub extern "C" fn vm_json_stringify(vm: u32, h: u32) -> u32 {
 /// Latin-1 unit per byte (an ASCII string's UTF-8 as is); the host fills them before its
 /// next call into the module. A large host string so skips the staging copy and the
 /// transcode.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_string_reserve(vm: u32, len: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1345,7 +1299,6 @@ pub extern "C" fn vm_string_reserve(vm: u32, len: u32) -> u32 {
 
 /// A handle to a new Error of `kind` (0 Error, 1 TypeError, 2 RangeError, 3
 /// ReferenceError, 4 SyntaxError, 5 InternalError) with message staging[0..msg_len].
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_error(vm: u32, kind: u32, msg_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1369,7 +1322,6 @@ pub extern "C" fn vm_new_error(vm: u32, kind: u32, msg_len: usize) -> u32 {
 
 /// Writes the 64 bits of a handle's value to the out buffer as two u32 (lo, hi), for
 /// js/src/reader.ts.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_handle_bits(vm: u32, h: u32) {
     with(|s| {
         let bits = s.slot(vm).value(h).to_bits();
@@ -1377,7 +1329,6 @@ pub extern "C" fn vm_handle_bits(vm: u32, h: u32) {
     })
 }
 
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_handle_free(vm: u32, h: u32) {
     with(|s| {
         if h != 0 {
@@ -1391,7 +1342,6 @@ pub extern "C" fn vm_handle_free(vm: u32, h: u32) {
 
 /// Formats a handle's value as `console.log` in `djs run` shows it (strings raw, Errors
 /// as `Name: message`, the rest as JSON) into the out buffer (UTF-8); returns its length.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_display(vm: u32, h: u32) -> usize {
     with(|s| {
         let slot = s.slot(vm);
@@ -1451,7 +1401,6 @@ pub extern "C" fn djs_stack(len: usize) -> usize {
 /// Starts calling `f` (a handle) with `this` (a handle, 0 = undefined) and `argc`
 /// argument handles from staging (u32 LE each). Returns 0, or -1 if a call is already in
 /// progress or the heap is full.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_call(vm: u32, f: u32, this: u32, argc: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1472,7 +1421,6 @@ pub extern "C" fn vm_call(vm: u32, f: u32, this: u32, argc: usize) -> i32 {
 
 /// Runs with `fuel`. Returns a [`status`] code. After DONE or THREW, `vm_result` hands
 /// out the value; after HOST_CALL, `vm_host_call` describes the call.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1505,7 +1453,6 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
 /// The fuel the last `vm_run` used (saturated to u32): a host that stops at host calls
 /// counts its fuel across them, so a loop of sync host calls still reaches its interrupt
 /// polls (D2653). It can exceed the fuel given by the cost of the instruction that ran out.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_fuel_used(vm: u32) -> u32 {
     with(|s| u32::try_from(s.slot(vm).fuel_used).unwrap_or(u32::MAX))
 }
@@ -1513,7 +1460,6 @@ pub extern "C" fn vm_fuel_used(vm: u32) -> u32 {
 /// Sets the clock `Date.now()` and `new Date()` read, in ms since the epoch
 /// (`Vm::set_now`, D1383). The VM reads no system clock: the host sets it, typically
 /// before every `vm_run`. With `vm_resolve_host_call_at`, the only exports with an f64 argument.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
     with(|s| s.slot(vm).vm.set_now(ms))
 }
@@ -1521,7 +1467,6 @@ pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
 /// The VM's canonical hash (`Vm::canonical_hash`, D1730): FNV-1a 64 of the image a
 /// collection would leave, computed on a copy (the VM is unchanged). Writes it to the out
 /// buffer as u32 lo, hi; returns 0, or -1 when there is no memory for the copy.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_canonical_hash(vm: u32) -> i32 {
     with(|s| match s.slot(vm).vm.canonical_hash() {
         Ok(h) => {
@@ -1536,7 +1481,6 @@ pub extern "C" fn vm_canonical_hash(vm: u32) -> i32 {
 /// (weak, the default), 1 strong (no collection is observable), 2 absent (the globals are
 /// deleted). Set it on a new VM, before running code. Returns 0, or -1 for a bad mode or
 /// a full heap.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_weak_refs(vm: u32, mode: u32) -> i32 {
     use djs_core::vm::WeakRefs;
     let mode = match mode {
@@ -1557,7 +1501,6 @@ pub extern "C" fn vm_set_weak_refs(vm: u32, mode: u32) -> i32 {
 /// Reseeds `Math.random` with the 64-bit seed `hi << 32 | lo` (`Vm::set_random_seed`; 0
 /// is the fixed default). A new VM starts with the default seed, so a host that wants
 /// real randomness passes one from its own source; a replay passes a fixed one (0049).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_random_seed(vm: u32, lo: u32, hi: u32) {
     with(|s| {
         s.slot(vm)
@@ -1568,7 +1511,6 @@ pub extern "C" fn vm_set_random_seed(vm: u32, lo: u32, hi: u32) {
 
 /// Reseeds `Math.random` alone with `hi << 32 | lo`, keeping the hash key
 /// (`Vm::set_math_random_seed`, D2433).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_math_random_seed(vm: u32, lo: u32, hi: u32) {
     math_random(vm, lo, hi, false)
 }
@@ -1584,14 +1526,12 @@ fn math_random(vm: u32, lo: u32, hi: u32, restore: bool) {
 
 /// Sets the local time zone as a fixed offset in minutes east of UTC
 /// (`Vm::set_time_zone_offset`; 0, UTC, by default).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_time_zone_offset(vm: u32, minutes: i32) {
     with(|s| s.slot(vm).vm.set_time_zone_offset(minutes))
 }
 
 /// Abandons the current call (after OUT_OF_FUEL, or while parked on a host call): the VM
 /// is idle and usable again, its globals intact (`Vm::abort`).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_abort(vm: u32) {
     with(|s| {
         let slot = s.slot(vm);
@@ -1601,7 +1541,6 @@ pub extern "C" fn vm_abort(vm: u32) {
 }
 
 /// The handle of the last DONE/THREW value (the host frees it). 0 if there is none.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_result(vm: u32) -> u32 {
     with(|s| core::mem::take(&mut s.slot(vm).result))
 }
@@ -1611,7 +1550,6 @@ pub extern "C" fn vm_result(vm: u32) -> u32 {
 /// async host calls are pending gets its return value (pi's adapter in its `next` mode,
 /// D2650). Unlike `vm_result` it can be taken any number of times. 0 if there is none (a
 /// frame is active, or nothing was called); out[0] = 1 if the call threw, else 0.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_outcome(vm: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1632,7 +1570,6 @@ pub extern "C" fn vm_outcome(vm: u32) -> u32 {
 /// Describes the parked host call: writes `[call_id, fn_id, this_lo, this_hi, (arg_lo,
 /// arg_hi) * argc]` as u32 to the out buffer and returns `argc`. The raw values are valid
 /// until the next `vm_run` or collection.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_host_call(vm: u32) -> u32 {
     with(|s| {
         let id = s.slot(vm).call_id;
@@ -1641,14 +1578,12 @@ pub extern "C" fn vm_host_call(vm: u32) -> u32 {
 }
 
 /// `vm_host_call` for any pending call by id (an async one from `vm_new_host_calls`).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_host_call_info(vm: u32, call_id: u32) -> u32 {
     with(|s| s.describe_call(vm, call_id))
 }
 
 /// The async host calls made since the last call of this (D1374): writes their ids as
 /// u32 to the out buffer and returns how many. Read them after every `vm_run`.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_new_host_calls(vm: u32) -> u32 {
     with(|s| {
         let ids = s.slot(vm).vm.new_host_calls();
@@ -1661,7 +1596,6 @@ pub extern "C" fn vm_new_host_calls(vm: u32) -> u32 {
 /// D1423): writes a handle (u32) per reason to the out buffer, oldest first, and returns
 /// how many. The host frees them. Check after DONE, THREW or IDLE, as qjs does after its
 /// job queue ran.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_take_unhandled_rejections(vm: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1676,7 +1610,6 @@ pub extern "C" fn vm_take_unhandled_rejections(vm: u32) -> u32 {
 /// rejected. When settled, the out buffer holds a handle (u32) to its result, which the
 /// host frees, and the promise counts as handled (`Vm::mark_promise_handled`): the host
 /// consumes its outcome, so a rejection is not also an unhandled one.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_promise_state(vm: u32, h: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1699,14 +1632,12 @@ pub extern "C" fn vm_promise_state(vm: u32, h: u32) -> u32 {
 /// Completes host call `call_id` with `value` (a handle, 0 = undefined): returned when
 /// `ok` is 1, thrown when 0. Returns 0, or -1 for an unknown call. An async call's result
 /// waits in the VM's inbox until the job queue is empty (D1670).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_resolve_host_call(vm: u32, call_id: u32, ok: u32, value: u32) -> i32 {
     resolve(vm, call_id, ok, value, None)
 }
 
 /// `vm_resolve_host_call` with the clock (`vm_set_now`'s ms) that `Date` reads from when
 /// the result is applied (`Vm::resolve_host_call_at`, D1670).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_resolve_host_call_at(
     vm: u32,
     call_id: u32,
@@ -1721,7 +1652,6 @@ pub extern "C" fn vm_resolve_host_call_at(
 /// call `parked`, opens async call `id` of host function `fn_id` (the host's for `name`)
 /// with `args`' elements, under the dump's id, and returns its promise from the parked
 /// call (`Vm::open_host_call`). 0, or -1 with the reason in out, for the host to throw.
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
     with(|s| match s.slot(vm).vm.open_host_call(parked, fn_id) {
         Ok(()) => 0,
@@ -1735,7 +1665,6 @@ pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
 /// Restores a dumped run's `Math.random` state `hi << 32 | lo` (a plain dump's
 /// `$djs.seed(lo, hi)`, `Vm::restore_math_random`): as a state that ran, which the next
 /// dump writes again (D2837).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_restore_math_random(vm: u32, lo: u32, hi: u32) {
     math_random(vm, lo, hi, true)
 }
@@ -1743,7 +1672,6 @@ pub extern "C" fn vm_restore_math_random(vm: u32, lo: u32, hi: u32) {
 /// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's
 /// load, its `$djs.seed`'s `next`, else one past its highest reopened call (D2897,
 /// D2837).
-#[unsafe(no_mangle)]
 pub extern "C" fn vm_set_next_call_id(vm: u32, id: u32) {
     with(|s| s.slot(vm).vm.set_next_call_id(id))
 }
@@ -1763,3 +1691,173 @@ fn resolve(vm: u32, call_id: u32, ok: u32, value: u32, now: Option<f64>) -> i32 
 
 #[cfg(test)]
 mod tests;
+
+// ---- the one export ------------------------------------------------------------------
+
+/// Converts a dispatch argument to a parameter's type.
+trait Arg<T> {
+    fn arg(self) -> T;
+}
+impl Arg<u32> for u32 {
+    fn arg(self) -> u32 {
+        self
+    }
+}
+impl Arg<usize> for u32 {
+    fn arg(self) -> usize {
+        self as usize
+    }
+}
+impl Arg<i32> for u32 {
+    fn arg(self) -> i32 {
+        self as i32
+    }
+}
+impl Arg<f64> for f64 {
+    fn arg(self) -> f64 {
+        self
+    }
+}
+
+/// Converts a result to the dispatcher's (a wasm i32: what the host reads as a signed
+/// number, as it did for each export).
+trait Ret {
+    fn ret(self) -> u32;
+}
+impl Ret for () {
+    fn ret(self) -> u32 {
+        0
+    }
+}
+impl Ret for u32 {
+    fn ret(self) -> u32 {
+        self
+    }
+}
+impl Ret for usize {
+    fn ret(self) -> u32 {
+        self as u32
+    }
+}
+impl Ret for i32 {
+    fn ret(self) -> u32 {
+        self as u32
+    }
+}
+
+macro_rules! ops {
+    (args($a:ident, $b:ident, $c:ident, $d:ident, $e:ident, $g:ident, $t:ident); $($(#[$m:meta])* $n:literal $f:ident($($x:ident),*);)*) => {
+        /// The module's one exported function (D3320): calls operation `op` (the functions
+        /// above, numbered in [`OPS`]) with integer arguments `a` to `f` and the float
+        /// argument `t` (`vm_set_now`, `vm_resolve_host_call_at`); unused ones are
+        /// ignored. Every export costs each instantiation (a JS function object per
+        /// instance in V8: ~0.4 µs each, a quarter of `new WebAssembly.Instance` with
+        /// 72 of them). An `op` this build lacks returns 0 (`djs_has` tells).
+        #[unsafe(no_mangle)]
+        #[allow(clippy::too_many_arguments)]
+        pub extern "C" fn djs(op: u32, $a: u32, $b: u32, $c: u32, $d: u32, $e: u32, $g: u32, $t: f64) -> u32 {
+            let _ = ($a, $b, $c, $d, $e, $g, $t);
+            match op {
+                $($(#[$m])* $n => $f($(Arg::arg($x)),*).ret(),)*
+                _ => 0,
+            }
+        }
+
+        /// Whether this build has operation `op` (operations of the `dump`, `docs`,
+        /// `alloc-stats` and `compiled-prelude` features only in those builds).
+        fn djs_has(op: u32) -> u32 {
+            match op {
+                $($(#[$m])* $n => 1,)*
+                _ => 0,
+            }
+        }
+
+        /// The operations by number, for hosts (js/src/abi.ts has the same table; a test
+        /// compares them).
+        pub const OPS: &[&str] = &[$(stringify!($f)),*];
+
+        // The numbers are the positions in `OPS`.
+        const _: () = {
+            let mut i = 0;
+            $(assert!($n == i); i += 1;)*
+            let _ = i;
+        };
+    };
+}
+
+ops! {
+    args(a, b, c, d, e, f, t);
+    0 djs_abi_version();
+    1 djs_build_hash();
+    2 djs_base_ptr();
+    3 djs_base_inject_ptr(a);
+    4 djs_base_inject();
+    5 djs_base_coded_ptr(a);
+    6 djs_base_len();
+    7 djs_image_staging(a, b);
+    8 djs_staging(a);
+    9 djs_out_ptr();
+    10 djs_out_len();
+    11 djs_panic_ptr();
+    12 djs_panic_len();
+    13 djs_debug_panic();
+    14 vm_new(a);
+    15 vm_new_reserved(a, b);
+    16 vm_new_with(a, b, c);
+    17 vm_frozen_builtins(a);
+    #[cfg(feature = "compiled-prelude")] 18 vm_new_compiled(a);
+    19 vm_from_bytes(a, b);
+    20 vm_replace_image(a, b);
+    21 vm_free(a);
+    22 vm_arena_ptr(a);
+    23 vm_arena_len(a);
+    24 vm_collect(a);
+    25 vm_seal(a);
+    26 vm_compile(a, b, c, d);
+    27 vm_compile_file(a, b, c, d, e);
+    #[cfg(feature = "dump")] 28 vm_set_dump_source_refs(a, b);
+    #[cfg(feature = "dump")] 29 vm_call_site(a, b);
+    #[cfg(feature = "dump")] 30 vm_dump_maps_export(a);
+    #[cfg(feature = "dump")] 31 vm_dump_maps_import(a, b);
+    #[cfg(feature = "dump")] 32 vm_compile_cached(a, b, c, d, e, f);
+    #[cfg(feature = "docs")] 33 djs_disasm(a, b, c);
+    34 vm_global(a);
+    35 vm_new_object(a);
+    36 vm_dump_runtime(a, b);
+    37 vm_new_host_function(a, b, c);
+    38 vm_new_async_host_function(a, b, c);
+    39 vm_define(a, b, c, d);
+    #[cfg(feature = "dump")] 40 vm_dump(a, b);
+    41 vm_decode_wire(a, b);
+    42 vm_parse_json(a, b);
+    43 vm_json_stringify(a, b);
+    44 vm_string_reserve(a, b);
+    45 vm_new_error(a, b, c);
+    46 vm_handle_bits(a, b);
+    47 vm_handle_free(a, b);
+    48 vm_display(a, b);
+    49 vm_call(a, b, c, d);
+    50 vm_run(a, b);
+    51 vm_fuel_used(a);
+    52 vm_set_now(a, t);
+    53 vm_canonical_hash(a);
+    54 vm_set_weak_refs(a, b);
+    55 vm_set_random_seed(a, b, c);
+    56 vm_set_math_random_seed(a, b, c);
+    57 vm_set_time_zone_offset(a, b);
+    58 vm_abort(a);
+    59 vm_result(a);
+    60 vm_outcome(a);
+    61 vm_host_call(a);
+    62 vm_host_call_info(a, b);
+    63 vm_new_host_calls(a);
+    64 vm_take_unhandled_rejections(a);
+    65 vm_promise_state(a, b);
+    66 vm_resolve_host_call(a, b, c, d);
+    67 vm_resolve_host_call_at(a, b, c, d, t);
+    68 vm_open_call(a, b, c);
+    69 vm_restore_math_random(a, b, c);
+    70 vm_set_next_call_id(a, b);
+    #[cfg(feature = "alloc-stats")] 71 djs_alloc_stats(a);
+    72 djs_has(a);
+}
