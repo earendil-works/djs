@@ -1,6 +1,6 @@
 # 0279: Re-record the benchmarks page and published numbers after the memory/speed push
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0279-bench-rerecord
 depends-on: 0256-0278
