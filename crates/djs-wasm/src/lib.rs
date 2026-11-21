@@ -92,6 +92,9 @@ struct Slot {
 struct State {
     vms: Vec<Option<Slot>>,
     staging: Vec<u8>,
+    /// The length `djs_image_staging` reserved in `staging` (left at length 0) for the
+    /// host to write, or 0.
+    image_staged: usize,
     out: Vec<u8>,
 }
 
@@ -115,6 +118,7 @@ instance_locals! {
     static STATE: RefCell<State> = RefCell::new(State {
         vms: Vec::new(),
         staging: Vec::new(),
+        image_staged: 0,
         out: Vec::new(),
     });
     /// The base snapshot, decoded from the coded image at the first use (D2252) or written
@@ -670,8 +674,10 @@ pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
             s.staging = Vec::new();
             s.staging.reserve_exact(cap);
         }
+        // Not zeroed: the host writes all `len` bytes next, and `vm_from_bytes` /
+        // `vm_replace_image` take them as written (`take_image`, D3451).
         s.staging.clear();
-        s.staging.resize(len, 0);
+        s.image_staged = len;
         s.staging.as_mut_ptr() as usize
     })
 }
@@ -680,6 +686,7 @@ pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
 /// next call.
 pub extern "C" fn djs_staging(len: usize) -> usize {
     with(|s| {
+        s.image_staged = 0;
         if len >= BIG_STAGING {
             // A fresh block, freeing the old one first, with room for the arena to grow
             // into before it: what is staged this large is usually decoded into the arena
@@ -812,12 +819,28 @@ fn add_new_vm(vm: Result<Vm, &str>) -> u32 {
 /// transport, pi's prelude images). They are not a persistence format (D2700), so only the
 /// header and the descriptor are checked, not every cell (`Vm::from_bytes_trusted`).
 /// Returns its number, or 0 with the reason in the out buffer.
+/// The image staged in `staging[0..len]`, taken out of it: by `djs_image_staging`'s
+/// reservation, which the host wrote (D3451), or by `djs_staging`.
+fn take_image(s: &mut State, len: usize) -> Vec<u8> {
+    let staged_len = core::mem::take(&mut s.image_staged);
+    if s.staging.is_empty() && len == staged_len && s.staging.capacity() >= len {
+        // SAFETY: `djs_image_staging` reserved `len` bytes (checked) and returned their
+        // address, and the host wrote them through the memory export since. A host that did
+        // not leaves the stale bytes of linear memory there, which hold values like any other
+        // (wasm memory has no uninitialized state) and fail the image's checks or break this
+        // instance only, as for the injected base (D3271).
+        unsafe { s.staging.set_len(len) };
+    }
+    staged(&s.staging, 0, len);
+    let mut bytes = core::mem::take(&mut s.staging);
+    bytes.truncate(len);
+    bytes
+}
+
 pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
     with(|s| {
-        staged(&s.staging, 0, len);
         // The image becomes the arena: hand over the staging buffer instead of copying.
-        let mut bytes = core::mem::take(&mut s.staging);
-        bytes.truncate(len);
+        let bytes = take_image(s, len);
         match Vm::from_bytes_trusted(bytes, options(memory_limit)) {
             Ok(vm) => s.add_vm(vm),
             Err(e) => {
@@ -835,9 +858,7 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
 /// reason in out (the VM keeps its old state).
 pub extern "C" fn vm_replace_image(vm: u32, len: usize) -> i32 {
     with(|s| {
-        staged(&s.staging, 0, len);
-        let mut bytes = core::mem::take(&mut s.staging);
-        bytes.truncate(len);
+        let bytes = take_image(s, len);
         let slot = s.slot(vm);
         match slot.vm.replace_image(bytes) {
             Ok(()) => {
