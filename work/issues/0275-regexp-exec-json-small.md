@@ -53,6 +53,26 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Re-measured on main 207945d6 (slope.py, wasm instr per iteration incl. ~300-500 loop;
+  QuickJS = quickjsBuilt bellard via qb-run.ts, quickjs-wasi via qjs-wasm-run.mjs):
+  match groups djs 38.0k / QuickJS 12.8k / quickjs-wasi 19.2k; replace /\s+/g 39.1k /
+  16.4k / 73.0k; JSON.parse 5 keys 22.3k / 18.9k / 22.9k; regex test 10.1k / 11.5k / 14.0k.
+- Profile (native samply, instr build): match = 130 builtin bytecodes (String.prototype.match
+  23, GetMethod 16, @@match 28, flags getter 13, ThisRegExpObject 2x6, RegExpExec 11) and
+  regexp_pristine 16% inclusive (a dozen prototype lookups + own_keys Vec per call).
+- D3460: regexp_pristine answers from the builtins latch; sole_property instead of own_keys;
+  String.prototype.match/replace call the leaves for a pristine RegExp. match −45%, replace −34%,
+  +119 B gz (approved).
+- D3461: ExecState memory reuse measured (−6% match, −8% test) but +100-118 B: not landed.
+- D3462: create_data_property quick insert for arrays (match result's index/input/groups): −9%
+  match, +10 B.
+- D3463: JSON parser Vec capacities via buf::vec_with_capacity: −4..−9%, −30 B.
+- Remaining: the matcher itself (`\s+` replace: resume_in 30% native), match_result's
+  substrings, the per-literal RegExp object (create + lastIndex define 4%), key atomization in
+  JSON (keyed hash + atom table lookups per key, the key cache is per parse).
+- Corpus case tests/corpus/builtins/regexp-pristine-paths.js (own @@match/exec, subclass,
+  String object, non-string replacement, patched RegExp.prototype.exec and flags).
+- Guide: none affected (builtins.md does not describe the RegExp fast paths).
 
 ## Follow-ups
 

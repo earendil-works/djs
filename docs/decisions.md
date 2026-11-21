@@ -13422,3 +13422,46 @@ date: 2026-11-21 · by: pgc · issue: 0277
 pieces, padStart/padEnd's result) did the same copy with different checks; both are
 `Heap::latin1_piece(s, a, b, extra)` now (a flat cell from one kind read, else the
 contiguous data). Together with D3480/D3481: module −8 B gz (428,730 vs 428,738).
+## D3460: A pristine RegExp from the builtins latch; String.prototype.match/replace call the leaves
+date: 2026-11-21 · by: pscan · issue: 0275
+`regexp_pristine` (D1503) looked up about a dozen properties of RegExp.prototype and
+%RegExp% per call and listed the RegExp's own keys into a Vec. While the builtin prefix
+was never written (`Heap::builtins_pristine`, the D3290 latch), those lookups find the base
+image's originals, so it answers after the per-object checks: prototype, and the one own
+property is a writable Number `lastIndex` (`Heap::sole_property`: one slot, no elements,
+no key list; a private name or a deleted dictionary entry declines, which is only
+conservative). Without a prefix, or once any builtin was written, the full check runs.
+String.prototype.match with a string `this` and a pristine non-global RegExp calls
+`%RegExpExecOwn` directly; String.prototype.replace with a string `this`, a string
+replacement and a pristine global RegExp calls `%RegExpReplaceRaw`. The check sits where
+the spec's GetMethod(@@match/@@replace) reads, and ToString of a string primitive runs
+no user code, so skipping GetMethod, the call, ThisRegExpObject and the `flags` getter
+(about 100 bytecodes and two frames) is unobservable. Per iteration (slope.py, wasm):
+`LINE.match(/^([^:]+):(\d+):/)` 37.7k → 18.9k instructions, `S.replace(/\s+/g, ' ')`
+39.6k → 26.0k; +119 B gz, nearly all of it the prelude image (approved by the
+coordinator).
+
+## D3461: The matcher's memory kept between matches: measured, not landed
+date: 2026-11-21 · by: pscan · issue: 0275
+Every exec allocates the matcher's slots and backtrack stack (`ExecState::mem`) and frees
+it. Keeping it in the heap between matches (capped at 1024 words) saved 6% of a
+non-global match and 8% of `test`, but cost +118 B gz as an `ExecState` field of the heap
+and still about +100 B as a bare `Vec<u32>` (the heap's constructors, drop glue and the
+keep function). Not worth the room; patch in work/scratch/0275/re-state-reuse.patch of
+the primary checkout.
+
+## D3462: create_data_property's quick insert takes arrays too
+date: 2026-11-21 · by: pscan · issue: 0275
+The quick path (a new key on an extensible object: insert without building a descriptor)
+excluded arrays wholesale, so a match result's `index`, `input` and `groups` each went
+through ordinary_define. An array now takes it for a key that is neither `length` nor an
+array index (string atoms such as "4294967294" included), where ArrayDefineOwnProperty is
+OrdinaryDefineOwnProperty. A non-global match −9%, +10 B gz.
+
+## D3463: JSON.parse's parser starts with room for a small document
+date: 2026-11-21 · by: pscan · issue: 0275
+The parser's four Vecs (frames, keys, values, key units) grew from empty, reallocating
+each two or three times on a five-key object. They start at 8, 16, 16 and 32 entries,
+through `buf::vec_with_capacity` (inline `Vec::with_capacity` cost +59 B; out of line it
+is −30 B). JSON.parse of a five-key object −4..−9% (20.6-23.0k → 18.7-22.0k under load
+noise; QuickJS 18.9k).
