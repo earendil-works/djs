@@ -1,6 +1,6 @@
 # 0263: Compile speed for small bodies; static data audit
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0263-compile-speed
 depends-on: -
