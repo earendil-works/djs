@@ -2502,10 +2502,13 @@ impl Heap {
     ) -> Result<bool, HeapError> {
         // A new key on an extensible ordinary object (object literals, the common case):
         // what ordinary_define would do, without building and validating a descriptor.
-        if !matches!(
-            self.object_class(o),
-            ObjectClass::Array | ObjectClass::TypedArray
-        ) && key.as_int().is_none()
+        // An array too, for a key that is neither `length` nor an index (a match
+        // result's `index`, `input` and `groups`, D3462).
+        let class = self.object_class(o);
+        if class != ObjectClass::TypedArray
+            && key.as_int().is_none()
+            && (class != ObjectClass::Array
+                || key != atoms::LENGTH && self.atom_array_index(key).is_none())
             && self.find_own(o, key) == Loc::None
             && self.is_extensible(o)
             // A builtin goes the general way, which sets the prefix latch (D3290).
