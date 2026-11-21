@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0265 | Allocator placement effects; the resolver re-emit | pstart | .worktrees/pstart |
-| 0266 | Promise construction, then, async without await, new Error | pidle | .worktrees/pidle |
+| 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
 | 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
 | 0268 | run_hot sensitivity, receiver method calls, the general path | pcall | .worktrees/pcall |
 | 0267 | Regexp compile speed; escape-dense JSON | pscan | .worktrees/pscan |
@@ -51,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0266 | new Error, new Promise (items 1-3 were done by 0232b) | 07c56383 (agent pidle; D3370; new Error 28.0k->15.4k instr (QuickJS 24.2k); fanout -4%; +161 B gz) |
 | 0258 | GC: prefix latch and skip, growth past the target, knee at 1 MiB | c1dd82cb (agent pgc; D3290-D3294; heavy 4736->3904 KiB, strbuild 24.2->11.9 MiB, json-objects -18%; retune, survivor discount, nursery w/o barrier measured, not built) |
 | 0264 | Cold Unicode tables out of linear memory | eed09e26 (agent pscan; D3350, ABI 7; data 92->41 KB, 2 initial pages; -64 KiB/row waits for dlmalloc need <= 88 KB) |
 | 0259 | Known builtins skip the lookup | 6dcf06cb (agent pcall; D3300, D3301; Math.floor/isInteger/max/isArray -20..-25% instr; +648 B gz; FastCall and int cases measured, dropped) |
