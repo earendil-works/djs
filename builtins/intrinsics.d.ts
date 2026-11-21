@@ -803,7 +803,8 @@ declare function IteratorFastReady(iterator: Obj, next: Value): boolean;
 declare function IteratorFastValue(iterator: Obj, next: Value): Value;
 /**
  * The values `IteratorFastValue` would give one by one for a keys or values Array
- * Iterator, stored with CreateDataPropertyOrThrow into the Array `arr` at n, n + 1, ...
+ * Iterator, or the original `next` of a Map or Set Iterator would give (0270), stored
+ * with CreateDataPropertyOrThrow into the Array `arr` at n, n + 1, ...
  * in one step, while they are plain dense stores (D2305): the next n. Stops before a
  * value only `next` can read (a hole), at the end (the next step finishes the iterator)
  * and where a store is not plain; gives n back unchanged for anything else. @leaf

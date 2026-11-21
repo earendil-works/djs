@@ -140,7 +140,6 @@ function MapPrototypeDelete(this: Value, key: Value): boolean {
  * Map.prototype.entries ( ), 24.1.3.4; also Map.prototype [ %Symbol.iterator% ].
  * @builtin Map.prototype.entries
  * @builtin Map.prototype[Symbol.iterator]
- * @intrinsic
  */
 function MapPrototypeEntries(this: Value): Obj {
   return CollectionIterator(ThisMap(this), 2);

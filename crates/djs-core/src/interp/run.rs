@@ -4021,9 +4021,8 @@ impl<'h> Exec<'h> {
     }
 
     /// `[...src]` without the iterator protocol where that is not observable: a string
-    /// (by code points), an array without holes, a Set, a Map or a Map/Set Iterator
-    /// (`collection_spread`), while their iteration is the original @@iterator and
-    /// `next` (D1351, D1346). Returns false, with nothing
+    /// (by code points) or an array without holes, while their iteration is the
+    /// original @@iterator and `next` (D1351, D1346). Returns false, with nothing
     /// changed, otherwise; the caller then runs %ArraySpread. Without a prelude every
     /// array and string is spread here (holes as undefined) and other values are a
     /// TypeError.
@@ -4034,17 +4033,10 @@ impl<'h> Exec<'h> {
         if !has_prelude && src.as_string().is_none() && src.as_object().is_none() {
             return type_error("value is not iterable");
         }
-        if let Some(c) = self.collection_source(src) {
-            let j = self.heap.array_length(arr);
-            self.collection_store(&c, arr, j, true)?;
-            // A spread Map/Set Iterator: as its last `next` leaves it.
-            if let Some(it) = c.it {
-                self.heap.set_object_slot(it, 0, Value::UNDEFINED);
-            }
-            return Ok(true);
-        } else if has_prelude && !self.iteration_unmodified(src) {
+        if has_prelude && !self.iteration_unmodified(src) {
             return Ok(false);
-        } else if let Some(s) = src.as_string() {
+        }
+        if let Some(s) = src.as_string() {
             let units = self.heap.str_to_utf16(s);
             let mut i = 0;
             while i < units.len() {

@@ -496,6 +496,7 @@ impl Heap {
     }
 
     /// The entries array of a Map or Set (the one its iterators lead to).
+    #[cfg(feature = "dump")]
     pub fn collection_entries_ref(&self, o: Obj) -> Option<u32> {
         self.object_slot(o, ENTRIES).as_internal()
     }

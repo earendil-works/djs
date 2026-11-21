@@ -3987,12 +3987,12 @@ function ArrayIteratorPrototypeNext() {
   return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
 }
 
-// builtins/iter.ts:146 %IteratorPrototype%[Symbol.iterator] %IteratorPrototypeIterator
+// builtins/iter.ts:145 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
 }
 
-// builtins/iter.ts:155 value %ArrayIteratorPrototype%[Symbol.toStringTag]
+// builtins/iter.ts:154 value %ArrayIteratorPrototype%[Symbol.toStringTag]
 function ArrayIteratorPrototypeToStringTag() {
   return "Array Iterator";
 }
@@ -5501,12 +5501,12 @@ function MapPrototypeDelete(key) {
   return %CollectionDelete(ThisMap(this), key);
 }
 
-// builtins/map.ts:145 Map.prototype.entries Map.prototype[Symbol.iterator] %MapPrototypeEntries
+// builtins/map.ts:144 Map.prototype.entries Map.prototype[Symbol.iterator]
 function MapPrototypeEntries() {
   return %CollectionIterator(ThisMap(this), 2);
 }
 
-// builtins/map.ts:153 Map.prototype.forEach
+// builtins/map.ts:152 Map.prototype.forEach
 function MapPrototypeForEach(callbackfn, thisArg) {
   const m = ThisMap(this);
   if (!%IsCallable(callbackfn)) {
@@ -5518,12 +5518,12 @@ function MapPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/map.ts:169 Map.prototype.get
+// builtins/map.ts:168 Map.prototype.get
 function MapPrototypeGet(key) {
   return %CollectionGet(ThisMap(this), key);
 }
 
-// builtins/map.ts:174
+// builtins/map.ts:173
 function CanonicalizeKeyedCollectionKey(key) {
   if (%IsNumber(key) && %AsNumber(key) === 0) {
     return 0;
@@ -5531,7 +5531,7 @@ function CanonicalizeKeyedCollectionKey(key) {
   return key;
 }
 
-// builtins/map.ts:185 Map.prototype.getOrInsert
+// builtins/map.ts:184 Map.prototype.getOrInsert
 function MapPrototypeGetOrInsert(key, value) {
   const m = ThisMap(this);
   if (%CollectionHas(m, key)) {
@@ -5541,7 +5541,7 @@ function MapPrototypeGetOrInsert(key, value) {
   return value;
 }
 
-// builtins/map.ts:199 Map.prototype.getOrInsertComputed
+// builtins/map.ts:198 Map.prototype.getOrInsertComputed
 function MapPrototypeGetOrInsertComputed(key, callbackfn) {
   const m = ThisMap(this);
   if (!%IsCallable(callbackfn)) {
@@ -5556,43 +5556,43 @@ function MapPrototypeGetOrInsertComputed(key, callbackfn) {
   return value;
 }
 
-// builtins/map.ts:218 Map.prototype.has
+// builtins/map.ts:217 Map.prototype.has
 function MapPrototypeHas(key) {
   return %CollectionHas(ThisMap(this), key);
 }
 
-// builtins/map.ts:226 Map.prototype.keys
+// builtins/map.ts:225 Map.prototype.keys
 function MapPrototypeKeys() {
   return %CollectionIterator(ThisMap(this), 0);
 }
 
-// builtins/map.ts:236 Map.prototype.set %MapPrototypeSet
+// builtins/map.ts:235 Map.prototype.set %MapPrototypeSet
 function MapPrototypeSet(key, value) {
   %CollectionSet(ThisMap(this), key, value);
   return this;
 }
 
-// builtins/map.ts:245 get Map.prototype.size
+// builtins/map.ts:244 get Map.prototype.size
 function MapPrototypeSize() {
   return %CollectionSize(ThisMap(this));
 }
 
-// builtins/map.ts:253 Map.prototype.values
+// builtins/map.ts:252 Map.prototype.values
 function MapPrototypeValues() {
   return %CollectionIterator(ThisMap(this), 1);
 }
 
-// builtins/map.ts:262 value Map.prototype[Symbol.toStringTag]
+// builtins/map.ts:261 value Map.prototype[Symbol.toStringTag]
 function MapPrototypeToStringTag() {
   return "Map";
 }
 
-// builtins/map.ts:271 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
+// builtins/map.ts:270 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
 function MapIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, false);
 }
 
-// builtins/map.ts:280 value %MapIteratorPrototype%[Symbol.toStringTag]
+// builtins/map.ts:279 value %MapIteratorPrototype%[Symbol.toStringTag]
 function MapIteratorToStringTag() {
   return "Map Iterator";
 }
@@ -8623,27 +8623,27 @@ function SetPrototypeSize() {
   return %CollectionSize(ThisSet(this));
 }
 
-// builtins/set.ts:140 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator] %SetPrototypeValues
+// builtins/set.ts:139 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
 function SetPrototypeValues() {
   return %CollectionIterator(ThisSet(this), 0);
 }
 
-// builtins/set.ts:149 value Set.prototype[Symbol.toStringTag]
+// builtins/set.ts:148 value Set.prototype[Symbol.toStringTag]
 function SetPrototypeToStringTag() {
   return "Set";
 }
 
-// builtins/set.ts:158 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
+// builtins/set.ts:157 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
 function SetIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, true);
 }
 
-// builtins/set.ts:167 value %SetIteratorPrototype%[Symbol.toStringTag]
+// builtins/set.ts:166 value %SetIteratorPrototype%[Symbol.toStringTag]
 function SetIteratorToStringTag() {
   return "Set Iterator";
 }
 
-// builtins/set.ts:177
+// builtins/set.ts:176
 function GetSetRecord(obj) {
   if (!%IsObject(obj)) {
     throw %NewTypeError("not an object");
@@ -8674,17 +8674,17 @@ function GetSetRecord(obj) {
   return rec;
 }
 
-// builtins/set.ts:208
+// builtins/set.ts:207
 function RecordSize(rec) {
   return %AsNumber(%Get(rec, "size"));
 }
 
-// builtins/set.ts:213
+// builtins/set.ts:212
 function RecordHas(rec, value) {
   return %ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), value));
 }
 
-// builtins/set.ts:218
+// builtins/set.ts:217
 function RecordKeys(rec) {
   const iterator = %Call(%Get(rec, "keys"), %Get(rec, "set"));
   if (!%IsObject(iterator)) {
@@ -8693,7 +8693,7 @@ function RecordKeys(rec) {
   return %AsObj(iterator);
 }
 
-// builtins/set.ts:227
+// builtins/set.ts:226
 function SetCopy(s) {
   const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
   const it = %CollectionIterator(s, 0);
@@ -8703,7 +8703,7 @@ function SetCopy(s) {
   return result;
 }
 
-// builtins/set.ts:240
+// builtins/set.ts:239
 function KeysNext(iterator, next, out) {
   const result = IteratorNextResult(iterator, next);
   if (%ToBoolean(%Get(result, "done"))) {
@@ -8713,7 +8713,7 @@ function KeysNext(iterator, next, out) {
   return true;
 }
 
-// builtins/set.ts:253 Set.prototype.union
+// builtins/set.ts:252 Set.prototype.union
 function SetPrototypeUnion(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8727,7 +8727,7 @@ function SetPrototypeUnion(other) {
   return result;
 }
 
-// builtins/set.ts:270 Set.prototype.intersection
+// builtins/set.ts:269 Set.prototype.intersection
 function SetPrototypeIntersection(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8754,7 +8754,7 @@ function SetPrototypeIntersection(other) {
   return result;
 }
 
-// builtins/set.ts:300 Set.prototype.difference
+// builtins/set.ts:299 Set.prototype.difference
 function SetPrototypeDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8778,7 +8778,7 @@ function SetPrototypeDifference(other) {
   return result;
 }
 
-// builtins/set.ts:327 Set.prototype.symmetricDifference
+// builtins/set.ts:326 Set.prototype.symmetricDifference
 function SetPrototypeSymmetricDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8797,7 +8797,7 @@ function SetPrototypeSymmetricDifference(other) {
   return result;
 }
 
-// builtins/set.ts:349 Set.prototype.isSubsetOf
+// builtins/set.ts:348 Set.prototype.isSubsetOf
 function SetPrototypeIsSubsetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8813,7 +8813,7 @@ function SetPrototypeIsSubsetOf(other) {
   return true;
 }
 
-// builtins/set.ts:368 Set.prototype.isSupersetOf
+// builtins/set.ts:367 Set.prototype.isSupersetOf
 function SetPrototypeIsSupersetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8832,7 +8832,7 @@ function SetPrototypeIsSupersetOf(other) {
   return true;
 }
 
-// builtins/set.ts:390 Set.prototype.isDisjointFrom
+// builtins/set.ts:389 Set.prototype.isDisjointFrom
 function SetPrototypeIsDisjointFrom(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -11839,7 +11839,6 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("IteratorRest", IteratorRest);
 %InstallIntrinsic("ArrayPrototypeValues", ArrayPrototypeValues);
 %InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
-%InstallIntrinsic("IteratorPrototypeIterator", IteratorPrototypeIterator);
 %InstallIntrinsic("StringPrototypeIterator", StringPrototypeIterator);
 %InstallIntrinsic("StringIteratorPrototypeNext", StringIteratorPrototypeNext);
 %InstallIntrinsic("SerializeJSONProperty", SerializeJSONProperty);
@@ -11848,7 +11847,6 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("SerializeJSONObject", SerializeJSONObject);
 %InstallIntrinsic("SerializeJSONArray", SerializeJSONArray);
 %InstallIntrinsic("AddEntriesFromIterable", AddEntriesFromIterable);
-%InstallIntrinsic("MapPrototypeEntries", MapPrototypeEntries);
 %InstallIntrinsic("MapPrototypeSet", MapPrototypeSet);
 %InstallIntrinsic("MapIteratorPrototypeNext", MapIteratorPrototypeNext);
 %InstallIntrinsic("ResolvePromise", ResolvePromise);
@@ -11909,7 +11907,6 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("RegExpPrototypeExec", RegExpPrototypeExec);
 %InstallIntrinsic("RegExpPrototypeMatch", RegExpPrototypeMatch);
 %InstallIntrinsic("SetPrototypeAdd", SetPrototypeAdd);
-%InstallIntrinsic("SetPrototypeValues", SetPrototypeValues);
 %InstallIntrinsic("SetIteratorPrototypeNext", SetIteratorPrototypeNext);
 %InstallIntrinsic("ArraySpread", ArraySpread);
 %InstallIntrinsic("CopyDataProperties", CopyDataProperties);

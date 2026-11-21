@@ -135,7 +135,6 @@ function SetPrototypeSize(this: Value): f64 {
  * @builtin Set.prototype.values
  * @builtin Set.prototype.keys
  * @builtin Set.prototype[Symbol.iterator]
- * @intrinsic
  */
 function SetPrototypeValues(this: Value): Obj {
   return CollectionIterator(ThisSet(this), 0);

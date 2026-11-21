@@ -141,7 +141,6 @@ function ArrayIteratorPrototypeNext(this: Value): Obj {
 /**
  * %IteratorPrototype% [ %Symbol.iterator% ] ( ), 27.1.2.1.
  * @builtin %IteratorPrototype%[Symbol.iterator]
- * @intrinsic
  */
 function IteratorPrototypeIterator(this: Value): Value {
   return this;
