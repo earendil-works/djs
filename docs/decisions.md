@@ -13248,7 +13248,8 @@ date: 2026-11-21 · by: pstart · issue: 0274
 `djs_image_staging` zero-filled the `len` bytes the host overwrites with the image right
 after (`resize`). It now sets the length over the reserved capacity (`set_len`, the
 reasoning of D3271: wasm memory has no uninitialized state, and a host that does not write
-the bytes breaks only its instance). −28K instructions per cached pi start, +36 B gz.
+the bytes breaks only its instance). −28K instructions per cached pi start; +40 B gz (429,747 → 429,787 on e0c804e4, under the
+ratchet ceiling).
 
 ## D3452: A pooled instance leaves the image's bytes to the image
 date: 2026-11-21 · by: pstart · issue: 0274
