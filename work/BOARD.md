@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0274 | pi cached start: image-cache key, restore zero-fill, instantiation | pstart | .worktrees/pstart |
 | 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
 | 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
 | 0273 | test262 under GC stress as a full-only gate leg | pgc (after 0269) | .worktrees/pgc |
@@ -25,6 +24,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
+| - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
 | - | GC nursery with a holder write barrier (D3294: heavy -13% memory; barrier-less version +5-9% CPU); test262 under gc-stress as a (nightly?) leg (0258 scratch patch) | owner (design) |
 | - | Flaky gate leg "pi tests (slim without lockdown)" (0260: failed once, passed on rerun); pi worker lifetime timing test at load ~50 (0256) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
@@ -54,6 +54,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0274 | pi cached start | 82edffa9 (agent pstart; D3450-D3452; cached start 1,089K -> 800K instr (-26.5%); pi.bench.ts pool fix) |
 | 0272 | Callback array builtins per element | 162c24bd (agent pscan; D3430, D3431; forEach/map/filter/reduce/some 0.77-0.93x quickjs-wasi; heavy -2.3%; in-loop return measured, dropped: V8 register allocation) |
 | 0267 | Regexp literal runs as one node (JSON escape variants measured, dropped) | 3431a787 (agent pscan; D3380; regexp compile -10%, 1.85x->1.67x QuickJS; +275 B gz) |
 | 0265 | Placement, first instances, compile zone, GC tables behind the arena, floor 87 KiB, compile peaks | c3b74656 (agent pstart; D3360-D3369; idle 448->384 KiB, every row -64 KiB, text 896 KiB; codemode-memory gate leg; compile -2..-5%) |
