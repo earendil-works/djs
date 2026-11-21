@@ -92,6 +92,19 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   D3362. D3362: a floor of 100 KiB for the first segment (prime computes its pages).
 - Moved here from 0258 item 4 (coordinator, 2026-11-21): the GC's side tables out of
   dlmalloc (IDEAS idea 9), the allocation of the tables only; pgc keeps the growth rule.
+- Merged D3362 (main 09f9b41f).
+- What dlmalloc holds (live.patch: live blocks and the set at the peak, per workload):
+  idle 2 blocks, 516 B. Peaks: sequential 24.7 KB (a 15 KB block + smalls), inspect
+  22.8, loop 21.2, media 44.1 (GC tables 2×16 KB + bitmap/table), fanout 83 (one 80,000 B
+  block: Array.prototype.join's buffer, via a trap stack in a keep-names build), text 49.2
+  (101 smalls: the compile beyond the zone), json 49.8 and heavy 114.8 (GC tables: 52+26+
+  2×16 KB). Compile peaks above the VM (alloc-stats): text 71 KB, heavy 52, json 51,
+  loop 41, sequential 36, inspect 37, media 27.
+- Tried: page runs behind the arena start their own size further on (keep.patch): heavy
+  +64 KiB, fanout worse with little room; dropped. GC tables in the arena's tail: D3363,
+  dropped (does not lower the floor; media +64 KiB).
+- So the floor tracks the compile's peak. Next lever: a compile's peak Rust memory (all
+  functions' phase-1 code until resolve, Vec doubling slack): part 2 territory.
 
 ## Follow-ups
 

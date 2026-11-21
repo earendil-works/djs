@@ -12732,3 +12732,20 @@ date: 2026-11-21 · by: pidle · issue: 0266
 `new Error("x")` at a codemode body's top level: 27.9k → 15.2k wasm instructions (QuickJS
 2026 24.4k, quickjs-wasi 19.3k); one more frame on the stack 34.9k → 20.2k; with
 Error.stackTraceLimit = 0 18.1k → 9.1k. +143 B gzip.
+## D3363: The collector's side tables in the arena's tail: measured, not adopted
+date: 2026-11-21 · by: pstart · issue: 0265 (moved from 0258 item 4)
+Built: the bitmap, the block table, the remembered list and the mark stack as scratch
+right behind the arena's end, in its own buffer (`Arena::scratch`, read and written by
+offset; the stack grows at the scratch's end; the Map/Set list copied out before the
+truncation), instead of four Rust allocations. Same collections (djs-core's tests), time
+within ±2% (json, text, heavy, fanout), −84 B gz. But wasm memory: media 832 → 896 KiB
+(the scratch grows the arena's capacity by a page where the tables used to fit in
+dlmalloc's room for free), text 1,088 → 1,024; first instances the same. And it does not
+lower what dlmalloc's first segment must hold (D3362): with that room cut to ~66 KB, text,
+json and heavy still moved their arenas with the tables out of dlmalloc. dlmalloc's
+needs are the compiles': a compile's Rust heap peaks 27-71 KB above the VM's (text's
+2.8 KB body: 71 KB; heavy 52 KB; json 51 KB), in the compile zone (D3361) and dlmalloc.
+An idle VM keeps 0.5 KB there (the ~45 KB seen before was the first instance's coded
+base, D3360); a collection's tables (16-111 KB) fit the floor's room and leave it again.
+So the floor comes down with the compile's peak, not with the tables. The patch is in
+work/scratch/0265/tables.patch of the primary checkout.
