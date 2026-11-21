@@ -12175,3 +12175,26 @@ and an FNV-1a sample: the first 256 bytes (the roots) and one word in every 504 
 against `BASE_SAMPLE` from the build script. The hash protected nothing a host cannot
 break anyway, since it can write anywhere in the instance's memory; what remains catches
 bytes from another build. A new sandbox in node: about 30 µs less of ~150 µs.
+
+## D3272: Fresh arena pages are zeroed as before: measured, not adopted
+date: 2026-11-21 · by: pstart · issue: 0256
+`Arena::zero_ahead` writes zeros over bytes that are often fresh wasm pages, zero already.
+Prototyped: an embedder hook (`VmOptions::extend_zeroed`) through which the arena grew its
+buffer without writing above the highest length it ever had, with djs-wasm's page
+allocator tracking which pages were never handed out (a `fresh` page mark, and the top
+block's zero suffix across in-place growth and moves). It skipped 112 KB of zeroing in
+`sequential`, 390 KB in `media`, 540 KB in `fanout` and 820 KB in `json`, yet run times
+moved by −1.1 to +0.5% (1,000 interleaved runs each, load ~18, within noise), for +440 B
+gzip. The profiles' 1.6-6.9% in `zero_ahead` is the first touch of fresh pages: V8
+commits wasm memory on demand, about 6.6 µs per 64 KiB page touched in node on macOS,
+and skipping the zeroing moves that cost to the cells' first writes. The patch is in
+work/scratch/0256/item3-v2.patch of the primary checkout. What touching a page costs
+is the reason fewer pages per run (idle memory, a smaller arena) also buys time.
+
+## D3273: The JS host draws seeds from an entropy pool
+date: 2026-11-21 · by: pstart · issue: 0256
+`Sandbox` seeds each VM (`vm_set_random_seed`) from `crypto.getRandomValues`, 1-4 µs a
+call in node: about 1% of a `sequential` run with its new sandbox in the profile. It now
+fills 256 words at a time and uses each word once. Also: `djs_prelude::base_len` is a
+constant from the build script instead of parsing the coded header on each of the four
+calls per new VM.

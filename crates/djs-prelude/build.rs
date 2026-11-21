@@ -115,10 +115,13 @@ fn main() {
                  /// The coded base's length.\n\
                  pub const PACKED_LEN: usize = {};\n\
                  /// `base_sample` of the image.\n\
-                 const BASE_SAMPLE: u64 = {};\n",
+                 const BASE_SAMPLE: u64 = {};\n\
+                 /// The image's length.\n\
+                 const BASE_LEN: usize = {};\n",
                 header.join(", "),
                 packed.len(),
-                base_sample(&image)
+                base_sample(&image),
+                image.len()
             ),
         )
         .expect("cannot write the coded image's header");

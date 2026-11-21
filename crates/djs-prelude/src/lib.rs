@@ -69,7 +69,7 @@ pub fn unpack_base(packed: &[u8], capacity: usize) -> Option<alloc::vec::Vec<u8>
 /// The length of the base image (decoded).
 #[cfg(feature = "packed")]
 pub fn base_len() -> usize {
-    djs_lzrc::decoded_len(&PACKED_HEADER).expect("the coded base has a header")
+    BASE_LEN
 }
 
 /// Whether `bytes` are the base image, by its length and a sample of its bytes: for a copy
@@ -211,6 +211,7 @@ mod tests {
         assert_eq!(unpack_base(BASE_PACKED, 0).as_deref(), Some(BASE));
         assert!(BASE_PACKED.len() < BASE.len() / 3);
         assert_eq!(base_len(), BASE.len());
+        assert_eq!(djs_lzrc::decoded_len(&PACKED_HEADER), Some(BASE.len()));
         assert!(is_base(BASE));
         // The build script's sample is this one's.
         assert_eq!(base_sample(BASE), BASE_SAMPLE);

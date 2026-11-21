@@ -2275,11 +2275,23 @@ function seedWords(seed: number | bigint): [number, number] {
   return [Number(s & 0xffffffffn), Number(s >> 32n)];
 }
 
+/**
+ * The host's entropy, drawn in blocks: one `getRandomValues` call costs a few µs in node,
+ * a few percent of a small run with its new sandbox (D3273). Each word is used once.
+ */
+const entropyPool = new Uint32Array(256);
+let entropyAt = entropyPool.length;
+
 /** A seed from the host's entropy (never 0, which would mean the VM's fixed default). */
 function entropy(): [number, number] {
-  const words = new Uint32Array(2);
-  globalThis.crypto.getRandomValues(words);
-  return [words[0], words[1] | 1];
+  if (entropyAt === entropyPool.length) {
+    globalThis.crypto.getRandomValues(entropyPool);
+    entropyAt = 0;
+  }
+  const lo = entropyPool[entropyAt];
+  const hi = entropyPool[entropyAt + 1] | 1;
+  entropyAt += 2;
+  return [lo, hi];
 }
 
 /** Console arguments: values without a host form are shown by their class. */
