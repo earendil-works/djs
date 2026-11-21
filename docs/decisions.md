@@ -12663,3 +12663,17 @@ date: 2026-11-21 · by: pcall · issue: 0259
   loads in the shipped module already. No further zero-size cut was found there; a
   receiver's method (`s.trim`) still pays ~300 for the prototype inline-cache hit,
   which is inlined in `run_hot`.
+## D3292: No allowance retune and no survivor-only string discount for now
+date: 2026-11-21 · by: pgc · issue: 0258
+Measured on top of D3290/D3291, KiB of wasm memory after a run (codemode set; every run
+collects 0–3 times, so a peak is where the last threshold falls against the run's end):
+- `BASE_ALLOWANCE` = `MIN_GROWTH` at 288/256 (kept): fanout 1536, media 832, loop 768,
+  text 1088, json 1280, ts 1408, heavy 3840. At 224: 1664, 896, 704, 1088, 1152, 1280,
+  4096. At 192: text 1024, json 1216, ts 1344, the rest as 224. At 160 and 128 fanout
+  jumps to 3008 (its arena moves during a collection, a compile peak behind it). Geomean
+  −0.3 to −0.8% for +2–4% instructions on json and ts (one more collection). Re-sweep
+  once compile peaks no longer move the arena.
+- 0234's follow-up, the big-string discount for survivors only (a `Roots` field with the
+  last collection's end; leaves below it count 100%, new ones 60/30/0%): heavy 3840 →
+  3968/3968/3904. The earlier third collection is followed by a fourth at a higher live
+  size (heavy's live data grows to 2.9 MB through the run). Not landed.
