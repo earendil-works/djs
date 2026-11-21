@@ -406,9 +406,14 @@ pub fn resume_in(
     st: &mut ExecState,
 ) -> Outcome {
     let mode = prog.at(H_MODE);
+    let first = prog.at(H_SEARCH) as usize;
     let mut m = Machine {
         code: prog,
         input,
+        first_bytes: match input {
+            Input::Latin1(_) if first != 0 => first_bytes(prog, first),
+            _ => None,
+        },
         unicode: prog.flags().unicode_mode(),
         regs: 2 * prog.at(H_CAPTURES) as usize,
         nslots: st.nslots as usize,
@@ -420,9 +425,37 @@ pub fn resume_in(
     m.run(fuel)
 }
 
+/// The Latin-1 characters of the first set at `first` (`n (lo hi){n}`, sorted, then a
+/// bitmap), when there are one to four (repeated to fill four). From the ranges: a large
+/// set (`\s`, `\w`) is turned down at its count, before any work.
+fn first_bytes(code: Prog<'_>, first: usize) -> Option<[u8; 4]> {
+    let n = code.at(first) as usize;
+    if n > 4 {
+        return None;
+    }
+    let mut set = [0u8; 4];
+    let mut k = 0;
+    for r in 0..n {
+        let (lo, hi) = (code.at(first + 1 + 2 * r), code.at(first + 2 + 2 * r));
+        for c in lo..=hi.min(0xFF) {
+            if k == 4 {
+                return None;
+            }
+            set[k] = c as u8;
+            k += 1;
+        }
+    }
+    for i in k..4 {
+        set[i] = set[0];
+    }
+    (k > 0).then_some(set)
+}
+
 struct Machine<'a, 's> {
     code: Prog<'a>,
     input: Input<'a>,
+    /// The first set's characters when they are one to four bytes, for a one-byte input.
+    first_bytes: Option<[u8; 4]>,
     unicode: bool,
     /// Index of the first register slot.
     regs: usize,
@@ -690,7 +723,12 @@ impl Machine<'_, '_> {
         let end = len.min(p.saturating_add(passes).saturating_add(1));
         // One-byte strings are the common input: their loop on its own.
         let found = match self.input {
-            Input::Latin1(b) => (p..end).find(|&i| self.in_first(first, b[i] as u32)),
+            Input::Latin1(b) => match self.first_bytes {
+                // A literal start (`function`, `TODO|FIXME`, `report` with `i`): eight
+                // bytes at a time (0260).
+                Some(set) => crate::swar::find_any(&b[p..end], set).map(|k| p + k),
+                None => (p..end).find(|&i| self.in_first(first, b[i] as u32)),
+            },
             input => (p..end).find(|&i| self.in_first(first, input.unit(i))),
         };
         match found {

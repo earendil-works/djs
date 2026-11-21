@@ -757,3 +757,52 @@ fn search_fuel_is_additive() {
         }
     }
 }
+
+/// The one-byte searches (0260): a first set of one to four bytes and line starts in
+/// one-byte text go eight bytes at a time. Each pattern at every offset of one-byte text
+/// gives the match and the fuel of the same text read as UTF-16 (the unit loop), whole
+/// and in slices of a few units.
+#[test]
+fn one_byte_search_agrees_with_units() {
+    let cases = [
+        ("fn", ""),
+        ("TODO|FIXME", ""),
+        ("report|metric", "i"),
+        ("[f\u{100}]x", ""),
+        ("[f\u{e9}\u{ff}]x", "i"),
+        ("\u{e9}", ""),
+        ("^x", "m"),
+        ("^(?:a|x)", "m"),
+        ("\\bx", ""),
+        ("\\s+x", ""),
+    ];
+    for (pat, flags) in cases {
+        let prog = re(pat, flags);
+        for n in 0..=20 {
+            for at in 0..n {
+                for needle in [
+                    "x", "fx", "FX", "TODO", "fixme", "Metric", "\u{e9}x", "\u{ff}x",
+                ] {
+                    let mut text: Vec<char> = (0..n)
+                        .map(|i| ['a', ' ', '\r', '\n', '\u{e9}', 'b', '\u{80}'][i % 7])
+                        .collect();
+                    text.truncate(at);
+                    text.extend(needle.chars());
+                    text.extend(['a', 'x', '\n', 'x']);
+                    let latin1: Vec<u8> = text.iter().map(|&c| c as u8).collect();
+                    let units: Vec<u16> = text.iter().map(|&c| c as u16).collect();
+                    for chunk in [i64::MAX / 2, 1, 3, 9] {
+                        let (a, fa) = exec_chunked_metered(&prog, Input::Latin1(&latin1), 0, chunk);
+                        let (b, fb) = exec_chunked_metered(&prog, Input::Utf16(&units), 0, chunk);
+                        assert!(same_result(&a.0, &b.0), "/{pat}/{flags} on {text:?}");
+                        assert_eq!(
+                            (a.1, fa),
+                            (b.1, fb),
+                            "/{pat}/{flags} on {text:?} by {chunk}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
