@@ -6,6 +6,10 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0280 | D020 budget +2 KB (owner); land parked construct path and object rest | pidle | .worktrees/pidle |
+| 0281 | Land the regexp matcher state reuse | pscan | .worktrees/pscan |
+| 0282 | @fast builtin getters (Map/Set size) | pcall | .worktrees/pcall |
+| 0283 | Builtin families: what each costs and gives (list for the owner) | pstart | .worktrees/pstart |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 
 ## Open (ready)
