@@ -238,6 +238,7 @@ function StringPrototypeEndsWith(this: Value, searchString: Value, endPosition?:
 /**
  * String.prototype.localeCompare ( that ), 22.1.3.12: code point order (no Intl).
  * @builtin String.prototype.localeCompare
+ * @rust
  */
 function StringPrototypeLocaleCompare(this: Value, that: Value): f64 {
   const s: Str = ThisToString(this);

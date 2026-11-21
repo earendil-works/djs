@@ -529,8 +529,14 @@ impl Heap {
         b: u32,
         extra: u32,
     ) -> Result<Str, HeapError> {
-        let (from, two_byte) = self.contiguous_data(s);
-        assert!(!two_byte, "latin1_piece: a two-byte string");
+        // (A flat cell, the usual case, from one kind read.)
+        let from = if self.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8 {
+            s.0 + Str8::DATA.offset
+        } else {
+            let (from, two_byte) = self.contiguous_data(s);
+            assert!(!two_byte, "latin1_piece: a two-byte string");
+            from
+        };
         let dst = self.alloc_flat(b - a + extra, false)?;
         self.arena_mut()
             .copy_within(from + a, b - a, dst + Str8::DATA.offset);

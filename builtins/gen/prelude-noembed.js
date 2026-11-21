@@ -9217,22 +9217,19 @@ function StringPrototypeStartsWith(searchString, position) {}
 // builtins/string.ts:223 String.prototype.endsWith
 function StringPrototypeEndsWith(searchString, endPosition) {}
 
-// builtins/string.ts:242 String.prototype.localeCompare
-function StringPrototypeLocaleCompare(that) {
-  const s = ThisToString(this);
-  return %StrLocaleCompare(s, ToString(that));
-}
+// builtins/string.ts:243 String.prototype.localeCompare
+function StringPrototypeLocaleCompare(that) {}
 
-// builtins/string.ts:255 String.prototype.slice
+// builtins/string.ts:256 String.prototype.slice
 function StringPrototypeSlice(start, end) {}
 
-// builtins/string.ts:272 String.prototype.substring
+// builtins/string.ts:273 String.prototype.substring
 function StringPrototypeSubstring(start, end) {}
 
-// builtins/string.ts:285 String.prototype.substr
+// builtins/string.ts:286 String.prototype.substr
 function StringPrototypeSubstr(start, length) {}
 
-// builtins/string.ts:308 String.prototype.concat
+// builtins/string.ts:309 String.prototype.concat
 function StringPrototypeConcat(...args) {
   let r = ThisToString(this);
   const n = LengthOfArrayLike(args);
@@ -9242,10 +9239,10 @@ function StringPrototypeConcat(...args) {
   return r;
 }
 
-// builtins/string.ts:323 String.prototype.repeat
+// builtins/string.ts:324 String.prototype.repeat
 function StringPrototypeRepeat(count) {}
 
-// builtins/string.ts:336
+// builtins/string.ts:337
 function StringPad(s, maxLength, fillString, atStart) {
   const intMaxLength = ToLength(maxLength);
   const stringLength = (%StrLength(s));
@@ -9263,44 +9260,44 @@ function StringPad(s, maxLength, fillString, atStart) {
   return %StrPad(s, filler, intMaxLength - stringLength, atStart);
 }
 
-// builtins/string.ts:360 String.prototype.padEnd
+// builtins/string.ts:361 String.prototype.padEnd
 function StringPrototypePadEnd(maxLength, fillString) {}
 
-// builtins/string.ts:370 String.prototype.padStart
+// builtins/string.ts:371 String.prototype.padStart
 function StringPrototypePadStart(maxLength, fillString) {}
 
-// builtins/string.ts:381 String.prototype.toLowerCase
+// builtins/string.ts:382 String.prototype.toLowerCase
 function StringPrototypeToLowerCase() {}
 
-// builtins/string.ts:390 String.prototype.toUpperCase
+// builtins/string.ts:391 String.prototype.toUpperCase
 function StringPrototypeToUpperCase() {}
 
-// builtins/string.ts:399 String.prototype.toLocaleLowerCase
+// builtins/string.ts:400 String.prototype.toLocaleLowerCase
 function StringPrototypeToLocaleLowerCase() {}
 
-// builtins/string.ts:408 String.prototype.toLocaleUpperCase
+// builtins/string.ts:409 String.prototype.toLocaleUpperCase
 function StringPrototypeToLocaleUpperCase() {}
 
-// builtins/string.ts:417 String.prototype.trim
+// builtins/string.ts:418 String.prototype.trim
 function StringPrototypeTrim() {}
 
-// builtins/string.ts:427 String.prototype.trimStart String.prototype.trimLeft
+// builtins/string.ts:428 String.prototype.trimStart String.prototype.trimLeft
 function StringPrototypeTrimStart() {}
 
-// builtins/string.ts:437 String.prototype.trimEnd String.prototype.trimRight
+// builtins/string.ts:438 String.prototype.trimEnd String.prototype.trimRight
 function StringPrototypeTrimEnd() {}
 
-// builtins/string.ts:445 String.prototype.isWellFormed
+// builtins/string.ts:446 String.prototype.isWellFormed
 function StringPrototypeIsWellFormed() {
   return %StrIsWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:453 String.prototype.toWellFormed
+// builtins/string.ts:454 String.prototype.toWellFormed
 function StringPrototypeToWellFormed() {
   return %StrToWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:462 String.prototype.normalize
+// builtins/string.ts:463 String.prototype.normalize
 function StringPrototypeNormalize(form) {
   const s = ThisToString(this);
   let f = "NFC";
@@ -9326,13 +9323,13 @@ function StringPrototypeNormalize(form) {
   return %AsStr(r);
 }
 
-// builtins/string.ts:495 String.fromCharCode
+// builtins/string.ts:496 String.fromCharCode
 function StringFromCharCode(...codeUnits) {
   CoerceNumbers(codeUnits);
   return %StrFromCodeUnits(codeUnits);
 }
 
-// builtins/string.ts:505 String.fromCodePoint
+// builtins/string.ts:506 String.fromCodePoint
 function StringFromCodePoint(...codePoints) {
   if (%AllCodePoints(codePoints)) {
     return %StrFromCodePoints(codePoints);
@@ -9349,7 +9346,7 @@ function StringFromCodePoint(...codePoints) {
   return %StrFromCodePoints(codePoints);
 }
 
-// builtins/string.ts:526 String.raw
+// builtins/string.ts:527 String.raw
 function StringRaw(template, ...substitutions) {
   const cooked = %ToObject(template);
   const literals = %ToObject(%Get(cooked, "raw"));
@@ -11997,6 +11994,7 @@ function GlobalAtob(...args) {
 %MarkFast(StringPrototypeIncludes);
 %MarkFast(StringPrototypeStartsWith);
 %MarkFast(StringPrototypeEndsWith);
+%MarkFast(StringPrototypeLocaleCompare);
 %MarkFast(StringPrototypeSlice);
 %MarkFast(StringPrototypeSubstring);
 %MarkFast(StringPrototypeSubstr);

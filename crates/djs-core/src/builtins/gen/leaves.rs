@@ -43,6 +43,7 @@ const I_IS_ARRAY: u16 = iid("IsArray");
 const I_NUMBER_POW: u16 = iid("NumberPow");
 const I_NUMBER_TO_INT32: u16 = iid("NumberToInt32");
 const I_PRIMITIVE_VALUE: u16 = iid("PrimitiveValue");
+const I_STR_LOCALE_COMPARE: u16 = iid("StrLocaleCompare");
 const I_STRING_PARSE_FLOAT: u16 = iid("StringParseFloat");
 const I_STRING_PARSE_INT: u16 = iid("StringParseInt");
 
@@ -92,19 +93,20 @@ pub(crate) static LEAVES: &[Leaf] = &[
     Leaf { run: shape_13, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0] } }, // StringPrototypeIncludes
     Leaf { run: shape_14, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0] } }, // StringPrototypeStartsWith
     Leaf { run: shape_15, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0] } }, // StringPrototypeEndsWith
-    Leaf { run: shape_16, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSlice
-    Leaf { run: shape_17, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSubstring
-    Leaf { run: shape_18, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSubstr
-    Leaf { run: shape_19, data: LeafData { ids: &[], lits: &[0.0, 1.0, 0.0, 0.0, 0.0] } }, // StringPrototypeRepeat
-    Leaf { run: shape_20, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 9007199254740991.0, 9007199254740991.0, 0.0] } }, // StringPrototypePadEnd
-    Leaf { run: shape_20, data: LeafData { ids: &[], lits: &[1.0, 0.0, 0.0, 9007199254740991.0, 9007199254740991.0, 0.0] } }, // StringPrototypePadStart
-    Leaf { run: shape_21, data: LeafData { ids: &[], lits: &[0.0] } }, // StringPrototypeToLowerCase
-    Leaf { run: shape_21, data: LeafData { ids: &[], lits: &[1.0] } }, // StringPrototypeToUpperCase
-    Leaf { run: shape_21, data: LeafData { ids: &[], lits: &[0.0] } }, // StringPrototypeToLocaleLowerCase
-    Leaf { run: shape_21, data: LeafData { ids: &[], lits: &[1.0] } }, // StringPrototypeToLocaleUpperCase
-    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[0.0] } }, // StringPrototypeTrim
-    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[1.0] } }, // StringPrototypeTrimStart
-    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[2.0] } }, // StringPrototypeTrimEnd
+    Leaf { run: shape_16, data: LeafData { ids: &[I_STR_LOCALE_COMPARE], lits: &[] } }, // StringPrototypeLocaleCompare
+    Leaf { run: shape_17, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSlice
+    Leaf { run: shape_18, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSubstring
+    Leaf { run: shape_19, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSubstr
+    Leaf { run: shape_20, data: LeafData { ids: &[], lits: &[0.0, 1.0, 0.0, 0.0, 0.0] } }, // StringPrototypeRepeat
+    Leaf { run: shape_21, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 9007199254740991.0, 9007199254740991.0, 0.0] } }, // StringPrototypePadEnd
+    Leaf { run: shape_21, data: LeafData { ids: &[], lits: &[1.0, 0.0, 0.0, 9007199254740991.0, 9007199254740991.0, 0.0] } }, // StringPrototypePadStart
+    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[0.0] } }, // StringPrototypeToLowerCase
+    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[1.0] } }, // StringPrototypeToUpperCase
+    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[0.0] } }, // StringPrototypeToLocaleLowerCase
+    Leaf { run: shape_22, data: LeafData { ids: &[], lits: &[1.0] } }, // StringPrototypeToLocaleUpperCase
+    Leaf { run: shape_23, data: LeafData { ids: &[], lits: &[0.0] } }, // StringPrototypeTrim
+    Leaf { run: shape_23, data: LeafData { ids: &[], lits: &[1.0] } }, // StringPrototypeTrimStart
+    Leaf { run: shape_23, data: LeafData { ids: &[], lits: &[2.0] } }, // StringPrototypeTrimEnd
 ];
 
 #[cfg(djs_prelude)]
@@ -153,6 +155,7 @@ pub(crate) static LEAF_NAMES: &[&str] = &[
     "StringPrototypeIncludes",
     "StringPrototypeStartsWith",
     "StringPrototypeEndsWith",
+    "StringPrototypeLocaleCompare",
     "StringPrototypeSlice",
     "StringPrototypeSubstring",
     "StringPrototypeSubstr",
@@ -476,8 +479,21 @@ fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
-// StringPrototypeSlice
+// StringPrototypeLocaleCompare
 fn shape_16(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+    let a_that: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
+        if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
+        }
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
+        unreachable!() });
+    return Ok(lnum(f64_of({ let a = [l_s_3, ex.l_to_string_at(a_that, sh, 1)?, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 2)? })));
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
+}
+
+// StringPrototypeSlice
+fn shape_17(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_start: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_end: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
@@ -523,7 +539,7 @@ fn shape_16(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 }
 
 // StringPrototypeSubstring
-fn shape_17(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_start: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_end: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
@@ -558,7 +574,7 @@ fn shape_17(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 }
 
 // StringPrototypeSubstr
-fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_start: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_length: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
@@ -601,7 +617,7 @@ fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 }
 
 // StringPrototypeRepeat
-fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+fn shape_20(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_count: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
@@ -625,7 +641,7 @@ fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 }
 
 // StringPrototypePadEnd, StringPrototypePadStart
-fn shape_20(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+fn shape_21(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_maxLength: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_fillString: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     return Ok(('b7: { let mut p_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
@@ -668,7 +684,7 @@ fn shape_20(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 }
 
 // StringPrototypeToLowerCase, StringPrototypeToUpperCase, StringPrototypeToLocaleLowerCase, StringPrototypeToLocaleUpperCase
-fn shape_21(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+fn shape_22(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     return Ok({ let s = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
@@ -679,7 +695,7 @@ fn shape_21(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 }
 
 // StringPrototypeTrim, StringPrototypeTrimStart, StringPrototypeTrimEnd
-fn shape_22(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
+fn shape_23(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     return Ok({ let s = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
