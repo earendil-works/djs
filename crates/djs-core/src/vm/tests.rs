@@ -3692,6 +3692,17 @@ const LIMITS_GENERATED: [usize; 2] = [1_800_000, 2_000_000];
 /// image at every stop with `suspend`: a hash of the heap image at each stop and at the
 /// end, and the console output (0093, D1930).
 fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<String> {
+    image_trace_fine(src, exec, fuel, suspend, 600)
+}
+
+/// [`image_trace`] with `fine` stops of `fuel` before the coarser ones.
+fn image_trace_fine(
+    src: &str,
+    exec: ExecOptions,
+    fuel: u64,
+    suspend: bool,
+    fine: usize,
+) -> Vec<String> {
     let opts = VmOptions {
         exec,
         ..Default::default()
@@ -3715,7 +3726,7 @@ fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<St
     let mut trace = Vec::new();
     loop {
         // Fine slices for the first stops, then coarser ones (every stop hashes the image).
-        let fuel = if trace.len() > 600 {
+        let fuel = if trace.len() > fine {
             fuel.max(997)
         } else {
             fuel
@@ -3741,11 +3752,12 @@ fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<St
 
 /// The paths the tier-0 loop got after D1930 (cache kinds for absent keys and accessors,
 /// getters with `@fast` entries, `typeof`, string comparisons, string keys, template
-/// literals, builtin method calls on strings and numbers with plain arguments: ones that
-/// succeed, throw, and convert an object), each a few times at one site and stopped after
-/// every few units of fuel: the arena's bytes at every stop, dead stack slots included, equal
-/// those of the run without the loop (0282: a stop right after a getter found a slot the
-/// loop had not written).
+/// literals, builtin calls made inside the loop: ones that succeed, throw, convert an
+/// object, meet a replaced builtin, and run near the stack's end, D3551), each a few
+/// times at one site, the whole run stopped after every one, two, three, five, seven and
+/// eleven units of fuel: the arena's bytes at every stop, dead stack slots included,
+/// equal those of the run without the loop (0282: a stop right after a getter found a
+/// slot the loop had not written).
 #[test]
 fn hot_loop_paths_are_invisible_at_every_stop() {
     let src = "class P { constructor() { this.v = 1; } get g() { return this.v + 1; } m() { return 2; } }\n\
@@ -3776,13 +3788,31 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
           if (i === 2) { Object.defineProperty(P.prototype, 'g', { get() { return 7; } }); o.missing = 1; }\n\
         }\n\
         console.log(acc, out);\n";
-    for fuel in [1, 2, 3, 5, 7, 11] {
+    // Builtin calls in frames up to the stack's end and beyond its first growth, with
+    // every alignment of the frames to it (a frame is 11 slots): in the last slots the
+    // loop makes no such call, since a leaf's intrinsic (`Math.pow`'s) would move the
+    // stack under it. The calls are on the way down: the stack never shrinks.
+    let deep: Vec<String> = (0..12)
+        .map(|shift| {
+            format!(
+                "function deep(n, str) {{ const c = str.charCodeAt(1) + str.trim().length + Math.floor(n / 3); return n === 0 ? c : c + deep(n - 1, str); }}\n\
+                 function pow(n) {{ const x = Math.pow(n, 2); return n === 0 ? x : x + pow(n - 1); }}\n\
+                 console.log(pow(100{}) + deep(20, [' ab', 'c'].join('')));\n",
+                ", 0".repeat(shift)
+            )
+        })
+        .collect();
+    for (src, fuel) in [1, 2, 3, 5, 7, 11]
+        .map(|f| (src, f))
+        .into_iter()
+        .chain(deep.iter().map(|d| (d.as_str(), 11)))
+    {
         let exec = |hot_loop| ExecOptions {
             hot_loop,
             ..Default::default()
         };
-        let with = image_trace(src, exec(true), fuel, false);
-        let without = image_trace(src, exec(false), fuel, false);
+        let with = image_trace_fine(src, exec(true), fuel, false, usize::MAX);
+        let without = image_trace_fine(src, exec(false), fuel, false, usize::MAX);
         assert!(with.len() > 100, "the program ran: {} stops", with.len());
         let first = with.iter().zip(&without).position(|(a, b)| a != b);
         assert!(
