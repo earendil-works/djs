@@ -13007,3 +13007,15 @@ date: 2026-11-21 · by: pgc · issue: 0269
 - Tried and dropped: a `StrMatchesAt` intrinsic for startsWith/endsWith (no substring):
   no change per op (the generated leaf's per-intrinsic calls dominate, not the
   substring), +372 B gz.
+
+## D3430: EachDense's per-element step reads its state once; reduce's box at the end
+date: 2026-11-21 · by: pscan · issue: 0272
+`each_return` and `each_complete` take the mode and k read once (no re-reads of the
+state slots per step), `each_element` takes the dense element first (an int length without
+a float compare; sorts and Array.from's Get out of line), a boolean result skips
+`to_boolean`, k is written as an int Value without the float round trip, and reduce keeps
+its accumulator in the state's THIS slot: the box gets it when the loop ends (its element
+made at the loop's start, so the end allocates nothing). Machine instructions per element
+(slope.py, 100-element arrays, wasm): forEach 799 → 750, map 868 → 816, filter 979 → 887,
+reduce 896 → 703, some/find/every ~722 → 630 (quickjs-wasi: 920, 996, 951, 769, ~705);
+heavy −2.3% workload instructions; +~130 B gz.

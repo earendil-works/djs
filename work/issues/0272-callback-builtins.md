@@ -55,6 +55,18 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Measured (main 8197d88e, slope.py N/2N on 100-element arrays, machine instructions per
+  element, work/scratch/0272/s/*.js; quickjs-wasi by the same method, qslope.py): djs
+  forEach 799, map 868, filter 979, reduce 896, some 721, find 733, every 721, for-of 736,
+  map (3 args) 951, flatMap 9,420; quickjs-wasi 920, 996, 951, 769, 712, 696, 709, 1,394,
+  1,226, 2,570. perelem.py's single runs include V8's tier-up (900-1,400 per element on
+  either engine): not usable here. flatMap is generic bytecode (FlattenIntoArray) and
+  appears in one codemode corpus file (275 .map, 39 .filter, 37 .forEach, 7 .reduce).
+- Profiles (forEach, wasm): run_hot 48% (callback body ~125 instructions, the rest the
+  Each exit, load_frame and re-entry), each_return 27%, each_element 10%; map adds the
+  store (create_element_fast + dense_put ~16%).
+- D3430 (batch 1): forEach -6.2%, map -6.0%, filter -9.4%, reduce -21.5%, some/find/every
+  -12.6%; heavy -2.3%. A frame rewrite through the stack's raw bytes was +3-4% (dropped).
 
 ## Follow-ups
 
