@@ -1,6 +1,6 @@
 # 0269: String costs: views, short results, slices, appends
 
-status: open
+status: in-progress
 agent: pgc
 branch: issue/0269-string-costs
 depends-on: 0258
