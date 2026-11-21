@@ -235,6 +235,10 @@ fn take_base() -> Option<Vec<u8>> {
             .with(|b| b.borrow_mut().take())
             .or_else(|| decode_base(base_capacity()))?;
         BASE_TAKEN.with(|t| t.set(true));
+        // The coded base goes too (D3360): 46 KB held in dlmalloc's first segment pushed
+        // a collection's side tables into page runs behind the arena, which then moved.
+        // A host that makes another VM here hands it over again.
+        CODED.with(|c| c.borrow_mut().take());
         return Some(base);
     }
     if base_ptr() == 0 {
@@ -477,8 +481,9 @@ pub extern "C" fn djs_build_hash() -> u32 {
 /// module's memory, read-only. Hosts compress snapshots against it (D2260): it is the
 /// image every `vm_new` starts from, and the build hash fixes its bytes. Valid until the
 /// next `vm_new`, which takes the bytes as its arena (D2060): a host that keeps the base
-/// reads it first (a later call decodes it again). 0 if the instance has no base and no
-/// coded base to decode (`djs_base_coded_ptr`).
+/// reads it first (a later call decodes it again, from a coded base the host hands over
+/// again: the first VM's takes the coded one with it, D3360). 0 if the instance has no
+/// base and no coded base to decode (`djs_base_coded_ptr`).
 pub extern "C" fn djs_base_ptr() -> usize {
     base_ptr()
 }
@@ -533,8 +538,9 @@ pub extern "C" fn djs_base_inject() -> u32 {
 /// Room for the coded base, the module's custom section `djs_base` (D2541): the module
 /// does not keep it in its memory, so the host hands it over when it has no decoded base
 /// to inject. The host writes the section's `len` bytes there; the instance decodes them
-/// when it needs the base (checking them) and drops them once it keeps a decoded copy. 0
-/// if the instance has its base or the coded one, or `len` is not the section's length.
+/// when it needs the base (checking them) and drops them once it keeps a decoded copy or
+/// its first VM took the decoded one (D3360). 0 if the instance has its base or the coded
+/// one, or `len` is not the section's length.
 pub extern "C" fn djs_base_coded_ptr(len: usize) -> usize {
     if BASE.with(|b| b.borrow().is_some())
         || CODED.with(|c| c.borrow().is_some())

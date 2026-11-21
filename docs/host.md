@@ -567,7 +567,9 @@ decoded or injected base as its arena and grows it in place (it ends where memor
 D2053); the instance keeps no copy. Hosts therefore call `rememberBase` before `vm_new`
 (a host that reads `djs_base_ptr` after it makes the instance decode again), and inject
 only into instances that create a VM, not into ones that restore an image. An instance
-that creates a second VM decodes the base once more and keeps it for its further VMs.
+that creates a second VM decodes the base once more, from the coded section handed over
+again (the first VM's `vm_new` drops the coded base, D3360), and keeps it for its further
+VMs.
 Measured: every sandbox and pi session uses 0.31 MiB less wasm memory (an empty Sandbox
 1.50 → 1.19 MiB, pi warm `return 1` 1.81 → 1.50 MiB), and later `Sandbox.create` is
 about 20 µs faster (no copy).

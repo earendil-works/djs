@@ -12459,3 +12459,19 @@ insertion order). No shape is created, so the shape tree stays a function of the
 program. Frozen, sealed, read-only, non-enumerable or getter sources, index keys,
 dictionaries and exotic objects take the per-key path. `{ ...row, x: 1 }` over 8-key
 JSON rows: 16.0k → 4.0k wasm instructions per object (QuickJS 2026 12.2k); +174 B gzip.
+
+## D3360: An instance drops the coded base when its first VM takes the decoded one
+date: 2026-11-21 · by: pstart · issue: 0265
+The first instance of a module decodes the base from the coded section the host hands
+over (D2541) and kept those 46 KB in dlmalloc's first segment "while a later decode may
+need them". Counted in an instrumented build (memory.grow calls, page runs, arena moves,
+collections per run): only first instances moved their arena. With the segment that much
+fuller, a collection's side tables became page runs right behind the arena, which then
+could not grow in place and moved (fanout: 1.2 MB copied, wasm memory 1,664 → 3,008 KiB;
+text: a new dlmalloc segment, 1,088 → 1,472 KiB; heavy 4,672 → 4,800 KiB). Every later
+instance gets the base injected and never held the coded one. `take_base` now drops it
+when the first VM takes the base; a host that makes a second VM in the same instance
+hands the section over again (`djs_base_coded_ptr`, as for an injected instance). The JS
+hosts make one VM per instance. First-instance memory (6 perturbed runs per workload) now
+equals every other instance's: the sum of the means 13,163 → 11,509 KiB; fanout's first
+run −8%. +29 B gz.

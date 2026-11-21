@@ -60,6 +60,25 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Instrumented builds (work/scratch/0265/instr.patch: memory.grow calls and pages, page
+  runs, huge reallocs that move and bytes copied, dlmalloc segments, arena moves,
+  collections; an event log of page-run allocations): main and the pre-D3341 build count
+  exactly the same for every codemode workload, warm or first instance. No arena move in
+  any warm instance; memory.grow 1-11 per run, collections 0-4.
+- The media +15-17% (0263): not placement. It shows only between two particular shipped
+  binaries: the same sources relinked with padded relocations (--keep-names) or with the
+  counters compiled in run equally fast; with V8's wasm inlining off and eager TurboFan
+  (--no-wasm-inlining --no-wasm-dynamic-tiering) the gap stays, so it lives in the
+  module's code bytes: the pre-D3341 shipped binary is the slow outlier (its profile has
+  the JSON parser's loop 4x heavier). Code-layout sensitivity of LLVM/V8, a lottery a
+  one-line change can win or lose; not a lever, and a reason to confirm one-workload
+  surprises on a relinked twin.
+- First instances are where placement bites (D3360): the coded base held in dlmalloc.
+  Dropped when the first VM takes the base: first-instance memory equals warm instances.
+- With D3360 the compile zone of D3342 no longer moves memory (first and warm instances,
+  all workloads): its regressions were first instances (and the variant that kept the
+  zone forever). Measured again on top: compile −2..−5%, sequential run −3.6%, inspect
+  −1.8%, +~220 B gz.
 
 ## Follow-ups
 

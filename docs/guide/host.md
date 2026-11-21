@@ -231,8 +231,11 @@ sandbox more than the rest of its setup.
 [`js/src/base.ts`](../../js/src/base.ts) does this for the `Sandbox`.
 
 The decoded or written bytes then become the first VM's arena as they are, grown in
-place: the instance keeps no copy of its own. Only an instance that makes a second VM
-decodes the base again and keeps that copy for any further VMs. A fresh sandbox is
+place: the instance keeps no copy of its own, and drops the coded section too, which
+would otherwise sit in the allocator's first pages and push later blocks behind the
+arena, where they keep it from growing in place. Only an instance that makes a second VM
+needs the base again: the host hands over the section once more, and the instance decodes
+it and keeps that copy for any further VMs. A fresh sandbox is
 <!--n heap/sandbox-memory kib-->640 KiB<!--/n--> of wasm memory: the stack, the static data, the allocator's first pages and the
 base.
 

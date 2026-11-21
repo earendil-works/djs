@@ -59,6 +59,12 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   const vm1 = first.vm_new(0);
   // The decoded bytes became the VM's arena, grown in place: no second copy (D2060).
   assert.equal(first.vm_arena_ptr(vm1), baseAt, "the decoded base is the arena");
+  // The coded base went with it (D3360): a second VM here needs it handed over again.
+  assert.equal(first.djs_base_ptr(), 0);
+  assert.ok(provideCodedBase(module, first));
+  const vm1b = first.vm_new(0);
+  assert.notEqual(vm1b, 0);
+  first.vm_free(vm1b);
   // An instance given the bytes takes them and creates the same VM.
   const second = djsExports(module) as any;
   const at = second.djs_base_inject_ptr(base.length);
