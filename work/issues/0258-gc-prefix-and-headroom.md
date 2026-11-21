@@ -69,6 +69,27 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
 
+### Batch 1 (D3290, D3291)
+- Latch `ROOT_PREFIX_WRITTEN` (Roots::FLAGS bit 8, sticky, image state), set only in
+  `Heap::set_prefix_written` (0259 hooks there). General property ops latch through
+  `refuse_write`/`note_write`; fast writers compare `gate_end` and decline (no new call in
+  run_hot / IC hits). `mark_compact` skips `[roots end, BASE_END)` while unlatched, in full
+  and minor collections. Debug builds verify at each skipping collection that the prefix
+  references nothing ≥ BASE_END. That check, under a gc-stress hack in the test262 runner
+  (work/scratch/0258/t262-stress-hack.patch), found create_data_property's new-key fast path
+  writing builtins unlatched (also e2e bigint.js in gc mode); fixed.
+- Instructions per run (wasm, node 26, fresh VMs, ±1–2% noise, load 17–60): fanout −1.5%,
+  media −2%, text −2%, json −0.6%, heavy −0.4%; wmeasure props −1.8, pi-like −1.3,
+  json-objects −1.3. Shipped module +~370 B gz (429,167 vs 428,796).
+- Codemode runs collect only 0–3 times (trace: work/scratch/0258/trace.ts with
+  trace-full.patch). heavy's 3rd threshold was crossed by 416 B and the arena's "past target:
+  +1/4" step reserved 864 KB: D3291 grows by half the overshoot. KiB after a run, main →
+  branch: fanout 1792→1664, json 1472→1408, ts 1664→1536, heavy 4736→3904; others equal.
+- Allowance sweep (before D3291; KiB after run): BASE_ALLOWANCE=MIN_GROWTH 224: loop −64,
+  json −192, ts −256, heavy −512; 192: also text −64; ≤160: fanout +192. json/ts +2–4%
+  instructions (one more collection). To be redone on top of D3291.
+- Guide: gc.md (skipping the prefix), arena.md (growth past the threshold).
+
 ## Follow-ups
 
 ## Result
