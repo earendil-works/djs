@@ -57,7 +57,8 @@ pub enum StackError {
     },
 }
 
-const UNKNOWN: u32 = u32::MAX;
+/// A position whose depth is not known (yet). Depths are below it (`TooDeep`).
+const UNKNOWN: u16 = u16::MAX;
 
 /// A handler depth that [`stack_depths`] skips: to be computed from the code.
 pub const UNKNOWN_DEPTH: u32 = u32::MAX;
@@ -72,9 +73,11 @@ pub fn check_stack(code: &[u8], handlers: &[Handler]) -> Result<u16, StackError>
 /// the positions of the `Cache` immediates in code order.
 #[derive(Default)]
 pub struct StackScratch {
-    /// Whether each position is an instruction start.
-    starts: Vec<bool>,
-    depth: Vec<u32>,
+    /// Whether each position is an instruction start, a bit each.
+    starts: Vec<u64>,
+    /// The depth before each position (u16: a compile's peak memory is the room the host
+    /// allocator needs in front of the arena, D3368).
+    depth: Vec<u16>,
     work: Vec<u32>,
     /// Forward jumps `(from, target)`, whose targets are checked once every start is known.
     forward: Vec<(u32, u32)>,
@@ -99,7 +102,17 @@ pub fn check_stack_in(
 pub fn stack_depths(code: &[u8], handlers: &[Handler]) -> Result<Vec<u32>, StackError> {
     let mut scratch = StackScratch::default();
     walk(code, handlers, true, &mut scratch)?;
-    Ok(scratch.depth)
+    Ok(scratch
+        .depth
+        .iter()
+        .map(|&d| {
+            if d == UNKNOWN {
+                UNKNOWN_DEPTH
+            } else {
+                u32::from(d)
+            }
+        })
+        .collect())
 }
 
 // One pass in code order decodes each instruction, marks the starts, collects the
@@ -121,7 +134,7 @@ fn walk(
         s: scratch,
     };
     w.s.starts.clear();
-    w.s.starts.resize(code.len() + 1, false);
+    w.s.starts.resize((code.len() + 1).div_ceil(64), 0);
     w.s.depth.clear();
     w.s.depth.resize(code.len(), UNKNOWN);
     w.s.work.clear();
@@ -139,6 +152,7 @@ fn walk(
         let entry = h
             .depth
             .checked_add(1)
+            .filter(|&e| e < u32::from(UNKNOWN))
             .ok_or(StackError::BadHandler { index })?;
         w.reach(h.start, h.target, entry)
             .map_err(|_| StackError::BadHandler { index })?;
@@ -163,7 +177,7 @@ fn walk(
             }
             at += k.width() as u32;
         }
-        w.s.starts[pc as usize] = true;
+        w.s.starts[pc as usize / 64] |= 1 << (pc % 64);
         w.decoded_to = pc + 1;
         if w.s.depth[pc as usize] != UNKNOWN && first.is_ok() {
             first = w.step(&insn);
@@ -172,17 +186,17 @@ fn walk(
     }
     w.decoded_to = len;
     let starts = &w.s.starts;
+    let is_start = |p: u32| is_start(starts, p);
     for (index, h) in handlers.iter().enumerate() {
         if skip_unknown && h.depth == UNKNOWN_DEPTH {
             continue;
         }
-        let is_start = |p: u32| starts.get(p as usize) == Some(&true);
         if !is_start(h.start) || !(h.end == len || is_start(h.end)) || h.start > h.end {
             return Err(StackError::BadHandler { index });
         }
     }
     for (i, &(from, target)) in w.s.forward.iter().enumerate() {
-        if !starts[target as usize] {
+        if !is_start(target) {
             return Err(match i < handler_targets {
                 true => StackError::BadHandler {
                     index: handlers
@@ -201,6 +215,13 @@ fn walk(
         w.step(&insn)?;
     }
     Ok(w.max as u16)
+}
+
+/// Whether position `p` is an instruction start (`starts` as a bit set).
+fn is_start(starts: &[u64], p: u32) -> bool {
+    starts
+        .get(p as usize / 64)
+        .is_some_and(|w| w & (1 << (p % 64)) != 0)
 }
 
 struct Walk<'a> {
@@ -226,19 +247,19 @@ impl Walk<'_> {
         let decoded = target < self.decoded_to;
         if !decoded {
             self.s.forward.push((from, target));
-        } else if !self.s.starts[target as usize] {
+        } else if !is_start(&self.s.starts, target) {
             return Err(StackError::BadTarget { pc: from, target });
         }
         let slot = &mut self.s.depth[target as usize];
         if *slot == UNKNOWN {
-            *slot = d;
+            *slot = d as u16;
             if decoded {
                 self.s.work.push(target);
             }
-        } else if *slot != d {
+        } else if u32::from(*slot) != d {
             return Err(StackError::Mismatch {
                 pc: target,
-                depth: *slot,
+                depth: u32::from(*slot),
                 other: d,
             });
         }
@@ -248,7 +269,7 @@ impl Walk<'_> {
     /// Checks `insn` at its depth and reaches its successors.
     fn step(&mut self, insn: &super::decode::Insn) -> Result<(), StackError> {
         let pc = insn.pc;
-        let d = self.s.depth[pc as usize];
+        let d = u32::from(self.s.depth[pc as usize]);
         let info = insn.info();
         let pops = insn.pops();
         if pops > d {
@@ -256,7 +277,7 @@ impl Walk<'_> {
         }
         let after = d - pops + insn.pushes();
         self.max = self.max.max(after).max(d);
-        if self.max > u16::MAX as u32 {
+        if self.max >= u32::from(UNKNOWN) {
             return Err(StackError::TooDeep { pc });
         }
         if info.has(flags::JUMP) || info.has(flags::BRANCH) {

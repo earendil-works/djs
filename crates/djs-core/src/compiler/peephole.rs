@@ -52,11 +52,12 @@ fn rewrite_all(mut code: Vec<Insn>) -> (Vec<Insn>, bool) {
     // Rules match at most this many instructions, so a replacement can complete a match
     // starting this many before it.
     const WINDOW: usize = 5;
-    let mut out = crate::buf::vec_with_capacity(code.len());
     let mut repl = crate::buf::vec_with_capacity(WINDOW);
     let mut jumps = false;
-    // `code[..i]` is free (moved to `out`); a replacement is shorter than what it
-    // replaces, so it and the instructions taken back from `out` fit in front of `i`.
+    // In place (D3368: no second list, a compile's peak memory): `code[..w]` is the
+    // output, `code[w..i]` is free; a replacement is shorter than what it replaces, so it
+    // and the instructions taken back from the output fit in front of `i`.
+    let mut w = 0;
     let mut i = 0;
     while i < code.len() {
         repl.clear();
@@ -68,23 +69,24 @@ fn rewrite_all(mut code: Vec<Insn>) -> (Vec<Insn>, bool) {
                 let mut j = i + n - repl.len();
                 code[j..i + n].copy_from_slice(&repl);
                 for _ in 0..WINDOW - 1 {
-                    match out.pop() {
-                        Some(x) => {
-                            j -= 1;
-                            code[j] = x;
-                        }
-                        None => break,
+                    if w == 0 {
+                        break;
                     }
+                    w -= 1;
+                    j -= 1;
+                    code[j] = code[w];
                 }
                 i = j;
             }
             None => {
-                out.push(code[i]);
+                code[w] = code[i];
+                w += 1;
                 i += 1;
             }
         }
     }
-    (out, jumps)
+    code.truncate(w);
+    (code, jumps)
 }
 
 /// Jump threading: a jump to a `jump` goes to its target instead (`if (x) break;` in a

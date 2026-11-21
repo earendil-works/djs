@@ -12903,3 +12903,21 @@ v8arm.py) and measured in steady state (slope.py):
   `return_call` for a call in tail position (nor with `-C llvm-args=-tailcallopt`); only
   `become` (`explicit_tail_calls`, unstable and marked incomplete) does, so the
   DJS_STABLE_ONLY build would keep the loop and two dispatchers would have to agree.
+## D3368: A compile's peak memory: the parse's tables go before the resolver, the
+## checker's and the peepholes' buffers shrink
+date: 2026-11-21 · by: pstart · issue: 0265
+A compile's Rust heap is what dlmalloc must hold in front of the arena (D3366): text's
+compile peaked at ~67 KB (native, cpeak in work/scratch/0265: live allocations at the
+peak by allocation site), during the resolver's re-emit of its largest function, with the
+parser's own tables still alive. Now:
+- `finish_unit` drops the parser's suspended-function stack, its identifier cache and
+  string pool and its block list before `resolve::finish` (they held 8 KB at text's peak);
+- the stack checker keeps a depth per code byte as `u16` (was `u32`; a depth of 65,535 is
+  now `TooDeep` too) and the instruction starts as a bit set (was a byte each);
+- `peephole::rewrite_all` rewrites in place instead of into a second list of
+  instructions (same rules, same order, same result).
+Same bytecode (golden fixtures, the compiler's and the bytecode tests). Native peak of
+text's compile 66.9 → 58.7 KB. The room sweep (as in D3366): text's arena now moves below
+~78 KB of room (was ~85.5), fanout's below ~81 KB (its join buffer of 80,000 B, D3365); so
+the floor's 87 KiB has ~4-6 KB of margin and today's layout (89.9 KB) ~9 KB. Compile time
+±0.7%; +96 B gz.

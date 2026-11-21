@@ -565,6 +565,14 @@ impl<'a, 'h> Parser<'a, 'h> {
             .collect::<PResult<Vec<_>>>()?;
         let erased = self.erased.take();
         let mut names = self.builtin_names.take();
+        // The parse's own tables go before the resolver runs: they were a third of a
+        // compile's peak memory, which is the room the host allocator needs in front of
+        // the arena (D3368).
+        self.stack = Vec::new();
+        self.ident_atoms = IdentAtoms::default();
+        self.str_pool = Vec::new();
+        self.str_table = Vec::new();
+        self.blocks = Vec::new();
         let t = super::resolve::finish(
             self.heap,
             self.src,

@@ -111,6 +111,11 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   dual-backend (B, +549 B). D3365: join's two-byte result in the arena, dropped (fanout
   +192 KiB). D3367: gate leg `codemode memory` (tests/scores/codemode-memory.tsv) as the
   guard for the thin margin (~4.5 KB today, ~1.5 KB at the floor).
+- Merged 6b8d21da (with the gate's build:size now cold-unicode, as shipped).
+- Part 2 starts with the compile's peak (D3368): cpeak (native, live allocations at the
+  peak by site) and wasm traps on dlmalloc's second segment (keep-names build with the
+  seed shrunk) to find what needs the room: the walk's buffers, then the peephole's second
+  list, then the parser's tables alive during resolve.
 
 ## Follow-ups
 
