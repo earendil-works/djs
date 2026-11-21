@@ -438,16 +438,12 @@ impl<'a> Decoder<'a, '_> {
         let two_byte = bytes.iter().any(|&b| b >= 0xC4);
         let s = self.heap.alloc_str_uninit(units, two_byte)?;
         let data = Heap::str_data_offset(s);
-        let ok = if two_byte {
-            let dst = self.heap.arena_mut().slice_mut(data, units * 2);
-            transcode(bytes, dst.as_chunks_mut::<2>().0, |d, u| {
-                *d = u.to_le_bytes()
-            })
-        } else {
-            // Every code point is at most U+00FF: one byte each.
-            let dst = self.heap.arena_mut().slice_mut(data, units);
-            transcode(bytes, dst, |d, u| *d = u as u8)
-        };
+        // (One byte per unit: every code point is at most U+00FF.)
+        let dst = self
+            .heap
+            .arena_mut()
+            .slice_mut(data, units << two_byte as u32);
+        let ok = transcode(bytes, dst, two_byte);
         match ok {
             Transcoded::Ok => Ok((Value::string(s), Atom::NULL)),
             Transcoded::InvalidUtf8 => {
@@ -505,12 +501,23 @@ enum Transcoded {
     WrongLength,
 }
 
-/// Validates UTF-8 strictly (as `str::from_utf8`) and transcodes it into exactly
-/// `dst.len()` UTF-16 code units, written with `put`, in one pass (D1781): a separate
+/// Validates UTF-8 strictly (as `str::from_utf8`) and transcodes it into exactly as many
+/// UTF-16 code units as `dst` holds (two bytes each, little-endian, with `two`, else one:
+/// the caller knows every code point is at most U+00FF), in one pass (D1781): a separate
 /// `from_utf8` pass cost ~40% of decoding a large non-ASCII string in wasm. ASCII runs go
 /// eight bytes at a time. Invalid UTF-8 anywhere is reported as such even when the length
-/// is also wrong, as the two-pass version did.
-fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> Transcoded {
+/// is also wrong, as the two-pass version did. (One function for both widths: a generic
+/// one was two ~900-byte copies, 0270.)
+fn transcode(src: &[u8], dst: &mut [u8], two: bool) -> Transcoded {
+    let w = two as usize;
+    let units = dst.len() >> w;
+    let put = |dst: &mut [u8], n: usize, u: u16| {
+        if two {
+            dst[2 * n..2 * n + 2].copy_from_slice(&u.to_le_bytes());
+        } else {
+            dst[n] = u as u8;
+        }
+    };
     let (mut i, mut n) = (0, 0);
     // The rest from `at` on decides between the two errors (cold).
     let length_or_invalid = |at: usize| {
@@ -521,11 +528,11 @@ fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> Transco
         }
     };
     while i < src.len() {
-        if i + 8 <= src.len() && n + 8 <= dst.len() {
-            let w = u64::from_le_bytes(src[i..i + 8].try_into().unwrap());
-            if w & 0x8080_8080_8080_8080 == 0 {
-                for (d, &b) in dst[n..n + 8].iter_mut().zip(&src[i..i + 8]) {
-                    put(d, b as u16);
+        if i + 8 <= src.len() && n + 8 <= units {
+            let word = u64::from_le_bytes(src[i..i + 8].try_into().unwrap());
+            if word & 0x8080_8080_8080_8080 == 0 {
+                for (k, &b) in src[i..i + 8].iter().enumerate() {
+                    put(dst, n + k, b as u16);
                 }
                 i += 8;
                 n += 8;
@@ -576,22 +583,22 @@ fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> Transco
         };
         if cp > 0xFFFF {
             let v = cp - 0x10000;
-            if n + 2 > dst.len() {
+            if n + 2 > units {
                 return length_or_invalid(i);
             }
-            put(&mut dst[n], 0xD800 | (v >> 10) as u16);
-            put(&mut dst[n + 1], 0xDC00 | (v & 0x3FF) as u16);
+            put(dst, n, 0xD800 | (v >> 10) as u16);
+            put(dst, n + 1, 0xDC00 | (v & 0x3FF) as u16);
             n += 2;
         } else {
-            match dst.get_mut(n) {
-                Some(d) => put(d, cp as u16),
-                None => return length_or_invalid(i),
+            if n >= units {
+                return length_or_invalid(i);
             }
+            put(dst, n, cp as u16);
             n += 1;
         }
         i += len;
     }
-    if n == dst.len() {
+    if n == units {
         Transcoded::Ok
     } else {
         Transcoded::WrongLength

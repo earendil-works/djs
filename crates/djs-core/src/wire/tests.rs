@@ -1147,8 +1147,12 @@ fn transcode_matches_from_utf8() {
             .map(|t| t.encode_utf16().collect());
         let n = want_units.as_ref().map_or(src.len(), |u| u.len());
         for len in [n.saturating_sub(1), n, n + 1] {
-            let mut dst = vec![0u16; len];
-            let got = transcode(&src, &mut dst, |d, u| *d = u);
+            let mut bytes = vec![0u8; 2 * len];
+            let got = transcode(&src, &mut bytes, true);
+            let dst: Vec<u16> = bytes
+                .chunks(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
             let want = match &want_units {
                 None => Transcoded::InvalidUtf8,
                 Some(u) if u.len() != len => Transcoded::WrongLength,
@@ -1157,6 +1161,18 @@ fn transcode_matches_from_utf8() {
             assert_eq!(got, want, "{src:x?} into {len}");
             if got == Transcoded::Ok {
                 assert_eq!(&dst, want_units.as_ref().unwrap(), "{src:x?}");
+            }
+            // One byte per unit where every unit fits (the Latin-1 strings).
+            if want_units
+                .as_ref()
+                .is_some_and(|u| u.iter().all(|&c| c <= 0xFF))
+            {
+                let mut narrow = vec![0u8; len];
+                assert_eq!(transcode(&src, &mut narrow, false), want, "{src:x?}");
+                if want == Transcoded::Ok {
+                    let wide: Vec<u16> = narrow.iter().map(|&b| b as u16).collect();
+                    assert_eq!(&wide, want_units.as_ref().unwrap(), "{src:x?}");
+                }
             }
         }
     }

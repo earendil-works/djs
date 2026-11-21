@@ -860,7 +860,7 @@ fn filled_collection(
     }
     let c = heap.collection_new(class, proto)?;
     for i in 0..heap.array_length(a) {
-        let Some(x) = heap.get_element_fast(a, i) else {
+        let Some(x) = element(heap, a, i) else {
             return Ok(None);
         };
         let (k, v) = if set {
@@ -872,7 +872,7 @@ fn filled_collection(
             else {
                 return Ok(None);
             };
-            match (heap.get_element_fast(e, 0), heap.get_element_fast(e, 1)) {
+            match (element(heap, e, 0), element(heap, e, 1)) {
                 (Some(k), Some(v)) => (k, v),
                 _ => return Ok(None),
             }
@@ -881,6 +881,12 @@ fn filled_collection(
         heap.collection_set(c, k, v)?;
     }
     Ok(Some(Value::object(c)))
+}
+
+/// `get_element_fast`, one copy for `filled_collection`'s three reads.
+#[inline(never)]
+fn element(heap: &Heap, o: Obj, i: u32) -> Option<Value> {
+    heap.get_element_fast(o, i)
 }
 
 fn empty_collection(heap: &mut Heap, args: &[Value], class: ObjectClass, proto: Intrinsic) -> Fast {
