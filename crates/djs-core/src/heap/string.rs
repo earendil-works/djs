@@ -629,11 +629,14 @@ impl Heap {
         let two_byte = leaves.iter().any(|&(leaf, first, len)| {
             self.cell_kind(leaf) == CellKind::Str16
                 && ((first == 0 && len == self.str_len(Str(leaf)))
+                    // A unit above 0xFF has a nonzero high (odd) byte.
                     || self
-                        .prefix_view(leaf, first + len)
-                        .units()
-                        .skip(first as usize)
-                        .any(|u| u > 0xFF))
+                        .arena()
+                        .slice(leaf + Str16::DATA.offset + 2 * first, 2 * len)
+                        .iter()
+                        .skip(1)
+                        .step_by(2)
+                        .any(|&b| b != 0))
         });
         let dst = self.alloc_flat(total, two_byte)?;
         self.write_leaves(leaves, dst, 0);

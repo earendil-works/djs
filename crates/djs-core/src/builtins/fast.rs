@@ -352,7 +352,7 @@ fn replace(heap: &mut Heap, this: Value, args: &[Value], all: bool) -> Fast {
     if pieces.is_empty() {
         return Ok(Some(Value::string(s)));
     }
-    pieces.push_out((s, end.min(n), n));
+    pieces.push_out((s, end, n));
     Ok(Some(Value::string(string::join(heap, &mut pieces)?)))
 }
 

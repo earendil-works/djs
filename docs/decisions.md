@@ -13211,4 +13211,8 @@ leaf per 64 units of the range plus 8: a rope that exceeds it is flattened in pl
 flat copy serves later reads) and the piece is copied from that. Ropes of a few big
 pieces (templates, joined bodies) keep D3400's single copy. `[s].join(" ")` 25.4M → 2.1M
 per call (the first one flattens), a 100K slice of it 746K → 684K (the same flatten,
-amortized over 20 calls), a template rope join unchanged. +108 B gz.
+amortized over 20 calls), a template rope join unchanged. +108 B gz, offset under the
+size ratchet by checking a two-byte range's width on its high bytes (not a units
+iterator) and by `str_array_index` reading its first unit with `char_code_at` again
+(D3401's view read; `existing_key_atom` handles flat keys first since D3402): net
+−29 B.

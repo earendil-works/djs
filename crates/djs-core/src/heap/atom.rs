@@ -971,11 +971,7 @@ impl Heap {
         if len == 0 || len > 10 {
             return None;
         }
-        // (A flat or sliced key, the usual case, from one view; a rope by the walk.)
-        let first = match self.str_view(s) {
-            Some(v) => v.get(0),
-            None => self.char_code_at(s, 0)?,
-        };
+        let first = self.char_code_at(s, 0)?;
         if !(b'0' as u16..=b'9' as u16).contains(&first) {
             return None;
         }
