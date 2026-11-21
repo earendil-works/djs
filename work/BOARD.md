@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0263 | Compile speed for small bodies; static data audit | pstart | .worktrees/pstart |
+| 0265 | Allocator placement effects; the resolver re-emit | pstart | .worktrees/pstart |
 | 0262 | Object and collection ops: Map/Set string keys, spread, entries, comparator sort, padStart | pidle | .worktrees/pidle |
 | 0258 | GC: minor collections skip the builtin prefix; headroom, big-string survivors | pgc | .worktrees/pgc |
 | 0259 | Builtin calls without finding the callee | pcall | .worktrees/pcall |
@@ -50,6 +50,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0263 | Compile speed; intrinsic names out of the shipped module | 45bb0280 (agent pstart; D3340-D3343; compile -5..-8%, small runs -2..-3%, -4,078 B gz; compile zone dropped: memory) |
 | 0260 | Byte kernels: JSON scans, escapes, find tails, regexp first bytes | 43679e13 (agent pscan; D3310-D3313; media -17%, fanout -12%, heavy -8%, text -4%; +628 B gz net; simd128 flag alone -764 B gz, owner) |
 | 0261 | Instantiation and sandbox setup costs | 29a129a5 (agent pstart; D3320-D3322; one export, ABI 6; new sandbox -13.7%, sequential -6.9%, -314 B gz; cold tables designed, not built) |
 | 0257 | Idle memory: elastic shadow stack, seeded dlmalloc segment | 6f25c16e (agent pidle; D3280-D3283; idle 576->448 KiB, every workload -128 KiB but heavy; +624 B gz net) |
