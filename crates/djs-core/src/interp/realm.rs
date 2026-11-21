@@ -197,9 +197,12 @@ pub enum Intrinsic {
     /// registry a hidden object from module key to module record and the traps the
     /// prototype of the namespace handlers; undefined until the first module loads.
     Modules,
+    /// The names of the known builtins (interp/known.rs, D3300): an internal U32Array,
+    /// or undefined in a realm without them (one not made from a base image).
+    KnownNames,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::Modules as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::KnownNames as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -403,6 +406,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::TypedArrayCtor, Value::UNDEFINED);
     set(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
     set(heap, Intrinsic::RegExpCache, Value::UNDEFINED);
+    set(heap, Intrinsic::KnownNames, Value::UNDEFINED);
     set(heap, Intrinsic::Registries, Value::UNDEFINED);
     set(heap, Intrinsic::GlobalLexEpoch, Value::int(0));
     let ctors = heap.new_object(None)?;
@@ -627,7 +631,10 @@ pub(crate) fn declare_global_lexical(
     let lex = global_lex(heap);
     let d = PropertyDescriptor::data(Value::UNINITIALIZED, PropFlags::new(writable, true, true));
     heap.define_own_property(lex, key, &d)?;
-    // A new lexical binding may shadow a global object property a cache remembers.
+    // It may shadow a known builtin (D3300),
+    let g = intrinsic_obj(heap, Intrinsic::Global);
+    heap.unwatch(g, key);
+    // or a global object property a cache remembers.
     let epoch = intrinsic(heap, Intrinsic::GlobalLexEpoch)
         .as_int()
         .unwrap_or(0);

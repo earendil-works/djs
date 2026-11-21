@@ -58,6 +58,11 @@ pub const EMPTY_SHAPE: u32 = 1;
 
 /// Storage-only flag bit: the entry is an accessor.
 pub(crate) const STORE_ACCESSOR: u32 = 8;
+/// Stored flags of a dictionary entry: a known builtin's binding in the global object
+/// (D3300). The first change of the entry (its value, its attributes, its removal) or a
+/// lexical binding of its name clears the bit and ends the known builtins' fast path
+/// (`interp::known::unpristine`). Only the base image's build sets it.
+pub(crate) const STORE_WATCHED: u32 = 16;
 
 /// The object class, stored in [`Object::CLASS`]. Issue 0006 adds more.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1259,8 +1264,15 @@ impl Heap {
             let s = self.arena().get(p, PropValues::SHAPE).0;
             (self.shape_desc(s, i).1, PropValues::VALUES.at(p, i))
         };
-        if fl & STORE_ACCESSOR != 0 || !PropFlags::from_bits(fl as u8).writable() {
-            return false;
+        if fl & (STORE_ACCESSOR | STORE_WATCHED) != 0 || !PropFlags::from_bits(fl as u8).writable()
+        {
+            // (One test for the common case: neither an accessor nor watched.)
+            if fl & (STORE_ACCESSOR | STORE_WATCHED) != STORE_WATCHED
+                || !PropFlags::from_bits(fl as u8).writable()
+            {
+                return false;
+            }
+            self.watched_change(p, i);
         }
         self.arena_mut().write(at, v);
         true
@@ -1291,7 +1303,58 @@ impl Heap {
             }
             self.become_dictionary(o, 0, Dict::Attributes)?;
         }
-        self.write_entry(self.props(o), i, key, p)
+        let t = self.props(o);
+        if self
+            .arena()
+            .get(PropTable::ENTRIES.at(t, i), PropEntry::FLAGS)
+            & STORE_WATCHED
+            != 0
+        {
+            self.watched_change(t, i);
+        }
+        self.write_entry(t, i, key, p)
+    }
+
+    /// Entry `i` of table `t`, a known builtin's binding (`STORE_WATCHED`), changes:
+    /// the known builtins are no longer what the base image has (D3300).
+    #[cold]
+    #[inline(never)]
+    fn watched_change(&mut self, t: u32, i: u32) {
+        let e = PropTable::ENTRIES.at(t, i);
+        let fl = self.arena().get(e, PropEntry::FLAGS);
+        self.arena_mut()
+            .set(e, PropEntry::FLAGS, fl & !STORE_WATCHED);
+        crate::interp::known::unpristine(self);
+    }
+
+    /// Before own property `key` of `o` is shadowed (a global lexical binding of that
+    /// name): as for a change of it, if it is a known builtin's binding.
+    pub(crate) fn unwatch(&mut self, o: Obj, key: Atom) {
+        if self.is_dictionary(o)
+            && let Some(i) = self.prop_find(o, key)
+        {
+            let t = self.props(o);
+            if self
+                .arena()
+                .get(PropTable::ENTRIES.at(t, i), PropEntry::FLAGS)
+                & STORE_WATCHED
+                != 0
+            {
+                self.watched_change(t, i);
+            }
+        }
+    }
+
+    /// Marks own data property `key` of the dictionary `o` as a known builtin's binding
+    /// (the base image's build).
+    #[cfg(djs_prelude)]
+    pub(crate) fn watch(&mut self, o: Obj, key: Atom) {
+        let i = self.prop_find(o, key).expect("a property");
+        assert!(self.is_dictionary(o));
+        let e = PropTable::ENTRIES.at(self.props(o), i);
+        let fl = self.arena().get(e, PropEntry::FLAGS);
+        self.arena_mut()
+            .set(e, PropEntry::FLAGS, fl | STORE_WATCHED);
     }
 
     /// Adds a property (the key must not be present): a shape transition, or a table
@@ -1822,6 +1885,14 @@ impl Heap {
     /// Removes entry `i` of `o`'s table.
     fn table_remove(&mut self, o: Obj, i: u32) {
         let t = self.props(o);
+        if self
+            .arena()
+            .get(PropTable::ENTRIES.at(t, i), PropEntry::FLAGS)
+            & STORE_WATCHED
+            != 0
+        {
+            self.watched_change(t, i);
+        }
         let count = self.arena().get(t, PropTable::COUNT);
         let index = self.arena().get(t, PropTable::INDEX).0;
         let esize = PropTable::ENTRIES.elem_size();

@@ -1819,6 +1819,8 @@ impl<'h> Exec<'h> {
                 op,
                 Op::Await | Op::Yield | Op::YieldStar | Op::GeneratorStart
             )
+            // (A declined known builtin became a jump, D3300.)
+            && self.byte(pc0) == op as u8
         {
             use crate::bytecode::flags as opflags;
             // The value of immediate k (a u16 count or a u8).
@@ -1903,6 +1905,36 @@ impl<'h> Exec<'h> {
     fn prelude_function(&self, i: u32) -> Option<Value> {
         let t = intrinsic(self.heap, Intrinsic::PreludeFunctions).as_internal()?;
         (i < self.heap.value_array_len(t)).then(|| self.heap.value_array_get(t, i))
+    }
+
+    /// A known builtin's `get_builtin` (D3300) after the builtins changed: on to the
+    /// ordinary lookup, which follows the jump after it and its sibling, and the
+    /// instruction becomes a jump there (`jump8; nop` in its three bytes), so the site
+    /// pays this once. False if no such jump follows (bad bytecode).
+    #[cold]
+    #[inline(never)]
+    fn known_declined(&mut self, next: u32) -> bool {
+        let mut pc = next;
+        if pc < self.code_len && self.byte(pc) == Op::GetBuiltin as u8 {
+            pc += Op::GetBuiltin.size() as u32;
+        }
+        if pc >= self.code_len {
+            return false;
+        }
+        let lookup = match self.byte(pc) {
+            fast::JUMP8 => pc + Op::Jump8.size() as u32,
+            fast::JUMP => pc + Op::Jump.size() as u32,
+            _ => return false,
+        };
+        let at = self.code + self.pc;
+        if let Ok(d) = i8::try_from(lookup - (self.pc + Op::Jump8.size() as u32)) {
+            let a = self.heap.arena_mut();
+            a.write(at, fast::JUMP8);
+            a.write(at + 1, d as u8);
+            a.write(at + 2, Op::Nop as u8);
+        }
+        self.pc = lookup;
+        true
     }
 
     fn capture(&self, i: u32) -> Value {
@@ -2241,6 +2273,9 @@ impl<'h> Exec<'h> {
             }
             Op::GetBuiltin => {
                 let Some(v) = self.prelude_function(self.imm_u16(1)) else {
+                    if self.known_declined(next) {
+                        return Ok(None);
+                    }
                     return Err(Fault::error(
                         ErrorKind::InternalError,
                         String::from("bad bytecode: get_builtin out of range"),

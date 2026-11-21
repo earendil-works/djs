@@ -341,7 +341,7 @@ impl Heap {
     /// The number of the base image's atoms (D2431), the first index of a VM's own; 0
     /// without a base.
     #[inline]
-    fn atom_base_count(&self) -> u32 {
+    pub(crate) fn atom_base_count(&self) -> u32 {
         self.arena().get(self.atom_table(), AtomTable::BASE_COUNT)
     }
 

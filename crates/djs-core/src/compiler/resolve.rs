@@ -1367,6 +1367,38 @@ fn emit_function(
                 {
                     return Err(internal("assignment to a prelude function"));
                 }
+                // A known builtin (interp/known.rs, D3300): its value from the realm's
+                // table while the builtins are pristine, with the object as `this` for a
+                // method call; the lookup itself follows for when they are not.
+                if insn.op == Op::NameGet
+                    && !privileged
+                    && matches!(resolved[r].target, Target::Global)
+                {
+                    let member = all
+                        .get(i)
+                        .filter(|m| matches!(m.op, Op::GetMethod | Op::GetField));
+                    if let Some((kx, kf)) =
+                        crate::interp::known::lookup(heap, atom, member.map(|m| m.atom(0)))
+                    {
+                        let l = out.new_label();
+                        out.get_builtin(kf.unwrap_or(kx));
+                        if let (Some(_), Some(m)) = (kf, member) {
+                            if m.op == Op::GetMethod {
+                                out.get_builtin(kx);
+                            }
+                            out.jump(l);
+                            out.get_global(atom, 0);
+                            flush(&out, &mut li, &mut lines, m.pc);
+                            out.emit_insn(m);
+                            i += 1;
+                        } else {
+                            out.jump(l);
+                            out.get_global(atom, 0);
+                        }
+                        out.place_label(l);
+                        continue;
+                    }
+                }
                 emit_name(
                     &mut out,
                     storage,
