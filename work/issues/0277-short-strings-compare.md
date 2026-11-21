@@ -1,6 +1,6 @@
 # 0277: Short concatenations, template literals, string comparison, localeCompare, startsWith/endsWith
 
-status: open
+status: in-progress
 agent: pgc
 branch: issue/0277-short-strings-compare
 depends-on: 0269, 0268
