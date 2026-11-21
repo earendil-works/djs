@@ -62,7 +62,9 @@ stores them the way V8 does, in one of two flat kinds:
 A **`Rope`** is the concatenation of two strings, made when the result has at least 32
 units. Shorter results are copied into a flat cell right away. A rope is flattened when
 something needs its units in one piece: the flat copy is written once and the rope is
-redirected to it.
+redirected to it. Operations that only copy units out of a rope (`slice`, `substring`,
+`join` and template pieces) do not flatten it: they walk its leaves and copy only the
+units in range, once, straight into the result.
 
 <!-- gen:cell Rope -->
 ![The Rope cell](gen/cell-Rope.svg)

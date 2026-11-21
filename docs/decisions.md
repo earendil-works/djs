@@ -12921,3 +12921,29 @@ text's compile 66.9 → 58.7 KB. The room sweep (as in D3366): text's arena now 
 ~78 KB of room (was ~85.5), fanout's below ~81 KB (its join buffer of 80,000 B, D3365); so
 the floor's 87 KiB has ~4-6 KB of margin and today's layout (89.9 KB) ~9 KB. Compile time
 ±0.7%; +96 B gz.
+## D3400: Joins and substrings copy rope leaves straight into the result
+date: 2026-11-21 · by: pgc · issue: 0269
+`builtins::string::join` (Array.prototype.join's general case, substrings of ropes and
+of two-byte strings) flattened every rope piece first; the two-byte path then collected
+the units in a `Vec<u16>` and copied them again into a cell it scanned for width: three
+copies of every unit. `Heap::concat_ranges` collects, per piece, the leaves that hold its
+range (`collect_range`: subtrees outside it are skipped) and writes them once with
+`write_leaves`, which now takes `(cell, first unit, units)` and narrows a part of a
+two-byte leaf that has no unit above 0xFF (a `Str16` keeps its invariant). Ropes are not
+flattened as a side effect any more. Wasm instructions: fanout −3.0%, sequential −4.5%,
+the rest within noise; module +196 B gz. tests/corpus/builtins/string-ranges.js.
+
+## D3401: @fast replace/replaceAll; slice views from one kind read
+date: 2026-11-21 · by: pgc · issue: 0269
+- String.prototype.replace and replaceAll with a primitive `this`, a primitive pattern
+  and a primitive replacement without `$` get a fast entry (`fast::replace`): the matches
+  as the builtin finds them, then one `string::join` of the pieces. Anything else (an
+  object pattern or replacement, a `$` in it, a two-byte replacement that only contains
+  a 0x24 byte) declines. Per op (wasm instructions, quickjs-wasi in parentheses):
+  replace 14.9k → 5.2k (4.3k), replaceAll 30.5k → 6.5k (5.9k); text −1.5..−3%.
+  +422 B gz.
+- `str_view`/`str_view_flat` read a slice's view right after the flat check, before the
+  rope cases' kind and flag reads: `line.includes(…)` on a split line −9.4% per op,
+  heavy −1.5%. +30 B gz.
+- `str_array_index` reads a flat key's first unit from its view instead of
+  `char_code_at`: `o[k]` −160 instructions. +50 B gz.

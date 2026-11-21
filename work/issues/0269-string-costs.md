@@ -59,6 +59,18 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
 
+### Profile (main 62cd4b66; scratch: work/scratch/0269 wmicro.py with cases*.py, bucket.py)
+Tiny ops are now at or below QuickJS (trim 0.96, slice 0.91, charCodeAt 0.92, includes 0.6,
+join 0.62, String(i) 0.85). Gaps: replace 3.4x, replaceAll 5.3x, substr 5.2x, o[k] string key
+2.5–3.6x, repeat 1.35, startsWith 1.33, endsWith/at 1.24, (i).toString 1.19, template 1.16.
+String bucket: heavy 19% of djs samples (find_latin1 6%: pscan's kernel), fanout 18%, text 10%.
+
+### Batch 1 (D3400, D3401)
+- concat_ranges (rope leaves copied once): fanout −3.0%, sequential −4.5%.
+- @fast replace/replaceAll: 3.4x/5.3x → 1.2x/1.1x of QuickJS; text −1.5..−3%.
+- slice views first: heavy −1.5%. str_array_index from the view: o[k] −160 instr.
+- Size: +~700 B gz (428,178 vs 427,478). Guide: heap.md (ropes read in place).
+
 ## Follow-ups
 
 ## Result
