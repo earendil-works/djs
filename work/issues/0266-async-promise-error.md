@@ -1,6 +1,6 @@
 # 0266: Promise construction, then, async functions without await, new Error
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0266-async-promise-error
 depends-on: -
