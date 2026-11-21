@@ -8,7 +8,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0289 | Builtins charge fuel for the work they do (GitHub #3) | pidle | .worktrees/pidle |
-| 0290 | Trace frames named by own `name`; continuations by origin (GitHub PR #2) | pcall | .worktrees/pcall |
 
 ## Open (ready)
 
@@ -40,6 +39,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Memory follow-ups (0234): survivor mark for big strings (format change), slice detach in minor GCs, base image 182 KB vs QuickJS ~130 KB realm, GC side tables vs dlmalloc's first segment, shadow stack/static data padding | ready |
 | - | Regexp follow-ups (0233): literal runs as one node (distinct-pattern compile 2x QuickJS), replace 1.14x | ready |
 | - | Per-op gaps vs best QuickJS (0229): trim 2.8, padStart/End 2.5, Object.entries+fromEntries 2.3, Math.floor 2.2, slice 1.9, sort cmp 1.9, Map.set 1.8, toFixed 1.8, toLowerCase/String(i) 1.7; wasm/* sizes in status.tsv stale (status.py size); compare monty snapshots on the page; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
+| - | No djs-core unit test checks builtin (native) frame names in traces; only the difftest errors cases caught a regression (0290) | ready |
 | - | Plain-dump 'crossing callbacks' refusal (s13-s10173, seed 689232 with --lazy): open since 0211 | ready |
 | - | new Error 30k vs 18.7k (CaptureStack converts frame names to Rust strings); derived class construct 1.2-1.6x (super_call opcode) (0236) | ready |
 | - | Embedding follow-ups (0240-0248): module code accepts HTML-like comments; the dumper knows no module records or TextCodec objects; host-function Throws have no stack; Step::Wait reports async calls only when the VM waits; import() loads are not fuel-metered; minor GCs walk the whole sealed snapshot region (12% of a 64 KiB body call; a card table would also let reset copy only what changed); non-ASCII TextEncoder.encode ~5x node; publishing djs-embed to crates.io needs builtins/gen and djs-libm sources inside the packaged crates | ready |
@@ -54,6 +54,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0290 | Trace frames named by own `name`; continuations by their origin (GitHub PR #2, rt2zz co-author) | ffe07762 (agent pcall; D3580; lazy-name functions skip the lookup: new Error in 5 frames 37.5k->37.7k; computed/symbol method names shown; -105 B gz) |
 | 0288 | for-of over strings out of line, last step finished once | cdd82d1f (agent pidle; D3570; ASCII 22.3k->17.9k (QuickJS 2026 13.2k); +301 B gz; ~294 B of the owner allowance left) |
 | 0286 | @fast/@rust calls inside the tier-0 loop; primitive methods from the slot | 584968e1 (agent pcall; D3550, D3551, COMPAT 13; builtin calls -55 instr, trim 1.14->1.04x QuickJS 2026, all 16 workloads -0.2..-6.1%; +403 B gz; slope.py --qjs2) |
 | 0287 | One-unit ASCII string cache (for-of over strings parked) | dcf889b8 (agent pidle; D3560, COMPAT 12; s[i] 1.9k->1.5k, split('') -16%; most short-string ops already below QuickJS in instructions; +187 B gz) |
