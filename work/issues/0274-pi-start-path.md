@@ -1,6 +1,6 @@
 # 0274: pi's cached start: image-cache key, restore zero-fill, instantiation
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0274-pi-start-path
 depends-on: -
