@@ -65,6 +65,26 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+2026-11-21 (pcall)
+- Baseline, main a0d85b06, shipped module 428,796 B gz. Scratch: work/scratch/0259 of the
+  primary checkout (base.wasm, wm.py = wmicro with extra cases, fdiff.py = per-function
+  wasm size diff of two --keep-names builds, ops-base.txt).
+- Anatomy (wmicro --no-liftoff, machine instr per statement): a trivial bytecode ≈ 42;
+  get_global IC hit ≈ 190 (already in run_hot, calls ic_global_get); get_method own/dict
+  ≈ 170, proto IC hit (s.trim, a.push) ≈ 300 (inlined in run_hot); the `call1` of a
+  @fast builtin ≈ 310 before the leaf runs (failed closure attempt, loop exit,
+  decline_fast, identify), the generic leaf machinery ≈ 300 for Math.floor(int).
+  Math.floor(i) 1048 = 396 lookup + ~570 call; s.charCodeAt(3) 1200 = 340 + ~730.
+- Batch 1 (merged alone, the rest waits for the owner's answer on the size budget): a
+  generated builtin's fast call passes `&Shadow::EMPTY`, the promoted constant, instead
+  of a 48-byte copy on the stack per call (fast_leaf_call, try_fast_call). −55 B gz,
+  −20 instructions per call of a generated builtin (Math.floor(i) 835 → 812,
+  s.charCodeAt(k) 1202 → 1182, s.trim() 1476 → 1457, s.padStart 2232 → 2209).
+  No guide page affected.
+- The known builtins (D3300, `get_builtin k` as guard and value for Math.floor, String,
+  Number.isInteger...: Math.floor(i) 1043 → 829) are built on the local branch
+  wip/0259-known: +747 B gz, over the ceiling, so unmerged. The per-op items of the
+  second paragraph moved to 0262 (pidle).
 
 ## Follow-ups
 

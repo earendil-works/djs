@@ -66,8 +66,14 @@ impl Exec<'_> {
                 *a = self.get(base + 2 + i as u32);
             }
             let this = self.get(base + 1);
-            let empty = crate::builtins::fast::Shadow::EMPTY;
-            return match (leaf.run)(self, this, &args[..argc as usize], &empty, &leaf.data) {
+            // (The constant by reference: a static, not a copy per call.)
+            return match (leaf.run)(
+                self,
+                this,
+                &args[..argc as usize],
+                &Shadow::EMPTY,
+                &leaf.data,
+            ) {
                 Ok(v) => {
                     self.sp = base;
                     self.push(v);
@@ -440,8 +446,7 @@ impl Exec<'_> {
                 *a = self.get(base + 2 + i as u32);
             }
             let this = self.get(base + 1);
-            let empty = crate::builtins::fast::Shadow::EMPTY;
-            return match (f.run)(self, this, &args[..argc as usize], &empty, &f.data) {
+            return match (f.run)(self, this, &args[..argc as usize], &Shadow::EMPTY, &f.data) {
                 Ok(v) => {
                     self.fuel -= FAST_FUEL;
                     self.sp = base;
