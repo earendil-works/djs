@@ -1197,26 +1197,19 @@ impl<'h> Exec<'h> {
                     return None;
                 }
                 if matches!(*f.0, FaultKind::NeedStack) {
-                    return Some(self.need_stack(pc0, sp0, fuel0));
+                    // The instruction compiles something that needs the larger stack
+                    // (D3280). It changed nothing yet (it compiles before any effect, with
+                    // `pc`, `sp` and its operands as they were), so the run stops before
+                    // it, its fuel given back, as an intrinsic suspended mid-work stops
+                    // (D1712). The host moves the stack and runs again, and the
+                    // instruction runs again with the full nesting limits armed.
+                    (self.pc, self.sp, self.fuel) = (pc0, sp0, fuel0);
+                    self.flush();
+                    return Some(Status::OutOfFuel);
                 }
                 self.throw_fault(f, pc0)
             }
         }
-    }
-
-    /// The instruction at `pc0` compiles something that needs the larger stack (D3280):
-    /// it changed nothing yet (the compile runs before its effects; operands are still in
-    /// their slots), so the run stops before it, its fuel given back, as an intrinsic
-    /// suspended mid-work stops (D1712). The host moves the stack and runs again; the
-    /// instruction runs again, with the full nesting limits armed.
-    #[cold]
-    #[inline(never)]
-    fn need_stack(&mut self, pc0: u32, sp0: u32, fuel0: i64) -> Status {
-        self.pc = pc0;
-        self.sp = sp0;
-        self.fuel = fuel0;
-        self.flush();
-        Status::OutOfFuel
     }
 
     /// Before `step`: if the instruction at `pc` may be retried once after a collection

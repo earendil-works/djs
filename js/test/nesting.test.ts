@@ -7,6 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Sandbox, SandboxError, loadModule } from "../src/sandbox.ts";
+import { stackMoves } from "../src/trap.ts";
 
 const nested: Record<string, (n: number) => string> = {
   parens: (n) => "(".repeat(n) + "1" + ")".repeat(n),
@@ -63,5 +64,54 @@ test("the deepest accepted nesting runs in wasm", async () => {
       else hi = m;
     }
     assert.ok(lo >= 20, `${name}: only ${lo} levels`);
+  }
+});
+
+// The elastic stack (D3280): a compile that nests deeper than the module's small stack
+// allows stops before any effect and runs again on a larger one. That must leave the same
+// heap and spend the same fuel as a compile that never stopped: the same module with the
+// elastic stack off compiles at once on its own stack (only where that stack is large: the
+// debug module's).
+test("a compile on the larger stack leaves the same heap and fuel", async () => {
+  const module = await loadModule();
+  const deep = (n: number) => "(".repeat(n) + "1" + ")".repeat(n);
+  const groups = (n: number) => "(".repeat(n) + "a" + ")".repeat(n);
+  const programs = [
+    // The script itself, a regexp literal in it, then run-time compiles.
+    `return ${deep(150)};`,
+    `return /${groups(100)}/.exec("a").length;`,
+    `return eval(${JSON.stringify(deep(150))}) + eval("1 + 1");`,
+    `return new Function("x", ${JSON.stringify(`return x + ${deep(150)};`)})(1);`,
+    `return new RegExp(${JSON.stringify(groups(100))}).exec("a").length;`,
+    // A function compiled at its first call (where functions compile lazily).
+    `const f = () => { return ${deep(150)}; }; return f() + f();`,
+    // Deep, then too deep: the same SyntaxError as without the small stack.
+    `try { eval(${JSON.stringify(deep(400))}); } catch (e) { return String(e); }`,
+    `try { new RegExp(${JSON.stringify(groups(300))}); } catch (e) { return String(e); }`,
+  ];
+  type Inner = { x: Record<string, any>; vm: number };
+  const run = (src: string, elastic: boolean) => {
+    const sb = new Sandbox({ module, fuelSlice: 1e9, deterministic: { startedAt: 0, seed: 1 } });
+    const { x, vm } = sb as unknown as Inner;
+    if (!elastic) x.djs_elastic_stack(0);
+    const moves = stackMoves;
+    const value = sb.run(src);
+    const arena = new Uint8Array(x.memory.buffer, x.vm_arena_ptr(vm), x.vm_arena_len(vm)).slice();
+    const fuel = x.vm_fuel_used(vm);
+    sb.dispose();
+    return { value, arena, fuel, moved: stackMoves > moves };
+  };
+  const probe = new Sandbox({ module });
+  const bigStack = ((probe as unknown as Inner).x.__stack_pointer.value as number) >= 128 * 1024;
+  probe.dispose();
+  for (const src of programs) {
+    const a = run(src, true);
+    assert.ok(a.moved, `did not move the stack: ${src.slice(0, 40)}`);
+    if (!bigStack) continue;
+    const b = run(src, false);
+    assert.ok(!b.moved);
+    assert.deepEqual(a.value, b.value, src.slice(0, 40));
+    assert.equal(a.fuel, b.fuel, `fuel: ${src.slice(0, 40)}`);
+    assert.ok(Buffer.compare(a.arena, b.arena) === 0, `heap: ${src.slice(0, 40)}`);
   }
 });

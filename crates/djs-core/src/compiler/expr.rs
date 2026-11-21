@@ -1488,10 +1488,7 @@ impl Parser<'_, '_> {
         let deep = self.max_depth == super::parser::MAX_DEPTH;
         let program = match crate::builtins::regexp::compile(&pattern, &flags, deep) {
             Ok(program) => program,
-            Err(e) if e.need_stack() => {
-                self.need_stack();
-                return Err(super::PErr::need_stack());
-            }
+            Err(e) if e.need_stack() => return Err(self.need_stack()),
             Err(e) => return syntax(tok.start, alloc::string::String::from(e.message())),
         };
         // The program is compiled once per literal and shared by the RegExp objects of

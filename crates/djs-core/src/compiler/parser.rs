@@ -825,17 +825,17 @@ impl<'a, 'h> Parser<'a, 'h> {
     #[inline(never)]
     fn too_deep(&mut self) -> PResult<()> {
         if self.max_depth < MAX_DEPTH {
-            self.need_stack();
-            return Err(PErr::need_stack());
+            return Err(self.need_stack());
         }
         syntax(self.tok.start, "stack overflow")
     }
 
-    /// Notes that this compile needs the larger stack. In the heap, not only as an
-    /// error: a speculative parse (TypeScript's `ts_try`) that swallows the error must
-    /// not change what compiles.
-    pub(super) fn need_stack(&mut self) {
+    /// The error of a compile that needs the larger stack. Noted in the heap too, not
+    /// only as the error: a speculative parse (TypeScript's `ts_try`) that swallows the
+    /// error must not change what compiles.
+    pub(super) fn need_stack(&mut self) -> PErr {
         self.heap.stack_need = true;
+        PErr::need_stack()
     }
 
     pub fn leave_n(&mut self, n: u32) {

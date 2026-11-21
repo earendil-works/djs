@@ -342,15 +342,22 @@ pub(crate) fn elastic<T, E>(
 ) -> Result<T, E> {
     loop {
         let r = f(heap);
-        if !core::mem::take(&mut heap.stack_need) {
-            heap.stack_deep = false;
-            return r;
-        }
-        heap.stack_deep = true;
-        if heap.stack_elastic {
-            return Err(need());
+        match again(heap) {
+            Some(true) => {}
+            Some(false) => return Err(need()),
+            None => return r,
         }
     }
+}
+
+/// After an attempt of [`elastic`]: `None` when it stands, else whether to run it again
+/// now (`Some(false)`: the host does). Out of line: every compile entry has a copy of
+/// [`elastic`].
+#[inline(never)]
+fn again(heap: &mut Heap) -> Option<bool> {
+    let need = core::mem::take(&mut heap.stack_need);
+    heap.stack_deep = need;
+    need.then_some(!heap.stack_elastic)
 }
 
 /// [`attempt`] under the elastic stack ([`elastic`]).

@@ -45,9 +45,9 @@ const BIG_STACK = 128 * 1024;
 export interface StackExports {
   __stack_pointer?: WebAssembly.Global;
   djs_elastic_stack?(on: number): void;
-  djs_stack_alloc?(len: number): number;
-  djs_stack_free?(): void;
+  djs_stack?(len: number): number;
   vm_run(vm: number, fuel: number): number;
+  vm_fuel_used?(vm: number): number;
   vm_compile?(vm: number, goal: number, paramsLen: number, srcLen: number): number;
   vm_compile_file?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_compile_cached?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number, blobLen: number): number;
@@ -63,35 +63,43 @@ export interface StackExports {
  * instance's memory was reset (a pooled instance).
  */
 export function elasticStack<X extends StackExports>(x: X): X {
-  const sp = x.__stack_pointer;
-  const { djs_stack_alloc: alloc, djs_stack_free: free } = x;
-  if (!sp || !alloc || !free || !x.djs_elastic_stack) return x;
+  const { __stack_pointer: sp, djs_stack: stack, vm_fuel_used: fuelUsed } = x;
+  if (!sp || !stack || !fuelUsed || !x.djs_elastic_stack) return x;
   x.djs_elastic_stack(1);
   // Already wrapped (a pooled instance): the static was reset with the memory, the wrappers
   // are still in place.
   if (wrapped.has(x)) return x;
   const big = <T>(f: () => T): T => {
+    stackMoves++;
     const small = sp.value as number;
-    sp.value = alloc(BIG_STACK);
+    sp.value = stack(BIG_STACK);
     // A trap leaves the pointer where it is: the instance is dead, `trapText` reads it.
     const r = f();
     sp.value = small;
-    free();
+    stack(0);
     return r;
   };
   const y: X = Object.assign(Object.create(null), x);
   const run = x.vm_run;
+  // The fuel of the last run's parts that stopped for the stack, which `vm_fuel_used` adds.
+  let carry = 0;
+  let carryVm = 0;
   y.vm_run = (vm, fuel) => {
+    carry = 0;
+    carryVm = vm;
     const st = run(vm, fuel);
     if (st !== NEED_STACK) return st;
     // Fuel 0: the run goes on with what this one had left.
     return big(() => {
       let s: number;
-      do s = run(vm, 0);
-      while (s === NEED_STACK);
+      do {
+        carry += fuelUsed(vm);
+        s = run(vm, 0);
+      } while (s === NEED_STACK);
       return s;
     });
   };
+  y.vm_fuel_used = (vm) => fuelUsed(vm) + (vm === carryVm ? carry : 0);
   for (const name of ["vm_compile", "vm_compile_file", "vm_compile_cached"] as const) {
     const f = x[name] as ((...a: number[]) => number) | undefined;
     if (!f) continue;
@@ -105,3 +113,6 @@ export function elasticStack<X extends StackExports>(x: X): X {
 }
 
 const wrapped = new WeakSet<object>();
+
+/** How often a call moved to the larger stack in this process (for tests). */
+export let stackMoves = 0;
