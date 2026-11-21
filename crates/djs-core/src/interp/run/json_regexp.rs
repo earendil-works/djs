@@ -76,6 +76,8 @@ impl Exec<'_> {
             }
         };
         let a0 = arg(self, 0);
+        // (Read once, as `call_intrinsic` does.)
+        let (a1, a2, a3) = (arg(self, 1), arg(self, 2), arg(self, 3));
         let v = match id {
             JSON_PARSE => {
                 let Some(s) = a0.as_string() else {
@@ -84,7 +86,7 @@ impl Exec<'_> {
                 self.fuel -= length_fuel(self.heap.str_len(s));
                 match json::parse(self.heap, s)? {
                     // With the second argument: `[value, record]` for the reviver (D1611).
-                    Ok(v) if arg(self, 1).as_bool() == Some(true) => {
+                    Ok(v) if a1.as_bool() == Some(true) => {
                         let rec = json::source_records(self.heap, s, v)?;
                         let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
                         let pair = self.heap.new_array_from_values(Some(proto), &[v, rec])?;
@@ -100,16 +102,16 @@ impl Exec<'_> {
                 }
             }
             JSON_STRINGIFY_FAST | JSON_STRINGIFY_FAST_AT => {
-                let Some(gap) = arg(self, 1).as_string() else {
+                let Some(gap) = a1.as_string() else {
                     return bad_argument(id);
                 };
                 let r = if id == JSON_STRINGIFY_FAST {
                     json::stringify_fast(self.heap, a0, gap)?
                 } else {
-                    let Some(stack) = arg(self, 2).as_object() else {
+                    let Some(stack) = a2.as_object() else {
                         return bad_argument(id);
                     };
-                    json::stringify_fast_in(self.heap, a0, gap, stack, arg(self, 3))?
+                    json::stringify_fast_in(self.heap, a0, gap, stack, a3)?
                 };
                 if let Some(s) = r.as_string() {
                     self.fuel -= length_fuel(self.heap.str_len(s));
@@ -138,17 +140,17 @@ impl Exec<'_> {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(id);
                 };
-                let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                Value::bool(self.heap.create_data_property(o, key, arg(self, 2))?)
+                let key = conv::to_property_key(self.heap, a1)?;
+                Value::bool(self.heap.create_data_property(o, key, a2)?)
             }
             IS_REGEXP_OBJECT => Value::bool(re::as_regexp(self.heap, a0).is_some()),
             REGEXP_CREATE => {
                 // The first argument is a prototype, or a literal's compiled program.
                 let (proto, cell) = (a0.as_object(), a0.as_internal());
-                let Some(f) = arg(self, 2).as_string() else {
+                let Some(f) = a2.as_string() else {
                     return bad_argument(id);
                 };
-                let pattern = arg(self, 1);
+                let pattern = a1;
                 if let Some(like) = re::as_regexp(self.heap, pattern) {
                     Value::object(re::create_like(self.heap, proto, like, f)?)
                 } else {
@@ -167,9 +169,7 @@ impl Exec<'_> {
                     REGEXP_FLAGS => Value::string(re::flags_string(self.heap, r)?),
                     REGEXP_ESCAPED_SOURCE => Value::string(re::escaped_source(self.heap, r)?),
                     _ => {
-                        let Some(c) = arg(self, 1)
-                            .as_string()
-                            .and_then(|f| self.heap.char_code_at(f, 0))
+                        let Some(c) = a1.as_string().and_then(|f| self.heap.char_code_at(f, 0))
                         else {
                             return bad_argument(id);
                         };
@@ -212,14 +212,14 @@ impl Exec<'_> {
                 Value::bool(ok)
             }
             CREATE_REGEXP_STRING_ITERATOR => {
-                let (Some(r), Some(s)) = (a0.as_object(), arg(self, 1).as_string()) else {
+                let (Some(r), Some(s)) = (a0.as_object(), a1.as_string()) else {
                     return bad_argument(id);
                 };
                 let mut flags = 0;
-                if arg(self, 2).as_bool() == Some(true) {
+                if a2.as_bool() == Some(true) {
                     flags |= re::IT_GLOBAL;
                 }
-                if arg(self, 3).as_bool() == Some(true) {
+                if a3.as_bool() == Some(true) {
                     flags |= re::IT_UNICODE;
                 }
                 Value::object(re::string_iterator(self.heap, r, s, flags)?)
@@ -231,7 +231,7 @@ impl Exec<'_> {
                     .object_slot(it, re::IT_FLAGS)
                     .as_int()
                     .unwrap_or(0);
-                match arg(self, 1).as_int() {
+                match a1.as_int() {
                     Some(0) => self.heap.object_slot(it, re::IT_REGEXP),
                     Some(1) => self.heap.object_slot(it, re::IT_STRING),
                     Some(2) => Value::bool(flags & re::IT_GLOBAL != 0),
