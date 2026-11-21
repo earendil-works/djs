@@ -29,6 +29,7 @@ use crate::value::Str;
 const STRING_KIND: i32 = 3;
 
 const GET_ITERATOR: u16 = id("GetIterator");
+const COPY_DATA_PROPERTIES_EXCLUDING: u16 = id("CopyDataPropertiesExcluding");
 const ITERATOR_CLOSE: u16 = id("IteratorClose");
 const MAP_ITERATOR_NEXT: u16 = id("MapIteratorPrototypeNext");
 const SET_ITERATOR_NEXT: u16 = id("SetIteratorPrototypeNext");
@@ -45,10 +46,13 @@ impl Exec<'_> {
         base: u32,
         argc: u32,
     ) -> Result<Option<Value>, Fault> {
+        let a0 = self.get(base);
+        if id == COPY_DATA_PROPERTIES_EXCLUDING {
+            return self.object_rest(a0, self.get(base + 1));
+        }
         if argc != 1 {
             return Ok(None);
         }
-        let a0 = self.get(base);
         match id {
             GET_ITERATOR => {
                 let (holder, original, proto, target, kind) = if a0.as_string().is_some() {
@@ -194,6 +198,34 @@ impl Exec<'_> {
     /// Whether `iter_fast_next` would produce a value (`%IteratorFastReady`).
     pub(super) fn iter_fast_ready(&self, it: Value, f: Value) -> bool {
         matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))
+    }
+
+    /// `%CopyDataPropertiesExcluding(src, excluded)` (an object rest, `{a, ...rest} =
+    /// src`) where it runs no user code: `copy_data_props` into a new object, without
+    /// the keys of the compiler's array `excluded` (property keys already; strings here,
+    /// 0278).
+    #[inline(never)]
+    fn object_rest(&mut self, src: Value, excluded: Value) -> Result<Option<Value>, Fault> {
+        let ex = excluded.as_object().expect("excluded keys");
+        // String keys (the usual ones); a string no atom exists for names no property.
+        let mut keys = alloc::vec::Vec::new();
+        for j in 0..self.heap.array_length(ex) {
+            let Some(s) = self
+                .heap
+                .get_element_fast(ex, j)
+                .and_then(|k| k.as_string())
+            else {
+                return Ok(None);
+            };
+            if let Some(a) = self.heap.existing_key_atom(s) {
+                crate::PushOut::push_out(&mut keys, a);
+            }
+        }
+        let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+        let o = self.heap.new_object(Some(proto))?;
+        Ok(self
+            .copy_data_props(o, src, &keys)?
+            .then_some(Value::object(o)))
     }
 
     /// `it` if it is a Map or Set Iterator.

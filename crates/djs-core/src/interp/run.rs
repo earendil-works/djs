@@ -2770,7 +2770,7 @@ impl<'h> Exec<'h> {
                     ));
                 }
                 let (o, src) = (t1, t0);
-                if !self.copy_data_props(o.as_object().expect("object literal"), src)? {
+                if !self.copy_data_props(o.as_object().expect("object literal"), src, &[])? {
                     // Getters run user code: in the builtin language (builtins/spread.ts),
                     // `o src` becomes `%CopyDataProperties undefined o src`, pushing o.
                     let g = realm::installed_intrinsic(self.heap, intrinsics::COPY_DATA_PROPERTIES);
@@ -3965,12 +3965,17 @@ impl<'h> Exec<'h> {
         })
     }
 
-    /// `{...src}` (CopyDataProperties without excluded keys). Like QuickJS, primitive
-    /// sources contribute nothing.
-    /// Object spread of plain data properties. Returns false, having copied nothing,
-    /// when the source needs the general CopyDataProperties (an enumerable getter, a
-    /// string's indexes).
-    fn copy_data_props(&mut self, o: Obj, src: Value) -> Result<bool, Fault> {
+    /// `{...src}` (CopyDataProperties without excluded keys), or an object rest's copy
+    /// without the keys `excluded` (0278). Like QuickJS, primitive sources contribute
+    /// nothing. Object spread of plain data properties. Returns false, having copied
+    /// nothing, when the source needs the general CopyDataProperties (an enumerable
+    /// getter, a string's indexes).
+    pub(super) fn copy_data_props(
+        &mut self,
+        o: Obj,
+        src: Value,
+        excluded: &[Atom],
+    ) -> Result<bool, Fault> {
         if src.as_string().is_some_and(|s| self.heap.str_len(s) > 0) {
             return Ok(false);
         }
@@ -3978,7 +3983,7 @@ impl<'h> Exec<'h> {
             return Ok(true);
         };
         // The first spread of plain data into a fresh literal: a copy of the values.
-        if self.heap.spread_clone(o, s)? {
+        if excluded.is_empty() && self.heap.spread_clone(o, s)? {
             return Ok(true);
         }
         if self.heap.is_proxy(s) {
@@ -3995,6 +4000,7 @@ impl<'h> Exec<'h> {
         for k in keys {
             if let Some(Property::Data { value, flags }) = self.heap.get_own_property_alloc(s, k)?
                 && flags.enumerable()
+                && !excluded.contains(&k)
             {
                 self.heap.create_data_property(o, k, value)?;
             }
