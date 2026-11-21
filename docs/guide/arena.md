@@ -99,7 +99,7 @@ Allocating a cell rounds the size up to 8, checks it against the cap, moves the 
 the used region (`len`) and writes the header:
 
 <!-- gen:excerpt crates/djs-core/src/heap/mod.rs "impl Heap" "pub fn alloc_cell(" 10 -->
-[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L560-L569), lines 560–569:
+[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L565-L574), lines 565–574:
 
 ```rust
 pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {
