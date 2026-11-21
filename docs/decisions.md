@@ -12359,3 +12359,19 @@ privileged `%Name` would be "unknown intrinsic", and those engine-bug messages s
 The dump module keeps working: its dumper takes the base's builtin paths from
 djs-prelude's `BASE_NAMES`, made natively. Shipped module 429,050 → 424,905 B gz
 (−4,145), data segment 99,123 → 90,883 B; slim 362,423 → 358,396.
+## D3312: The held byte kernels of 0260; the ceiling rises 12 B
+date: 2026-11-21 · by: pscan (approved by the coordinator) · issue: 0260
+- JSON strings in two-byte input skip plain units four to a word (`swar::lt16`/`eq16`,
+  and whether a skipped unit is above 0xFF from the same word); escaped strings of
+  two-byte input are written run by run (copied, or narrowed for one-byte output) instead
+  of unit by unit. fanout's data holds a ✓, so every string of it is two-byte.
+- A regular expression whose first set has one or two Latin-1 characters (`function`,
+  `TODO|FIXME`, a letter with `i`) finds candidates in one-byte text with
+  `swar::find_either`, read from the program's ranges once per exec (a set of more than
+  two ranges is turned down at once); a multiline `^` finds the next `\n` or `\r` the
+  same way. Four bytes cost +96 B gz more and only added `report|metric`/i-like sets.
+Sizes (gz, cumulative on 5a3891f6 at 428,963): two-byte scan 429,119 (+156), two-byte
+writer 429,308 (+189), regexp first set and multiline `^` 429,657 (+349). Effect
+(wasm instructions / wall min-time, load ~15): the two-byte pair fanout −7.6% / −8%;
+the regexp pair heavy −5.5% / −5%, text −4.8% / −4%. The ceiling goes 429,648 →
+429,660 (+12), within the 1.5x budget of 429,982. Slim 362,751 (its ceiling 363,349).

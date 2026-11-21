@@ -758,7 +758,7 @@ fn search_fuel_is_additive() {
     }
 }
 
-/// The one-byte searches (0260): a first set of one to four bytes and line starts in
+/// The one-byte searches (0260): a first set of one or two bytes and line starts in
 /// one-byte text go eight bytes at a time. Each pattern at every offset of one-byte text
 /// gives the match and the fuel of the same text read as UTF-16 (the unit loop), whole
 /// and in slices of a few units.

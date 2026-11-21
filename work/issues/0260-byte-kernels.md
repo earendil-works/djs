@@ -1,6 +1,6 @@
 # 0260: Byte kernels: search, JSON scanning and splitting, word at a time
 
-status: in-progress
+status: done
 agent: pscan
 branch: issue/0260-byte-kernels
 depends-on: -
@@ -88,9 +88,6 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   updated.
 
 ## Follow-ups
-- Branch 0260-rest (held for the size budget, rebased on 5a3891f6): two-byte JSON scan
-  (+156 B gz) and escaped writer (+189): fanout −8%; regexp first sets of one or two
-  bytes and multiline `^` through `swar::find_either` (+349): heavy −5%, text −4%.
 - The `+simd128` target feature alone shrinks the shipped module by ~764 B gz at equal
   speed (autovectorization; scratch build): an owner question against D016.
 - includes/indexOf on short lines are ~80% call overhead (run_hot, decline_fast,
@@ -116,7 +113,19 @@ min-of-15; load 10-50, so wall ±3-5%):
 | text, loop, inspect, sequential | ~0 | ~0 |
 Kernels (µs per iteration, wall): JSON.parse of an 80 KB plain text 9.9 vs 52 (0.19x),
 escaped text (3,266 escapes) 0.87x, find_latin1 self time in an includes loop −30%.
-Held on 0260-rest (see Follow-ups): fanout −8%, heavy −5%, text −4% more for +694 B.
+Then (D3312, approved): two-byte JSON scan and escaped writer (fanout −8% more), regexp
+first sets of one or two bytes and multiline `^` (heavy −5.5%, text −4.8% more): +694 B
+gz, the ceiling raised 12 B to 429,660.
+
+### For the owner: the simd128 flag as a size option
+Building the shipped module with `-Ctarget-feature=+simd128` and no code change makes it
+764 B gz smaller (428,404 vs 429,168 at 84ed9975) at the same speed: wall min-time
+ratios heavy 1.02, fanout 0.98, media 0.96, json 1.00, text 0.99, loop 0.98, inspect
+1.02, sequential 1.03 (noise ±3%). The catch is D016's: the module then fails to
+validate on a runtime without SIMD (wasm engines before V8 9.1 / Chrome 91, Firefox 89,
+Safari 16.4; wasmtime and wasmer have it by default; some embedded or interpreter
+runtimes still lack it), and there is no fallback unless a second, SIMD-less module
+ships. The flag is a build setting in scripts/wasm-build-env.sh, no source change.
 
 simd128 (scratch, patches in work/scratch/0260/simd-hand*.patch; same code as main
 otherwise):
