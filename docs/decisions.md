@@ -12531,3 +12531,20 @@ overshoot was tried: fanout's 220 KB burst then reserved 260 KB more than with t
 eighth (memory after a run, KiB, wasm: main / eighth / twice / half: heavy 4736 / 4288 /
 3904 / 3904, fanout 1792 / 1664 / 1792 / 1664, json 1472 / – / 1472 / 1408, ts
 1664 / – / 1664 / 1536; the rest unchanged). Instructions within noise.
+
+## D3362: dlmalloc's first segment has a floor
+date: 2026-11-21 · by: pstart · issue: 0265
+dlmalloc's first segment, which lies in front of the arena, was the rest of the static
+data's last page (the seed, D3281) plus one page (`PRIME`). How much room that is depended
+on the static data's size, and whatever dlmalloc needs beyond it becomes a segment at
+memory's end, right behind the arena, which then cannot grow in place and moves (and a
+collection's side tables that do not fit become page runs behind it, D2541). Measured with
+the seed shrunk step by step (warm and first instances, the codemode workloads; counted
+segments, page runs and arena moves): D3360's layout has 104.3 KB of room; 102.4 KB keeps
+every row; 94 KB costs heavy a page (+64 KiB); 84 KB moves text's arena (1,088 → 1,472 KiB);
+76 KB also fanout's (1,664 → 3,008 KiB) and json's (1,344 → 1,856 KiB). So `prime` now adds
+the pages that make the seed at least `FLOOR` = 100 KiB (102,400 B); today's layout keeps
+one page. A layout with less static data (the Unicode tables out of the data segment)
+then primes two pages until dlmalloc needs less: a smaller idle memory is only real when
+the runs never need the room. `dlmalloc_has_the_floor_in_front_of_the_arena` checks small
+blocks up to the floor stay in front of the arena for seeds of 0 to 60 KB.

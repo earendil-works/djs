@@ -498,3 +498,37 @@ fn the_compile_zone_bumps_frees_and_goes_back() {
         "no memory grown for the zone"
     );
 }
+
+#[test]
+fn dlmalloc_has_the_floor_in_front_of_the_arena() {
+    // D3362: whatever the seed (the rest of the static data's page), the first segment
+    // holds FLOOR bytes of small blocks without a segment behind the arena.
+    for seed in [0, 1_700, 24_000, 38_000, PAGE - 4096] {
+        let mut mem = Fake::new(1024);
+        mem.grow(3);
+        let a = Box::leak(Box::new(PageAlloc::new(mem)));
+        // SAFETY: leaked: it never moves.
+        unsafe { a.init() };
+        a.free_pages(1, 2);
+        let base = a.pages().addr(1) - seed;
+        a.seed(base, seed);
+        a.prime();
+        let l = Layout::from_size_align(8 << 20, 8).unwrap();
+        // SAFETY: a non-zero size.
+        let arena = unsafe { a.alloc(l) };
+        let small = Layout::from_size_align(2000, 8).unwrap();
+        // Small blocks up to the floor, less dlmalloc's own overhead (16 B a chunk, its
+        // segment records).
+        let n = (FLOOR - 2048) / 2016;
+        // SAFETY: a valid layout; freed below.
+        let blocks: Vec<*mut u8> = (0..n).map(|_| unsafe { a.alloc(small) }).collect();
+        assert!(
+            blocks.iter().all(|&p| !p.is_null() && p < arena),
+            "seed {seed}"
+        );
+        for p in blocks {
+            // SAFETY: live, with its layout.
+            unsafe { a.dealloc(p, small) };
+        }
+    }
+}

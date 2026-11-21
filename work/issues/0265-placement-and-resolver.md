@@ -83,6 +83,15 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   memfirst.ts (first instances, 6 perturbed runs × 8 workloads), mem.ts (warm instances)
   and mem-perturb (8 workloads × 6): unchanged. Size: 425,611 (main) → 425,640 (D3360) →
   425,900 (D3361) B gz.
+- Merged D3360 + D3361 (main d44e1bdb; one retry: pi's worker-lifetime timing test at
+  load 78).
+- pscan's case (0264: data shrinks, dlmalloc's first segment ~66 KB): reproduced by
+  shrinking the seed (shrink.patch). Two mechanisms: dlmalloc's second segment lands
+  behind the arena (text, json, heavy), and a collection's side tables become page runs
+  behind it while the arena grows during the same collection (fanout). Room sweep: see
+  D3362. D3362: a floor of 100 KiB for the first segment (prime computes its pages).
+- Moved here from 0258 item 4 (coordinator, 2026-11-21): the GC's side tables out of
+  dlmalloc (IDEAS idea 9), the allocation of the tables only; pgc keeps the growth rule.
 
 ## Follow-ups
 

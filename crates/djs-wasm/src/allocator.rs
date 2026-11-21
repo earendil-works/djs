@@ -364,9 +364,14 @@ pub(crate) mod pages {
         }
     }
 
-    /// dlmalloc's first segment, in pages (`PageAlloc::prime`), besides the rest of the
-    /// static data's last page (`PageAlloc::seed`).
-    const PRIME: usize = 1;
+    /// The least room dlmalloc's first segment has, the rest of the static data's last
+    /// page (`PageAlloc::seed`) and the pages `PageAlloc::prime` adds (D3362). Whatever
+    /// dlmalloc needs beyond it becomes a segment at memory's end, right behind the arena,
+    /// which then cannot grow in place and moves. Measured on the codemode workloads, warm
+    /// and first instances: 102.4 KB keeps every row as with D3360's 104.3 KB; 94 KB put
+    /// a collection's tables of heavy into page runs (+64 KiB), 84 KB moved text's arena
+    /// (+384 KiB), 76 KB also fanout's and json's.
+    pub(crate) const FLOOR: usize = 100 * 1024;
 
     /// Whether a block of `layout` is huge (its own pages).
     fn huge(size: usize, align: usize) -> bool {
@@ -446,15 +451,21 @@ pub(crate) mod pages {
             });
         }
 
-        /// Gives dlmalloc its first segment now (`PRIME` pages and the `seed` before them),
+        /// Gives dlmalloc its first segment now (the `seed` and the pages that make it `FLOOR`),
         /// below everything else: the first block an instance allocates is usually the
         /// arena, and a segment right after it would keep it from growing in place. It
         /// holds what a VM keeps in dlmalloc and what most compiles need.
         pub(crate) fn prime(&mut self) {
+            // The pages that make the seed at least FLOOR.
+            let seed = self.dl.allocator().head.get().1;
+            let pages = FLOOR.saturating_sub(seed).div_ceil(PAGE);
+            if pages == 0 {
+                return;
+            }
             // SAFETY: a valid size and alignment; the block is freed right away (dlmalloc
             // keeps the segment).
             unsafe {
-                let n = PRIME * PAGE - 4096;
+                let n = pages * PAGE - 4096;
                 let p = self.dl.malloc(n, 8);
                 if !p.is_null() {
                     self.dl.free(p, n, 8);
