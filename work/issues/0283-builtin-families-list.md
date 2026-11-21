@@ -1,6 +1,6 @@
 # 0283: What each builtin family costs and gives: a list for the owner's decision
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0283-families-list
 depends-on: 0271 (research)
