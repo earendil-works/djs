@@ -12975,3 +12975,35 @@ compiles in djs-wasm's compile zone through a host switch on the heap (another �
 create path, +383 B, most of it from the new heap field shifting offsets in every VM
 function), and a one-byte escaped-string scan over raw positions (escape-dense parse −4%
 instructions, workloads within noise, +181 B); patches in the issue's scratch.
+## D3402: String-key element access without interning or leaving the leaf
+date: 2026-11-21 · by: pgc · issue: 0269
+`o[k]` with a string `k` cost ~2,800 wasm instructions against QuickJS's ~1,000: the hot
+loop declined every non-integer key to the general path, which interns the key (and
+would allocate an atom for a key that no object has). `Heap::existing_key_atom` finds the
+atom `intern` would return without allocating (a flat one-byte key of the VM's own is
+hashed once, cached, and compared as bytes; `intern` uses the same path), and
+`string_key_get` / `string_key_has` / `string_key_set` do `o[k]`, `k in o` and
+`o[k] = v` when no code can run: a data property on an ordinary chain, `undefined` when
+nothing has the key (a key that is not interned cannot be one, unless a proxy answers),
+an own writable data property for stores. Anything else declines to the general path,
+which they mirror (`lookup_property` / `got_of`, `has_property_or_proxy`,
+`set_own_data_value`). 0268 calls them from the interpreter's element paths. With that
+wiring (measured locally): `o[k]` 2,783 → 1,105, `o[k] = 1` 2,649 → 1,055, a counter
+`c[k] = (c[k] || 0) + 1` 4,250 → ~2,900 (QuickJS 1,017 / 2,312 / 3,229). Not done: keys
+that are atoms of the base image (`name`) still hash with the base key per lookup
+(~1.6x QuickJS); caching them in the VM's index would have to happen on every intern path
+to keep plain and suspended heaps identical.
+
+## D3403: substr as a generated leaf; short substrings of slices copy from the parent
+date: 2026-11-21 · by: pgc · issue: 0269
+- String.prototype.substr (Annex B) ran as bytecode: 9.7k instructions per call against
+  QuickJS's 2.2k. `@rust` (D3260) makes it 2.2k.
+- D3400 routed every substring that is neither a slice nor a flat one-byte copy through
+  `concat_ranges`, whose leaf list was a `Vec`: a short substring of a split line (too
+  short to be a slice) got 10% slower. `latin1_copy` copies straight from a slice's parent,
+  and `concat_ranges` keeps up to four rope-free pieces on the stack: split-line `trim`
+  2.76k → 2.18k, `slice(2, 10)` 2.76k → 2.21k, a two-byte `slice` 3.24k → 2.58k (QuickJS
+  2.16k / 2.28k / 2.32k).
+- Tried and dropped: a `StrMatchesAt` intrinsic for startsWith/endsWith (no substring):
+  no change per op (the generated leaf's per-intrinsic calls dominate, not the
+  substring), +372 B gz.

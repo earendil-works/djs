@@ -71,6 +71,16 @@ String bucket: heavy 19% of djs samples (find_latin1 6%: pscan's kernel), fanout
 - slice views first: heavy −1.5%. str_array_index from the view: o[k] −160 instr.
 - Size: +~700 B gz (428,178 vs 427,478). Guide: heap.md (ropes read in place).
 
+### Batch 2 (D3402, D3403)
+- String-key helpers (heap/atom.rs) for o[k] / k in o / o[k] = v; 0268 wires them into
+  hot.rs. Local wiring: o[k] 2.78k → 1.1k (QuickJS 1.0k), stores 2.65k → 1.06k.
+- substr @rust 9.7k → 2.2k; slice substrings copy from the parent (fixes batch 1's +10% on
+  split-line trims; now below main).
+- startsWith/endsWith via a no-substring intrinsic: no gain, dropped. The remaining
+  1.2–1.4x ops (startsWith, endsWith, at, repeat, toString) are generated-leaf call
+  overhead (several intrinsic calls per builtin), pcall's area.
+- Workloads within noise; module +180 B gz (helpers unlinked until wired).
+
 ## Follow-ups
 
 ## Result
