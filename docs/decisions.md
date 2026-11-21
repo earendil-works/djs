@@ -12677,3 +12677,35 @@ collects 0–3 times, so a peak is where the last threshold falls against the ru
   last collection's end; leaves below it count 100%, new ones 60/30/0%): heavy 3840 →
   3968/3968/3904. The earlier third collection is followed by a fourth at a higher live
   size (heavy's live data grows to 2.9 MB through the run). Not landed.
+
+## D3293: Growth past 1 MiB counts half
+date: 2026-11-21 · by: pgc · issue: 0258
+`next_threshold_cheap`'s growth (young live data, minus the big-string discount, plus
+the prefix allowance) counts in full up to `GROWTH_KNEE` (1 MiB) and half beyond it, so a
+heap with megabytes of live data grows by about half its size between collections
+instead of doubling. Measured (wasm, node 26; peak MiB over mem-perturb runs; wmeasure
+instructions incl. V8's tier-up): json-objects 7.1 → 5.8 (+3.3% instr), strbuild
+24.2 → 11.9 (+1.1%), jsonh 4.3 → 3.7 (+1.1%), json 4.4 → 3.9 (±0), json-indent 3.3 → 3.4
+(+0.3%), pi-like 1.2 (±0). Codemode set: memory equal except heavy 3840 → 3968 KiB (its
+run now ends just under the next threshold), instructions within noise. A knee at 512
+KiB saved a little more (jsonh 3.4, json 3.6) for json +2.7% and jsonh +4.3%.
+
+## D3294: A fixed nursery without a barrier: measured, not built
+date: 2026-11-21 · by: pgc · issue: 0258
+IDEAS.md's item 5 as the cheap experiment: every collection promotes all survivors
+(`OLD_END` = live), the next threshold is live + N, and a full collection runs when the
+old region grew by 1/F since the last full one; minor collections walk the whole old
+region (no barrier). Against D3291's state (memory as in D3293):
+- N 512 KiB, F 4: json-objects 6.0, strbuild 20.5, jsonh 3.3, json 3.7, json-indent 2.5
+  MiB; codemode heavy 3328 KiB (−13%), the rest equal. Instructions: json-objects +6.5%,
+  strbuild +6.5%, jsonh +8.5%, json +6.7%.
+- N 256 KiB, F 2: codemode text 960, json 1216, ts 1344, heavy 3392 KiB; instructions
+  codemode json +5–7%, ts +5%, fanout +3%, heavy +1%; the native-track cases +4–9%.
+The cost is the old-region walk at every minor collection. D3293 gets most of the memory
+on the big heaps for a fraction of the CPU; the nursery would additionally take heavy to
+~3.3 MiB, and only a holder barrier (IDEAS.md item 5, its own issue) would make that cheap.
+
+Slice parents kept by minor collections (0234's follow-up) do not set heavy's peak:
+full collections at every point give the same live size at its second collection; the
+~420 KB of parents appear at the third, which is the peak's trigger itself. A full
+collection "before the peak" buys nothing there.

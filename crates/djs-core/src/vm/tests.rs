@@ -3889,7 +3889,8 @@ fn reserved_bases_start_with_room() {
     let plain = Vm::from_base(&base, VmOptions::default()).unwrap();
     let big = Vm::from_base_reserved(&base, VmOptions::default(), 4 << 20).unwrap();
     assert!(plain.heap().arena().capacity() < 4 << 20);
-    assert!(big.heap().arena().capacity() >= 8 << 20);
+    // 4 MiB live grows by 1 MiB and half of the rest past the knee (D3293).
+    assert!(big.heap().arena().capacity() >= 6 << 20);
     assert_eq!(plain.bytes(), big.bytes());
 }
 

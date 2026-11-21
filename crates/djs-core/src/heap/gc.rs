@@ -81,10 +81,16 @@ pub struct GcStats {
 /// before; retune it on its own.
 pub const BASE_ALLOWANCE: u32 = 288_160;
 
+/// Growth past this much counts half (D3293): a heap with megabytes of live data grows by
+/// 1 MiB plus half of the rest before its next collection, not by all of it. The
+/// collections that adds cost little next to the memory a doubling heap reserves (wasm
+/// memory never shrinks).
+pub const GROWTH_KNEE: u32 = 1 << 20;
+
 /// The arena size at which the next collection is requested, for `live` bytes after a
 /// collection, `base` of them the builtin prefix (`Roots::BASE_END`, 0 without one): as
-/// much growth as live data (at least [`MIN_GROWTH`]), the prefix counted as
-/// [`BASE_ALLOWANCE`], but never more than half of the remaining headroom below `limit`.
+/// much growth as live data (at least [`MIN_GROWTH`]; half of what exceeds
+/// [`GROWTH_KNEE`]), the prefix counted as [`BASE_ALLOWANCE`], but never more than half of the remaining headroom below `limit`.
 /// Close to the cap, collections get more frequent instead of running into
 /// `OutOfMemory`.
 pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
@@ -110,6 +116,11 @@ pub fn next_threshold_cheap(live: u32, base: u32, limit: u32, cheap: u32) -> u32
         live.saturating_sub(base).saturating_sub(discount) + BASE_ALLOWANCE
     } else {
         live.saturating_sub(discount)
+    };
+    let counted = if counted > GROWTH_KNEE {
+        GROWTH_KNEE + (counted - GROWTH_KNEE) / 2
+    } else {
+        counted
     };
     let growth = counted.max(MIN_GROWTH);
     if growth > headroom / 2 {
@@ -534,13 +545,22 @@ mod tests {
     }
 
     #[test]
+    fn growth_past_the_knee_counts_half() {
+        // D3293: 3 MiB live without a prefix grows by 1 MiB + 1 MiB, in pages.
+        let big = arena::MAX_ARENA;
+        assert_eq!(next_threshold(3 << 20, 0, big), 5 << 20);
+        assert_eq!(next_threshold(GROWTH_KNEE, 0, big), 2 * GROWTH_KNEE);
+    }
+
+    #[test]
     fn cheap_leaves_count_in_part() {
         // D3144: 4 MB live above the prefix, 3 MB of them large strings.
         let (big, base, live) = (arena::MAX_ARENA, 200_000, 200_000 + (4 << 20));
         let full = next_threshold(live, base, big);
         let cheap = next_threshold_cheap(live, base, big, 3 << 20);
-        // Growth shrinks by the discounted share of the cheap bytes, up to the page rounding.
-        let less = (3 << 20) * CHEAP_DISCOUNT / 100;
+        // Growth shrinks by the discounted share of the cheap bytes, up to the page rounding
+        // (by half of it: both growths are past the knee, D3293).
+        let less = (3 << 20) * CHEAP_DISCOUNT / 100 / 2;
         assert!(
             (full - cheap).abs_diff(less) < PAGE as u32,
             "{full} {cheap} {less}"

@@ -267,7 +267,8 @@ frame entry, a return, a backward jump, a loop back-edge of a native builtin. Af
 collection, `next_threshold` sets the next threshold from the live size:
 
 - let the heap grow by as much as is live (at least 256 KiB), so it can reach twice its
-  live size. Large strings and byte buffers (16 KiB and up) count for only two fifths of
+  live size; past the first MiB of growth only half counts, so a heap with megabytes of
+  live data grows by about half its size between collections. Large strings and byte buffers (16 KiB and up) count for only two fifths of
   their size: the collector marks them with one bit and traces nothing inside them, so
   they make the next collection hardly more expensive, and a run that holds megabytes of
   tool output as text should not get as much again in headroom;
@@ -283,11 +284,13 @@ come after the same allocations. The arena's backing store stops growing at the
 threshold ([growing, and the cap](arena.md#growing-and-the-cap)), since wasm memory never
 shrinks and the peak is what a run costs.
 
-> **Trade-off.** Twice the live size, not more. Minor collections skip the old region,
-> so a collection's cost is mostly the young data that survives it, and a larger growth
-> factor would mean fewer collections and a few percent fewer instructions in
-> collection-heavy runs. It would also raise their peak memory by up to a sixth, and in
-> wasm the peak is what a run costs, so djs takes the smaller peak.
+> **Trade-off.** Twice the live size at most, and about one and a half for big heaps.
+> Minor collections skip the old region, so a collection's cost is mostly the young data
+> that survives it, and a larger growth factor would mean fewer collections and a few
+> percent fewer instructions in collection-heavy runs. In wasm the peak is what a run
+> costs, so djs takes the smaller peak: halving the growth past 1 MiB cut the peak of
+> runs that hold several MB (a large JSON document, a long string being built) by a
+> tenth to a half, for at most a few percent more instructions.
 
 Three rules make the collection points a function of the program alone:
 
