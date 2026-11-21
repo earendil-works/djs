@@ -12334,3 +12334,12 @@ date: 2026-11-21 · by: pscan · issue: 0260
 - Held back for the size budget (branch 0260-rest): two-byte input four units a word
   (fanout −8.5%, +221 B), its escaped writer (+202 B), regexp first sets of 1-4 Latin-1
   bytes through `find_any` (heavy −3%, +377 B), multiline `^` (text −2.8%, +57 B).
+
+## D3311: Size offsets in JSON for 0260
+date: 2026-11-21 · by: pscan · issue: 0260
+Stringify's `escape_ascii` picks the escape letter and writes both bytes through one
+`latin1` (an arm each was eight inlined copies of it: −751 B raw); the parse errors that
+quote a character or token share one builder (−98); `true`/`false`/`null` are recognized
+as one number of their bytes instead of a copy compared three times (−242). Shipped
+429,168 → 428,963 B gz (−205). Speed unchanged (stringify of an escaped 80 KB text
+within noise).

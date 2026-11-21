@@ -82,6 +82,8 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   | 7 regexp first set 1-4 bytes | +377 | heavy −3% |
   | 8 multiline ^ | +57 | text −2.8% |
   All 8 (wall, load ~12): heavy 0.95, fanout 0.90, media 0.83, text 0.96; +1,022 B.
+- Merged steps 1-4 (84ed9975). Offsets in json (D3311): −205 B gz.
+- simd128 (scratch only, patches work/scratch/0260/simd-hand*.patch): see Result.
 - Guide: no page describes these kernels (builtins.md lists the fast entries only); none
   updated.
 
