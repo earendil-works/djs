@@ -165,6 +165,18 @@ gave them, and its images share those bytes with the base. In debug builds a che
 make sure nothing writes there: every arena write below the prefix's end panics, and
 after every run and collection the prefix is compared with a copy.
 
+**Skipping the prefix.** As the base image has it, the prefix points at nothing above
+itself, and only a script that changes a builtin can make it do so. The property
+operations (defining, setting, deleting, changing the prototype or extensibility) check
+whether their object lies in the prefix; the first time one changes a builtin it sets a
+latch bit in the `Roots` cell, which is never cleared. Until then every collection, full
+or minor, walks only the roots cell and the cells from the prefix's end on, which
+saves reading some five thousand cells per collection. The fast paths of the
+interpreter (inline caches, dense element stores) never write a builtin: they decline,
+and the general path sets the latch. With frozen builtins the writes are refused, so the
+latch stays clear. Debug builds check the reason the skip is safe at every collection
+that skips: no field in the prefix points above it.
+
 > **Trade-off.** Never freeing the prefix. A script that reshapes a builtin (adds a
 > property to `Array.prototype`, redefines one with `defineProperty`) gives it new
 > storage, and the old storage stays in the prefix, dead, for the VM's life; a lockdown

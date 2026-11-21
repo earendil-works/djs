@@ -12489,3 +12489,32 @@ back to dlmalloc when it is off and empty; whatever does not fit, and everything
 compile, is dlmalloc's as before. Compile −2..−5% (codemode bodies), whole runs sequential
 −3.6%, inspect −1.8%, fanout ±0. +260 B gz. Run-time compiles (`eval`, `Function`, lazy
 functions) are not in the zone.
+## D3290: The ROOT_PREFIX_WRITTEN latch; collections skip an unwritten builtin prefix
+date: 2026-11-21 · by: pgc · issue: 0258
+Every collection walked the whole builtin prefix (~4,800 cells, D2064) for references to
+newer cells, though the base image has none and only a script that changes a builtin can
+add one (D2063).
+- **Latch:** `Roots::FLAGS` bit `ROOT_PREFIX_WRITTEN` (8), image state, never cleared.
+  `Heap::set_prefix_written` is the one place it is set. The heap caches `gate_end`
+  (BASE_END while writes below it are refused, frozen builtins, or would set the latch,
+  else 0).
+- **Sites (heap/object.rs):** the general property operations (`define_own_property`,
+  `delete_own_property`, `prevent_extensions`, `set_prototype_of`,
+  `add_private_property`) call `refuse_write`/`note_write`: one compare against
+  `gate_end`, out of line only for a prefix object (refuse if frozen, else latch). The
+  fast writers (`shaped_set`, `shaped_add`, `prop_set_value`, `set_own_data_value`,
+  `set_element_fast`, `create_element_fast`, `array_append_fast`, `array_splice_dense`,
+  `create_data_property`'s new-key path) compare and decline, as they did for frozen
+  builtins, so the general path decides; this kept `run_hot` and the IC hits free of a
+  new call.
+- **Skip:** `mark_compact` walks only the roots cell and `[BASE_END, old)` when the
+  latch is clear (full and minor collections, the remembered-list fallback, old
+  ephemerons). Debug builds check at every collection that skips that no traced field of
+  the prefix points at or above BASE_END and no prefix template caches an offset; it
+  found the unlatched `create_data_property` fast path in e2e and test262 under GC
+  stress.
+- **For 0259:** `Heap::builtins_pristine()` (a prefix and the latch clear) is the
+  "builtins are as the base has them" signal.
+- **Measured** (wasm, node 26, instructions per run, fresh VMs, noise ±1–2%): fanout
+  −1.5%, media −2%, text −2%, json −0.6%, heavy −0.4%; wmeasure props −1.8%, pi-like
+  −1.3%, json-objects −1.3%, strings −0.8%. Memory unchanged. Shipped module +~370 B gz.
