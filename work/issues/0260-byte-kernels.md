@@ -1,6 +1,6 @@
 # 0260: Byte kernels: search, JSON scanning and splitting, word at a time
 
-status: open
+status: in-progress
 agent: pscan
 branch: issue/0260-byte-kernels
 depends-on: -
