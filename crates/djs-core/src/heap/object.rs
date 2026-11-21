@@ -948,7 +948,7 @@ impl Heap {
         delete: u32,
         insert: u32,
     ) -> Result<bool, HeapError> {
-        if self.object_class(o) != ObjectClass::Array || self.refuse_write(o) {
+        if self.object_class(o) != ObjectClass::Array || self.gated(o) {
             return Ok(false);
         }
         let f = self.obj_flags(o);
@@ -999,7 +999,7 @@ impl Heap {
     }
 
     pub fn set_element_fast(&mut self, o: Obj, i: u32, v: Value) -> Result<bool, HeapError> {
-        if self.refuse_write(o) {
+        if self.gated(o) {
             return Ok(false);
         }
         let el = self.elements(o);
@@ -1056,7 +1056,7 @@ impl Heap {
         let f = self.obj_flags(o);
         if f & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) != 0
             || f & OBJ_EXTENSIBLE == 0
-            || self.refuse_write(o)
+            || self.gated(o)
             || self.object_class(o) != ObjectClass::Array
         {
             return Ok(None);
@@ -1098,7 +1098,7 @@ impl Heap {
         v: Value,
     ) -> Result<bool, HeapError> {
         debug_assert_eq!(self.object_class(o), ObjectClass::Array);
-        if self.refuse_write(o) {
+        if self.gated(o) {
             return Ok(false);
         }
         let el = self.elements(o);
@@ -1245,7 +1245,7 @@ impl Heap {
     /// nothing changed otherwise.
     #[inline]
     fn prop_set_value(&mut self, o: Obj, i: u32, v: Value) -> bool {
-        if self.refuse_write(o) {
+        if self.gated(o) {
             return false;
         }
         let p = self.props(o);
@@ -1629,7 +1629,7 @@ impl Heap {
         // one of them.
         if f & (OBJ_DICTIONARY | OBJ_IS_PROTO | OBJ_LAZY) != 0
             || f & OBJ_EXTENSIBLE == 0
-            || self.refuse_write(o)
+            || self.gated(o)
         {
             return false;
         }
@@ -1687,7 +1687,7 @@ impl Heap {
     #[inline(always)]
     pub fn shaped_set(&mut self, o: Obj, shape: u32, slot: u32, value: Value) -> bool {
         // A frozen builtin can share its shape with a session object (D2304).
-        if self.refuse_write(o) {
+        if self.gated(o) {
             return false;
         }
         let Some(v) = self.values_if_shape(o, shape) else {
@@ -2105,7 +2105,7 @@ impl Heap {
             }
             return false;
         }
-        if self.refuse_write(o) {
+        if self.gated(o) {
             return false;
         }
         match self.find_own(o, key) {

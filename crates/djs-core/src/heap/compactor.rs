@@ -351,15 +351,9 @@ impl Marker<'_> {
     /// The slots it finds are remembered for the update pass, which then does not walk
     /// the old region again (unless there were more than the list holds).
     fn mark_old(&mut self) {
-        let (old, skip) = (self.old, self.prefix_from());
+        let old = self.old;
         let mut c = 0;
         while c < old {
-            if c == skip {
-                c = self.prefix;
-            }
-            if c >= old {
-                break;
-            }
             let h: u64 = self.arena.read(c);
             let (kb, size) = (h as u8, (h >> 32) as u32);
             if kb == CellKind::EphemeronArray as u8 {
@@ -382,7 +376,7 @@ impl Marker<'_> {
                 self.scan_old(kb, c, size);
                 self.drain();
             }
-            c += size;
+            c = next_old(c + size, self.prefix);
         }
     }
 
@@ -467,28 +461,16 @@ impl Marker<'_> {
         self.remembered.push_out(entry);
     }
 
-    /// Where the skipped part of the prefix starts: right after the roots cell (`u32::MAX`
-    /// when nothing is skipped).
-    #[inline]
-    fn prefix_from(&self) -> u32 {
-        skip_from(self.arena, self.prefix)
-    }
-
     /// The first ephemeron table to resolve at or after `from`, in address order: old
     /// ones (by a walk over the old region, only if it has any), then marked young ones.
     fn next_ephemeron(&self, mut from: u32) -> Option<u32> {
         if from < self.old {
             if self.old_ephemerons > 0 {
-                let skip = self.prefix_from();
                 while from < self.old {
-                    if from == skip {
-                        from = self.prefix.min(self.old);
-                        continue;
-                    }
                     if self.arena.get(from, Header::KIND) == CellKind::EphemeronArray as u8 {
                         return Some(from);
                     }
-                    from += self.arena.get(from, Header::SIZE);
+                    from = next_old(from + self.arena.get(from, Header::SIZE), self.prefix);
                 }
             }
             from = self.old;
@@ -570,15 +552,12 @@ impl Marker<'_> {
     }
 }
 
-/// Where a walk over the old region jumps to `prefix` (the skipped part of the builtin
-/// prefix, D3290): the end of the roots cell, or `u32::MAX` when nothing is skipped.
-#[inline]
-fn skip_from(arena: &Arena, prefix: u32) -> u32 {
-    if prefix == 0 {
-        u32::MAX
-    } else {
-        arena.get(0, Header::SIZE)
-    }
+/// The next cell of a walk over the old region after one ending at `end`: `end`, or the
+/// end of the skipped builtin prefix (`prefix`, D3290) when `end` is in it (the walk only
+/// visits the roots cell there).
+#[inline(always)]
+fn next_old(end: u32, prefix: u32) -> u32 {
+    end.max(prefix)
 }
 
 /// Debug builds, when a collection skips the builtin prefix (D3290): checks that nothing in
@@ -768,7 +747,6 @@ impl Heap {
         if prefix > 0 {
             check_skipped_prefix(&self.arena, prefix);
         }
-        let skip = skip_from(&self.arena, prefix);
         let blocks = (before - old).div_ceil(BLOCK) as usize;
         let mut live: Vec<u64> = Vec::new();
         let mut table: Vec<u32> = Vec::new();
@@ -903,23 +881,15 @@ impl Heap {
             }
             let mut c = 0;
             while old_ephemerons > 0 && c < old {
-                if c == skip {
-                    c = prefix;
-                    continue;
-                }
                 let h: u64 = arena.read(c);
                 if h as u8 == CellKind::EphemeronArray as u8 {
                     update(arena, CellKind::EphemeronArray, c, (h >> 32) as u32);
                 }
-                c += (h >> 32) as u32;
+                c = next_old(c + (h >> 32) as u32, prefix);
             }
         } else {
             let mut c = 0;
             while c < old {
-                if c == skip {
-                    c = prefix;
-                    continue;
-                }
                 let h: u64 = arena.read(c);
                 let (kb, size) = (h as u8, (h >> 32) as u32);
                 if !is_leaf(kb) {
@@ -930,7 +900,7 @@ impl Heap {
                     }
                     update(arena, kind, c, size);
                 }
-                c += size;
+                c = next_old(c + size, prefix);
             }
         }
         // 4. Update the marked cells' slots and slide them down, in one walk: a run of

@@ -38,10 +38,17 @@ impl Heap {
     /// Recomputes the cached boundary after anything that can move `Roots::BASE_END` or
     /// the flag: loading, collections, truncation.
     pub(crate) fn refresh_frozen(&mut self) {
-        let end = self.base_end();
-        let frozen = self.frozen_builtins();
+        let (end, f) = if self.arena.len() >= Roots::LAYOUT.min_size {
+            (
+                self.arena.get(0, Roots::BASE_END),
+                self.arena.get(0, Roots::FLAGS),
+            )
+        } else {
+            (0, 0)
+        };
+        let frozen = f & cells::ROOT_FROZEN_BUILTINS != 0;
+        let written = f & cells::ROOT_PREFIX_WRITTEN != 0;
         self.frozen_end = if frozen { end } else { 0 };
-        let written = self.prefix_written();
         self.gate_end = if frozen || !written { end } else { 0 };
         self.pristine = end > 0 && !written;
         self.refresh_barrier();
@@ -69,6 +76,14 @@ impl Heap {
     #[inline(always)]
     pub(crate) fn refuse_write(&mut self, o: Obj) -> bool {
         o.0 < self.gate_end && self.prefix_write()
+    }
+
+    /// The fast writers' gate (D2304, D3290): true if `o` is in the builtin prefix while
+    /// writes there are refused or would set the latch. They decline then (with nothing
+    /// changed), and the general path's property operations decide in `refuse_write`.
+    #[inline(always)]
+    pub(crate) fn gated(&self, o: Obj) -> bool {
+        o.0 < self.gate_end
     }
 
     /// `refuse_write`'s out-of-line part: refuses with frozen builtins, else sets the latch.
