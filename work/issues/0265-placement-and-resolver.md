@@ -105,6 +105,12 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   dropped (does not lower the floor; media +64 KiB).
 - So the floor tracks the compile's peak. Next lever: a compile's peak Rust memory (all
   functions' phase-1 code until resolve, Vec doubling slack): part 2 territory.
+- With pscan's seed of 24.4 KB the target became 88 KB of room: at 89.9 KB only heavy lost
+  a page, from its collection's tables in page runs. D3364 (tables behind the arena after
+  all, smaller fixed tables), D3366 (floor 87 KiB), coordinator chose variant (A) over the
+  dual-backend (B, +549 B). D3365: join's two-byte result in the arena, dropped (fanout
+  +192 KiB). D3367: gate leg `codemode memory` (tests/scores/codemode-memory.tsv) as the
+  guard for the thin margin (~4.5 KB today, ~1.5 KB at the floor).
 
 ## Follow-ups
 
