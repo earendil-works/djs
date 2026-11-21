@@ -1,6 +1,6 @@
 # 0287: Short result strings: allocation cost of tiny strings
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0287-short-result-strings
 depends-on: -
