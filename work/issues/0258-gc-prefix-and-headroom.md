@@ -1,6 +1,6 @@
 # 0258: GC: minor collections skip the builtin prefix; headroom and big-string survivors
 
-status: in-progress
+status: done
 agent: pgc
 branch: issue/0258-gc-prefix-headroom
 depends-on: -
@@ -29,10 +29,10 @@ real shares are in IDEAS.md 0.2).
    only if 1-4 leave a clear gap, and report before building it.
 
 ## Acceptance criteria
-- [ ] memory (mem-perturb) and run time per workload, main vs branch; GC share in the profiles
-- [ ] collection points stay a function of the program; the difftest's --gc-stress and determinism legs pass; pinned GC counts updated with reasons
-- [ ] the debug barrier (D2065) still checks the latch's invariant
-- [ ] size reported; gate green; decisions recorded; gc.md updated
+- [x] memory (mem-perturb) and run time per workload, main vs branch; GC share in the profiles
+- [x] collection points stay a function of the program; the difftest's --gc-stress and determinism legs pass; pinned GC counts updated with reasons
+- [x] the debug barrier (D2065) still checks the latch's invariant
+- [x] size reported; gate green; decisions recorded; gc.md updated
 
 ## Notes
 - Overlap: 0259 (pcall) wants a "builtins are pristine" signal cleared by writes to
@@ -103,6 +103,34 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 - Experiment scaffolding in work/scratch/0258: trace.py on/off (GC + page trace, trace.ts
   reads it), vbuild.sh + v-*.py variant builds, mem.sh/perturb.sh/instr.sh.
 
+### GC CPU (no batch)
+Native profile (release+LTO, samply) of a GC-heavy synthetic (30k live objects + churn; the
+real cases are too short to sample): Marker::mark 13%, Marker::trace 11%, update+slide slot
+loop 10%, set_bits 5% of all samples; the hot lines are the header read, the stack push and
+the bitmap write: cache misses of the pointer chase. Slot plans are already used everywhere.
+A one-word fast path in `set_bits` gave −1.05% wasm instructions on the synthetic and noise on
+json-objects/pi-like/json: not landed (work/scratch/0258/v-setbits.py).
+
 ## Follow-ups
+- A fixed nursery with a holder barrier (IDEAS.md item 5): D3294 has the barrier-free numbers
+  (heavy −13%, +5–9% instructions from the old-region walk).
+- Re-sweep `BASE_ALLOWANCE`/`MIN_GROWTH` once compile peaks no longer move the arena
+  (D3292; fanout's cliff at ≤160 KiB).
+- Item 4 (side tables in the arena's tail) went to 0265 (pstart; D3363 measured and did not
+  adopt it).
+- The D2065 check found create_data_property's unlatched fast path only under GC stress; a
+  gc-stressed test262 run is not part of the gate (work/scratch/0258/t262-stress-hack.patch
+  adds `DJS_GC_STRESS_HACK` to the runner; the built-ins ran an hour clean in debug).
 
 ## Result
+Landed in two merges (main 8b58a2ba, 7cb04e84):
+- D3290: `ROOT_PREFIX_WRITTEN` latch (`Heap::set_prefix_written`, `Heap::builtins_pristine`,
+  used by 0259); collections skip the unwritten builtin prefix; debug builds verify the
+  invariant at every skipping collection. −0.4..−2% instructions where collections run.
+- D3291: past the GC target the arena grows by half its overshoot: KiB after a run heavy
+  4736→3904, fanout 1792→1664, json 1472→1408, ts 1664→1536.
+- D3293: growth past 1 MiB counts half: json-objects 7.1→5.8 MiB, strbuild 24.2→11.9,
+  jsonh 4.3→3.7, json 4.4→3.9 for +0..3.3% instructions.
+- Measured, not built: D3292 (allowance retune, survivor-only discount), D3294 (fixed nursery
+  without barrier; slice parents and heavy's peak).
+Size: +~370 B gz for D3290, −6 B for D3293. Guide: gc.md, arena.md.
