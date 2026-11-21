@@ -2631,7 +2631,7 @@ impl<'h> Exec<'h> {
                 if let Some(rec) = it.as_object() {
                     return self.for_in_proxy_next(rec, next);
                 }
-                let (key, done) = self.for_in_next(it)?;
+                let (key, done) = self.for_in_next(it);
                 self.push(key);
                 self.push(Value::bool(done));
             }
@@ -3968,24 +3968,27 @@ impl<'h> Exec<'h> {
 
     /// `for_in_next`: the next snapshot key that is still present on the object or its
     /// prototype chain (deleted keys are skipped), or `(undefined, true)` at the end.
-    fn for_in_next(&mut self, it: Value) -> Result<(Value, bool), Fault> {
+    /// Infallible: a key no atom exists for cannot be a property (0278).
+    pub(super) fn for_in_next(&mut self, it: Value) -> (Value, bool) {
         let arr = it.as_internal().expect("for-in iterator");
         let len = self.heap.value_array_len(arr);
         let target = self.heap.value_array_get(arr, 0).as_object();
         loop {
             let idx = self.heap.value_array_get(arr, 1).as_int().unwrap_or(0) as u32;
             if 2 + idx >= len {
-                return Ok((Value::UNDEFINED, true));
+                return (Value::UNDEFINED, true);
             }
             self.heap
                 .value_array_set(arr, 1, Value::int(idx as i32 + 1));
             let key = self.heap.value_array_get(arr, 2 + idx);
             let Some(o) = target else {
-                return Ok((key, false));
+                return (key, false);
             };
-            let atom = self.heap.intern(key.as_string().expect("string key"))?;
-            if self.heap.has_property(o, atom) {
-                return Ok((key, false));
+            let s = key.as_string().expect("string key");
+            if let Some(atom) = self.heap.existing_key_atom(s)
+                && self.heap.has_property(o, atom)
+            {
+                return (key, false);
             }
         }
     }
