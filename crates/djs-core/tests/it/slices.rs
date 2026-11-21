@@ -19,7 +19,12 @@ fn repo() -> PathBuf {
 /// Runs `src` in slices of `slice` fuel; returns its output, the final raw image and the
 /// total fuel used.
 fn run(src: &str, slice: u64, restore: bool) -> (String, Vec<u8>, u64) {
-    let mut vm = djs_prelude::new_vm(VmOptions::default()).unwrap();
+    run_with(src, slice, restore, VmOptions::default())
+}
+
+/// [`run`] with `opts`.
+fn run_with(src: &str, slice: u64, restore: bool, opts: VmOptions) -> (String, Vec<u8>, u64) {
+    let mut vm = djs_prelude::new_vm(opts).unwrap();
     vm.set_now(1_700_000_000_000.0);
     let console = vm.new_object().unwrap();
     let log = vm.new_host_function(LOG, "log").unwrap();
@@ -163,6 +168,7 @@ fn fuel_independent_of_slice() {
                }
                console.log(n);"#,
         ),
+        ("builtin-work", BUILTIN_WORK),
         (
             "backref",
             r#"const s = "a".repeat(2000) + "b"; let n = 0;
@@ -178,6 +184,44 @@ fn fuel_independent_of_slice() {
         .collect();
     assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
+
+/// Builtins that charge for their work (0289, `heap/work.rs`): the charge is taken
+/// where it is made, so it does not depend on the slicing or on the collections.
+const BUILTIN_WORK: &str = r#"const s = "abc".repeat(4000), t = "abc".repeat(4000);
+    const o = {}; for (let i = 0; i < 2000; i++) o["k" + i] = i;
+    const na = Array.from({ length: 3000 }, (_, i) => i);
+    let n = 0;
+    for (let k = 0; k < 6; k++) {
+      const a = s.split("");
+      n += a.join("-").length + s.indexOf("!") + a.indexOf("!") + s.split("b").length;
+      n += Object.keys(o).length + new Set(na).size + new Set(a).size + (s === t ? 1 : 0);
+      n += s.toUpperCase().length + s.toLowerCase().length + ("  " + s + "  ").trim().length;
+      n += a.toSorted().length + Object.entries(o).length + ({ ...o }).k1;
+      n += parseInt("7".repeat(300)) > 0 ? 1 : 0;
+      const b = na.slice(); b.shift(); b.unshift(1); b.length = 10; n += b.length;
+      n += new Map([[s, 1]]).get(t);
+    }
+    console.log(n);"#;
+
+/// A collection charges no fuel, so the fuel of a run does not depend on where they
+/// ran: with a collection at every safepoint (GC stress) it is the same.
+#[test]
+fn fuel_independent_of_collections() {
+    for (name, src) in [("builtin-work", BUILTIN_WORK), ("json", JSON_WORK)] {
+        let fuel = |gc_stress: bool| {
+            let mut opts = VmOptions::default();
+            opts.exec.gc_stress = gc_stress;
+            run_with(src, u64::MAX, false, opts).2
+        };
+        assert_eq!(fuel(false), fuel(true), "{name}");
+    }
+}
+
+const JSON_WORK: &str = r#"const o = []; for (let i = 0; i < 300; i++) o.push({ i, s: "v" + i, a: [i, i * 2] });
+    let n = 0; for (let k = 0; k < 4; k++) n += JSON.parse(JSON.stringify(o)).length;
+    const keep = []; let s = "";
+    for (let i = 0; i < 3000; i++) { s += "ab" + i; if (i % 500 == 499) { keep.push(s); s = ""; } }
+    console.log(n, keep.join("").length);"#;
 
 /// Every e2e case at a few slices (slow; `cargo test -p djs-core --test it slices:: -- --ignored`).
 #[test]
