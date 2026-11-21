@@ -13261,3 +13261,46 @@ If staging lands elsewhere, the instance is dropped and a new one used: the skip
 could hold the earlier session's. Nothing of an earlier session is left either way
 (js/test/pi-pool.test.ts fails if the skip leaves the image range unzeroed when not
 overwritten). −19K instructions, a 470 KB memset less per cached start.
+
+## D3394: The general path: where its cost is, template literals outside `step`, call_intrinsic 8 KB smaller
+date: 2026-11-21 · by: pcall · issue: 0268
+IDEAS 12 proposed a diet for `step_once` and `call_intrinsic` (the two largest functions
+of the module, 30 and 39 KB of wasm) on the assumption that the trip through them is
+what a declined instruction pays. Measured:
+- **Few instructions take the trip.** scripts/perf/instr.py on the workloads: 2.7–3.2%
+  of the bytecodes of pi-like go through `step` (object literals, closures, non-pure
+  intrinsics, `to_string`), 5% of json and strbuild, 7% of props (`delete`, `push_atom`),
+  0.0% of strings, arrays, foreach and higher-order.
+- **The trip is not what they cost.** Running an instruction from the loop's exit
+  instead of through `step_once` saved 30–170 machine instructions of 400–3,000: an
+  object literal 375 → 331, `typeof x` 1084 → 1024, an array literal +70 (worse).
+  What these instructions cost is their work. `"a" + s` is 1,100 instructions, of which
+  the heap's `concat` of two short flat strings is about 560 (`write_leaves` 250 for
+  three bytes, `concat` 140, `str_is_two_byte` 85, `alloc_flat` 80: a CPU profile).
+So no redesign of `Step` or of the boxed `Fault`; three things landed:
+- **Template literals.** `to_string` of a string is an arm of the loop (nothing to do);
+  `to_string` of another primitive and `concat n` run from `decline_fast` through
+  `Exec::concat_op`, the function `step` also uses, so both paths allocate the same.
+  `decline_fast`'s `+` takes two strings without asking for conversions (two calls of
+  `to_string` and four of `Value::kind`, 230 instructions). Per operation (slope.py):
+  `"a" + s` 1096 → 865, `"a" + s + "b"` 2197 → 1734, `` `a${s}` `` 1834 → 1303,
+  `` `a${s}b` `` 2620 → 2083, `` `a${i}b` `` 3043 → 2832. wmeasure: strbuild 2410.5 →
+  2038.3 M (−15.4%), strings −3.2%, json-date −3.4%, json −1.5%, the others within ±0.6%
+  but indexof −4.2% and regexp-compile −1.3% (a smaller module compiles faster).
+- **`call_intrinsic` reads its second to fourth argument once.** 158 sites each had the
+  bounds test, the stack's address and the load (`arg(self, 1)`): −5.7 KB of wasm,
+  −1,209 B gz. The 89 `return bad_argument(id)` sites share one exit (`break 'bad`):
+  −2.0 KB of wasm, −119 B gz. `call_intrinsic` is 30.8 KB (was 38.8).
+- **What gzip rewards.** The second cut removed 2 KB of forty-byte repeats and gained
+  119 B; the first removed code that differed per site and gained ten times as much per
+  byte. New code costs about 0.6 B gz per byte of wasm.
+Tried and left out: object literals, `typeof` and `push_atom` from the loop's exit
+(−5..−12% on those instructions for ~100 B gz); an absent property answered by a chain
+lookup in `field_slow` (`o.missing` 1000 → 674, but every read of an accessor pays the
+lookup too: `m.size` +14%, an own getter +25%; the caches need a kind for "absent"
+instead, see 0268's follow-ups).
+Size: shipped 429,787 → 428,691 B gz (−1,096; raw −7.4 KB), slim 363,607 → 362,887
+(−720). The ceilings go back to what they were before D3393: 429,648 (957 B of room)
+and slim 363,349 (462 B). Over the whole of 0268 the shipped module went from 427,465 to
+428,691 B gz with 0269's and 0270's bytes in between; 0268's own share is −289 B
+(+49, +758, −1,096).

@@ -1,6 +1,6 @@
 # 0268: run_hot's sensitivity, receiver method calls, the general path
 
-status: in-progress
+status: done
 agent: pcall
 branch: issue/0268-run-hot-method-calls
 depends-on: 0259
@@ -25,9 +25,9 @@ decisions: D3390-D3399
    cheaper where the profiles point.
 
 ## Acceptance criteria
-- [ ] a written explanation of run_hot's sensitivity with evidence (in the issue and a decision)
-- [ ] per-op instructions for method calls; workload instructions (wmeasure tight/calls/prop1/loop/strings/json + the codemode set) with a noise control
-- [ ] size reported (room ~2.4 KB under the ceiling, shared); gate green; decisions recorded
+- [x] a written explanation of run_hot's sensitivity with evidence (in the issue and a decision)
+- [x] per-op instructions for method calls; workload instructions (wmeasure tight/calls/prop1/loop/strings/json + the codemode set) with a noise control
+- [x] size reported (room ~2.4 KB under the ceiling, shared); gate green; decisions recorded
 
 ## Notes
 - pstart (0265 part 2) works in compiler/resolve.rs, not in interp/run.
@@ -190,7 +190,52 @@ and teardown, table bounds check, instance check, signature check, target load) 
   built-ins/Object, Array, TypedArray, Proxy and language/expressions.
 - Size +758 B gz (429,785), ceilings raised to 429,790 / slim 363,630 (D3393).
 
+### Batch 3: the general path (D3394)
+
+- Where declined instructions go and what they cost: scripts/perf/instr.py on the
+  workloads (2.7–7% of bytecodes through `step`, 0% on four of eight), and slope.py per
+  instruction: the trip through `step_once` is 30–170 of 400–3,000 instructions. So no
+  redesign of `Step`/`Fault`.
+- Template literals: `to_string` of a string in the loop, `concat` and the other
+  `to_string`s from `decline_fast` through `Exec::concat_op` (shared with `step`);
+  `+` of two strings without conversions. strbuild −15.4%.
+- Bytes: `call_intrinsic` reads arguments 1–3 once (−1,209 B gz) and has one
+  bad-argument exit (−119 B gz); 38.8 → 30.8 KB of wasm. Ceilings back at 429,648 and
+  363,349. Tools for this in work/scratch/0268: ngram.py (repeated instruction runs in a
+  wasm function), arms.py.
+- Tried and left out: object literals/`typeof`/`push_atom` from the exit; absent
+  properties by a chain lookup (accessors pay for it).
+- Guide: interpreter.md's decline list names template literals.
+- Checked: lib tests, e2e in four modes, difftest (corpus plain; builtins/, codemode/,
+  language/ with suspension and GC stress, codemode/ and language/ with determinism),
+  test262 built-ins (18,083 active, no new failures).
+
 ## Follow-ups
+Ranked by what they are worth per instruction saved and how often scripts do them
+(steady-state instructions per operation on main after this issue, slope.py):
+1. **String concatenation in the heap** (heap/string.rs, outside this issue): `"a" + s`
+   is 865, of which `Heap::concat` of two short flat strings is ~560 (`write_leaves` 250
+   to copy three bytes). A direct two-piece copy for flat operands would take ~350 off
+   every `+` and every part of a template literal (`` `a${s}b` `` is 2,083).
+2. **A cache kind for absent properties**: `o.missing` 1,000 (QuickJS 771 with the
+   loop), `o.missing ?? 1` 1,164. The addition slots' machinery (`chain_lacks`,
+   `OBJ_IS_PROTO`, the epoch) proves the same thing: receiver shape + prototype + epoch
+   → undefined, ~60 instructions. A plain chain lookup on a miss gives 674 but costs
+   every accessor read +14–25% (twins/d4-absent-lookup.patch).
+3. **`typeof x === "string"`** 1,082: `typeof` leaves the loop and the comparison calls
+   `strict_equals` for two strings; `typeof` yields one of eight atom strings, so
+   `strict_eq` of two identical string cells can answer in the loop (it does: `a == c`),
+   and `typeof` as an arm needs only `atom_string` of a fixed atom (no allocation in a
+   VM with a base image).
+4. **Superinstructions** (compiler + op table): a dispatch is 18 of a simple
+   instruction's ~21–29; `get_loc; push_i8; lt; jump_if_true8` → one instruction.
+5. **`Map.get` / `Set.has`** 1,085 / 1,058 and **`a.push(i)`**: `@fast` calls pay the
+   failed closure attempt, the exit and `fast_leaf_call`'s dispatch (D3301); the call
+   arm could test the template's FAST flag before building a frame.
+6. **for-of over a Set/Map** (`iter_next_loc` declines for collection iterators) and
+   **`f(...args)`**: not looked at.
+7. **The add cache for a key that shadows a writable inherited data property**
+   (`e.name = 'X'` on an Error): `chain_lacks` refuses any key on the chain.
 - The frame header written by six stores instead of a loop: −36 of a call's 178
   instructions, blocked by a V8 register swap on every bytecode (D3392). Worth another
   attempt whenever run_hot's shape changes.
@@ -203,3 +248,32 @@ and teardown, table bounds check, instance check, signature check, target load) 
   bytecode table (outside this issue's `touches:`).
 
 ## Result
+Three batches on main: 4f134156 (batch 1), d7ff0d88 (batch 2), batch 3 with this commit.
+- **Why edits to run_hot moved everything** (D3391): every bytecode runs one shared path
+  (dispatch block, tail, back edge); V8's register allocator places each value that is
+  live around the loop separately at the head, in the arms and at the tail, and a
+  disagreement is a move or a stack load on that path, 5% of a simple bytecode. Edits
+  that change what is live around the loop do it; new arms did not. The procedure:
+  `scripts/perf/hotcode.sh` before and after, diff the summaries; `slope.py` for the
+  steady state; never `--no-liftoff` (TESTING.md "Measuring the tier-0 loop").
+  Threaded dispatch measured +33% and needs unstable Rust; a two-loop structure gives a
+  move-free inner loop but costs 40 instructions per re-entry (D3392).
+- **What every bytecode pays** (D3390): 33 → 21 machine instructions for `drop` by
+  checking the end of the code where the frame changes instead of per instruction.
+- **Property, method and element hits** read from the loop's slice (D3393): own
+  property 138 → 94, method lookup 206–229 → 143–158, `a[1]` 141 → 105; string keys
+  through 0269's helpers: `o[k]` 1521 → 943.
+- **The general path** (D3394): the trip is not the cost; template literals −20–29%;
+  `call_intrinsic` 8 KB smaller.
+- Shipped module, wmeasure M instructions, main 5f5434e3 (before) → main after batch 3,
+  measured batch by batch against the main of the day (n=3, spread ≤ 0.9%):
+  tight 5335 → 4107 → 3903 → 3914; loop 5221 → 4054 → 3851; calls 2578 → 2179 → 2062;
+  prop1 2129 → 1736 → 1520 → 1514; arrays 7054 → 6076 → 5234 → 5229; call1 3369 → 2825 →
+  2686; pushpop 2478 → 2304 → 2126; strbuild 2478 → 2414 → 2405 → 2038; strings 1735 →
+  1682 → 1664 → 1620; json 1065 → 1045 → 1041 → 1031; pi-like −1.1%, −1.5%, −0.3%.
+- Size: 427,465 → 428,691 B gz over the issue with other issues' bytes in between;
+  0268's share +49, +758, −1,096 = −289 B. Ceilings as before the issue (429,648; slim
+  363,349).
+- Tools: scripts/perf/slope.py (+ s/), hotcode.sh, v8arm.py.
+Known gaps: the follow-ups above; the frame-header stores (−36 per call) blocked by a V8
+register swap; wall-clock numbers were taken at load 11–19 only (D3390).

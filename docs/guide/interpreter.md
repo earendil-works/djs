@@ -296,8 +296,8 @@ faster loop in front of it:
   general path (`step_once`), which runs that one instruction after the locals have been
   written back. Some declined cases are finished on the way out instead, by one call that
   keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
-  `arr.push(x)` appended straight to the array), `+` of a string with a primitive, `in`
-  with a string key, and the instructions of `new`: the construct itself, the return into the constructing frame,
+  `arr.push(x)` appended straight to the array), `+` of a string with a primitive, the
+  parts of a template literal, `in` with a string key, and the instructions of `new`: the construct itself, the return into the constructing frame,
   `new.target`, the class constructor checks and `super()`. A trip through `step` costs
   more than most of these instructions do, and one `new C()` meets several of them.
   Nothing the tier-0 loop does itself can collect or run user code, which
