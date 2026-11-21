@@ -164,6 +164,147 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Va
     }
 }
 
+/// [`cached_get`] for the tier-0 loop, read from its arena slice `b`: the two hits a loop
+/// meets most, an own property of a shape-mode receiver and a prototype property whose
+/// receiver has the remembered shape word (or is a string or a number). `None` for
+/// everything else, which the caller then asks [`cached_get`] about (a dictionary-mode
+/// receiver, a receiver with another shape, the other primitives, `length`).
+///
+/// The same checks in the same order as [`cached_get`], [`proto_start`] and
+/// `Heap::data_at`, on plain loads: through `&Heap` every access loads the arena's
+/// pointer again, the slot's words are a checked slice and the result comes back through
+/// memory, which made an own-property hit 132 machine instructions in V8's code and a
+/// prototype hit over 200 (D3393). Reads only. Debug builds compare every hit with
+/// [`cached_get`] (hot.rs).
+#[inline(always)]
+pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> Option<Value> {
+    use crate::heap::cells::flags::OBJ_DICTIONARY;
+    use crate::heap::cells::{Header, Object, PropValues};
+    use crate::heap::layout::arena_read;
+    use crate::heap::object::EMPTY_SHAPE;
+    let r32 = |off: u32| u32::from_le_bytes(arena_read(b, off as usize));
+    let dictionary = |obj: u32| {
+        u16::from_le_bytes(arena_read(b, (obj + Header::FLAGS.offset) as usize)) & OBJ_DICTIONARY
+            != 0
+    };
+    let a = r32(template + FuncTemplate::IC.offset);
+    if a == 0 || ic == NO_CACHE as u32 {
+        return None;
+    }
+    let at = U32Array::DATA.at(a, ic * WORDS);
+    let w0 = r32(at);
+    if w0 & IC_OFFSET_SLOT == 0 {
+        return None;
+    }
+    let index = (w0 & INDEX_MASK) - 1;
+    let depth = kind(w0);
+    if depth == 0 {
+        // `Heap::shaped_get`.
+        let obj = o.as_object()?.offset();
+        let v = r32(obj + Object::PROPS.offset);
+        if dictionary(obj) || v == 0 || r32(v + PropValues::SHAPE.offset) != r32(at + 4) {
+            return None;
+        }
+        return Some(super::hot::ld(b, PropValues::VALUES.at(v, index)));
+    }
+    if depth == KIND_ADD || r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
+        return None;
+    }
+    // `proto_start`, without its own-property lookup: the receiver's shape word must be
+    // the remembered one.
+    let proto = match o.as_object() {
+        Some(obj) => {
+            let obj = obj.offset();
+            let class = r32(obj + Object::CLASS.offset);
+            let length = key == crate::heap::atoms::LENGTH;
+            if class == ObjectClass::Proxy as u32
+                || class == ObjectClass::TypedArray as u32
+                || (class == ObjectClass::Array as u32 && length)
+                || (class == ObjectClass::Function as u32
+                    && (length || key == crate::heap::atoms::NAME))
+            {
+                return None;
+            }
+            let shape = if dictionary(obj) {
+                0
+            } else {
+                match r32(obj + Object::PROPS.offset) {
+                    0 => EMPTY_SHAPE,
+                    v => r32(v + PropValues::SHAPE.offset),
+                }
+            };
+            if shape == 0 || shape != r32(at + 12) {
+                return None;
+            }
+            r32(obj + Object::PROTO.offset)
+        }
+        None => {
+            let i = if o.as_string().is_some() {
+                if key == crate::heap::atoms::LENGTH || key.as_int().is_some() {
+                    return None;
+                }
+                Intrinsic::StringProto
+            } else if o.is_number() {
+                Intrinsic::NumberProto
+            } else {
+                return None;
+            };
+            let realm = super::hot::ld(b, Roots::REALM.offset).as_internal()?;
+            let p = super::hot::ld(b, crate::heap::cells::Realm::INTRINSICS.at(realm, i as u32));
+            p.as_object()?.offset()
+        }
+    };
+    if proto == 0 || proto != r32(at + 4) {
+        return None;
+    }
+    let mut h = proto;
+    for _ in 1..depth {
+        h = r32(h + Object::PROTO.offset);
+        if h == 0 {
+            return None;
+        }
+    }
+    hot_data_at(b, h, index, key)
+}
+
+/// `Heap::data_at` on the tier-0 loop's slice: the value of slot `index` of the object at
+/// `h` if that slot is the data property `key`.
+#[inline(always)]
+fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Value> {
+    use crate::heap::cells::flags::OBJ_DICTIONARY;
+    use crate::heap::cells::{Header, Object, PropEntry, PropTable, PropValues, Shape};
+    use crate::heap::layout::arena_read;
+    use crate::heap::object::STORE_ACCESSOR;
+    let r32 = |off: u32| u32::from_le_bytes(arena_read(b, off as usize));
+    let flags: u16 = u16::from_le_bytes(arena_read(b, (h + Header::FLAGS.offset) as usize));
+    let p = r32(h + Object::PROPS.offset);
+    if p == 0 {
+        return None;
+    }
+    let (k, fl, value) = if flags & OBJ_DICTIONARY != 0 {
+        if index >= r32(p + PropTable::COUNT.offset) {
+            return None;
+        }
+        let e = PropTable::ENTRIES.at(p, index);
+        (
+            r32(e + PropEntry::KEY.offset),
+            r32(e + PropEntry::FLAGS.offset),
+            e + PropEntry::VALUE.offset,
+        )
+    } else {
+        if index >= r32(p + PropValues::LEN.offset) {
+            return None;
+        }
+        let d = r32(r32(p + PropValues::SHAPE.offset) + Shape::DESCS.offset);
+        let e = U32Array::DATA.at(d, 1 + 2 * index);
+        (r32(e), r32(e + 4), PropValues::VALUES.at(p, index))
+    };
+    if k != key.id() || fl & STORE_ACCESSOR != 0 {
+        return None;
+    }
+    Some(super::hot::ld(b, value))
+}
+
 /// A put or define site's cache hit: true if the slot at `at` (0: none) still applies to
 /// `obj[key] = v` and `v` was stored (an own writable data property, or a cached
 /// addition).

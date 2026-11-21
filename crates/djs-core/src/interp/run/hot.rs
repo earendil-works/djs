@@ -189,6 +189,8 @@ const _: () = assert!(
     same_step(Op::Inc, Op::Dec)
         && same_step(Op::IncLoc, Op::DecLoc)
         && same_step(Op::StrictEq, Op::StrictNe)
+        && same_step(Op::GetField, Op::GetMethod)
+        && same_step(Op::PutField, Op::DefineField)
         && fuel_of(Op::Call) == fuel_of(Op::Call0)
         && fuel_of(Op::CallIntrinsic) == fuel_of(Op::CallIntrinsic8)
         && fuel_of(Op::Return) == fuel_of(Op::ReturnUndef)
@@ -370,6 +372,20 @@ fn object_slot(b: &[u8], cell: u32, i: u32) -> u32 {
     Object::SLOTS.at(cell, i)
 }
 
+/// `a.length` of an Array (its slot 0) and of a string primitive (0086), read from the
+/// loop's slice; `None` for anything else (and a length above the int32 range).
+#[inline(always)]
+fn hot_length(b: &[u8], o: Value) -> Option<Value> {
+    if let Some(a) = o.as_object() {
+        return (ld32(b, a.offset() + Object::CLASS.offset) == ObjectClass::Array as u32)
+            .then(|| ld(b, object_slot(b, a.offset(), 0)));
+    }
+    let s = o.as_string()?;
+    i32::try_from(ld32(b, s.0 + crate::heap::cells::Str8::LEN.offset))
+        .ok()
+        .map(Value::int)
+}
+
 /// An array index key (as `intrinsics::index_key`).
 fn index_key(k: Value) -> Option<u32> {
     if let Some(i) = k.as_int() {
@@ -398,20 +414,28 @@ enum Exit {
 }
 
 impl Exec<'_> {
-    /// `fast_field`'s and `fast_define`'s cache hits on explicit operands (ic.rs's
-    /// shared hit checks, 0083): `get_field`/`get_method` of `o` (the value), or
-    /// `put_field`/`define_field` of `v` into `o` (`Some(undefined)` when stored). A cached
-    /// addition may allocate (never collect), like `set_element_fast`.
-    #[inline(always)]
-    fn field_hit(&mut self, op: u8, key: Atom, ic: u32, o: Value, v: Value) -> Option<Value> {
+    /// A `put_field` or `define_field` cache hit (ic.rs's shared hit checks, 0083): true
+    /// when `v` was stored into `o`. A cached addition may allocate (never collect), like
+    /// `set_element_fast`. Through the heap, not the loop's slice: a store is the
+    /// heap's to make (its write gate, and whatever a collector needs to hear of).
+    #[inline(never)]
+    fn field_store(&mut self, op: u8, key: Atom, ic: u32, o: Value, v: Value) -> bool {
+        let Some(obj) = o.as_object() else {
+            return false;
+        };
         if op == fast::DEFINE_FIELD {
-            let obj = o.as_object()?;
-            return self.ic_define(obj, ic, v).then_some(Value::UNDEFINED);
+            self.ic_define(obj, ic, v)
+        } else {
+            self.ic_put(obj, key, ic, v)
         }
-        if op == fast::PUT_FIELD {
-            let obj = o.as_object()?;
-            return self.ic_put(obj, key, ic, v).then_some(Value::UNDEFINED);
-        }
+    }
+
+    /// Every `get_field`/`get_method` cache hit (0083), out of line: the loop asks it
+    /// for those that `hot_length` and `ic::hot_get` leave (a dictionary-mode receiver, a
+    /// receiver whose shape is not the remembered one, the rarer primitives), and debug
+    /// builds compare the slice's hits with it.
+    #[inline(never)]
+    fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Value> {
         if key == atoms::LENGTH && op == fast::GET_FIELD {
             // `a.length` of an Array (its slot 0) and of a string primitive (0086).
             match (o.as_object(), o.as_string()) {
@@ -1162,40 +1186,50 @@ impl Exec<'_> {
                                 jump!(Op::JumpIfFalse, !c)
                             }
                         }
-                        fast::GET_FIELD
-                        | fast::GET_METHOD
-                        | fast::PUT_FIELD
-                        | fast::DEFINE_FIELD => {
+                        fast::GET_FIELD | fast::GET_METHOD => {
                             let key = Atom::from_id(imm32!());
                             let ic = (w >> 40) as u16 as u32;
-                            let (o, v) = if op == fast::PUT_FIELD || op == fast::DEFINE_FIELD {
-                                (top!(1), top!(0))
+                            let o = top!(0);
+                            // The frequent hits are read from the slice (D3393); the
+                            // others, and the misses, out of line.
+                            let hit = if key == atoms::LENGTH && op == fast::GET_FIELD {
+                                hot_length(b, o)
                             } else {
-                                (top!(0), Value::UNDEFINED)
+                                super::ic::hot_get(b, self.template, ic, o, key)
                             };
-                            let Some(r) = heap_call_op!(self.field_hit(op, key, ic, o, v)) else {
-                                break Exit::Decline(op);
+                            let r = match hit {
+                                Some(r) => {
+                                    #[cfg(debug_assertions)]
+                                    {
+                                        let want = heap_call_op!(self.field_slow(op, key, ic, o));
+                                        assert!(want == Some(r), "the slice's hit differs");
+                                    }
+                                    r
+                                }
+                                None => {
+                                    let hit = heap_call_op!(self.field_slow(op, key, ic, o));
+                                    let Some(r) = hit else {
+                                        break Exit::Decline(op);
+                                    };
+                                    r
+                                }
                             };
-                            match op {
-                                fast::PUT_FIELD => {
-                                    sp -= 2;
-                                    next!(Op::PutField);
-                                }
-                                // `obj v -> obj`
-                                fast::DEFINE_FIELD => {
-                                    sp -= 1;
-                                    next!(Op::DefineField);
-                                }
-                                fast::GET_FIELD => {
-                                    st(b, slot!(sp - 1), r);
-                                    next!(Op::GetField);
-                                }
-                                _ => {
-                                    st(b, slot!(sp - 1), r);
-                                    push!(o);
-                                    next!(Op::GetMethod);
-                                }
+                            st(b, slot!(sp - 1), r);
+                            if op == fast::GET_METHOD {
+                                push!(o);
                             }
+                            next!(op, like Op::GetField);
+                        }
+                        fast::PUT_FIELD | fast::DEFINE_FIELD => {
+                            let key = Atom::from_id(imm32!());
+                            let ic = (w >> 40) as u16 as u32;
+                            let (o, v) = (top!(1), top!(0));
+                            if !heap_call_op!(self.field_store(op, key, ic, o, v)) {
+                                break Exit::Decline(op);
+                            }
+                            // `obj v -> obj` for `define_field`.
+                            sp -= if op == fast::PUT_FIELD { 2 } else { 1 };
+                            next!(op, like Op::PutField);
                         }
                         fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => {
                             let put = op == fast::PUT_ELEM;
