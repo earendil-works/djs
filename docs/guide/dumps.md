@@ -326,7 +326,7 @@ that object, and `scriptFor(dump)` a Script of only the helpers a given dump nam
 | `bytes(base64)` | an `ArrayBuffer` from base64 |
 | `fn(o)` | the method, getter or setter of a one-property literal, as the function it is |
 | `keep(o, keys)` | delete the own properties of a class that the run had deleted |
-| `k(K, f, at, r, h, p)` | attach a continuation's origin record and return `K` |
+| `k(K, f, at, r, h, p)` | attach a continuation's origin record, give `K` the name of `f` and return `K` |
 
 `$djs.k` deserves a word, because every continuation passes through it. `f` is the
 original function: a value of the dump, or `$djs.source(...)`. `at` is the site the

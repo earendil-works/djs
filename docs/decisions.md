@@ -13892,3 +13892,20 @@ Wasm instructions per iteration of `for (const c of s)` over 10 code units (slop
 19.3k (13.1k), with a € and an astral character 23.8k → 20.1k (13.1k); for-of over an
 Array 11.6k → 11.5k (13.6k); `[...s]` unchanged. Shipped 431,435 → 431,736 B gz (+301),
 slim 365,364 → 365,655, from the owner's allowance (D3510).
+
+## D3580: A trace frame is named by the function's own string `name`; `$djs.k` copies the origin's
+date: 2026-11-21 · by: pcall · issue: 0290 (GitHub PR #2 by rt2zz)
+After a plain dump loads, a waiting frame's function is its continuation, an anonymous
+function expression, so traces showed `<anonymous>` where the uninterrupted run showed the
+function. Now a bytecode frame's name is the function's own `name` when that is a data
+property holding a string (read without running code; empty means anonymous), else the
+template's name as before; `$djs.k(K, f, ...)` defines `K`'s `name` from `f`'s own string
+`name`. A renamed function, a computed-key or symbol method (SetFunctionName's name, which
+the template does not hold) and a continuation now show what V8 and qjs show; a `name`
+getter is not run and the compiled name stands (V8; qjs prints `<anonymous>`). The lookup
+is skipped while the closure's name is still the unstored lazy one (D2445, the flag
+`OBJ_LAZY_NAME`): only a function whose `name` was defined, deleted or set at creation
+pays it. Wasm instructions per op (opsins.py, main → unconditional lookup → flag-gated):
+`new Error('x')` in 5 nested functions 37.6k → 38.5k → 37.6k, in one 19.5k → 19.9k →
+19.5k, top level 14.7k → 14.3k → 14.5k (noise ±0.3k), in a renamed function 19.9k →
+20.5k → 20.6k. Shipped +54 B gz.

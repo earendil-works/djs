@@ -217,6 +217,9 @@ to `K` as it is made. It names
 - `h`, the stretches of `K`'s text that depend on values and that `f`'s site alone does not
   give.
 
+It also gives `K` the own `name` of `f`, so a stack trace taken after a load names the
+waiting frame as the uninterrupted run does, not as an anonymous function.
+
 When the writer meets a frame of `K`, it writes `K` again from `f`, `at`, `r` and `h`,
 which tells it which stretches of `K`'s text are copies of `f`'s and which are its own
 constructs. Through that layout, `K`'s site maps to `f`'s, `K`'s bindings to `f`'s by name

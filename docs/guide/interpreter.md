@@ -209,7 +209,11 @@ Errors raised in Rust, a TypeError from a property access on `undefined` or a Ra
 from a conversion, take the same path. A Rust operation returns a fault instead of
 throwing; the loop turns it into an error object, with a QuickJS-style stack trace read
 from the frame records and the templates' line tables, and throws it at the instruction
-that failed. An allocation that hits the heap cap is a fault too: for instructions that
+that failed. A frame is named by its function's own `name` when that is a string data
+property, else by the name the compiler gave it: a renamed function, a method with a
+computed key and a continuation of a loaded dump show the name the program knows. A
+closure whose `name` was never touched keeps it unstored, so the common frame costs no
+property lookup. An allocation that hits the heap cap is a fault too: for instructions that
 allocate before they change anything, the loop collects and runs the instruction once
 more before it gives up ([out of memory](gc.md#out-of-memory)).
 
