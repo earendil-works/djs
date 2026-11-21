@@ -1,0 +1,26 @@
+toString "ab|12.5|obj|true|Symbol(sy)|10|1,2|cd|7"
+toString "ab|12.5|obj|true|Symbol(sy)|10|1,2|cd|7"
+toString "ab|12.5|obj|true|Symbol(sy)|10|1,2|cd|7"
+work 4998
+replaced trim 5038
+restored trim 4998
+shadowed hasOwnProperty 8958
+unshadowed 4998
+unrelated write 4998
+deleted toFixed "TypeError: not a function"
+getter charCodeAt 42134
+no charCodeAt "TypeError: not a function"
+charCodeAt again 4998
+edge 1 "1.5|ab|b|ab|1|1.5|ab|b|ab|1|1.5|ab|b|ab|1|1.5|ab|b|ab|1"
+edge -1 "RangeError: invalid number of digits|RangeError: invalid repeat count|b|ab|1|RangeError: invalid number of digits|RangeError: invalid repeat count|b|ab|1|RangeError: invalid number of digits|RangeError: invalid repeat count|b|ab|1|RangeError: invalid number of digits|RangeError: invalid repeat count|b|ab|1"
+edge 200 "RangeError: invalid number of digits|abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab||ab200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200|40000|RangeError: invalid number of digits|abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab||ab200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200|40000|RangeError: invalid number of digits|abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab||ab200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200|40000|RangeError: invalid number of digits|abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab||ab200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200200|40000"
+edge object "1.50|abab||ab|4|1.50|abab||ab|4|1.50|abab||ab|4|1.50|abab||ab|4"
+conversions "vvvvvvvvvvvvvvvvvvvv"
+edge symbol "TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number|TypeError: cannot convert symbol to number"
+edge undefined "2||ab|ab|NaN|2||ab|ab|NaN|2||ab|ab|NaN|2||ab|ab|NaN"
+deep 9077483
+borrowed at "y"
+borrowed toFixed "TypeError: not a number"
+null receiver "TypeError: null or undefined are forbidden"
+same function true
+=== completed
