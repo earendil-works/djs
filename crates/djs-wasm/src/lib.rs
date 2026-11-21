@@ -930,13 +930,14 @@ fn compile_with(
 ) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
+        // Borrowed from staging, which the compile leaves alone.
         let name = if name_len == 0 {
-            String::from("sandbox.js")
+            "sandbox.js"
         } else {
-            staged_str(staging, 0, name_len).to_owned()
+            staged_str(staging, 0, name_len)
         };
-        let params_text = staged_str(staging, name_len, params_len).to_owned();
-        let src = staged(staging, name_len + params_len, src_len).to_vec();
+        let params_text = staged_str(staging, name_len, params_len);
+        let src = staged(staging, name_len + params_len, src_len);
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
         // (`..`: the dump build's fields.)
         #[allow(clippy::needless_update)]
@@ -946,7 +947,7 @@ fn compile_with(
             } else {
                 Goal::AsyncBody
             },
-            filename: &name,
+            filename: name,
             params: &params,
             privileged: false,
             typescript: goal & 2 != 0,
@@ -961,18 +962,18 @@ fn compile_with(
         let result = match blob_len {
             Some(n) => {
                 let at = name_len + params_len + src_len;
-                let blob = (n > 0).then(|| staged(staging, at, n).to_vec());
+                let blob = (n > 0).then(|| staged(staging, at, n));
                 elastic(&mut slot.vm, |vm| {
-                    vm.compile_cached(&src, &opts, blob.as_deref())
+                    vm.compile_cached(src, &opts, blob)
                 })
                 .map_err(|e| e.text())
             }
-            None => elastic(&mut slot.vm, |vm| vm.compile(&src, &opts))
+            None => elastic(&mut slot.vm, |vm| vm.compile(src, &opts))
                 .map(|f| (f, None))
                 .map_err(|e| e.text()),
         };
         #[cfg(not(feature = "dump"))]
-        let result = elastic(&mut slot.vm, |vm| vm.compile(&src, &opts))
+        let result = elastic(&mut slot.vm, |vm| vm.compile(src, &opts))
             .map(|f| (f, None::<Vec<u8>>))
             .map_err(|e| e.text());
         match result {
