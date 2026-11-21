@@ -7,6 +7,7 @@
 import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { elasticStack, trapText } from "../src/trap.ts";
+import { djsExports } from "../src/abi.ts";
 import { provideBase, rememberBase } from "../src/base.ts";
 import { script as dumpRuntimeScript, scriptFor as dumpRuntimeFor } from "../src/dump-runtime.js";
 
@@ -17,7 +18,7 @@ export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 5;
+const ABI_VERSION = 6;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 
@@ -544,7 +545,7 @@ function instantiate(module: WebAssembly.Module): Exports {
   const pooled = pool?.free.pop();
   // The elastic stack (D3280): its switch is in memory, which `renew` resets.
   if (pool && pooled) return elasticStack(renew(pool.fresh, pooled));
-  const x = elasticStack(new WebAssembly.Instance(module, {}).exports as unknown as Exports);
+  const x = elasticStack(djsExports(module) as unknown as Exports);
   // (Its memory before any call: what a pooled instance is made as again.)
   if (!pool) pools.set(module, { fresh: new Uint8Array(x.memory.buffer).slice(), free: [] });
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {

@@ -6,6 +6,7 @@
 // alloc-stats`): the largest Rust allocation of a fresh instance is the arena.
 import { readFileSync } from "node:fs";
 import { Sandbox, defaultWasmPath } from "../../js/src/sandbox.ts";
+import { djsExports } from "../../js/src/abi.ts";
 
 const path = process.argv[2] ?? defaultWasmPath();
 const n = Number(process.argv[3] ?? 200);
@@ -14,7 +15,7 @@ const KiB = (b: number) => `${(b / 1024).toFixed(0)} KiB`;
 
 // Below the arena: the shadow stack (wasm-ld puts it first, D1941) and the static data;
 // `wasm-objdump -x -j Global -j Data` shows both.
-const exported = WebAssembly.Module.exports(module).map((e) => e.name);
+const exported = Object.keys(djsExports(module));
 const first = new Sandbox({ module }); // decodes the base once; later instances get it injected
 const probe = new Sandbox({ module });
 const x = (probe as any).x;

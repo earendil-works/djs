@@ -41,7 +41,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 /// `vm_run` results.
 pub mod status {
@@ -1360,7 +1360,6 @@ pub extern "C" fn vm_display(vm: u32, h: u32) -> usize {
 /// of stack; the host calls again on a larger stack (`djs_stack`). Off (the default),
 /// the compile runs again at once on the module's stack, where deep nesting traps. Other
 /// exports that compile (the dump module's) always do that.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_elastic_stack(on: u32) {
     ELASTIC.with(|e| e.set(on != 0));
 }
@@ -1377,7 +1376,6 @@ fn elastic<R>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> R) -> R {
 /// allocator: returns its end (the stack grows down). The host sets `__stack_pointer`
 /// there, calls the export that needs it, sets the pointer back and calls `djs_stack(0)`,
 /// which frees the block. One block at a time; call it on the module's own stack.
-#[unsafe(no_mangle)]
 pub extern "C" fn djs_stack(len: usize) -> usize {
     use core::alloc::Layout;
     BIG_STACK.with(|b| {
@@ -1858,6 +1856,8 @@ ops! {
     68 vm_open_call(a, b, c);
     69 vm_restore_math_random(a, b, c);
     70 vm_set_next_call_id(a, b);
-    #[cfg(feature = "alloc-stats")] 71 djs_alloc_stats(a);
-    72 djs_has(a);
+    71 djs_elastic_stack(a);
+    72 djs_stack(a);
+    #[cfg(feature = "alloc-stats")] 73 djs_alloc_stats(a);
+    74 djs_has(a);
 }

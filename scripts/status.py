@@ -127,44 +127,28 @@ def section_sizes(b):
 
 
 # The base snapshot of a module: decoded (an instance's `djs_base_len`) and coded (the
-# `djs_base` custom section), as `decoded coded`.
+# `djs_base` custom section), and the operations of its one export (D3320), as `decoded coded
+# ops`.
 BASE_JS = """
-const fs = require("fs");
+import fs from "node:fs";
+import { djsExports } from "./js/src/abi.ts";
 const m = new WebAssembly.Module(fs.readFileSync(process.argv[1]));
-const x = new WebAssembly.Instance(m, {}).exports;
+const x = djsExports(m);
 x.djs_base_ptr();
-console.log(x.djs_base_len(), WebAssembly.Module.customSections(m, "djs_base")[0].byteLength);
+const ops = Object.values(x).filter((f) => typeof f === "function").length;
+console.log(x.djs_base_len(), WebAssembly.Module.customSections(m, "djs_base")[0].byteLength, ops);
 """
 
 
 def base(path):
-    out = subprocess.run(["node", "-e", BASE_JS, path], capture_output=True, text=True, check=True)
-    decoded, coded = out.stdout.split()
-    return int(decoded), int(coded)
+    out = subprocess.run(["node", "--input-type=module", "-e", BASE_JS, path], capture_output=True, text=True,
+                         check=True, cwd=ROOT)
+    decoded, coded, ops = out.stdout.split()
+    return int(decoded), int(coded), int(ops)
 
 
 def build(*flags):
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh"), *flags], check=True)
-
-
-def exported_functions(b):
-    """Function exports (kind 0) of the export section (7)."""
-    i = 8
-    while i < len(b):
-        sid = b[i]
-        n, j = leb(b, i + 1)
-        if sid == 7:
-            count, k = leb(b, j)
-            funcs = 0
-            for _ in range(count):
-                ln, k = leb(b, k)
-                k += ln
-                kind = b[k]
-                _, k = leb(b, k + 1)
-                funcs += kind == 0
-            return funcs
-        i = j + n
-    return 0
 
 
 def size():
@@ -173,14 +157,14 @@ def size():
     build("--dump")
     b = open(WASM, "rb").read()
     code, data = section_sizes(b)
-    _, coded = base(WASM)
+    _, coded, ops = base(WASM)
     new = {
         "wasm/bytes": len(b),
         "wasm/gzip": len(gzip.compress(b, compresslevel=9, mtime=0)),
         "wasm/code": code,
         "wasm/data": data,
         "wasm/base-coded": coded,
-        "wasm/exports": exported_functions(b),
+        "wasm/ops": ops,
     }
     if shutil.which("brotli"):
         r = subprocess.run(["brotli", "-c", "-q", "11"], input=b, capture_output=True, check=True)
@@ -189,7 +173,7 @@ def size():
         m = open(path, "rb").read()
         new[f"{name}/bytes"] = len(m)
         new[f"{name}/gzip"] = len(gzip.compress(m, compresslevel=9, mtime=0))
-    new["slim/base"], _ = base(SLIM)
+    new["slim/base"], _, _ = base(SLIM)
     # What the dumper adds to the shipped module (the dump module is the same build with it).
     new["dump/extra-gzip"] = new["dump/gzip"] - new["wasm/gzip"]
     return new

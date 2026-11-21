@@ -3,6 +3,7 @@
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
 import { elasticStack, trapText } from "./trap.ts";
+import { djsExports } from "./abi.ts";
 import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
 import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
@@ -295,7 +296,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 5;
+const ABI_VERSION = 6;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
@@ -785,7 +786,12 @@ export class Sandbox {
     if (module === undefined) {
       throw new SandboxError("misuse", "no compiled module: pass opts.module or await loadModule() first");
     }
-    const x = elasticStack(new WebAssembly.Instance(module, {}).exports as unknown as Exports);
+    let x: Exports;
+    try {
+      x = elasticStack(djsExports(module) as unknown as Exports);
+    } catch (e) {
+      throw new SandboxError("misuse", `djs-wasm: ${(e as Error).message}`);
+    }
     if (x.djs_abi_version() !== ABI_VERSION) {
       throw new SandboxError("misuse", `djs-wasm ABI ${x.djs_abi_version()}, expected ${ABI_VERSION}`);
     }

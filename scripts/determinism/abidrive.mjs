@@ -2,11 +2,12 @@
 // the same order, so native and wasm images can be compared (0072).
 // usage: node abidrive.mjs <wasm> <body.js> <slice> [trace-every] [raw-out]
 import { readFileSync, writeFileSync } from "node:fs";
+import { djsExports } from "../../js/src/abi.ts";
 
 const [wasmPath, srcPath, sliceS, traceS, rawOut] = process.argv.slice(2);
 const mod = new WebAssembly.Module(readFileSync(wasmPath));
-const inst = new WebAssembly.Instance(mod, {});
-const x = inst.exports;
+// One export, `djs(op, ...)`, as functions by name (D3320).
+const x = djsExports(mod);
 // The coded base is the module's custom section `djs_base`, handed over (D2541).
 const [coded] = WebAssembly.Module.customSections(mod, "djs_base");
 if (coded) {

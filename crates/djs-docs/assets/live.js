@@ -26,11 +26,14 @@ function lib() {
     import("./djs/sandbox.js"),
     import("./djs/layout.generated.js"),
     WebAssembly.compileStreaming(fetch(new URL("./djs/djs_wasm.wasm", import.meta.url))),
-  ]).then(([{ Sandbox }, { LAYOUT }, module]) => ({
+    import("./djs/abi.js"),
+  ]).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => ({
     Sandbox,
     module,
-    // The docs build has the dumper (`vm_dump`), which a `debugger;` pause needs.
-    dumps: WebAssembly.Module.exports(module).some((e) => e.name === "vm_dump"),
+    // The docs build has the dumper (`vm_dump`), which a `debugger;` pause needs. The
+    // instance's operations by name (the module has one export, `djs`) serve the Bytecode
+    // tab.
+    dumps: "vm_dump" in (disasmExports = djsExports(module)),
     kindNames: Object.fromEntries(Object.entries(LAYOUT.cells).map(([n, c]) => [c.kind, n])),
     classNames: Object.fromEntries(Object.entries(LAYOUT.objectClasses).map(([n, c]) => [c, n])),
   }));
@@ -42,9 +45,8 @@ function lib() {
 // own bytecode. With the shipping module the tab keeps the build-time listing.
 let disasmExports;
 function disasm(module, src, ts) {
-  if (!WebAssembly.Module.exports(module).some((e) => e.name === "djs_disasm")) return null;
-  disasmExports ??= new WebAssembly.Instance(module, {}).exports;
   const x = disasmExports;
+  if (!x?.djs_disasm) return null;
   const enc = new TextEncoder();
   const params = enc.encode(PARAMS);
   const body = enc.encode(src);

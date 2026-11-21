@@ -613,3 +613,19 @@ fn frozen_builtins_flag() {
     }
     assert_eq!(vm_new_with(0, 0, 2), 0);
 }
+
+#[test]
+fn ops_table_matches_the_js_host() {
+    // js/src/abi.ts numbers the operations of `djs` the same way (D3320).
+    let src = include_str!("../../../js/src/abi.ts");
+    let start = src.find("export const OPS = [").expect("OPS in abi.ts");
+    let list = &src[start..start + src[start..].find("] as const").expect("end of OPS")];
+    let names: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+    assert_eq!(names, OPS);
+    // Each operation is reachable through `djs` and known to `djs_has` (here: the native
+    // build's features).
+    assert_eq!(djs(0, 0, 0, 0, 0, 0, 0, 0.0), ABI_VERSION);
+    let has = OPS.iter().position(|&n| n == "djs_has").unwrap() as u32;
+    assert_eq!(djs(has, has, 0, 0, 0, 0, 0, 0.0), 1);
+    assert_eq!(djs(has, OPS.len() as u32, 0, 0, 0, 0, 0, 0.0), 0);
+}

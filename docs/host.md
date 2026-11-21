@@ -383,9 +383,18 @@ replay only on it, and pi's fingerprint names it.
 
 ## The ABI
 
-Exports take and return only `i32`s, except the `f64` clock of `vm_set_now` and `vm_resolve_host_call_at`. There are no imports: the module needs nothing from
-the host, so `WebAssembly.instantiate(module, {})` works anywhere. `djs_abi_version()`
-returns `5` (since 0213: `vm_dump`'s host roots line; 4 since 0205: `vm_dump` without its options line, `vm_load_dump` gone) and is bumped on any incompatible change. The Sandbox checks it.
+The module exports `memory`, `__stack_pointer` and one function, `djs(op, a, b, c, d, e, f, t)`
+(D3320): it runs operation `op` (numbered by `ops!` in crates/djs-wasm/src/lib.rs and `OPS` in
+js/src/abi.ts) with integer arguments `a`-`f` and the `f64` `t`, which only `vm_set_now` and
+`vm_resolve_host_call_at` take, and returns an `i32`. This document calls the operations by
+name, as if each were an export; `djsExports(module)` (js/src/abi.ts) makes them functions by
+those names. Operation 0 is `djs_abi_version` in every ABI; `djs_has(op)` tells whether the build
+has an operation. One export because V8 makes a function object for each exported function of
+each instance: 75 exports were a quarter of `new WebAssembly.Instance`. There are no imports:
+the module needs nothing from the host, so `WebAssembly.instantiate(module, {})` works
+anywhere. `djs_abi_version()` returns `6` (since 0261: one export; 5 since 0213: `vm_dump`'s
+host roots line; 4 since 0205: `vm_dump` without its options line, `vm_load_dump` gone) and is
+bumped on any incompatible change. The Sandbox checks it.
 
 **Buffers.** Data crosses the boundary through two buffers in linear memory.
 - `djs_staging(len) -> ptr` makes the *staging* buffer at least `len` bytes. The host writes

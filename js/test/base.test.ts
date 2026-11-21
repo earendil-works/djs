@@ -8,12 +8,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defaultWasmPath } from "../src/sandbox.ts";
 import { provideCodedBase } from "../src/base.ts";
+import { djsExports } from "../src/abi.ts";
 
 const path = defaultWasmPath();
 const module = new WebAssembly.Module(readFileSync(typeof path === "string" ? path : fileURLToPath(path)));
 
 test("the base equals a realm compiled in wasm", (t) => {
-  const x = new WebAssembly.Instance(module, {}).exports as any;
+  const x = djsExports(module) as any;
   provideCodedBase(module, x);
   if (x.vm_new_compiled === undefined) {
     // Release modules leave it out; the gate builds with `--features compiled-prelude`.
@@ -36,7 +37,7 @@ test("the base equals a realm compiled in wasm", (t) => {
 });
 
 test("the coded base: decoded by the first instance, injected into later ones (D2252)", (t) => {
-  const first = new WebAssembly.Instance(module, {}).exports as any;
+  const first = djsExports(module) as any;
   if (first.djs_base_inject_ptr === undefined) {
     t.skip("djs-wasm without the coded base");
     return;
@@ -59,7 +60,7 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   // The decoded bytes became the VM's arena, grown in place: no second copy (D2060).
   assert.equal(first.vm_arena_ptr(vm1), baseAt, "the decoded base is the arena");
   // An instance given the bytes takes them and creates the same VM.
-  const second = new WebAssembly.Instance(module, {}).exports as any;
+  const second = djsExports(module) as any;
   const at = second.djs_base_inject_ptr(base.length);
   assert.notEqual(at, 0);
   new Uint8Array(second.memory.buffer, at, base.length).set(base);
@@ -78,7 +79,7 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   assert.ok(Buffer.from(arena(second, vm2b)).equals(Buffer.from(arena(second, vm2))));
   // Another base (or the wrong length) is refused, and the instance decodes its own. The
   // check is of identity, by a sample of the bytes (D3271): here a byte of the roots.
-  const third = new WebAssembly.Instance(module, {}).exports as any;
+  const third = djsExports(module) as any;
   assert.equal(third.djs_base_inject_ptr(base.length + 8), 0);
   const at3 = third.djs_base_inject_ptr(base.length);
   const bad = base.slice();

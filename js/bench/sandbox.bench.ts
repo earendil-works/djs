@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Sandbox, defaultWasmPath, loadModule } from "../src/sandbox.ts";
 import { provideCodedBase } from "../src/base.ts";
+import { djsExports } from "../src/abi.ts";
 
 function median(f: () => void, n = 200): number {
   for (let i = 0; i < 10; i++) f();
@@ -42,8 +43,8 @@ console.log(`WebAssembly.compile: ${(performance.now() - t).toFixed(2)} ms (once
 await loadModule();
 
 const inst = await WebAssembly.instantiate(module, {});
-provideCodedBase(module, inst.exports as never);
-const x = inst.exports as unknown as { vm_new(n: number): number; vm_free(vm: number): void };
+const x = djsExports(module, inst) as unknown as { vm_new(n: number): number; vm_free(vm: number): void };
+provideCodedBase(module, x as never);
 console.log(`instantiate: ${(await medianAsync(async () => void (await WebAssembly.instantiate(module, {})))).toFixed(1)} us`);
 console.log(`vm_new: ${median(() => x.vm_free(x.vm_new(0))).toFixed(1)} us (a copy of the base snapshot, D1321)`);
 console.log(`Sandbox.create: ${(await medianAsync(async () => (await Sandbox.create({ module })).dispose())).toFixed(1)} us`);

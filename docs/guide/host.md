@@ -3,15 +3,15 @@
 djs never runs on its own. A host (an agent's codemode, a test runner, a browser page)
 loads the djs-wasm module, gives it a script and the tools the script may call, and reads
 the result. This chapter is about the boundary between the two at the level of the
-module's exports: how a VM is made and driven, how host calls are reported and answered,
+module's operations: how a VM is made and driven, how host calls are reported and answered,
 how values cross in each direction, how the base snapshot gets into the module, and which
 builds of the module exist. Most hosts never see this level: the `Sandbox` of [the
 JavaScript interface](js-api.md) wraps it, and [continuation dumps](dumps.md) shows how
 it persists runs.
 
 > **In short.** djs-wasm is a WebAssembly module with no imports and an ABI of integer
-> functions. Data crosses through a staging buffer (in) and an out buffer, and values the
-> host keeps are handles. The host drives a run by calling `vm_run` with a fuel slice and
+> operations behind one exported function. Data crosses through a staging buffer (in) and
+> an out buffer, and values the host keeps are handles. The host drives a run by calling `vm_run` with a fuel slice and
 > acting on the status it returns; host calls are records the host reads and answers by
 > id. Values go in through a compact binary *wire format* that the VM decodes in one
 > pass, and come out through the *reader*, which reads the VM's arena in place. The
@@ -49,7 +49,7 @@ pointer back and frees the block with `djs_stack(0)`. The compile that stopped h
 full limits then; whether a compile stopped or not, the heap and the fuel come out the
 same. Without the switch, such a compile runs again at once on the small stack, where
 deep nesting traps. The `Sandbox` does all of this in one wrapper around
-the module's exports ([`js/src/trap.ts`](../../js/src/trap.ts)).
+the module's operations ([`js/src/trap.ts`](../../js/src/trap.ts)).
 
 One trap is not a bug. Should some path still exhaust the module's own stack, the stack
 pointer wraps below 0 and the instance traps with "memory access out of bounds". The
@@ -72,15 +72,26 @@ it there.
 
 ## Buffers, handles and numbers
 
-The exports take and return `i32`s, except the `f64` clock of `vm_set_now` and
+The module exports its memory, its stack pointer and one function,
+`djs(op, a, b, c, d, e, f, t)`, which runs operation number `op` with the integer
+arguments `a` to `f` and the float `t`, ignoring the ones the operation does not take, and
+returns an `i32`. The operations are what other modules would export one by one; this
+chapter calls them by name (`vm_run`), and
+[`js/src/abi.ts`](../../js/src/abi.ts) turns an instance into functions by those names
+(`djsExports`). One export instead of one per operation, because a JavaScript engine makes
+a function object for every exported function of every instance: with one export per
+operation, about 70 of them, that was a quarter of the time `new WebAssembly.Instance`
+takes, paid by every sandbox. Operation 0 is `djs_abi_version` in every version, and
+`djs_has(op)` tells whether a build has an operation (the dump and docs builds have more).
+All arguments are integers except the `f64` clock of `vm_set_now` and
 `vm_resolve_host_call_at`. Data crosses through two buffers in linear memory:
 
 - the **staging** buffer, host to module: `djs_staging(len)` makes it at least `len`
   bytes and returns its address; the host writes source text, names, wire data or
-  argument handles there and then calls the export that consumes them. Exports that take
+  argument handles there and then calls the operation that consumes them. Operations that take
   several pieces take their lengths and read them one after another (`vm_compile_file`:
   the file name, the parameter names, the source);
-- the **out** buffer, module to host: exports that return data (an error message,
+- the **out** buffer, module to host: operations that return data (an error message,
   display text, value bits, a host call record, a dump) fill it, and the host reads it at
   `djs_out_ptr()` and `djs_out_len()`.
 
@@ -92,15 +103,15 @@ call is a **handle**: a slot in a table of GC roots in the VM's heap, numbered f
 As an argument, handle 0 means `undefined`; as a result, 0 means failure, with the reason
 as UTF-8 text in the out buffer. The host frees handles with `vm_handle_free`. Using a
 freed VM or handle traps. `djs_abi_version()` names the ABI, which changes with any
-incompatible change to the exports, and the `Sandbox` checks it.
+incompatible change to the operations, and the `Sandbox` checks it.
 
-## The exports
+## The operations
 
-The shipped module has <!--n wasm/exports-->63<!--/n--> exported functions. By area:
+The shipped module has <!--n wasm/ops-->66<!--/n--> operations. By area:
 
-| area | exports |
+| area | operations |
 | --- | --- |
-| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack` ([above](#a-module-that-needs-nothing)) |
+| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack` ([above](#a-module-that-needs-nothing)) |
 | the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
 | VMs | `vm_new`, `vm_new_reserved`, `vm_new_with` (flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; images: `vm_arena_ptr`, `vm_arena_len`, `vm_from_bytes`, `vm_replace_image`, `vm_collect`, `vm_seal` |
 | code | `vm_compile` (a Script, or a codemode body with parameter names; option bits for TypeScript and decorators), `vm_compile_file` (the same, with the file name stack traces show) |
@@ -113,15 +124,15 @@ The shipped module has <!--n wasm/exports-->63<!--/n--> exported functions. By a
 
 The dump build adds the dumper and what serves it:
 
-| export | does |
+| operation | does |
 | --- | --- |
 | `vm_dump` | writes the idle VM as a dump into the out buffer, or the reasons it refuses, one per line. Staging names the host's globals, its function names by id, the values it wants back, its namespace objects and its state of each open call |
 | `vm_set_dump_source_refs` | whether a dump names the script the run started with by reference (the default) or carries its text |
 | `vm_call_site` | where the run waits on open call `id`: `line:col:file` in the out buffer, the position of the `await` of the innermost activation waiting on it, directly or through `Promise.all` and the like; 0 when nothing waits on it at a known position. The `Sandbox` offers it as `callSite(id)`, and the live examples of this site use it to say where a run paused |
 | `vm_compile_cached`, `vm_dump_maps_export`, `vm_dump_maps_import` | the compile cache and the suspension maps across VMs ([the dumper's caches](continuations.md#the-dumpers-caches)) |
 
-Loading a dump needs no export of its own: it is running a Script with `$djs` defined.
-The four "loading a dump" exports serve the hooks while it runs: `vm_dump_runtime`
+Loading a dump needs no operation of its own: it is running a Script with `$djs` defined.
+The four "loading a dump" operations serve the hooks while it runs: `vm_dump_runtime`
 evaluates the runtime's helpers from text the host passes, `vm_open_call` reopens an open
 call under its old id from inside the `$djs.resume` hook, and the other two restore
 `Math.random`'s state and the next call id.
@@ -334,8 +345,8 @@ alone.
 
 ## Where to look
 
-- [`crates/djs-wasm/src/lib.rs`](../../crates/djs-wasm/src/lib.rs): every export, with
-  its contract in its doc comment; [`crates/djs-wasm/Cargo.toml`](../../crates/djs-wasm/Cargo.toml):
+- [`crates/djs-wasm/src/lib.rs`](../../crates/djs-wasm/src/lib.rs): every operation, with
+  its contract in its doc comment, and their numbers (`ops!`); [`crates/djs-wasm/Cargo.toml`](../../crates/djs-wasm/Cargo.toml):
   the features of the builds; [`scripts/build-wasm.sh`](../../scripts/build-wasm.sh):
   how each is built.
 - [`crates/djs-core/src/wire/`](../../crates/djs-core/src/wire/): the wire decoder;
