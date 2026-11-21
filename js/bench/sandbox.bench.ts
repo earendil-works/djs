@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Sandbox, defaultWasmPath, loadModule } from "../src/sandbox.ts";
-import { provideCodedBase } from "../src/base.ts";
+import { provideBase, rememberBase } from "../src/base.ts";
 import { djsExports } from "../src/abi.ts";
 
 function median(f: () => void, n = 200): number {
@@ -44,9 +44,17 @@ await loadModule();
 
 const inst = await WebAssembly.instantiate(module, {});
 const x = djsExports(module, inst) as unknown as { vm_new(n: number): number; vm_free(vm: number): void };
-provideCodedBase(module, x as never);
+// The decoded base kept, as hosts keep it for their later instances.
+rememberBase(module, x as never);
 console.log(`instantiate: ${(await medianAsync(async () => void (await WebAssembly.instantiate(module, {})))).toFixed(1)} us`);
-console.log(`vm_new: ${median(() => x.vm_free(x.vm_new(0))).toFixed(1)} us (a copy of the base snapshot, D1321)`);
+// A VM takes the instance's base as its arena (D2060), and an instance holds it for one VM
+// (D3360): each VM here gets the decoded base injected, as a host's fresh instance does.
+console.log(
+  `vm_new: ${median(() => {
+    provideBase(module, x as never);
+    x.vm_free(x.vm_new(0));
+  }).toFixed(1)} us (the decoded base injected and taken as the arena, D1321, D3360)`,
+);
 console.log(`Sandbox.create: ${(await medianAsync(async () => (await Sandbox.create({ module })).dispose())).toFixed(1)} us`);
 const sb = await Sandbox.create({ module });
 console.log(`run("return 1") (compile + call + run): ${median(() => void sb.run("return 1")).toFixed(1)} us`);
