@@ -3930,21 +3930,28 @@ impl<'h> Exec<'h> {
                 keys.push(self.heap.atom_to_value(Atom::int(i).unwrap())?);
             }
         } else if let Some(o) = v.as_object() {
-            // Objects already visited: their keys (enumerable or not) shadow the same
-            // keys further up. Checked by lookup rather than kept in a set (0043: a set
-            // type costs code size, and chains are short).
-            let mut below: alloc::vec::Vec<Obj> = alloc::vec::Vec::new();
+            // Objects already visited (from `o` up to `c`): their keys (enumerable or
+            // not) shadow the same keys further up. Checked by lookup rather than kept
+            // in a set (0043: a set type costs code size, and chains are short).
             let mut cur = Some(o);
             while let Some(c) = cur {
                 // (Enumerable ones first: a builtin prototype's many keys are not, and
                 // need no lookup below.)
                 for k in self.heap.own_enumerable_keys(c) {
-                    if k.is_symbol() || below.iter().any(|&b| self.heap.has_own_property(b, k)) {
-                        continue;
+                    let mut b = o;
+                    let shadowed = loop {
+                        if b == c {
+                            break false;
+                        }
+                        if self.heap.has_own_property(b, k) {
+                            break true;
+                        }
+                        b = self.heap.get_prototype_of(b).expect("on the chain");
+                    };
+                    if !k.is_symbol() && !shadowed {
+                        keys.push(self.heap.atom_to_value(k)?);
                     }
-                    keys.push(self.heap.atom_to_value(k)?);
                 }
-                below.push(c);
                 cur = self.heap.get_prototype_of(c);
             }
         }
