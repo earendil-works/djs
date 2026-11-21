@@ -1,6 +1,6 @@
 # 0258: GC: minor collections skip the builtin prefix; headroom and big-string survivors
 
-status: open
+status: in-progress
 agent: pgc
 branch: issue/0258-gc-prefix-headroom
 depends-on: -
