@@ -12198,3 +12198,71 @@ call in node: about 1% of a `sequential` run with its new sandbox in the profile
 fills 256 words at a time and uses each word once. Also: `djs_prelude::base_len` is a
 constant from the build script instead of parsing the coded header on each of the four
 calls per new VM.
+
+## D3280: An elastic shadow stack: 64 KiB linked, a larger block for deep compiles
+date: 2026-11-21 · by: pidle · issue: 0257
+Supersedes D2540's size for the shipped and slim modules. The 128 KiB stack existed for
+one case, the recursive parsers at their full limits (550 units, regexp 212 levels), and
+was two of an idle instance's nine pages. Now djs-wasm links 64 KiB in release builds
+without the dumper (build.rs; debug builds and the dump module keep 128 KiB: larger
+frames, and dumps and loads compile without the host), and:
+- **Small limits first.** The parser nests to `SMALL_DEPTH` = 200 units, the regexp
+  parser to 32 levels, unless `Heap::stack_deep` is set. The codemode corpus nests at
+  most 44 units; on the shipped module the small limits peak at 33 KiB of stack (objects;
+  regexp groups 20 KiB), leaving room for a regexp literal at the parser's limit and the
+  first instance's base decode (11 KiB). Past them the compile notes `Heap::stack_need`
+  (sticky: TypeScript's speculative `ts_try` swallows errors) and fails.
+- **One retry point per operation** (`compiler::elastic`, around `parse`, `compile_module`,
+  `compile_lazy`; `RegExpCreate` does it itself): a compile that needed more arms
+  `stack_deep` and runs again: at once natively, or, with `Heap::stack_elastic`
+  (`Vm::set_elastic_stack`, djs-wasm's `djs_elastic_stack`, set only around `vm_run` and
+  `vm_compile*`), it fails with `CompileErrorKind::NeedStack`. In the interpreter that is
+  `FaultKind::NeedStack` from the four instructions that compile (`CompileEval`,
+  `CompileFunction`, `RegExpCreate`, `lazy`): they compile before any effect, so
+  `step_once` puts back `pc`, `sp` and the fuel and stops with `OutOfFuel`, as a
+  suspended intrinsic does (D1712); djs-wasm reports status 6 NEED_STACK
+  (`Vm::needs_stack`) and `vm_compile*` returns `u32::MAX`.
+- **The host moves the stack.** `djs_stack(len)` allocates a block from the page
+  allocator and returns its end; js/src/trap.ts `elasticStack` wraps `vm_run` and the
+  compiles: on NEED_STACK it sets `__stack_pointer` to a 128 KiB block, calls again
+  (`vm_run(vm, 0)` goes on with the stopped run's fuel credit), sets the pointer back
+  and frees the block (`djs_stack(0)`); `vm_fuel_used` adds the stopped part's fuel. The
+  Sandbox and js/pi/engine.ts wrap every instance (a pooled one again: the switch is in
+  memory).
+- **Same results, heap and fuel.** Both ways run the failed small attempt and then the
+  deep one, so the heap sees the same allocations (the retried instruction re-reads
+  memoized flat strings and interned atoms) and the fuel is charged once; any other end
+  of a compile disarms `stack_deep`, `Vm::abort` too. js/test/nesting.test.ts compares
+  arena bytes and fuel of a moved compile with an unmoved one on the debug module
+  (script, regexp literal, eval, Function, new RegExp, lazy function, too-deep errors),
+  and a new gate leg runs the nesting test on the shipped module. The accepted depths
+  are unchanged (182 parentheses … 211 regexp groups, as before).
+Accepted risk: on the moved block a stack overflow does not wrap below 0 and trap; the
+full limits' 10% margin (D2540) is what keeps it inside, as it kept the 128 KiB stack.
+`Parser::enter` is `#[inline(never)]`: inlined, it let LLVM merge parse_object,
+parse_array and others into parse_primary (+1.1 KB, and a larger frame per level).
+Instructions (wmeasure, pi-like, json, regexp-compile, strings, calls): within ±0.5%.
+
+## D3281: dlmalloc's first segment starts in the static data's last page
+date: 2026-11-21 · by: pidle · issue: 0257
+With a 64 KiB stack, stack and data (100.3 KB) end 30 KiB into their third page. That
+rest becomes the start of dlmalloc's first segment: `PageAlloc::seed`, and `Sys::alloc`
+returns its first segment from there when the pages it got follow it (once). `PRIME`
+drops from 2 pages to 1, so the first segment is 94 KiB instead of 128 (an idle VM keeps
+~45 KiB there). Shipped module, linear memory in KiB (run.ts workloads, main → branch):
+idle 576 → 448, sequential 704 → 576, fanout 1792 → 1664, media 960 → 832, inspect
+640 → 512, loop 896 → 768, text 1216 → 1088, json 1472 → 1344, ts 1664 → 1536, heavy
+4736 → 4736. mem-perturb n=6 (MiB, all values equal per build): pi-like 1.3 → 1.3, json
+5.2 → 5.1, strbuild 24.2 → 24.1, arrays 12.9 → 12.8, json-objects 7.7 → 7.6. Slim
+module idle 512 → 384 (its data fits the second page with the stack).
+
+## D3282: Size of 0257; the ceiling rises
+date: 2026-11-21 · by: pidle (approved by the coordinator) · issue: 0257
+D3280 and D3281: shipped 428,729 → 429,780 B gz (+1,051; +1,541 raw), slim 362,379 →
+362,805 (+426, under its ceiling). Where (raw): the regexp parser's limit and stop paths
+(`compile_within`, the literal's arm, `RegExpCreate`) ~330, the compiler's retry
+(`elastic` instances in `compile` and `compile_dynamic_function`, `again`, `too_deep`,
+`PErr`/`Fault::need_stack`, error arms) ~450, the interpreter's stop in `step_once`
+~150, djs-wasm (`djs_stack`, `djs_elastic_stack`, `vm_run`, compile) ~250, the seeded
+first segment ~140, larger Heap/Vm layouts ~200. Ceiling 429,648 → 429,830 (+182; still
+under the 1.5x budget of 429,982).

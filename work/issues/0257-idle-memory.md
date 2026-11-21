@@ -1,6 +1,6 @@
 # 0257: Idle memory: elastic shadow stack, data padding, dlmalloc's first segment
 
-status: in-progress
+status: done
 agent: pidle
 branch: issue/0257-idle-memory
 depends-on: -
@@ -64,7 +64,33 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Measured (main a0d85b06, shipped wasm): idle 576 KiB = stack 2 pages + data 99,043 +
+  bss 1,240 (4 pages with the stack) + dlmalloc 2 + arena 3. Stack high-water of the
+  workloads ~6.5 KiB (11 KiB for the first instance's base decode); per nesting unit
+  ~112–160 B release, ~225 B debug; regexp groups ~512 B/level. Codemode corpus (339
+  scripts) nests at most 44 parser units.
+- Batch 1 (D3280, D3281, D3282): elastic stack (64 KiB linked; small limits 200 units /
+  32 regexp levels; NeedStack retry, host moves the stack to a 128 KiB block via
+  `djs_stack`, js/src/trap.ts `elasticStack`), dlmalloc's first segment seeded with the
+  data page's rest, PRIME 1. Idle 576 → 448, every workload −128 KiB but heavy; slim
+  idle 512 → 384. +1,051 B gz; ceiling +182 approved by the coordinator.
+- Size: inlining `Parser::enter` (once its check moved out of line) made LLVM merge
+  parse_object/array/… into parse_primary (+1.1 KB, bigger frame): enter is
+  `#[inline(never)]`.
+- Guide pages updated: limits.md (nesting in source), host.md (the stack protocol,
+  exports, status 6), arena.md (dlmalloc's first memory). docs/host.md and
+  docs/compiler.md 2.4 too. New gate leg: nesting test on the shipped module.
 
 ## Follow-ups
+- Stack + data in two pages (another −64 KiB): needs ~2 KB less data or a ~30 KiB stack
+  (then small limits ~100 units); idea 11 (Unicode tables out of linear memory) would
+  make room. Not done.
+- heavy's peak is unchanged (4736 KiB): pgc's territory.
 
 ## Result
+Idle linear memory of the shipped module 576 → 448 KiB (target met), every codemode
+workload −128 KiB except heavy; slim idle 512 → 384. No measurable run-time cost. Same
+nesting limits and errors; a compile deeper than the small stack allows runs again on a
+128 KiB block the host provides (hosts other than the Sandbox/pi adapter: call
+`djs_elastic_stack(1)` and wrap with `elasticStack`, or keep it off and get the old
+behaviour on a 64 KiB stack). Size +1,051 B gz (D3282).
