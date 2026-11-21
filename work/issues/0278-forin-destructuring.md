@@ -1,6 +1,6 @@
 # 0278: for-in and destructuring, size-neutral
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0278-forin-destructuring
 depends-on: 0270
