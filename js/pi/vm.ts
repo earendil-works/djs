@@ -979,21 +979,30 @@ interface PreludeImage {
 }
 
 /** The keys made for a start's data, kept: a session moved to a new instance at every
- * idle point (D2651) would make the same long key twice each time (0215). */
-const preludeKeys = new WeakMap<VmStartData, { prelude: string; frozen: boolean; key: string }>();
+ * idle point (D2651) would make the same key twice each time (0215). */
+const preludeKeys = new WeakMap<VmStartData, { prelude: string; frozen: boolean; key: string; length: number }>();
 
-/** Everything the prelude image depends on, besides the engine build. */
-function preludeKey(prelude: string, data: VmStartData, frozenBuiltins = false): string {
+/**
+ * Each prelude text seen, by content: a number for the cache key and the length of its JSON.
+ * A start's key names the prelude by that number instead of holding the text: pi passes a
+ * new `data` per run, so the key is made at every start, and stringifying the whole prelude
+ * was a third of a cached start (D3450).
+ */
+const preludeIds = new Map<string, { id: number; json: number }>();
+const PRELUDE_IDS = 64;
+
+/** Everything the prelude image depends on, besides the engine build, and the length the
+ * key had as the JSON of all of it (what `MAX_CACHE_KEY` limits). */
+function preludeKey(prelude: string, data: VmStartData, frozenBuiltins = false): { key: string; length: number } {
   const kept = preludeKeys.get(data);
-  if (kept && kept.prelude === prelude && kept.frozen === frozenBuiltins) return kept.key;
-  const key = preludeKeyOf(prelude, data, frozenBuiltins);
-  preludeKeys.set(data, { prelude, frozen: frozenBuiltins, key });
-  return key;
-}
-
-function preludeKeyOf(prelude: string, data: VmStartData, frozenBuiltins: boolean): string {
-  return JSON.stringify([
-    prelude,
+  if (kept && kept.prelude === prelude && kept.frozen === frozenBuiltins) return kept;
+  let p = preludeIds.get(prelude);
+  if (!p) {
+    if (preludeIds.size >= PRELUDE_IDS) preludeIds.clear();
+    p = { id: nextPreludeId++, json: JSON.stringify(prelude).length };
+    preludeIds.set(prelude, p);
+  }
+  const rest = JSON.stringify([
     data.tools,
     data.globals,
     data.store,
@@ -1001,11 +1010,16 @@ function preludeKeyOf(prelude: string, data: VmStartData, frozenBuiltins: boolea
     data.deterministic !== undefined,
     ...(frozenBuiltins ? ["frozen builtins"] : []),
   ]);
+  // (`[prelude, ...rest]` as JSON is one longer than the two JSON texts together.)
+  const made = { prelude, frozen: frozenBuiltins, key: `${p.id} ${rest}`, length: p.json + rest.length + 1 };
+  preludeKeys.set(data, made);
+  return made;
 }
+let nextPreludeId = 1;
 
 /** Keeps `entry` in the module's prelude images, dropping the oldest beyond the limit. */
-function cachePreludeImage(module: object, key: string, entry: PreludeImage): void {
-  if (key.length > MAX_CACHE_KEY) return;
+function cachePreludeImage(module: object, { key, length }: { key: string; length: number }, entry: PreludeImage): void {
+  if (length > MAX_CACHE_KEY) return;
   let cache = imageCache.get(module);
   if (!cache) imageCache.set(module, (cache = new Map()));
   if (cache.size >= IMAGE_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
@@ -1104,7 +1118,7 @@ function newSession(options: VmHooks, prelude: string, data: VmStartData): { ses
   const module = options.wasm as WebAssembly.Module;
   const deterministic = data.deterministic;
   const frozen = frozenOf(options);
-  const key = preludeKey(prelude, data, frozen);
+  const { key } = preludeKey(prelude, data, frozen);
   const cached = options.reuseImages === false ? undefined : imageCache.get(module)?.get(key);
   const engine = cached
     ? Engine.restore(module, cached.image, data.memoryLimitBytes)
@@ -1134,7 +1148,7 @@ function setUp(session: Session, cached: PreludeImage | undefined, options: VmHo
   const module = options.wasm as WebAssembly.Module;
   const deterministic = data.deterministic;
   const frozen = frozenOf(options);
-  const key = preludeKey(prelude, data, frozen);
+  const cacheKey = preludeKey(prelude, data, frozen);
   let prepared = cached?.prepared;
   session.prelude = cached;
   if (!prepared) {
@@ -1152,9 +1166,9 @@ function setUp(session: Session, cached: PreludeImage | undefined, options: VmHo
     // The next cold start reserves for this size up front (D2043): growing the heap
     // while the prelude runs moved it, and the old block stayed behind as a hole.
     sealedSize = engine.heapSize;
-    if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
+    if (options.reuseImages !== false && cacheKey.length <= MAX_CACHE_KEY) {
       const entry = { image: engine.image(), prepared };
-      cachePreludeImage(module, key, entry);
+      cachePreludeImage(module, cacheKey, entry);
       session.prelude = entry;
     }
   }
