@@ -1,0 +1,1364 @@
+diff --git a/crates/djs-core/src/bytecode/code.rs b/crates/djs-core/src/bytecode/code.rs
+index 44bdb26b..df02bef5 100644
+--- a/crates/djs-core/src/bytecode/code.rs
++++ b/crates/djs-core/src/bytecode/code.rs
+@@ -108,6 +108,15 @@ pub struct P1 {
+ }
+ 
+ impl P1 {
++    pub fn op(self) -> Op {
++        self.op
++    }
++
++    /// The first immediate, raw.
++    pub fn imm_a(self) -> u32 {
++        self.a
++    }
++
+     /// The instruction, with `pc` = its index.
+     pub fn insn(self, index: u32) -> Insn {
+         Insn::from_parts(self.op, index, [self.a, self.b])
+@@ -462,6 +471,11 @@ impl CodeBuf<Final> {
+ }
+ 
+ impl CodeBuf<Phase1> {
++    /// The instructions from index `start` on.
++    pub fn insns_from(&self, start: u32) -> &[P1] {
++        self.insns.get(start as usize..).unwrap_or(&[])
++    }
++
+     /// Moves the code in `mid..end` in front of `start..mid` (loop rotation, 0086).
+     /// Phase-1 code refers to labels, not positions, so only the jump fixups move along.
+     /// Nothing before `end` can be truncated afterwards, so the fixups need not stay
+diff --git a/crates/djs-core/src/bytecode/ops.rs b/crates/djs-core/src/bytecode/ops.rs
+index b4b6823b..f769cc18 100644
+--- a/crates/djs-core/src/bytecode/ops.rs
++++ b/crates/djs-core/src/bytecode/ops.rs
+@@ -510,8 +510,9 @@ ops! {
+     GetElemMethod get_elem_method() pop 2 push 2 cost Access flags THROWS | CALLS;
+     /// `obj key v ->`
+     PutElem put_elem() pop 3 push 0 cost Access flags THROWS | CALLS | ALLOC;
+-    /// `obj v -> obj`: CreateDataProperty (literals).
+-    DefineField define_field(atom: Atom, ic: Cache) pop 2 push 1 cost Access flags THROWS | ALLOC;
++    /// `obj v -> obj`: CreateDataProperty (literals), or CreateDataPropertyOrThrow of a
++    /// class field with a plain name (any object: a proxy's trap runs).
++    DefineField define_field(atom: Atom, ic: Cache) pop 2 push 1 cost Access flags THROWS | CALLS | ALLOC;
+     /// `obj key v -> obj`: computed keys.
+     DefineElem define_elem() pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
+     /// `obj f -> obj`
+@@ -678,6 +679,13 @@ ops! {
+     SuperCall super_call(argc: Argc) pop 2 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+     /// `f args newTarget -> r`: `super(...args)` with an argument array (spread).
+     SuperCallSpread super_call_spread() pop 3 push 1 cost Call flags THROWS | CALLS | ALLOC;
++    /// `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments
++    /// that run no code: constructs the active function's [[Prototype]] with the
++    /// frame's new.target (0270).
++    SuperCallFrame super_call_frame(argc: Argc) pop 0 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
++    /// `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with
++    /// the frame's own arguments (no array).
++    SuperCallForward super_call_forward() pop 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+     /// `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3).
+     CallIntrinsic call_intrinsic(id: Intrinsic, argc: Argc) pop 0 + imm 1 push 1 cost Call flags THROWS | CALLS | ALLOC;
+     // ---- Generators and async functions (D1375; docs/compiler.md 7.7) ------------------
+@@ -724,8 +732,9 @@ ops! {
+     ForInStart for_in_start() pop 1 push 1 cost Alloc flags THROWS | ALLOC;
+     /// `it -> it key done`
+     ForInNext for_in_next() pop 1 push 3 cost Access flags THROWS;
+-    /// TypeError if a class constructor is called without `new`.
+-    CheckCtor check_ctor() pop 0 push 0 cost Basic flags THROWS;
++    /// `v -> r`: `return v` in a base class constructor: `v` if it is an object, else the
++    /// frame's `this` (the constructor's code returns its own result, 0270).
++    CtorResult ctor_result() pop 1 push 1 cost Basic;
+     /// `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized
+     /// (`undefined`, before `super()`).
+     CheckThis check_this() pop 1 push 1 cost Basic flags THROWS;
+diff --git a/crates/djs-core/src/bytecode/template.rs b/crates/djs-core/src/bytecode/template.rs
+index 1c4d3c2e..82cf214b 100644
+--- a/crates/djs-core/src/bytecode/template.rs
++++ b/crates/djs-core/src/bytecode/template.rs
+@@ -53,6 +53,11 @@ pub mod func_flags {
+     /// D2445: a privileged template whose `NAME` and `LENGTH` are its builtin closure's
+     /// lazy `name` and `length` (set at base-image build time): the base keeps the name.
+     pub const LAZY_NAME: u32 = 1 << 12;
++    /// A class constructor (either kind): a call without `new` is a TypeError, which the
++    /// call paths raise (the flag is in `Exec::slow_call_flags`, so the fast ones leave
++    /// it to `Exec::call`). Its code returns the constructed object itself, so a
++    /// construct enters it as an ordinary call that pushes its result (0270).
++    pub const CLASS_CTOR: u32 = 1 << 13;
+ 
+     pub const fn kind(flags: u32) -> u32 {
+         flags & KIND_MASK
+diff --git a/crates/djs-core/src/compiler/class.rs b/crates/djs-core/src/compiler/class.rs
+index 5e55d429..4d202592 100644
+--- a/crates/djs-core/src/compiler/class.rs
++++ b/crates/djs-core/src/compiler/class.rs
+@@ -996,7 +996,9 @@ impl Parser<'_, '_> {
+                 let r = self.name_ref(s, pos);
+                 self.code().name_get(r);
+             }
+-            (None, Key::Atom(a)) => self.code().push_atom(a),
++            // A plain name is `define_field`'s immediate (unless decorators run).
++            (None, Key::Atom(a)) if rec.is_some() => self.code().push_atom(a),
++            (None, Key::Atom(_)) => {}
+             (None, Key::Private(a)) => {
+                 let r = self.name_ref(a, pos);
+                 self.code().name_get(r);
+@@ -1040,6 +1042,8 @@ impl Parser<'_, '_> {
+         self.mark(pos);
+         if storage.is_some() || matches!(key, Key::Private(_)) {
+             self.code().define_private_field(0);
++        } else if let (Key::Atom(a), None) = (key, rec) {
++            self.code().define_field(a, 0);
+         } else {
+             self.code().define_class_field();
+         }
+@@ -1247,9 +1251,10 @@ impl Parser<'_, '_> {
+         Ok(())
+     }
+ 
+-    /// Starts a class constructor: the `new` check, and for a base class the field
+-    /// initializer, which runs before the parameters (OrdinaryCallEvaluateBody after
+-    /// InitializeInstanceElements, 10.2.2).
++    /// Starts a class constructor: for a base class the field initializer, which runs
++    /// before the parameters (OrdinaryCallEvaluateBody after InitializeInstanceElements,
++    /// 10.2.2). A call without `new` never gets here: the call paths throw it
++    /// (`func_flags::CLASS_CTOR`).
+     fn begin_ctor(&mut self, b: &ClassBuild, props: Vec<Atom>) -> PResult<()> {
+         let kind = if b.derived {
+             FuncKind::DerivedCtor
+@@ -1263,13 +1268,13 @@ impl Parser<'_, '_> {
+         self.f.param_props = props;
+         self.f.src_start = b.start;
+         self.mark(pos);
+-        self.code().check_ctor();
+         if b.derived {
+             let ret = self.heap.atom_str("<return>")?;
+             self.f
+                 .add_var(ret, VarKind::Internal, super::func::BODY_SCOPE);
+             let l = self.new_label();
+             self.f.ctor_return = Some((l, ret));
++            self.f.ctor_labels = self.f.code.label_count();
+         } else {
+             self.emit_this(pos);
+             self.emit_param_prop_decls(pos);
+@@ -1286,10 +1291,9 @@ impl Parser<'_, '_> {
+         let props = self.ctor_param_props();
+         for a in props {
+             self.code().dup();
+-            self.code().push_atom(a);
+             self.code().undefined();
+             self.mark(pos);
+-            self.code().define_class_field();
++            self.code().define_field(a, 0);
+             self.code().drop();
+         }
+     }
+@@ -1321,23 +1325,13 @@ impl Parser<'_, '_> {
+         let pos = b.start;
+         self.begin_ctor(b, Vec::new())?;
+         if b.derived {
+-            self.declare_pseudo(VarKind::ActiveFunc);
+-            let active = self.atom_active;
+-            let r = self.name_ref(active, pos);
+-            self.code().name_get(r);
+-            self.code().get_super();
+-            self.code().rest(0);
+-            let nt = self
+-                .new_target_ref(pos)
+-                .ok_or_else(|| super::resolve::internal("no new.target"))?;
+-            self.code().name_get(nt);
+             self.mark(pos);
+-            self.code().super_call_spread();
+-            self.emit_bind_this(pos);
++            self.code().super_call_forward();
++            self.emit_bind_this(pos, true);
+             self.code().return_();
+             self.f.ctor_return = None;
+         } else {
+-            self.code().return_undef();
++            self.emit_return_undef();
+         }
+         self.end_function_at(Some(b.ctor_slot))?;
+         Ok(())
+diff --git a/crates/djs-core/src/compiler/expr.rs b/crates/djs-core/src/compiler/expr.rs
+index 9c0d59a4..9413b780 100644
+--- a/crates/djs-core/src/compiler/expr.rs
++++ b/crates/djs-core/src/compiler/expr.rs
+@@ -1799,6 +1799,9 @@ impl Parser<'_, '_> {
+     /// initializers.
+     fn parse_super_call(&mut self, pos: u32) -> PResult<()> {
+         use super::func::VarKind;
++        if matches!(self.own_this_function(), Ok(None)) {
++            return self.parse_own_super_call(pos);
++        }
+         self.declare_pseudo(VarKind::ActiveFunc);
+         let active = self.atom_active;
+         let r = self.name_ref(active, pos);
+@@ -1817,18 +1820,89 @@ impl Parser<'_, '_> {
+             Args::Count(n) => self.code().super_call(n),
+             Args::Array => self.code().super_call_spread(),
+         }
+-        self.emit_bind_this(pos);
++        self.emit_bind_this(pos, false);
+         Ok(())
+     }
+ 
++    /// `super(args)` in the derived constructor itself (0270): the super constructor
++    /// and new.target come from the frame, not from bindings its prologue sets up.
++    /// Arguments that run no code let `super_call_frame` read the super constructor
++    /// after them; otherwise it is read before them (SuperCall: GetSuperConstructor,
++    /// then ArgumentListEvaluation).
++    fn parse_own_super_call(&mut self, pos: u32) -> PResult<()> {
++        use crate::bytecode::special;
++        // Straight-line code from the entry, no `super()` before (in the arguments
++        // either) and no arrow that could have called one: `this` is unbound here, and
++        // bound for everything compiled after this call.
++        let straight = !self.f.ctor_return_used && self.f.code.label_count() == self.f.ctor_labels;
++        let unbound = |f: &super::func::FuncState| !f.super_called && !f.this_escaped;
++        let first = straight && unbound(&self.f);
++        self.names_push(pos, &["super.callee"]);
++        let start = self.f.code.pos();
++        let paren = self.tok.start;
++        let args = self.parse_args_as(ArgsOf::Super)?;
++        self.names_pop(1);
++        let first = first && unbound(&self.f);
++        self.f.super_called = true;
++        match args {
++            Args::Count(n) if self.runs_no_code(start) => {
++                self.mark(paren);
++                self.code().super_call_frame(n);
++            }
++            _ => {
++                let mid = self.f.code.pos();
++                self.code().special_object(special::ACTIVE_FUNCTION);
++                self.code().get_super();
++                let end = self.f.code.pos();
++                self.rotate_code(start, mid, end);
++                self.code().special_object(special::NEW_TARGET);
++                self.mark(paren);
++                match args {
++                    Args::Count(n) => self.code().super_call(n),
++                    Args::Array => self.code().super_call_spread(),
++                }
++            }
++        }
++        self.emit_bind_this(pos, first);
++        self.f.this_bound |= first;
++        Ok(())
++    }
++
++    /// Whether the code from `start` on only pushes constants, reads bindings of this
++    /// function and builds literals of them: nothing that runs user code.
++    fn runs_no_code(&self, start: u32) -> bool {
++        use crate::bytecode::Op;
++        self.f.code.insns_from(start).iter().all(|p| match p.op() {
++            Op::NameGet => {
++                let r = &self.f.refs[p.imm_a() as usize];
++                self.f.lookup(r.scope, r.atom).is_some()
++            }
++            Op::Undefined
++            | Op::Null
++            | Op::PushTrue
++            | Op::PushFalse
++            | Op::PushI8
++            | Op::PushI32
++            | Op::PushConst
++            | Op::PushAtom
++            | Op::Object
++            | Op::DefineField
++            | Op::ArrayFrom => true,
++            _ => false,
++        })
++    }
++
+     /// After `super(...)` constructed `this` (on the stack, where it stays): binds it
+-    /// (BindThisValue: a ReferenceError if it is bound already) and runs the field
+-    /// initializers of the constructor's class (InitializeInstanceElements).
+-    pub(super) fn emit_bind_this(&mut self, pos: u32) {
+-        let this = self.this_ref(pos);
++    /// (BindThisValue: a ReferenceError if it is bound already; `unbound`: it cannot be)
++    /// and runs the field initializers of the constructor's class
++    /// (InitializeInstanceElements).
++    pub(super) fn emit_bind_this(&mut self, pos: u32, unbound: bool) {
+         self.mark(pos);
+-        self.code().name_get(this);
+-        self.code().check_this_uninit();
++        if !unbound {
++            let this = self.this_ref(pos);
++            self.code().name_get(this);
++            self.code().check_this_uninit();
++        }
+         self.code().dup();
+         let this = self.this_ref(pos);
+         self.code().name_put(this);
+diff --git a/crates/djs-core/src/compiler/func.rs b/crates/djs-core/src/compiler/func.rs
+index b90de9b5..090a7988 100644
+--- a/crates/djs-core/src/compiler/func.rs
++++ b/crates/djs-core/src/compiler/func.rs
+@@ -311,6 +311,14 @@ pub(super) struct FuncState {
+     pub ctor_return: Option<(crate::bytecode::Label, Atom)>,
+     /// A `return` jumped to that epilogue (falling off the body does not).
+     pub ctor_return_used: bool,
++    /// Derived constructors (0270): the number of labels when the body began (a later
++    /// one means code that may not run, or run again); a `super()` of the function
++    /// itself was compiled; an arrow that may call `super()` was; `this` is bound for
++    /// all the code compiled from here on (a first `super()` that every run reaches).
++    pub ctor_labels: u32,
++    pub super_called: bool,
++    pub this_escaped: bool,
++    pub this_bound: bool,
+     /// `async` function (or the codemode body): `await` is an operator.
+     pub is_async: bool,
+     /// Generator function: `yield` is an operator.
+@@ -467,6 +475,10 @@ impl FuncState {
+             fields_atom: Atom::NULL,
+             ctor_return: None,
+             ctor_return_used: false,
++            ctor_labels: 0,
++            super_called: false,
++            this_escaped: false,
++            this_bound: false,
+             is_async: false,
+             is_generator: false,
+             tail_call: None,
+diff --git a/crates/djs-core/src/compiler/function.rs b/crates/djs-core/src/compiler/function.rs
+index f6761283..846ab074 100644
+--- a/crates/djs-core/src/compiler/function.rs
++++ b/crates/djs-core/src/compiler/function.rs
+@@ -526,6 +526,10 @@ impl Parser<'_, '_> {
+         if self.f.is_async && !self.f.is_generator {
+             self.code().async_return(0);
+         } else {
++            if self.f.kind == FuncKind::ClassCtor {
++                // A class constructor returns its result itself (0270).
++                self.code().ctor_result();
++            }
+             self.code().return_();
+         }
+     }
+@@ -566,6 +570,10 @@ impl Parser<'_, '_> {
+         if self.f.is_async && !self.f.is_generator {
+             self.code().undefined();
+             self.code().async_return(0);
++        } else if self.f.kind == FuncKind::ClassCtor {
++            // A class constructor returns its result itself: `this` (0270).
++            self.code().special_object(crate::bytecode::special::THIS);
++            self.code().return_();
+         } else {
+             self.code().return_undef();
+         }
+@@ -584,6 +592,12 @@ impl Parser<'_, '_> {
+             self.next()?;
+         }
+         self.enter()?;
++        // An arrow in a derived constructor may call `super()` (0270).
++        match self.own_this_function() {
++            Ok(None) => self.f.this_escaped = true,
++            Ok(Some(i)) => self.stack[i].f.this_escaped = true,
++            Err(()) => {}
++        }
+         self.begin_function(FuncKind::Arrow)?;
+         self.start_flavor((is_async, false))?;
+         self.f.name = hint;
+diff --git a/crates/djs-core/src/compiler/parser.rs b/crates/djs-core/src/compiler/parser.rs
+index 6ac86afc..dd49fbc5 100644
+--- a/crates/djs-core/src/compiler/parser.rs
++++ b/crates/djs-core/src/compiler/parser.rs
+@@ -1469,12 +1469,15 @@ impl<'a, 'h> Parser<'a, 'h> {
+     }
+ 
+     /// Reads `this`. In a derived constructor (or an arrow in one) it is checked: it is
+-    /// uninitialized until `super()` returns.
++    /// uninitialized until `super()` returns (not in the constructor itself after a
++    /// `super()` that every run reaches first, 0270).
+     pub fn emit_this(&mut self, pos: u32) {
+         let r = self.this_ref(pos);
+         self.mark(pos);
+         self.code().name_get(r);
+-        if self.own_this_kind() == Some(FuncKind::DerivedCtor) {
++        if self.own_this_kind() == Some(FuncKind::DerivedCtor)
++            && !(self.f.kind == FuncKind::DerivedCtor && self.f.this_bound)
++        {
+             self.code().check_this();
+         }
+     }
+diff --git a/crates/djs-core/src/compiler/resolve.rs b/crates/djs-core/src/compiler/resolve.rs
+index 53ad2286..de642c50 100644
+--- a/crates/djs-core/src/compiler/resolve.rs
++++ b/crates/djs-core/src/compiler/resolve.rs
+@@ -1642,6 +1642,9 @@ fn template_flags(f: &FuncState, privileged: bool) -> u32 {
+     if f.home_var.is_some() {
+         flags |= func_flags::HOME;
+     }
++    if matches!(f.kind, FuncKind::ClassCtor | FuncKind::DerivedCtor) {
++        flags |= func_flags::CLASS_CTOR;
++    }
+     flags
+ }
+ 
+diff --git a/crates/djs-core/src/compiler/snapshots/classes.disasm b/crates/djs-core/src/compiler/snapshots/classes.disasm
+index 71724fe5..6007b6f0 100644
+--- a/crates/djs-core/src/compiler/snapshots/classes.disasm
++++ b/crates/djs-core/src/compiler/snapshots/classes.disasm
+@@ -36,34 +36,23 @@ function 0 <anonymous>: params=0 locals=6 stack=3 captures=0
+   106  init_global_lex "A"
+   111  get_loc0 (<completion>)
+   112  return
+-function 0.0 A: params=1 locals=4 stack=3 captures=1
++function 0.0 A: params=1 locals=2 stack=3 captures=1
+     0  special_object 4
+-    2  put_loc3 (this)
+-    3  special_object 1
+-    5  put_loc2 (new.target)
+-    6  special_object 3
+-    8  put_loc1 (<active>)
+-    9  check_ctor  ; 7:14
+-   10  get_loc1 (<active>)
+-   11  get_super
+-   12  get_arg0  ; 8:11
+-   13  get_loc2 (new.target)
+-   14  super_call 1  ; 8:10
+-   17  get_loc3 (this)  ; 8:5
+-   18  check_this_uninit
+-   19  dup
+-   20  put_loc3 (this)
+-   21  get_cap cap0 (<fields 0>)
+-   24  dup
+-   25  is_undefined
+-   26  jump_if_true8 -> 31
+-   28  pick 1
+-   30  call0
+-   31  drop
+-   32  drop
+-   33  get_loc3 (this)  ; 9:4
+-   34  check_this
+-   35  return
++    2  put_loc1 (this)
++    3  get_arg0  ; 8:11
++    4  super_call_frame 1  ; 8:10
++    7  dup  ; 8:5
++    8  put_loc1 (this)
++    9  get_cap cap0 (<fields 0>)
++   12  dup
++   13  is_undefined
++   14  jump_if_true8 -> 19
++   16  pick 1
++   18  call0
++   19  drop
++   20  drop
++   21  get_loc1 (this)  ; 9:4
++   22  return
+ function 0.1 #m: params=0 locals=1 stack=2 captures=1
+     0  special_object 4
+     2  put_loc0 (this)
+@@ -99,40 +88,38 @@ function 0.3 has: params=1 locals=0 stack=2 captures=1
+ function 0.4 <anonymous>: params=0 locals=1 stack=3 captures=3
+     0  special_object 4
+     2  put_loc0 (this)
+-    3  jump8 -> 23
++    3  jump8 -> 24
+     5  get_loc0 (this)  ; 4:5
+-    6  push_atom "x"
+-   11  push1
+-   12  define_class_field
+-   13  drop
+-   14  get_loc0 (this)  ; 5:6
+-   15  get_cap cap0 (#p)
+-   18  push2
+-   19  define_private_field 0
+-   21  drop
+-   22  return_undef
+-   23  get_loc0 (this)  ; 22:2
+-   24  get_cap cap1 (#m)
+-   27  get_cap cap2 (<#m>)
+-   30  define_private_field 1
+-   32  drop
+-   33  jump8 -> 5
+-function 0.5 <anonymous>: params=0 locals=1 stack=3 captures=0
++    6  push1
++    7  define_field "x" ic0
++   14  drop
++   15  get_loc0 (this)  ; 5:6
++   16  get_cap cap0 (#p)
++   19  push2
++   20  define_private_field 0
++   22  drop
++   23  return_undef
++   24  get_loc0 (this)  ; 22:2
++   25  get_cap cap1 (#m)
++   28  get_cap cap2 (<#m>)
++   31  define_private_field 1
++   33  drop
++   34  jump8 -> 5
++function 0.5 <anonymous>: params=0 locals=1 stack=2 captures=0
+     0  special_object 4
+     2  put_loc0 (this)
+     3  get_loc0 (this)  ; 6:12
+-    4  push_atom "s"
+-    9  push3
+-   10  define_class_field
+-   11  drop
+-   12  get_loc0 (this)  ; 16:10
+-   13  fclosure child0
+-   18  set_home_object
+-   19  swap
+-   20  call0
+-   21  drop
+-   22  return_undef
+-   23  jump8 -> 3
++    4  push3
++    5  define_field "s" ic0
++   12  drop
++   13  get_loc0 (this)  ; 16:10
++   14  fclosure child0
++   19  set_home_object
++   20  swap
++   21  call0
++   22  drop
++   23  return_undef
++   24  jump8 -> 3
+ function 0.5.0 <anonymous>: params=0 locals=1 stack=2 captures=0
+     0  special_object 4
+     2  put_loc0 (this)
+diff --git a/crates/djs-core/src/compiler/snapshots/decorators.disasm b/crates/djs-core/src/compiler/snapshots/decorators.disasm
+index b519c88e..34cf75ff 100644
+--- a/crates/djs-core/src/compiler/snapshots/decorators.disasm
++++ b/crates/djs-core/src/compiler/snapshots/decorators.disasm
+@@ -147,17 +147,17 @@ function 0 <anonymous>: params=0 locals=20 stack=8 captures=0
+ function 0.0 C: params=0 locals=1 stack=3 captures=1
+     0  special_object 4
+     2  put_loc0 (this)
+-    3  check_ctor  ; 12:1
+-    4  get_loc0 (this)
+-    5  get_cap cap0 (<fields 0>)
+-    8  dup
+-    9  is_undefined
+-   10  jump_if_true8 -> 15
+-   12  pick 1
+-   14  call0
++    3  get_loc0 (this)  ; 12:1
++    4  get_cap cap0 (<fields 0>)
++    7  dup
++    8  is_undefined
++    9  jump_if_true8 -> 14
++   11  pick 1
++   13  call0
++   14  drop
+    15  drop
+-   16  drop
+-   17  return_undef
++   16  special_object 4
++   18  return
+ function 0.1 m: params=0 locals=0 stack=0 captures=0
+     0  return_undef
+ function 0.2 <anonymous>: params=0 locals=0 stack=0 captures=0
+diff --git a/crates/djs-core/src/compiler/snapshots/modules.disasm b/crates/djs-core/src/compiler/snapshots/modules.disasm
+index 358175f8..6996191f 100644
+--- a/crates/djs-core/src/compiler/snapshots/modules.disasm
++++ b/crates/djs-core/src/compiler/snapshots/modules.disasm
+@@ -49,17 +49,17 @@ function 0.2 default: params=0 locals=0 stack=2 captures=1
+ function 0.3 C: params=0 locals=1 stack=3 captures=1
+     0  special_object 4
+     2  put_loc0 (this)
+-    3  check_ctor  ; 16:1
+-    4  get_loc0 (this)
+-    5  get_cap cap0 (<fields 0>)
+-    8  dup
+-    9  is_undefined
+-   10  jump_if_true8 -> 15
+-   12  pick 1
+-   14  call0
++    3  get_loc0 (this)  ; 16:1
++    4  get_cap cap0 (<fields 0>)
++    7  dup
++    8  is_undefined
++    9  jump_if_true8 -> 14
++   11  pick 1
++   13  call0
++   14  drop
+    15  drop
+-   16  drop
+-   17  return_undef
++   16  special_object 4
++   18  return
+ module:
+   env 0 d kind 3 aux 0
+   env 1 a kind 3 aux 0
+diff --git a/crates/djs-core/src/interp/frame.rs b/crates/djs-core/src/interp/frame.rs
+index d6546b40..e0f9204f 100644
+--- a/crates/djs-core/src/interp/frame.rs
++++ b/crates/djs-core/src/interp/frame.rs
+@@ -28,9 +28,6 @@ pub const ARGC: u32 = 3;
+ pub const FLAGS: u32 = 4;
+ pub const NEW_TARGET: u32 = 5;
+ 
+-/// `flags` bit: the frame was entered by `construct`.
+-pub const FLAG_CONSTRUCT: i32 = 1 << 4;
+-
+ /// `flags` bit: a native frame (a `@native` builtin's generated state machine, 0063):
+ /// `pc` is the state, the locals are the generated slots. Set when the frame is pushed,
+ /// so a frame stays native (or bytecode) for its whole activation whatever the options
+diff --git a/crates/djs-core/src/interp/run.rs b/crates/djs-core/src/interp/run.rs
+index bb030e1b..f8d3d570 100644
+--- a/crates/djs-core/src/interp/run.rs
++++ b/crates/djs-core/src/interp/run.rs
+@@ -318,8 +318,8 @@ pub(crate) struct Exec<'h> {
+     /// 0 for a bytecode frame. Native frames have `code_len` 0, so `fast_step` declines
+     /// them and `step` hands them to `native_step`.
+     native: u32,
+-    /// Template flags that make the tier-0 loop's call decline: SLOPPY_THIS, NATIVE and
+-    /// FAST.
++    /// Template flags that make the tier-0 loop's call decline: SLOPPY_THIS, NATIVE,
++    /// FAST and CLASS_CTOR.
+     slow_call_flags: u32,
+     /// The generated (`@rust`) builtin whose error is being thrown: its native frame is
+     /// the innermost of the error's stack (D3260).
+@@ -377,7 +377,10 @@ impl<'h> Exec<'h> {
+             native: 0,
+             // Builtins with generated Rust have no bytecode body (D3261): their calls
+             // always take the native frame or the fast entry.
+-            slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,
++            slow_call_flags: func_flags::SLOPPY_THIS
++                | func_flags::FAST
++                | func_flags::NATIVE
++                | func_flags::CLASS_CTOR,
+             native_callee: None,
+             own_shadow: None,
+             host_oom: false,
+@@ -565,8 +568,7 @@ impl<'h> Exec<'h> {
+     }
+ 
+     /// `push_frame` with the template's fields already read. `new_target` is a
+-    /// construct's: the frame is flagged as one and holds it before the entry's
+-    /// safepoint, which may move it.
++    /// construct's: the frame holds it before the entry's safepoint, which may move it.
+     #[inline(always)]
+     #[allow(clippy::too_many_arguments)]
+     fn push_frame_head(
+@@ -590,7 +592,7 @@ impl<'h> Exec<'h> {
+             Value::int(if bottom { 0 } else { self.hp as i32 }),
+             Value::int(ret_pc as i32),
+             Value::int(argc as i32),
+-            Value::int(cont.to_flags() | new_target.map_or(0, |_| frame::FLAG_CONSTRUCT)),
++            Value::int(cont.to_flags()),
+             new_target.unwrap_or(Value::UNDEFINED),
+         ];
+         let vals = ValueArray::VALUES.at(self.stack, 0);
+@@ -648,6 +650,10 @@ impl<'h> Exec<'h> {
+                 if flags & func_flags::SLOPPY_THIS != 0 {
+                     self.bind_sloppy_this(base + 1)?;
+                 }
++                // (A construct pushes its frame itself, `construct_call`.)
++                if flags & func_flags::CLASS_CTOR != 0 {
++                    return type_error("class constructors must be invoked with 'new'");
++                }
+                 let th = hot::template_head(self.heap.arena().bytes(), t);
+                 let top = base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack;
+                 self.ensure(top)?;
+@@ -2549,11 +2555,15 @@ impl<'h> Exec<'h> {
+             Op::DefineField => {
+                 let key = self.imm_atom();
+                 let ic = self.imm_u16(5);
+-                let v = self.pop();
+-                let o = self.top(0).as_object().expect("object literal");
+-                let old = self.heap.receiver_shape(o);
+-                self.heap.create_data_property(o, key, v)?;
+-                self.ic_add_fill(o, key, old, false, ic);
++                let (o, v) = (self.top(1), self.top(0));
++                let obj = o.as_object().expect("object literal or class field target");
++                let old = self.heap.receiver_shape(obj);
++                // A class field's target may be any object a base constructor returned.
++                if self.heap.is_proxy(obj) || !self.heap.create_data_property(obj, key, v)? {
++                    return self.define_field_slow(o, key, v, 1, next);
++                }
++                self.sp -= 1;
++                self.ic_add_fill(obj, key, old, false, ic);
+             }
+             Op::In => {
+                 let (k, o) = (self.top(1), self.top(0));
+@@ -3014,7 +3024,9 @@ impl<'h> Exec<'h> {
+             | Op::DefineClassField
+             | Op::SuperCall
+             | Op::SuperCallSpread
+-            | Op::CheckCtor
++            | Op::SuperCallFrame
++            | Op::SuperCallForward
++            | Op::CtorResult
+             | Op::CheckThis
+             | Op::CheckThisUninit
+             | Op::CheckCtorReturn
+@@ -4355,7 +4367,7 @@ impl<'h> Exec<'h> {
+                 let th = hot::template_head(self.heap.arena().bytes(), t);
+                 self.ensure(base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack)?;
+                 let nt = new_target.unwrap_or(f);
+-                let cont = Continuation::ConstructResult;
++                let cont = self.construct_cont(fo, flags);
+                 self.push_frame_head(t, &th, base, argc, cont, next, Some(nt));
+                 return Ok(None);
+             }
+@@ -4374,13 +4386,25 @@ impl<'h> Exec<'h> {
+             v
+         });
+         let r = r?;
+-        let flags = self.header_int(frame::FLAGS) as i32 | frame::FLAG_CONSTRUCT;
+-        self.set(self.hp + frame::FLAGS, Value::int(flags));
+         let f = nt.unwrap_or_else(|| self.get(self.bp));
+         self.set(self.hp + frame::NEW_TARGET, f);
+         Ok(r)
+     }
+ 
++    /// The continuation of a construct's bytecode frame for function `fo` (template
++    /// flags `flags`): class constructors and builtins return the constructed object
++    /// themselves, so their frames return as calls do (the tier-0 loop takes those
++    /// returns); a plain function's result is checked (0270).
++    pub(super) fn construct_cont(&self, fo: Obj, flags: u32) -> Continuation {
++        let builtin =
++            self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
++        if builtin || flags & func_flags::CLASS_CTOR != 0 {
++            Continuation::PushResult
++        } else {
++            Continuation::ConstructResult
++        }
++    }
++
+     /// Whether `v instanceof f` needs the builtin InstanceofOperator: `f` has a
+     /// Symbol.hasInstance other than Function.prototype's (a getter, a user method, a
+     /// non-callable value), or its `prototype` is an accessor. The common case (a plain
+diff --git a/crates/djs-core/src/interp/run/class.rs b/crates/djs-core/src/interp/run/class.rs
+index c28a6990..ea428e56 100644
+--- a/crates/djs-core/src/interp/run/class.rs
++++ b/crates/djs-core/src/interp/run/class.rs
+@@ -15,8 +15,7 @@ use crate::heap::cells::FuncTemplate;
+ use crate::heap::cells::flags::{SYM_PRIVATE_METHOD, SYM_PRIVATE_READONLY};
+ use crate::heap::{Atom, ObjectClass, PropFlags, Property, PropertyDescriptor, atoms};
+ use crate::interp::conv::{self, Fault, type_error};
+-use crate::interp::frame;
+-use crate::interp::frame::Continuation;
++use crate::interp::frame::{self, Continuation};
+ use crate::interp::realm::{ErrorKind, Intrinsic, intrinsic_obj};
+ use crate::value::{Obj, Value};
+ 
+@@ -221,34 +220,24 @@ impl Exec<'_> {
+                 let (o, k, v) = (self.top(2), self.top(1), self.top(0));
+                 let key = self.property_key(o, k)?;
+                 let obj = o.as_object().expect("class field target");
+-                if self.heap.is_proxy(obj) {
+-                    // The proxy's defineProperty trap.
+-                    self.sp -= 2;
+-                    self.pc = next;
+-                    let k = self.heap.atom_to_value(key)?;
+-                    return self.call_prelude(
+-                        PROXY_CREATE_DATA_PROPERTY_OR_THROW,
+-                        &[o, k, v],
+-                        Continuation::DiscardResult,
+-                    );
+-                }
+                 // CreateDataPropertyOrThrow.
+-                if !self.heap.create_data_property(obj, key, v)? {
+-                    return type_error(if self.heap.has_own_property(obj, key) {
+-                        "could not define property"
+-                    } else {
+-                        "object is not extensible"
+-                    });
++                if self.heap.is_proxy(obj) || !self.heap.create_data_property(obj, key, v)? {
++                    return self.define_field_slow(o, key, v, 2, next);
+                 }
+                 self.sp -= 2;
+             }
+-            Op::SuperCall | Op::SuperCallSpread => {
+-                let nt = self.pop();
+-                let argc = if op == Op::SuperCall {
+-                    self.imm_u16(1)
+-                } else {
+-                    let args = self.top(0);
+-                    self.spread_args(args)?
++            Op::SuperCall | Op::SuperCallSpread | Op::SuperCallFrame | Op::SuperCallForward => {
++                let nt = match op {
++                    Op::SuperCall | Op::SuperCallSpread => self.pop(),
++                    _ => self.header(frame::NEW_TARGET),
++                };
++                let argc = match op {
++                    Op::SuperCall => self.imm_u16(1),
++                    Op::SuperCallSpread => {
++                        let args = self.top(0);
++                        self.spread_args(args)?
++                    }
++                    _ => self.place_frame_super(op == Op::SuperCallFrame)?,
+                 };
+                 // qjs's messages: the super constructor is the class's [[Prototype]].
+                 let f = self.top(argc);
+@@ -261,9 +250,10 @@ impl Exec<'_> {
+                 }
+                 return self.construct_with(argc, next, Some(nt));
+             }
+-            Op::CheckCtor => {
+-                if self.header_int(frame::FLAGS) as i32 & frame::FLAG_CONSTRUCT == 0 {
+-                    return type_error("class constructors must be invoked with 'new'");
++            Op::CtorResult => {
++                if self.top(0).as_object().is_none() {
++                    let this = self.get(self.bp + 1);
++                    self.set(self.sp - 1, this);
+                 }
+             }
+             Op::CheckThis => {
+@@ -485,4 +475,69 @@ impl Exec<'_> {
+         self.sp -= n;
+         Ok(None)
+     }
++
++    /// `super_call_frame argc` (`a1 .. an`) or `super_call_forward`: the active
++    /// function's [[Prototype]] under the arguments, which are the frame's own for
++    /// `super_call_forward` (`f a1 .. an`, as `super_call` has them). Returns argc.
++    fn place_frame_super(&mut self, frame_args: bool) -> Result<u32, Fault> {
++        let f = self.frame_super();
++        if frame_args {
++            let argc = self.imm_u16(1);
++            self.ensure(self.sp + 1)?;
++            let base = self.sp - argc;
++            for i in (0..argc).rev() {
++                let v = self.get(base + i);
++                self.set(base + 1 + i, v);
++            }
++            self.set(base, f);
++            self.sp += 1;
++            return Ok(argc);
++        }
++        let argc = self.header_int(frame::ARGC);
++        self.ensure(self.sp + 1 + argc)?;
++        self.push(f);
++        for i in 0..argc {
++            let v = self.get(self.bp + 2 + i);
++            self.push(v);
++        }
++        Ok(argc)
++    }
++
++    /// The super constructor of the running (derived constructor) frame: its function's
++    /// [[Prototype]] (a class constructor is never a proxy).
++    pub(super) fn frame_super(&self) -> Value {
++        let active = self.get(self.bp).as_object().expect("frame callee");
++        self.heap
++            .get_prototype_of(active)
++            .map_or(Value::NULL, Value::object)
++    }
++
++    /// A class field `key` = `v` on `o` that is a proxy (its defineProperty trap) or
++    /// refused the definition (a TypeError): `o` stays of the instruction's `n`
++    /// operands above it.
++    pub(super) fn define_field_slow(
++        &mut self,
++        o: Value,
++        key: Atom,
++        v: Value,
++        n: u32,
++        next: u32,
++    ) -> Step {
++        let obj = o.as_object().expect("class field target");
++        if self.heap.is_proxy(obj) {
++            self.sp -= n;
++            self.pc = next;
++            let k = self.heap.atom_to_value(key)?;
++            return self.call_prelude(
++                PROXY_CREATE_DATA_PROPERTY_OR_THROW,
++                &[o, k, v],
++                Continuation::DiscardResult,
++            );
++        }
++        type_error(if self.heap.has_own_property(obj, key) {
++            "could not define property"
++        } else {
++            "object is not extensible"
++        })
++    }
+ }
+diff --git a/crates/djs-core/src/interp/run/construct.rs b/crates/djs-core/src/interp/run/construct.rs
+index f83e1368..add1b01e 100644
+--- a/crates/djs-core/src/interp/run/construct.rs
++++ b/crates/djs-core/src/interp/run/construct.rs
+@@ -9,6 +9,14 @@
+ //! frame, safepoints), or returns false having changed nothing and `step` runs it: an
+ //! error to throw, a callee or a `prototype` that needs the general path, a stack that
+ //! must grow, the heap cap.
++//!
++//! The compiler keeps most of them out of class constructors (0270): a call without
++//! `new` is refused by the call paths (no `check_ctor`), class and builtin constructors
++//! return their object themselves (their frames return as calls do, in `run_hot`),
++//! `super(...)` in the constructor itself reads the super constructor and new.target
++//! from the frame (`super_call_frame`, `super_call_forward`), and `this` needs no check
++//! after a first `super()` that every run reaches. A class `new` now leaves the loop
++//! once (`construct`), a derived one once more per `super()`.
+ 
+ use super::{Exec, NO_RETRY, fast};
+ use crate::bytecode::template::func_flags;
+@@ -19,10 +27,10 @@ use crate::value::Value;
+ 
+ const CONSTRUCT: u8 = Op::Construct as u8;
+ const SUPER_CALL: u8 = Op::SuperCall as u8;
+-const SUPER_CALL_SPREAD: u8 = Op::SuperCallSpread as u8;
++const SUPER_CALL_FRAME: u8 = Op::SuperCallFrame as u8;
++const SUPER_CALL_FORWARD: u8 = Op::SuperCallForward as u8;
+ const REST: u8 = Op::Rest as u8;
+ const GET_SUPER: u8 = Op::GetSuper as u8;
+-const CHECK_CTOR: u8 = Op::CheckCtor as u8;
+ const CHECK_THIS: u8 = Op::CheckThis as u8;
+ const CHECK_THIS_UNINIT: u8 = Op::CheckThisUninit as u8;
+ const CHECK_CTOR_RETURN: u8 = Op::CheckCtorReturn as u8;
+@@ -35,12 +43,12 @@ pub(super) fn takes(op: u8) -> bool {
+         op,
+         CONSTRUCT
+             | SUPER_CALL
+-            | SUPER_CALL_SPREAD
++            | SUPER_CALL_FRAME
++            | SUPER_CALL_FORWARD
+             | REST
+             | fast::RETURN
+             | fast::RETURN_UNDEF
+             | fast::SPECIAL_OBJECT
+-            | CHECK_CTOR
+             | CHECK_THIS
+             | CHECK_THIS_UNINIT
+             | CHECK_CTOR_RETURN
+@@ -48,6 +56,17 @@ pub(super) fn takes(op: u8) -> bool {
+     )
+ }
+ 
++/// Where `construct_fast` finds the arguments.
++#[derive(Clone, Copy)]
++enum Args {
++    /// Above the callee (`f a1 .. an`).
++    Above,
++    /// Where the callee goes (`a1 .. an`, `super_call_frame`).
++    Below,
++    /// The frame's own (`super_call_forward`).
++    Frame,
++}
++
+ impl Exec<'_> {
+     /// The instruction `op` at `pc` (declined by `run_hot`), if it is one of the
+     /// construct path's and its case needs nothing of `step`.
+@@ -57,7 +76,9 @@ impl Exec<'_> {
+             return false;
+         }
+         let done = match op {
+-            CONSTRUCT | SUPER_CALL | SUPER_CALL_SPREAD => self.construct_fast(op),
++            CONSTRUCT | SUPER_CALL | SUPER_CALL_FRAME | SUPER_CALL_FORWARD => {
++                self.construct_fast(op)
++            }
+             REST => {
+                 // An allocation that fails changes nothing: `step` runs it then.
+                 let Ok(a) = self.rest_array() else {
+@@ -76,10 +97,6 @@ impl Exec<'_> {
+                 self.push(v);
+                 self.advance_op(Op::SpecialObject)
+             }
+-            CHECK_CTOR => {
+-                self.header_int(frame::FLAGS) as i32 & frame::FLAG_CONSTRUCT != 0
+-                    && self.advance_op(Op::CheckCtor)
+-            }
+             CHECK_THIS => !self.top(0).is_undefined() && self.advance_op(Op::CheckThis),
+             CHECK_THIS_UNINIT => {
+                 if !self.top(0).is_undefined() {
+@@ -122,27 +139,39 @@ impl Exec<'_> {
+         true
+     }
+ 
+-    /// `construct argc` (`f a1 .. an`), `super_call argc` (`f a1 .. an newTarget`) or
+-    /// `super_call_spread` (`f args newTarget`, the arguments in an array) of a
+-    /// bytecode function or builtin constructor whose frame fits the stack: what
+-    /// `construct_with` does after its checks.
++    /// `construct argc` (`f a1 .. an`), `super_call argc` (`f a1 .. an newTarget`),
++    /// `super_call_frame argc` (`a1 .. an`) or `super_call_forward` (the frame's
++    /// arguments) of a bytecode function or builtin constructor whose frame fits the
++    /// stack: what `construct_with` does after its checks. (`super_call_spread`, a
++    /// spread in `super(...)`, goes through `step`.)
+     fn construct_fast(&mut self, op: u8) -> bool {
+         let sup = op != CONSTRUCT;
+-        let (base, argc, spread) = if op == SUPER_CALL_SPREAD {
+-            // The compiler's argument array: its elements, in place of it (`spread_args`).
+-            let Some(a) = self.top(1).as_object() else {
+-                return false;
+-            };
+-            let n = self.heap.array_length(a);
+-            if (0..n).any(|i| self.heap.get_element_fast(a, i).is_none()) {
+-                return false;
++        // Where the arguments come from, and the new.target of a super call.
++        let (base, argc, args, f, nt) = match op {
++            SUPER_CALL_FRAME => {
++                let argc = self.imm_u16(1);
++                let nt = self.header(frame::NEW_TARGET);
++                (
++                    self.sp - argc,
++                    argc,
++                    Args::Below,
++                    self.frame_super(),
++                    Some(nt),
++                )
++            }
++            SUPER_CALL_FORWARD => {
++                let argc = self.header_int(frame::ARGC);
++                let nt = self.header(frame::NEW_TARGET);
++                (self.sp, argc, Args::Frame, self.frame_super(), Some(nt))
++            }
++            _ => {
++                let argc = self.imm_u16(1);
++                let base = self.sp - 1 - argc - sup as u32;
++                let nt = sup.then(|| self.top(0));
++                (base, argc, Args::Above, self.get(base), nt)
+             }
+-            (self.sp - 3, n, Some(a))
+-        } else {
+-            let argc = self.imm_u16(1);
+-            (self.sp - 1 - argc - sup as u32, argc, None)
+         };
+-        let Some(fo) = self.get(base).as_object() else {
++        let Some(fo) = f.as_object() else {
+             return false;
+         };
+         // (Bound functions and proxies are not of this class.)
+@@ -164,7 +193,6 @@ impl Exec<'_> {
+         if top > self.heap.value_array_capacity(self.stack) {
+             return false;
+         }
+-        let nt = sup.then(|| self.top(0));
+         let info = &OPS[op as usize];
+         let next = self.pc + info.size as u32;
+         // A constructor's `new` entry, as `construct_with` tries it: a host refusal
+@@ -184,18 +212,30 @@ impl Exec<'_> {
+             return false;
+         };
+         self.fuel -= info.cost.fuel() as i64;
+-        if let Some(a) = spread {
+-            // `f this a1 .. an` (the frame overwrites what lies above).
+-            for i in 0..argc {
+-                let v = self.heap.get_element_fast(a, i).unwrap_or(Value::UNDEFINED);
+-                self.set(base + 2 + i, v);
++        // `f this a1 .. an` (the frame overwrites what lies above).
++        match args {
++            Args::Above => {
++                for i in (0..argc).rev() {
++                    let v = self.get(base + 1 + i);
++                    self.set(base + 2 + i, v);
++                }
++            }
++            Args::Below => {
++                for i in (0..argc).rev() {
++                    let v = self.get(base + i);
++                    self.set(base + 2 + i, v);
++                }
++            }
++            Args::Frame => {
++                for i in 0..argc {
++                    let v = self.get(self.bp + 2 + i);
++                    self.set(base + 2 + i, v);
++                }
+             }
+-            self.set(base + 1, this);
+-            self.sp = base + 2 + argc;
+-        } else {
+-            self.sp -= sup as u32;
+-            self.insert_this(base, argc, this);
+         }
++        self.set(base, f);
++        self.set(base + 1, this);
++        self.sp = base + 2 + argc;
+         // Cannot fail: the frame fits and `this` needs no binding.
+         let r = self.construct_call(base, argc, nt, next);
+         debug_assert!(matches!(r, Ok(None)));
+diff --git a/crates/djs-core/src/interp/run/stack.rs b/crates/djs-core/src/interp/run/stack.rs
+index bb89ce03..d7a56217 100644
+--- a/crates/djs-core/src/interp/run/stack.rs
++++ b/crates/djs-core/src/interp/run/stack.rs
+@@ -118,7 +118,8 @@ impl Exec<'_> {
+             let script = debug.script;
+             let builtin = self.heap.cell_flags(f.offset()) & OBJ_BUILTIN != 0;
+             let flags = self.get(hp + frame::FLAGS).as_int().unwrap_or(0);
+-            let construct = flags & frame::FLAG_CONSTRUCT != 0;
++            // A construct's frame holds its new.target (a call's is undefined).
++            let construct = !self.get(hp + frame::NEW_TARGET).is_undefined();
+             // Prelude frames: privileged templates (D1980), or the prelude's script.
+             let in_prelude =
+                 u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::PRIVILEGED != 0
+diff --git a/docs/compiler.md b/docs/compiler.md
+index 8b27fab0..1e30559a 100644
+--- a/docs/compiler.md
++++ b/docs/compiler.md
+@@ -826,12 +826,13 @@ Control flow:
+ | `construct` | `u16` argc | f a1..an → r | `new f(...)`, new.target = f, P1 |
+ | `call_spread` / `construct_spread` | | f this arr → r / f arr → r | P1 |
+ | `super_call` / `super_call_spread` | `u16` argc / | f a1..an nt → r / f arr nt → r | derived constructors (7.9) |
++| `super_call_frame` / `super_call_forward` | `u16` argc / | a1..an → r / → r | `super()` in the derived constructor itself: super constructor and new.target from the frame (7.9) |
+ | `call_intrinsic` | `u16` id, `u16` argc | a1..an → r | privileged code only (7.3), P1 |
+ | `get_iterator` | | o → iter | R (`%GetIterator` slow path), P1 |
+ | `iter_check_object` | | v → v | TypeError if not an object, P1 |
+ | `for_in_start` / `for_in_next` | | o → it / it → it key done | leaf (snapshot of keys), P1 |
+ | `iterator_close` | | iter → | R (calls `return`), P1 |
+-| `check_ctor` | | | class constructor called without `new`: TypeError |
++| `ctor_result` | | v → r | a base class constructor's `return v`: v if an object, else `this` |
+ | `check_this` / `check_this_uninit` | | v → v / v → | a derived constructor's `this` (7.9) |
+ | `check_ctor_return` | | v → v | a derived constructor's result: an object or `undefined` |
+ | `throw_error` | `atom`, `u8` kind | | throws a TypeError/ReferenceError (`delete super.x`), TERM |
+@@ -1619,16 +1620,28 @@ What the compiler emits:
+   `StaticBlock` function (its own var scope), created and called by the static
+   initializer at its position. `arguments` in either is an early error; `await` is
+   reserved in static blocks.
+-- **Constructors.** `check_ctor` first. A base constructor then calls `.fields` with
+-  `this` (a runtime `undefined` check), before the parameters. A derived constructor
+-  gets no `this` from `construct` (it is `undefined`, read through `check_this`);
+-  `super(args)` is `<active>; get_super; args; new.target; super_call n`, then binds
+-  `this` (`check_this_uninit`) and calls `.fields`. Its returns store the value in a
+-  local and jump to an epilogue after the body, outside every try region (the result
+-  check belongs to [[Construct]]): `check_ctor_return`, and `undefined` → the checked
+-  `this`. Falling off the body returns the checked `this` directly; the epilogue is
+-  emitted only when a `return` jumps to it (0236). Default constructors: `{}`, or `super(...args)` with `rest 0;
+-  super_call_spread` (no iteration).
++- **Constructors.** A call without `new` never enters one: the template's
++  `func_flags::CLASS_CTOR` sends every call to `Exec::call`, which throws (0270). A
++  class constructor returns its object itself, and its construct frame returns as a
++  call's does: a base constructor ends with `special_object THIS; return`, and `return
++  v` is `v; ctor_result; return`. A base constructor calls `.fields` with `this` (a
++  runtime `undefined` check), before the parameters. A derived constructor gets no
++  `this` from `construct` (it is `undefined`, read through `check_this`). `super(args)`
++  in the constructor itself is `args; super_call_frame n` when the arguments run no
++  code (constants, the constructor's own bindings, literals of them), else
++  `special_object ACTIVE_FUNCTION; get_super` moved in front of the arguments, then
++  `special_object NEW_TARGET; super_call n`; in an arrow it is `<active>; get_super;
++  args; new.target; super_call n` through the captured pseudo-bindings. Then it binds
++  `this` (`check_this_uninit`) and calls `.fields`. A first `super()` that every run
++  reaches (no label created since the body began, no `return`, arrow or other
++  `super()` before it or in its arguments) needs no `check_this_uninit`, and the
++  constructor's own `this` reads after it no `check_this`. Its returns store the value
++  in a local and jump to an epilogue after the body, outside every try region (the
++  result check belongs to [[Construct]]): `check_ctor_return`, and `undefined` → the
++  checked `this`. Falling off the body returns the checked `this` directly; the
++  epilogue is emitted only when a `return` jumps to it (0236). Default constructors:
++  `special_object THIS; return`, or `super_call_forward` (the frame's arguments, no
++  array, no iteration).
+ - **Home objects.** A function that uses `super.x` (itself or in arrows) declares the
+   `<home>` pseudo-binding (`special_object HOME_OBJECT`); its template gets
+   `func_flags::HOME`, and its closures a home slot after the captures, set by
+diff --git a/docs/decisions.md b/docs/decisions.md
+index da4c60df..cde9ed0b 100644
+--- a/docs/decisions.md
++++ b/docs/decisions.md
+@@ -12732,3 +12732,39 @@ date: 2026-11-21 · by: pidle · issue: 0266
+ `new Error("x")` at a codemode body's top level: 27.9k → 15.2k wasm instructions (QuickJS
+ 2026 24.4k, quickjs-wasi 19.3k); one more frame on the stack 34.9k → 20.2k; with
+ Error.stackTraceLimit = 0 18.1k → 9.1k. +143 B gzip.
++## D3410: Class constructors leave the tier-0 loop once per construct
++date: 2026-11-21 · by: pidle · issue: 0270
++- A class constructor's template has `func_flags::CLASS_CTOR`, which is in
++  `slow_call_flags`: every fast call path leaves such a call to `Exec::call`, which
++  throws "class constructors must be invoked with 'new'" before a frame exists. The
++  `check_ctor` instruction is gone. (The error's trace no longer has the constructor's
++  frame; qjs shows one. No corpus case prints it.)
++- Class and builtin constructors return their object themselves: a base class
++  constructor ends with `special_object THIS; return`, a `return v` in it runs
++  `ctor_result` (v if an object, else `this`); derived constructors already returned the
++  checked `this` or an object; builtins always return their object. Their construct
++  frames get `PushResult`, so the hot loop's `return` takes them; only plain functions
++  keep `ConstructResult`. The frame flag FLAG_CONSTRUCT is gone: traces tell a
++  construct by the frame's new.target (undefined for calls).
++- `super(...)` in the derived constructor itself reads the active function and
++  new.target from its frame: `super_call_frame argc` when the arguments only push
++  constants, read bindings of the constructor or build literals of them (nothing can
++  change the class's [[Prototype]] in between, so reading the super constructor after
++  them is unobservable), `super_call_forward` for a default derived constructor (the
++  frame's own arguments, no rest array, no spread), else `special_object
++  ACTIVE_FUNCTION; get_super` moved in front of the arguments and `special_object
++  NEW_TARGET; super_call`. The prologue's new.target and active-function locals are
++  only made for arrows that call `super()`.
++- `check_this_uninit` and `check_this` are left out after a first `super()` that every
++  run reaches: no label created since the body began (no branch, loop or try before
++  it), no `return` before it, no arrow (which could call `super()`) and no other
++  `super()` before it or in its arguments. Code compiled after it in the constructor
++  itself then runs only after it; arrows keep their checks.
++- Class fields with a plain name are `define_field atom ic` (the object literal
++  instruction, inline cached) instead of `push_atom; define_class_field` through `step`;
++  `define_field` falls back to the proxy trap or the TypeError when the target is not a
++  fresh ordinary object (a base constructor may return anything).
++Wasm instructions per op, main → branch (QuickJS 2026): `new C()` 2.9k → 2.3k (1.8k),
++`new C(i)` with a class field 7.1k → 4.7k (4.8k), derived default 8.6k → 4.5k (3.3k),
++derived `super(a)` 8.2k → 5.0k (4.4k), three levels 11.3k → 6.4k (5.8k), a derived Error
++15.9k → 13.1k (33.2k), `new Promise(() => {})` 7.6k → 7.2k (6.0k).
+diff --git a/docs/guide/interpreter.md b/docs/guide/interpreter.md
+index eb8bb933..ae377af1 100644
+--- a/docs/guide/interpreter.md
++++ b/docs/guide/interpreter.md
+@@ -54,8 +54,8 @@ hp      prev_bp           int32
+ hp+1    prev_hp           int32
+ hp+2    ret_pc            int32: the caller's pc to resume
+ hp+3    argc              int32: actual argument count
+-hp+4    flags             int32: continuation | construct bit | native bit
+-hp+5    new_target        Value
++hp+4    flags             int32: continuation | native bit
++hp+5    new_target        Value: undefined for a call
+ lp      locals            lp = hp + 6, filled with undefined
+ sb      operand stack     sb = lp + locals
+ ```
+@@ -156,7 +156,7 @@ There are only a few continuations:
+ | --- | --- |
+ | `PushResult` | push the value on the caller's operand stack (calls, getters) |
+ | `DiscardResult` | drop it (setters) |
+-| `ConstructResult` | use it if it is an object, else the frame's `this` (constructors) |
++| `ConstructResult` | use it if it is an object, else the frame's `this` (plain functions under `new`; class and builtin constructors return their object themselves and get `PushResult`) |
+ | `Entry` | the bottom frame of the embedder's call: `run` returns `Done` |
+ | `Job` | the bottom frame of a promise job: drop it and run the next job |
+ | `Replace(slot)` | store it in a stack slot of the caller and continue after the instruction |
+@@ -297,9 +297,14 @@ faster loop in front of it:
+   written back. Some declined cases are finished on the way out instead, by one call that
+   keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
+   `arr.push(x)` appended straight to the array), `+` of a string with a primitive, and the
+-  instructions of `new`: the construct itself, the return into the constructing frame,
+-  `new.target`, the class constructor checks and `super()`. A trip through `step` costs
+-  more than most of these instructions do, and one `new C()` meets several of them. V8
++  instructions of `new`: the construct itself, the return into a plain function's
++  constructing frame, `new.target`, the derived constructor checks and `super()`. A trip
++  through `step` costs more than most of these instructions do, so the compiler keeps
++  them out of class constructors where it can: a call of a class without `new` is
++  refused by the call itself, a class constructor returns its object as a call returns
++  its value, `super(...)` reads the super constructor and new.target from the frame, and
++  `this` is not checked after a first `super()` that every run reaches. `new C()` leaves
++  the loop once, a derived class once more per `super()`. V8
+   compiles the whole loop as one function, and even small additions to it slowed every
+   plain call. Nothing the tier-0 loop does itself can collect or run user code, which
+   is why it may hold the state in locals. It charges the same fuel and stops at the same
+diff --git a/tests/corpus/language/class-ctor-frames.expected b/tests/corpus/language/class-ctor-frames.expected
+new file mode 100644
+index 00000000..985e0bb8
+--- /dev/null
++++ b/tests/corpus/language/class-ctor-frames.expected
+@@ -0,0 +1,39 @@
++[{"x":1},{},{"r":7},{"f":1},{"x":2},{"x":3,"y":3},{"z":1},{"x":1}]
++class constructors must be invoked with 'new'
++class constructors must be invoked with 'new'
++derived class constructor must return an object or undefined
++4 9
++[{"a":[]},{"a":[1,2,3]},{"a":[5,{"cause":5},[5,1],"s",null]}]
++object true true
++'this' can be initialized only once
++{"x":3,"q":1}
++this is not initialized
++{"x":4,"q":1}
++this is not initialized
++{"x":1,"g":1}
++{"x":1,"o":1}
++'this' can be initialized only once
++ is not a constructor
++'Z0' is not defined
++{"p":7,"k":true} {"p":7,"k":false}
++3 true true
++Er: boom true true
++2
++true
++{"3":4,"x":1,"s t":2,"__proto__":6,"z":7} 3,x,y,s t,__proto__,z true 6
++f,g
++TypeError object is not extensible
++TypeError object is not extensible
++TypeError
++1 2
++TypeError class constructors must be invoked with 'new'
++{"x":1,"v":1} {"x":2,"v":2}
++arrow ReferenceError
++9
++twice 'this' can be initialized only once
++{"x":1,"t":1}
++11
++{"x":12}
++{"other":13}
++{"x":"TQ","y":"TQ!"}
++=== completed
+diff --git a/tests/corpus/language/class-ctor-frames.js b/tests/corpus/language/class-ctor-frames.js
+new file mode 100644
+index 00000000..8a09dd32
+--- /dev/null
++++ b/tests/corpus/language/class-ctor-frames.js
+@@ -0,0 +1,89 @@
++// Class constructors without `check_ctor` and with their own results, super() from the
++// frame, `this` checks left out after a first unconditional super(), class fields
++// through `define_field` (0270): the cases where each shortcut must not apply.
++class A { constructor(x) { this.x = x; } }
++class R { constructor(x) { if (x) return { r: x }; return 5; } }
++class R2 { constructor() { try { return; } finally { this.f = 1; } } }
++class D extends A {}
++class E extends A { constructor(a) { super(a); this.y = a; } }
++class F extends A { constructor() { return {z: 1}; } }
++class G extends A { constructor() { super(1); return undefined; } }
++class H extends A { constructor() { super(1); return 3; } }
++console.log(JSON.stringify([new A(1), new R(0), new R(7), new R2(), new D(2), new E(3), new F(), new G()]));
++try { A.call({}); } catch (e) { console.log(e.message); }
++try { [1].map(A); } catch (e) { console.log(e.message); }
++try { new H(); } catch (e) { console.log(e.message); }
++console.log(Reflect.construct(A, [4]).x, new (class extends E {})(9).y);
++class P { constructor(...a) { this.a = a; } }
++class Q extends P {}
++console.log(JSON.stringify([new Q(), new Q(1, 2, 3), new (class extends Q { constructor(x) { super(x, { cause: x }, [x, 1], "s", null); } })(5)]));
++let evaluated = false, caught;
++class S extends Object { constructor() { try { super(evaluated = true); } catch (e) { caught = e; } } }
++Object.setPrototypeOf(S, parseInt);
++try { new S(); } catch (_) {}
++console.log(typeof caught, caught && caught.constructor === TypeError, evaluated);
++class T extends A { constructor() { super(1); super(2); } }
++try { new T(); } catch (e) { console.log(e.message); }
++class U extends A { constructor() { const f = () => super(3); f(); this.q = 1; } }
++console.log(JSON.stringify(new U()));
++class V extends A { constructor(c) { if (c) super(4); this.q = 1; } }
++try { new V(false); } catch (e) { console.log(e.message); }
++console.log(JSON.stringify(new V(true)));
++class W extends A { constructor() { return; super(1); } }
++try { new W(); } catch (e) { console.log(e.message); }
++class X extends A { constructor() { super(1); const g = () => this.x; this.g = g(); } }
++console.log(JSON.stringify(new X()));
++class Y extends A { constructor() { let o = 1; super(o); this.o = o; } }
++console.log(JSON.stringify(new Y()));
++class Z extends A { constructor() { for (let i = 0; i < 2; i++) super(i); } }
++try { new Z(); } catch (e) { console.log(e.message); }
++class N extends null { constructor() { super(); } }
++try { new N(); } catch (e) { console.log(e.message); }
++class M extends A { constructor() { super(Z0); } }
++try { new M(); } catch (e) { console.log(e.message); }
++function Pf(x) { this.p = x; } class Pg extends Pf { constructor() { super(7); this.k = new.target === Pg; } }
++console.log(JSON.stringify(new Pg()), JSON.stringify(Reflect.construct(Pg, [], Object)));
++class Arr extends Array {} const arr = new Arr(1, 2, 3); console.log(arr.length, arr instanceof Arr, Array.isArray(arr));
++class Er extends Error { constructor(m) { super(m); this.name = "Er"; } } const er = new Er("boom"); console.log(String(er), er instanceof Er, er instanceof Error);
++class Mp extends Map {} console.log(new Mp([[1,2]]).get(1));
++class Pr extends Promise {} console.log(new Pr(r => r(1)) instanceof Pr);
++{
++class A2 { x = 1; y; "s t" = 2; 3 = 4; [Symbol.iterator] = 5; __proto__ = 6; constructor(z) { this.z = z; } }
++const a = new A2(7); console.log(JSON.stringify(a), Object.keys(a).join(), Object.getPrototypeOf(a) === A2.prototype, a.__proto__);
++let log = [];
++const P = new Proxy({}, { defineProperty(t, k, d) { log.push(String(k)); return Reflect.defineProperty(t, k, d); } });
++class Base { constructor() { return P; } }
++class D extends Base { f = 1; g = 2; }
++new D(); console.log(log.join());
++class Fz { constructor() { return Object.freeze({}); } }
++class E extends Fz { h = 1; }
++try { new E(); } catch (e) { console.log(e.constructor.name, e.message); }
++class Pe { constructor() { return Object.preventExtensions({}); } }
++class G extends Pe { h = 1; }
++try { new G(); } catch (e) { console.log(e.constructor.name, e.message); }
++const deny = new Proxy({}, { defineProperty() { return false; } });
++class Bd { constructor() { return deny; } }
++class H extends Bd { k = 1; }
++try { new H(); } catch (e) { console.log(e.constructor.name); }
++class S { static s = 1; static t = S.s + 1; }
++console.log(S.s, S.t);
++for (let i = 0; i < 3; i++) { const o = new A2(i); if (o.x !== 1) console.log("bad"); }
++}
++{
++try { A(); } catch (e) { console.log(e.constructor.name, e.message); }
++class Cond extends A { constructor(c) { const v = c ? 1 : 2; super(v); this.v = v; } }
++console.log(JSON.stringify(new Cond(true)), JSON.stringify(new Cond(false)));
++class Late extends A { constructor() { const f = () => this; try { f(); } catch (e) { console.log("arrow", e.constructor.name); } super(9); console.log(f().x); } }
++new Late();
++class Twice extends A { constructor() { super(1); try { super(2); } catch (e) { console.log("twice", e.message); } this.t = 1; } }
++console.log(JSON.stringify(new Twice()));
++class Getter extends A { constructor(o) { super(o.v); } }
++console.log(new Getter({ get v() { return 11; } }).x);
++class Swap extends A { constructor(o) { super(o.v); } }
++const other = class { constructor(x) { this.other = x; } };
++console.log(JSON.stringify(new Swap({ get v() { Object.setPrototypeOf(Swap, other); return 12; } })));
++console.log(JSON.stringify(new Swap({ v: 13 })));
++class TP { x = this.constructor.name; constructor() {} }
++class TQ extends TP { y = this.x + "!"; }
++console.log(JSON.stringify(new TQ()));
++}

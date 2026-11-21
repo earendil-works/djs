@@ -13312,3 +13312,46 @@ Size: shipped 429,787 → 428,691 B gz (−1,096; raw −7.4 KB), slim 363,607 �
 and slim 363,349 (462 B). Over the whole of 0268 the shipped module went from 427,465 to
 428,691 B gz with 0269's and 0270's bytes in between; 0268's own share is −289 B
 (+49, +758, −1,096).
+## D3410: Class constructors leave the tier-0 loop once per construct (parked)
+date: 2026-11-21 · by: pidle · issue: 0270
+Parked, not merged: the module has no room (D020), and classes are rare in codemode (0130
+found none in 2,535 scripts). The change is work/research/0270/construct-path.patch
+(against main 9ab27ba5; it applies with the opcode table, snapshots and a corpus case;
+`regen` the generated guide parts after it), +424 B gzip. What it does:
+- A class constructor's template has `func_flags::CLASS_CTOR`, which is in
+  `slow_call_flags`: every fast call path leaves such a call to `Exec::call`, which
+  throws "class constructors must be invoked with 'new'" before a frame exists. The
+  `check_ctor` instruction is gone. (The error's trace no longer has the constructor's
+  frame; qjs shows one. No corpus case prints it.)
+- Class and builtin constructors return their object themselves: a base class
+  constructor ends with `special_object THIS; return`, a `return v` in it runs
+  `ctor_result` (v if an object, else `this`); derived constructors already returned the
+  checked `this` or an object; builtins always return their object. Their construct
+  frames get `PushResult`, so the hot loop's `return` takes them; only plain functions
+  keep `ConstructResult`. The frame flag FLAG_CONSTRUCT is gone: traces tell a
+  construct by the frame's new.target (undefined for calls).
+- `super(...)` in the derived constructor itself reads the active function and
+  new.target from its frame: `super_call_frame argc` when the arguments only push
+  constants, read bindings of the constructor or build literals of them (nothing can
+  change the class's [[Prototype]] in between, so reading the super constructor after
+  them is unobservable), `super_call_forward` for a default derived constructor (the
+  frame's own arguments, no rest array, no spread), else `special_object
+  ACTIVE_FUNCTION; get_super` moved in front of the arguments and `special_object
+  NEW_TARGET; super_call`. The prologue's new.target and active-function locals are
+  only made for arrows that call `super()`.
+- `check_this_uninit` and `check_this` are left out after a first `super()` that every
+  run reaches: no label created since the body began (no branch, loop or try before
+  it), no `return` before it, no arrow (which could call `super()`) and no other
+  `super()` before it or in its arguments. Code compiled after it in the constructor
+  itself then runs only after it; arrows keep their checks.
+- Class fields with a plain name are `define_field atom ic` (the object literal
+  instruction, inline cached) instead of `push_atom; define_class_field` through `step`;
+  `define_field` falls back to the proxy trap or the TypeError when the target is not a
+  fresh ordinary object (a base constructor may return anything).
+Wasm instructions per op, main → branch (QuickJS 2026): `new C()` 2.9k → 2.3k (1.8k),
+`new C(i)` with a class field 7.1k → 4.7k (4.8k), derived default 8.6k → 4.5k (3.3k),
+derived `super(a)` 8.2k → 5.0k (4.4k), three levels 11.3k → 6.4k (5.8k), a derived Error
+15.9k → 13.1k (33.2k), `new Promise(() => {})` 7.6k → 7.2k (6.0k).
+Tests it passed: lib, e2e plain, the active test262 group, difftest (plain, stress and
+plain-dumps --lazy on language/builtins/errors) and its corpus case
+language/class-ctor-frames.js.
