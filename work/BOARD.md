@@ -6,6 +6,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0285 | Fast keyed hash instead of SipHash-1-3 (owner decision) | pgc | .worktrees/pgc |
+| 0286 | Builtin method calls on primitives outside the loop | pcall | .worktrees/pcall |
+| 0287 | Short result strings | pidle | .worktrees/pidle |
 | 0284 | Refresh the published numbers after 0280-0282 | pstart | .worktrees/pstart |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 
