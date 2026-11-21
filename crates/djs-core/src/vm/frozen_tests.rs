@@ -223,7 +223,7 @@ fn prefix_written_latch() {
     for src in [
         "Array.prototype.x = { y: 1 }; [].x.y",
         "Math.z = { y: 1 }; Math.z.y",
-        "BigInt.prototype.toJSON = function () { return 1 }; JSON.stringify(1n)",
+        "Number.prototype.extra = { y: 1 }; (1).extra.y",
         "Object.defineProperty(Math, 'y', { value: { z: 2 } }); Math.y.z",
         "delete Math.PI; Math.PI",
         "Object.setPrototypeOf(Math, { w: {} }); typeof Math.w",
