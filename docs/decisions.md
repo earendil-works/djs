@@ -13724,12 +13724,14 @@ D2433's choice of SipHash-1-3 and keeps the rest of D2433: the per-VM key from t
 (`Roots::HASH_KEY`), the fixed base key, the hashes cached per level, rekeying, the
 hash defined on code units (independent of width and rope shape), never 0.
 - **The hash:** units four to a 64-bit word, as before; each word is xored into a 64-bit
-  state and mixed by a 64×64→128-bit multiply folded to 64 bits (foldhash's and wyhash's
-  step) with a fixed multiplier; the state starts as the key xor a constant, and the
-  finish folds the last word (with the unit count) and the rotated key in. Latin-1 bytes
-  go four at a time (spread into 16-bit lanes), UTF-16LE eight bytes at a time, whenever
-  no unit is pending. `keyed_u64` (Map/Set keys that are numbers, BigInts, objects,
-  symbols) is two folds. The multipliers are fixed so that no key can make one zero.
+  state, multiplied by a fixed odd constant and its high half folded down (`mix`); the
+  state starts as the key xor a constant, and the finish mixes in the last word (with the
+  unit count) and the rotated key and runs murmur3's 64-bit finalizer. Latin-1 bytes go
+  four at a time (spread into 16-bit lanes), UTF-16LE eight bytes at a time, whenever no
+  unit is pending. `keyed_u64` (Map/Set keys that are numbers, BigInts, objects,
+  symbols) is one mix and the finalizer. The multiplier is fixed so that no key can make
+  it zero or even. A 64×64→128-bit folded multiply (foldhash's step) was tried first: in
+  wasm32 it costs four 32-bit products, and it measured no faster than SipHash.
 - **What it gives up:** a fixed set of keys built offline still spreads out in every VM
   (the key is in the state); an attacker who can observe hash-dependent timings inside a
   run and adapt could find collisions, which SipHash prevented. `hash_key_for_seed` is no
@@ -13739,3 +13741,10 @@ hash defined on code units (independent of width and rope shape), never 0.
   index never grows).
 - **Compatibility:** `vm::COMPAT_VERSION` 10 → 11 (string caches, atom and Map/Set
   indexes hash differently).
+- **Measured** (wasm instructions per op, main → this; load ~10): JSON.parse of an
+  8-key object 27.0k → 26.0k, a new-string key into a Map 4,670 → 4,550, Map.get with a
+  string key 2,150 → 2,060, `o[k]` with a base atom's name 1,840 → 1,720, Map.set with
+  number keys 1,780 → 1,660, Set.has of a number 1,670 → 1,500; workloads: json −2.0%,
+  the others within noise; compile (test_builtin.js) −1.3%. Most keys hit cached hashes,
+  so the gains are bounded. Module −117 B gz (430,844 vs 430,961). Codemode memory
+  unchanged.

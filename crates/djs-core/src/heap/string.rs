@@ -164,17 +164,26 @@ pub struct KeyedHasher {
     n: u32,
 }
 
-/// The multipliers (the fractional parts of π, as foldhash's seeds): fixed, so that no key
-/// can make one of them zero or small; the key enters the state.
+/// The state's start (π's fraction) and the multiplier (the golden ratio's, odd so that
+/// the step is a bijection): fixed, so that no key can make the multiplier zero or small;
+/// the key enters the state.
 const M0: u64 = 0x243F_6A88_85A3_08D3;
-const M1: u64 = 0x1319_8A2E_0370_7344;
+const M1: u64 = 0x9E37_79B9_7F4A_7C15;
 
-/// The 128-bit product of `a` and `b`, its halves xored: every input bit reaches every
-/// output bit.
+/// One mixing step: a 64-bit multiply, then the high half folded down (wasm32 has no
+/// 64×64→128 multiply, so a wide fold would cost four 32-bit products).
 #[inline(always)]
-fn fold_mul(a: u64, b: u64) -> u64 {
-    let p = u128::from(a) * u128::from(b);
-    (p as u64) ^ ((p >> 64) as u64)
+fn mix(a: u64, b: u64) -> u64 {
+    let p = a.wrapping_mul(b);
+    p ^ (p >> 32)
+}
+
+/// murmur3's 64-bit finalizer: every input bit reaches every output bit.
+#[inline(always)]
+fn avalanche(mut h: u64) -> u64 {
+    h = (h ^ (h >> 33)).wrapping_mul(0xFF51_AFD7_ED55_8CCD);
+    h = (h ^ (h >> 33)).wrapping_mul(0xC4CE_B9FE_1A85_EC53);
+    h ^ (h >> 33)
 }
 
 impl KeyedHasher {
@@ -191,7 +200,7 @@ impl KeyedHasher {
     // Out of line: the hash is used in many places.
     #[inline(never)]
     fn compress(&mut self, m: u64) {
-        self.h = fold_mul(self.h ^ m, M1);
+        self.h = mix(self.h ^ m, M1);
     }
 
     #[inline]
@@ -252,7 +261,7 @@ impl KeyedHasher {
     fn finish64(mut self) -> u64 {
         let m = self.word | ((self.n as u64 & 0xFFFF) << 48);
         self.compress(m);
-        fold_mul(self.h ^ self.key.rotate_left(32), M0)
+        avalanche(self.h ^ self.key.rotate_left(32))
     }
 
     #[inline]
@@ -270,7 +279,7 @@ pub const BASE_HASH_KEY: u64 = 0;
 /// The keyed hash of one 64-bit word (Map/Set keys that are not strings, D2433).
 #[inline(never)]
 pub fn keyed_u64(key: u64, x: u64) -> u32 {
-    let h = fold_mul(fold_mul(x ^ key ^ M0, M1) ^ key.rotate_left(32), M0);
+    let h = avalanche(mix(x ^ key ^ M0, M1) ^ key.rotate_left(32));
     let h = (h ^ (h >> 32)) as u32;
     if h == 0 { 1 } else { h }
 }

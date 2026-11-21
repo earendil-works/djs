@@ -1,6 +1,6 @@
 # 0285: A fast keyed hash instead of SipHash-1-3 (owner: no strong flood resistance needed)
 
-status: in-progress
+status: done
 agent: pgc
 branch: issue/0285-fast-keyed-hash
 depends-on: -
@@ -26,9 +26,9 @@ Keep the existing collision test meaningful (or adapt it: offline collisions of 
 base key are acceptable now, say so).
 
 ## Acceptance criteria
-- [ ] per-op instructions vs QuickJS before/after; workloads; compile
-- [ ] determinism (same seed, same heap), images, dumps; gate green; decisions recorded; guide updated
-- [ ] size reported (~1 KB of the owner's allowance left, shared): a simpler hash should shrink code
+- [x] per-op instructions vs QuickJS before/after; workloads; compile
+- [x] determinism (same seed, same heap), images, dumps; gate green; decisions recorded; guide updated
+- [x] size reported (~1 KB of the owner's allowance left, shared): a simpler hash should shrink code
 ## Shared context (all of 0256-0260)
 The owner asked to push both memory and speed as far as they go (2026-11-21). Background,
 fresh profiles and the ranked idea list: work/scratch/perfreview/ of the primary checkout
@@ -56,5 +56,15 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- First version (foldhash's 128-bit folded multiply): no faster than SipHash in wasm32
+  (the 128-bit product is four 32-bit ones); some ops slower.
+- Final (D3540): a 64-bit multiply-fold per 4 units, murmur3's finalizer, keyed state;
+  Latin-1 4 bytes per word. Per-op numbers and workloads in D3540: JSON.parse −3.7%,
+  Map/Set with number keys −7..−10%, string-key paths −3..−6%, json workload −2.0%,
+  compile −1.3%; module −117 B gz. New test: the hash is one of code units (width and
+  chunking independent). Determinism/stress legs on codemode and builtins pass.
 
 ## Result
+SipHash-1-3 replaced by a keyed multiply-fold hash (D3540, owner's decision): every hash
+site cheaper (most keys hit cached hashes, so the per-op gains are 3–10%, json −2%),
+module −117 B gz, COMPAT_VERSION 11. heap.md describes the hash and its trade-off.
