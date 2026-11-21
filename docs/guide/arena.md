@@ -148,8 +148,10 @@ of wasm memory: wasm linear memory never shrinks, so the peak is what a run cost
   growth adds an eighth, in whole pages, rather than doubling: in wasm the arena grows in
   place, so doubling would only reserve pages the run may never touch. Growth never
   reserves past the threshold and a small slack for what is allocated before the next
-  safepoint. Past it, a collection is pending and growth is by a quarter. Thresholds are
-  whole 64 KiB wasm pages.
+  safepoint. Past it, a collection is pending at the next safepoint, and each growth adds
+  half of how far the arena is past the threshold, in whole pages: a step that only covers
+  the few bytes allocated before that safepoint would otherwise stay reserved after the
+  collection, and wasm memory never shrinks. Thresholds are whole 64 KiB wasm pages.
 - **In wasm it grows in place.** The module's allocator keeps big blocks, the arena among
   them, as runs of whole pages. When the pages after the arena are free or memory ends
   there, a growth adds pages instead of copying the arena into a new block, which would

@@ -12518,3 +12518,16 @@ add one (D2063).
 - **Measured** (wasm, node 26, instructions per run, fresh VMs, noise ±1–2%): fanout
   −1.5%, media −2%, text −2%, json −0.6%, heavy −0.4%; wmeasure props −1.8%, pi-like
   −1.3%, json-objects −1.3%, strings −0.8%. Memory unchanged. Shipped module +~370 B gz.
+
+## D3291: Past the GC target the arena grows by half its overshoot
+date: 2026-11-21 · by: pgc · issue: 0258
+`Arena::reserve` grew by a quarter of the capacity once the arena was past its target
+(the GC threshold): a collection is pending at the next safepoint, which usually comes
+a few bytes later. heavy crossed its third threshold by 416 bytes and reserved 864 KB
+(+14 pages) that the collection then left unused; wasm memory never shrinks. Now the
+step is half the overshoot, in pages: one page for a small overshoot, still geometric
+over a long stretch without a safepoint (an embedder's big JSON.parse). Twice the
+overshoot was tried: fanout's 220 KB burst then reserved 260 KB more than with the
+eighth (memory after a run, KiB, wasm: main / eighth / twice / half: heavy 4736 / 4288 /
+3904 / 3904, fanout 1792 / 1664 / 1792 / 1664, json 1472 / – / 1472 / 1408, ts
+1664 / – / 1664 / 1536; the rest unchanged). Instructions within noise.
