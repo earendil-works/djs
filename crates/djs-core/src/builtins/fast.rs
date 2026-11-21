@@ -144,13 +144,6 @@ pub(crate) static FAST: &[FastFn] = &[
     f("ToPropertyKey", to_property_key),
     // ---- String ----
     f("StringPrototypeSplit", split),
-    // 0269: string patterns were 3.4x (replace) and 5.3x (replaceAll) QuickJS
-    f("StringPrototypeReplace", |h, this, a| {
-        replace(h, this, a, false)
-    }),
-    f("StringPrototypeReplaceAll", |h, this, a| {
-        replace(h, this, a, true)
-    }),
     // 0230b: >2x QuickJS after the general fixes (D3120, D3121)
     // ---- Number ----
     f("NumberConstructor", number_constructor),
@@ -192,6 +185,13 @@ pub(crate) static FAST: &[FastFn] = &[
     f("PromiseStaticResolve", promise::fast_static_resolve),
     // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
+    // ---- replace/replaceAll of string patterns (0269: 3.4x and 5.3x QuickJS) ----
+    f("StringPrototypeReplace", |h, this, a| {
+        replace(h, this, a, false)
+    }),
+    f("StringPrototypeReplaceAll", |h, this, a| {
+        replace(h, this, a, true)
+    }),
     // ---- constructors (0236: `new Map()` was 2x QuickJS after the general fixes) ----
     ctor("ArrayConstructor", array_call, array_new),
     ctor("MapConstructor", no_call, map_new),
