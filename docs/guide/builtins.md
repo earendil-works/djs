@@ -330,7 +330,7 @@ a conversion site: `"a,b".split(",")`, `xs.indexOf(3)`, `xs.push(v)`, `m.get(k)`
 `@fast` has a hand-written Rust entry of the same name in
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 A call first runs the entry, which either returns the builtin's result or *declines*,
-and then the builtin runs as usual. <!--n builtins/fast-->45<!--/n--> builtins have one.
+and then the builtin runs as usual. <!--n builtins/fast-->50<!--/n--> builtins have one.
 Getters can have one too: `map.size`, `set.size` and a typed array's `length`,
 `byteLength` and `byteOffset`. A read whose cache slot leads to such a getter runs the
 entry inside the interpreter's loop, without a call.
@@ -408,7 +408,7 @@ each other are judged together, such as `sort` and its comparison loop, or the
 serializer functions of `JSON.stringify`.
 `scripts/native-sizes.sh` prints the wasm size of each native function.
 
-By that rule there are <!--n builtins/fast-->45<!--/n--> `@fast` entries (`split` on strings, `indexOf`, `includes`
+By that rule there are <!--n builtins/fast-->50<!--/n--> `@fast` entries (`split` on strings, `indexOf`, `includes`
 and `slice` on arrays, `push`, `pop` and `join`, `String.fromCharCode`, `String` and
 `Number` called as functions, `Math.max` and `Math.min`, `ArraySpeciesCreate`, `get`,
 `has`, `set` and `add` of `Map` and `Set`, and the conversion helpers the builtins call
