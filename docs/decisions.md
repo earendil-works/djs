@@ -12763,7 +12763,13 @@ smaller fixed tables: the remembered list holds 1,024 entries (4 KiB; past that 
 collection's update pass walks the old region, as before past 4,096) and the stack starts
 at 512 entries (2 KiB) and grows. With the floor of D3366: every codemode row holds or
 drops (see there). djs-core's tests and the corpus under --gc-stress unchanged; time
-within ±1.5%.
+within ±1.5%; −91 B gz. The trade (coordinator's call): mem-perturb on main 62cd4b66 (4
+runs each, MiB) pi-like 1.2 → 1.2, json 3.8 → 3.8, jsonh 3.6 → 3.6, strings 9.3 → 9.3,
+json-text 0.8 → 0.8, arrays 15.4 → 15.1, json-objects 5.8 → 5.6, strbuild 11.9 → 12.1: a
+big heap's tables (strbuild's ~0.3 MB) now grow the arena's capacity where the host had
+placed them in a hole. Tried and dropped for that: a buffer of their own when they are
+≥ 128 KiB and do not fit the arena's spare room (every row holds, but +549 B gz and +1.5%
+instructions on strbuild from the extra indirection; work/scratch/0265/sideB.patch).
 
 ## D3365: Array.prototype.join's two-byte result straight into the arena: measured, not adopted
 date: 2026-11-21 · by: pstart · issue: 0265
@@ -12775,13 +12781,26 @@ collection's threshold. Patch: work/scratch/0265/join-attempt.patch.
 
 ## D3366: dlmalloc's floor drops to 87 KiB
 date: 2026-11-21 · by: pstart · issue: 0265
-With the tables out of dlmalloc (D3364), the room sweep (the seed shrunk to give exact
-room with one primed page; warm and first instances, 6 perturbed first runs each): 89.9 KB
-(today's seed of 24.4 KB plus one page) and 87.0 KiB keep every row; 86 KB moves text's
-arena (1,024 → 1,408 KiB: its compile's Rust heap peaks at ~71 KB); 82 KB the same; 74 KB
-also json (1,216 → 1,728). So `FLOOR` = 87 KiB, which today's layout meets with one page.
-Against main (FLOOR 100 KiB, two pages), wasm memory per row: idle 448 → 384 KiB,
-sequential 576 → 512, inspect 512 → 448, media 832 → 768, fanout 1,536 → 1,472, loop
-768 → 704, text 1,088 → 1,024, json 1,280 → 1,216, heavy 3,776 → 3,776; first instances
-the same. The margin to text's move is 1-3 KB of compile peak: the compile's memory (0265
-part 2) is what can widen it.
+With the tables out of dlmalloc (D3364), the room sweep on main 62cd4b66 (the seed shrunk
+to give exact room with one primed page; warm and first instances, 6 perturbed first runs
+each): 89.9 KB (today's seed of 24.4 KB plus one page), 87.0 KiB and 85.9 KiB keep every
+row; 84.9 KiB moves text's arena (1,024 → 1,408 KiB: its compile's Rust heap peaks at
+~71 KB); 74 KB also json's (1,216 → 1,728). So `FLOOR` = 87 KiB, which today's layout
+meets with one page. Against main (FLOOR 100 KiB, two pages), wasm memory per row: idle
+448 → 384 KiB, sequential 576 → 512, inspect 512 → 448, media 832 → 768, fanout 1,536 →
+1,472, loop 768 → 704, text 1,088 → 1,024, json 1,280 → 1,216, heavy 3,968 → 3,968; first
+instances the same. The margin to text's move is ~4.5 KB of compile peak in today's layout
+and ~1.5 KB at the floor itself: D3367 guards it, and a smaller compile peak (0265 part 2)
+widens it.
+
+## D3367: The gate checks the codemode rows' memory
+date: 2026-11-21 · by: pstart · issue: 0265
+The floor of D3366 leaves text's compile ~4.5 KB of room before its arena moves (+384 KiB);
+a compiler change can eat that without any test noticing, and so can a change that makes
+the static data larger, the allocator place blocks differently or a collection run at
+another point. A new gate leg, `codemode memory`, runs each codemode workload (but ts) on
+the shipped module in a first instance (which decodes the base) and in a later one (which
+gets it injected) and compares the wasm memory after the run with
+tests/scores/codemode-memory.tsv: any row above its record fails, a lower one is reported
+as stale (`--update` rewrites the file). Checked: the seed shrunk by 3 KB (text's arena
+moves) fails it on text, first and warm. About 2 s.

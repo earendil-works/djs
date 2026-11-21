@@ -392,6 +392,12 @@ def jobs():
         # without pi's lockdown (D2411), and in the adapter's next mode (0176, D2650).
         J("size budget", f"python3 scripts/size/budget.py {size_mod} && python3 scripts/size/budget.py"
           f" {slim_mod} --slim", cls="rust", needs=["build:size", "build:size-slim"]),
+        # 0265: the shipped module's wasm memory per codemode workload, first and later
+        # instance, against tests/scores/codemode-memory.tsv (D3367): an arena that has to
+        # move (a compile outgrowing dlmalloc's room in front of it, D3366) shows here.
+        J("codemode memory", f"node scripts/size/codemode-memory.ts $PWD/{size_mod}"
+          " --check tests/scores/codemode-memory.tsv", cls="nodocs", needs=["build:size"],
+          summary=r"^codemode-memory:"),
         J("pi tests (slim without lockdown)", f"DJS_WASM=$PWD/{slim_mod} node js/pi/pi-tests.ts --no-lockdown"
           " --out target/pi-codemode-slim --expected tests/pi/slim-expected-failures.txt",
           cls="nodocs", ext=("base", "pi"), needs=["build:size-slim"], summary=r"^pi tests:"),

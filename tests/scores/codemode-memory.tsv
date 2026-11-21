@@ -1,0 +1,9 @@
+# workload	first KiB	warm KiB (scripts/size/codemode-memory.ts, D3367)
+sequential	512	512
+fanout	1472	1472
+media	768	768
+inspect	448	448
+loop	704	704
+text	1024	1024
+json	1216	1216
+heavy	3968	3968
