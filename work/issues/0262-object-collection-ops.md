@@ -1,6 +1,6 @@
 # 0262: Object and collection operations: Map/Set string keys, spread, entries, comparator sort
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0262-object-collection-ops
 depends-on: -
