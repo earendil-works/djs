@@ -414,6 +414,33 @@ fn hot_elem(b: &[u8], o: Value, key: Value) -> Option<Value> {
     (!v.is_hole()).then_some(v)
 }
 
+/// Whether the strings at `x` and `y` are equal, if both are flat one-byte cells
+/// (`Heap::str_eq` for those): the lengths, then eight bytes at a time. `None` for a
+/// two-byte string, a slice or a rope.
+#[inline(always)]
+fn hot_str_eq(b: &[u8], x: u32, y: u32) -> Option<bool> {
+    use crate::heap::CellKind;
+    use crate::heap::cells::Str8;
+    let kind = |s: u32| arena_read::<1>(b, (s + Header::KIND.offset) as usize)[0];
+    if kind(x) != CellKind::Str8 as u8 || kind(y) != CellKind::Str8 as u8 {
+        return None;
+    }
+    let n = ld32(b, x + Str8::LEN.offset);
+    if n != ld32(b, y + Str8::LEN.offset) {
+        return Some(false);
+    }
+    // (A cell's size is a multiple of 8: the last word may reach into its padding.)
+    let word = |s: u32, i: u32| u64::from_le_bytes(arena_read(b, (Str8::DATA.at(s, i)) as usize));
+    let mut i = 0;
+    while i + 8 <= n {
+        if word(x, i) != word(y, i) {
+            return Some(false);
+        }
+        i += 8;
+    }
+    Some(i == n || (word(x, i) ^ word(y, i)) << (64 - 8 * (n - i)) == 0)
+}
+
 /// An array index key (as `intrinsics::index_key`).
 fn index_key(k: Value) -> Option<u32> {
     if let Some(i) = k.as_int() {
@@ -1335,6 +1362,19 @@ impl Exec<'_> {
                             let eq = match (a.as_number(), c.as_number()) {
                                 (Some(x), Some(y)) => x == y,
                                 _ if a == c => true,
+                                // Two flat one-byte strings (`kind === "text"`): read
+                                // from the slice.
+                                _ if let (Some(x), Some(y)) = (a.as_string(), c.as_string())
+                                    && let Some(eq) = hot_str_eq(b, x.0, y.0) =>
+                                {
+                                    #[cfg(debug_assertions)]
+                                    {
+                                        let want =
+                                            heap_call_op!(conv::strict_equals(self.heap, a, c));
+                                        assert!(want == eq, "the slice's string compare differs");
+                                    }
+                                    eq
+                                }
                                 _ if (a.as_string().is_some() && c.as_string().is_some())
                                     || (a.as_bigint().is_some() && c.as_bigint().is_some()) =>
                                 {
