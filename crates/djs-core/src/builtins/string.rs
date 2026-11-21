@@ -589,6 +589,35 @@ pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fau
 mod tests {
     use super::{find_byte, find_latin1};
 
+    /// D3406: a rope of many small leaves (`repeat`'s shares its subtrees) is flattened in
+    /// place by the first join or substring instead of walked leaf by leaf every time; a
+    /// rope of a few big pieces (a template's) is still copied from its leaves.
+    #[test]
+    fn joins_flatten_ropes_of_small_leaves_once() {
+        use crate::heap::{Heap, cells::flags};
+        let mut h = Heap::new().unwrap();
+        let x = h.alloc_latin1(b"x").unwrap();
+        let r = super::repeat(&mut h, x, 1 << 16).unwrap();
+        let flattened =
+            |h: &Heap, s: crate::value::Str| h.cell_flags(s.0) & flags::ROPE_FLATTENED != 0;
+        assert!(!flattened(&h, r));
+        let n = h.str_len(r);
+        let j = super::join(&mut h, &mut [(r, 0, n)]).unwrap();
+        assert!(flattened(&h, r), "the first join flattens the repeat rope");
+        assert_eq!(h.str_len(j), n);
+        let sub = super::substring(&mut h, r, 10, 20).unwrap();
+        assert_eq!(h.str_to_string(sub), "x".repeat(10));
+        // Every leaf of the walk the second time: the flat copy.
+        let mut leaves = alloc::vec::Vec::new();
+        assert!(h.collect_range(r, 0, n, 1, &mut leaves));
+        assert_eq!(leaves.len(), 1);
+        // Two big pieces: copied straight from them, the rope stays as it is.
+        let big = h.alloc_latin1(&[b'y'; 4000]).unwrap();
+        let t = h.concat(big, big).unwrap();
+        let _ = super::join(&mut h, &mut [(t, 0, 8000)]).unwrap();
+        assert!(!flattened(&h, t));
+    }
+
     /// Against the naive searches, on random strings over small alphabets (so that
     /// matches, near misses and bytes with the high bit set all occur) at every
     /// alignment and length around the 8-byte chunks.

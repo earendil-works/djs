@@ -609,8 +609,18 @@ impl Heap {
             &small[..n]
         } else {
             for &(s, a, b) in pieces {
-                if a < b {
-                    self.collect_range(s, a, b, &mut list);
+                if a >= b {
+                    continue;
+                }
+                // A rope of many small leaves (`repeat`'s, which shares its subtrees, or
+                // a chain of one-character concatenations) is flattened in place once
+                // instead (D3406): walking its leaves at every join or substring cost
+                // more than copying it, and the flat copy serves the next one.
+                let mark = list.len();
+                if !self.collect_range(s, a, b, (b - a) / 64 + 8, &mut list) {
+                    list.truncate(mark);
+                    let f = self.flatten(s)?;
+                    list.push_out((f.0, a, b - a));
                 }
             }
             &list
@@ -994,19 +1004,27 @@ impl Heap {
     }
 
     fn collect_leaves(&self, s: Str, out: &mut Vec<(u32, u32, u32)>) {
-        self.collect_range(s, 0, self.str_len(s), out);
+        self.collect_range(s, 0, self.str_len(s), u32::MAX, out);
     }
 
     /// The leaves of `s` that hold its units `[a, b)`, as `(cell, first unit, units)` in
-    /// order, appended to `out`: subtrees outside the range are not entered.
-    pub(crate) fn collect_range(&self, s: Str, a: u32, b: u32, out: &mut Vec<(u32, u32, u32)>) {
+    /// order, appended to `out`: subtrees outside the range are not entered. False (with
+    /// `out` partly filled) once it found more than `budget` leaves.
+    pub(crate) fn collect_range(
+        &self,
+        s: Str,
+        a: u32,
+        b: u32,
+        budget: u32,
+        out: &mut Vec<(u32, u32, u32)>,
+    ) -> bool {
         if self.cell_kind(s.0) != CellKind::Rope {
             // A flat cell or a slice (most pieces): no walk.
             out.push_out((s.0, a, b - a));
-            return;
+            return true;
         }
         let mut stack = alloc::vec![(s.0, self.str_len(s))];
-        let mut pos = 0;
+        let (mut pos, mut found) = (0, 0);
         while let Some((off, len)) = stack.pop() {
             if pos >= b {
                 break;
@@ -1018,6 +1036,10 @@ impl Heap {
             match self.cell_kind(off) {
                 CellKind::Rope => self.push_children(off, &mut stack),
                 _ => {
+                    found += 1;
+                    if found > budget {
+                        return false;
+                    }
                     let from = a.saturating_sub(pos);
                     let to = len.min(b - pos);
                     out.push_out((off, from, to - from));
@@ -1025,6 +1047,7 @@ impl Heap {
                 }
             }
         }
+        true
     }
 
     /// Copies units `[first, first + len)` of each flat cell (or slice) in `leaves`, back

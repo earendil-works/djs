@@ -13199,3 +13199,16 @@ The saving per element is ~30 machine instructions (the exit, the outer loop and
 `load_frame`), less than the profile suggested; any new way back into the loop moves V8's
 register allocation of the whole function. Not worth it until the loop's allocation can
 absorb a second entry.
+## D3406: Ropes of many small leaves are flattened by the first join or substring
+date: 2026-11-21 · by: pgc · issue: 0269 (regression from D3400, found by pstart)
+D3400 copied every rope piece of a join or substring straight from its leaves, without
+flattening it. `repeat` builds its result by doubling, a rope whose subtrees are shared:
+`"x".repeat(1 << 20)` has a million one-character leaves, and every join walked all of
+them (26.9M wasm instructions per `[s].join(" ")` against 6.3M before D3400, where the
+first join flattened the rope in place and later ones read the flat copy; pi's
+console.log of such a string got 4x slower). `collect_range` now takes a leaf budget, a
+leaf per 64 units of the range plus 8: a rope that exceeds it is flattened in place (its
+flat copy serves later reads) and the piece is copied from that. Ropes of a few big
+pieces (templates, joined bodies) keep D3400's single copy. `[s].join(" ")` 25.4M → 2.1M
+per call (the first one flattens), a 100K slice of it 746K → 684K (the same flatten,
+amortized over 20 calls), a template rope join unchanged. +108 B gz.
