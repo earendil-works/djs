@@ -25,6 +25,17 @@ use crate::builtins::{collection, string};
 use crate::heap::{Lookup, atoms};
 use crate::value::Str;
 
+/// A Map or Set entry as `collection_entry_from` gives it.
+type CollectionEntry = (u32, u32, Value, Value);
+
+/// What spreading a Set, a Map or a Map/Set Iterator reads (`collection_source`).
+pub(super) struct CollectionSource {
+    cursor: Option<(u32, u32)>,
+    kind: i32,
+    set: bool,
+    pub(super) it: Option<Obj>,
+}
+
 /// The kind slot of a String Iterator (D1346).
 const STRING_KIND: i32 = 3;
 
@@ -32,6 +43,9 @@ const GET_ITERATOR: u16 = id("GetIterator");
 const ITERATOR_CLOSE: u16 = id("IteratorClose");
 const MAP_ITERATOR_NEXT: u16 = id("MapIteratorPrototypeNext");
 const SET_ITERATOR_NEXT: u16 = id("SetIteratorPrototypeNext");
+const SET_PROTOTYPE_VALUES: u16 = id("SetPrototypeValues");
+const MAP_PROTOTYPE_ENTRIES: u16 = id("MapPrototypeEntries");
+const ITERATOR_PROTOTYPE_ITERATOR: u16 = id("IteratorPrototypeIterator");
 
 impl Exec<'_> {
     /// `%GetIterator(obj)` and `%IteratorClose(it)` of for-of and array destructuring
@@ -68,6 +82,23 @@ impl Exec<'_> {
                             a0,
                             1,
                         ),
+                        // A Set, a Map or one of their iterators with the original
+                        // @@iterator: its values iterator, entries iterator or itself.
+                        Some(o) => {
+                            let Some((method, kind)) = self.collection_iteration(o) else {
+                                return Ok(None);
+                            };
+                            if self.data_property(o, atoms::SYM_ITERATOR)
+                                != Some(realm::installed_intrinsic(self.heap, method))
+                            {
+                                return Ok(None);
+                            }
+                            if kind < 0 {
+                                return Ok(Some(a0));
+                            }
+                            let it = collection::iterator(self.heap, o, kind)?;
+                            return Ok(Some(Value::object(it)));
+                        }
                         _ => return Ok(None),
                     }
                 };
@@ -113,15 +144,8 @@ impl Exec<'_> {
     /// with nothing changed, when the caller must call `next`.
     pub(super) fn iter_fast_next(&mut self, it: Value, f: Value) -> Result<FastStep, Fault> {
         // A Map or Set Iterator with its original `next`: that never runs user code.
-        if let Some(o) = it.as_object()
-            && self.heap.object_class(o) == ObjectClass::CollectionIterator
-        {
-            let original = if self.heap.object_slot(o, 3).as_int() == Some(1) {
-                SET_ITERATOR_NEXT
-            } else {
-                MAP_ITERATOR_NEXT
-            };
-            if f != realm::installed_intrinsic(self.heap, original) {
+        if let Some(o) = self.collection_iter(it) {
+            if !self.collection_next_original(o, f) {
                 return Ok(FastStep::Slow);
             }
             return Ok(match collection::iterator_step_value(self.heap, o)? {
@@ -198,9 +222,128 @@ impl Exec<'_> {
         }
     }
 
-    /// Whether `iter_fast_next` would produce a value (`%IteratorFastReady`).
+    /// Whether `iter_fast_next` would produce a value (`%IteratorFastReady`). (Not for a
+    /// Map or Set Iterator: `%IteratorFastDrain` takes those.)
     pub(super) fn iter_fast_ready(&self, it: Value, f: Value) -> bool {
         matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))
+    }
+
+    /// For a Set, a Map or a Map/Set Iterator: its original @@iterator and the kind of
+    /// iterator that returns (-1: the iterator itself).
+    fn collection_iteration(&self, o: Obj) -> Option<(u16, i32)> {
+        match self.heap.object_class(o) {
+            ObjectClass::Set => Some((SET_PROTOTYPE_VALUES, 0)),
+            ObjectClass::Map => Some((MAP_PROTOTYPE_ENTRIES, 2)),
+            ObjectClass::CollectionIterator => Some((ITERATOR_PROTOTYPE_ITERATOR, -1)),
+            _ => None,
+        }
+    }
+
+    /// `o.key` if it is a data property (found without running code).
+    fn data_property(&self, o: Obj, key: Atom) -> Option<Value> {
+        match self.heap.find_property(o, key) {
+            Some((_, Property::Data { value, .. })) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// `it` if it is a Map or Set Iterator.
+    fn collection_iter(&self, it: Value) -> Option<Obj> {
+        it.as_object()
+            .filter(|&o| self.heap.object_class(o) == ObjectClass::CollectionIterator)
+    }
+
+    /// Whether `f` is the original `next` of Map or Set Iterator `o`'s kind.
+    fn collection_next_original(&self, o: Obj, f: Value) -> bool {
+        let original = if self.heap.object_slot(o, 3).as_int() == Some(1) {
+            SET_ITERATOR_NEXT
+        } else {
+            MAP_ITERATOR_NEXT
+        };
+        f == realm::installed_intrinsic(self.heap, original)
+    }
+
+    /// Where spreading `src` reads from when it is a Set, a Map or a Map/Set Iterator
+    /// whose iteration is the original (its @@iterator and the iterator's `next` are the
+    /// builtins', as data properties): that iteration runs no user code, so its values
+    /// can be read directly. The cursor (`None`: an iterator that is done), the kind of
+    /// value, whether it is a Set's, and the iterator.
+    pub(super) fn collection_source(&self, src: Value) -> Option<CollectionSource> {
+        let o = src.as_object()?;
+        let (method, kind) = self.collection_iteration(o)?;
+        let (it, kind, set) = if kind < 0 {
+            let set = self.heap.object_slot(o, 3).as_int() == Some(1);
+            (
+                Some(o),
+                self.heap.object_slot(o, 2).as_int().unwrap_or(0),
+                set,
+            )
+        } else {
+            (None, kind, kind == 0)
+        };
+        let (proto, next) = if set {
+            (Intrinsic::SetIteratorProto, SET_ITERATOR_NEXT)
+        } else {
+            (Intrinsic::MapIteratorProto, MAP_ITERATOR_NEXT)
+        };
+        let installed = |id| Some(realm::installed_intrinsic(self.heap, id));
+        if self.data_property(o, atoms::SYM_ITERATOR) != installed(method)
+            || self.data_property(it.unwrap_or(intrinsic_obj(self.heap, proto)), atoms::NEXT)
+                != installed(next)
+        {
+            return None;
+        }
+        let cursor = match it {
+            Some(i) => self.heap.collection_iterator_cursor(i),
+            None => self.heap.collection_entries_ref(o).map(|e| (e, 0)),
+        };
+        Some(CollectionSource {
+            cursor,
+            kind,
+            set,
+            it,
+        })
+    }
+
+    /// Stores the values of `src` from its cursor on into the Array `arr` at `j`, `j + 1`,
+    /// ... while they are plain dense stores (all of them with `force`, the others as
+    /// CreateDataProperty). Returns the next `j` and the last entry stored.
+    pub(super) fn collection_store(
+        &mut self,
+        src: &CollectionSource,
+        arr: Obj,
+        mut j: u32,
+        force: bool,
+    ) -> Result<(u32, Option<CollectionEntry>), Fault> {
+        let mut last = None;
+        let mut cur = src.cursor;
+        while j < u32::MAX - 1
+            && let Some((entries, n)) = cur
+            && let Some(e) = self.heap.collection_entry_from(entries, n)
+        {
+            let (k, v) = (e.2, e.3);
+            let v = match src.kind {
+                0 => k,
+                1 => v,
+                // A Set's entries are [value, value].
+                _ => {
+                    let pair = if src.set { [k, k] } else { [k, v] };
+                    let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                    Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
+                }
+            };
+            if !self.heap.create_element_fast(arr, j, v)? {
+                if !force {
+                    break;
+                }
+                let key = self.heap.atom_from_index(j)?;
+                self.heap.create_data_property(arr, key, v)?;
+            }
+            cur = Some((e.0, e.1));
+            last = Some(e);
+            j += 1;
+        }
+        Ok((j, last))
     }
 
     /// `%IteratorFastDrain(it, next, arr, n)` (D2305): the steps `iter_fast_next` would
@@ -219,6 +362,30 @@ impl Exec<'_> {
         arr: Value,
         n: f64,
     ) -> Result<f64, Fault> {
+        // A Map or Set Iterator: it moves past what was stored, after the stores (an
+        // allocation failure leaves it where it was).
+        if let Some(o) = self.collection_iter(it) {
+            let (Some(a), Some(n0)) = (arr.as_object(), index(n)) else {
+                return Ok(n);
+            };
+            if !self.collection_next_original(o, f)
+                || self.heap.object_class(a) != ObjectClass::Array
+            {
+                return Ok(n);
+            }
+            let src = CollectionSource {
+                cursor: self.heap.collection_iterator_cursor(o),
+                kind: self.heap.object_slot(o, 2).as_int().unwrap_or(0),
+                set: self.heap.object_slot(o, 3).as_int() == Some(1),
+                it: Some(o),
+            };
+            let (j, last) = self.collection_store(&src, a, n0, false)?;
+            if let Some(e) = last {
+                self.heap.collection_iterator_set(o, e);
+            }
+            self.fuel -= i64::from((j - n0) / 4);
+            return Ok(f64::from(j));
+        }
         let Plan::Elem(it, _, i, kind @ 0..=1) = self.iter_plan(it, f) else {
             return Ok(n);
         };

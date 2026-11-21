@@ -413,6 +413,24 @@ impl Heap {
     /// The next live entry of an iterator as (key, value), following forwarded entries
     /// arrays; `None` once done (and from then on).
     pub fn collection_iterator_next(&mut self, it: Obj) -> Option<(Value, Value)> {
+        let e = self
+            .collection_iterator_cursor(it)
+            .and_then(|(entries, n)| self.collection_entry_from(entries, n));
+        match e {
+            Some(e) => {
+                self.collection_iterator_set(it, e);
+                Some((e.2, e.3))
+            }
+            None => {
+                self.set_object_slot(it, 0, Value::UNDEFINED);
+                None
+            }
+        }
+    }
+
+    /// Where iterator `it` stands: the entries array it walks now (forwarding followed)
+    /// and its position there; `None` once done.
+    pub fn collection_iterator_cursor(&self, it: Obj) -> Option<(u32, u32)> {
         let mut entries = self.object_slot(it, 0).as_internal()?;
         let mut n = self.object_slot(it, 1).as_int().unwrap_or(0) as u32;
         while let Some(next) = self.value_array_get(entries, FORWARD).as_internal() {
@@ -423,21 +441,34 @@ impl Heap {
             }
             entries = next;
         }
+        Some((entries, n))
+    }
+
+    /// The first live entry of `entries` at position `n` or later, without moving any
+    /// iterator: (entries, the position after it, key, value).
+    pub fn collection_entry_from(
+        &self,
+        entries: u32,
+        mut n: u32,
+    ) -> Option<(u32, u32, Value, Value)> {
         let used = (self.value_array_len(entries) - MAP_BASE) / 2;
         while n < used {
             let k = self.coll_key(entries, MAP_BASE, n);
             n += 1;
             if !k.is_hole() {
                 let v = self.value_array_get(entries, MAP_BASE + 2 * (n - 1) + 1);
-                self.set_object_slot(it, 0, Value::internal(entries));
-                self.set_object_slot(it, 1, Value::int(n as i32));
-                self.set_object_slot(it, 4, k);
-                self.set_object_slot(it, 5, v);
-                return Some((k, v));
+                return Some((entries, n, k, v));
             }
         }
-        self.set_object_slot(it, 0, Value::UNDEFINED);
         None
+    }
+
+    /// Moves iterator `it` past entry `e` (from `collection_entry_from`).
+    pub fn collection_iterator_set(&mut self, it: Obj, e: (u32, u32, Value, Value)) {
+        self.set_object_slot(it, 0, Value::internal(e.0));
+        self.set_object_slot(it, 1, Value::int(e.1 as i32));
+        self.set_object_slot(it, 4, e.2);
+        self.set_object_slot(it, 5, e.3);
     }
 
     /// Where a Map or Set iterator stands, for the dumper (0172): the entries array it
@@ -445,16 +476,7 @@ impl Heap {
     /// once done.
     #[cfg(feature = "dump")]
     pub fn collection_iterator_position(&self, it: Obj) -> Option<(u32, u32)> {
-        let mut entries = self.object_slot(it, 0).as_internal()?;
-        let mut n = self.object_slot(it, 1).as_int().unwrap_or(0) as u32;
-        while let Some(next) = self.value_array_get(entries, FORWARD).as_internal() {
-            if let Some(r) = self.value_array_get(entries, REMOVED).as_internal() {
-                let len = self.u32_array_len(r);
-                let before = (0..len).filter(|&i| self.u32_array_get(r, i) < n).count();
-                n -= before as u32;
-            }
-            entries = next;
-        }
+        let (entries, n) = self.collection_iterator_cursor(it)?;
         let live = (0..n)
             .filter(|&i| !self.coll_key(entries, MAP_BASE, i).is_hole())
             .count();
@@ -474,7 +496,6 @@ impl Heap {
     }
 
     /// The entries array of a Map or Set (the one its iterators lead to).
-    #[cfg(feature = "dump")]
     pub fn collection_entries_ref(&self, o: Obj) -> Option<u32> {
         self.object_slot(o, ENTRIES).as_internal()
     }
