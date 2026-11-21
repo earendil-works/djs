@@ -1473,6 +1473,9 @@ impl Exec<'_> {
                                     // fuel of such a call (D3530).
                                     Some(Hit::Fast(r)) => {
                                         fuel -= super::fastpath::FAST_FUEL;
+                                        // (`call_accessor` pushes the receiver above
+                                        // the getter: the same bytes in that slot.)
+                                        st(b, slot!(sp), o);
                                         r
                                     }
                                     // An accessor (D3470): `decline_fast` calls the

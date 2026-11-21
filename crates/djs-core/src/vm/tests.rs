@@ -3739,6 +3739,47 @@ fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<St
     }
 }
 
+/// The paths the tier-0 loop got after D1930 (cache kinds for absent keys and accessors,
+/// getters with `@fast` entries, `typeof`, string comparisons, string keys, template
+/// literals), each read a few times at one site and stopped after every one, two and
+/// three units of fuel: the arena's bytes at every stop, dead stack slots included, equal
+/// those of the run without the loop (0282: a stop right after a getter found a slot the
+/// loop had not written).
+#[test]
+fn hot_loop_paths_are_invisible_at_every_stop() {
+    let src = "class P { constructor() { this.v = 1; } get g() { return this.v + 1; } m() { return 2; } }\n\
+        const p = new P(), o = { a: 1, get own() { return 5; } }, m = new Map([[1, 2]]), st = new Set([1]);\n\
+        const ta = new Uint8Array(4), s = ['ab', 'c'].join(''), k = ['a'].join(''), xs = [1, 2, 3];\n\
+        let acc = 0, out = '';\n\
+        for (let i = 0; i < 4; i++) {\n\
+          acc += p.g + o.own + m.size + st.size + ta.length + ta.byteLength + (o.missing ?? 3);\n\
+          acc += (typeof p.m === 'function') + (typeof s === 'string') + (s === 'abc') + (s < 'abd') + (s >= 'b');\n\
+          acc += o[k] + (k in o) + xs[i & 1] + xs.length + s.length + p.m() + ('zz' in o);\n\
+          o[k] = i; out = `${s}-${i}` + out.length + (i + s);\n\
+          acc += (o['q' + i] === undefined) + ('w1' in o) + ('n' + i in o); o['w' + (i & 1)] = i;\n\
+          acc += ta[1] + ta['1'] + (ta['x'] === undefined) + xs['1'] + xs['length'];\n\
+          if (i === 2) { Object.defineProperty(P.prototype, 'g', { get() { return 7; } }); o.missing = 1; }\n\
+        }\n\
+        console.log(acc, out);\n";
+    for fuel in [1, 2, 3] {
+        let exec = |hot_loop| ExecOptions {
+            hot_loop,
+            ..Default::default()
+        };
+        let with = image_trace(src, exec(true), fuel, false);
+        let without = image_trace(src, exec(false), fuel, false);
+        assert!(with.len() > 100, "the program ran: {} stops", with.len());
+        let first = with.iter().zip(&without).position(|(a, b)| a != b);
+        assert!(
+            first.is_none() && with.len() == without.len(),
+            "fuel {fuel}: stop {first:?} of {} differs: {:?} / {:?}",
+            with.len(),
+            first.map(|i| &with[i]),
+            first.map(|i| &without[i])
+        );
+    }
+}
+
 /// The tier-0 loop (D1930) changes nothing observable: at every stop (fuel boundaries
 /// inside it, with and without restoring the image), with collections wanted at its
 /// back-edges (GC stress, and garbage that makes a collection pending), and with its

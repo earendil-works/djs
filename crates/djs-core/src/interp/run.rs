@@ -1216,6 +1216,13 @@ impl<'h> Exec<'h> {
         Ok(())
     }
 
+    /// `o[k]` with a string key where the heap's helper answers it (D3402), for `exec`:
+    /// the general path reads such a key as the tier-0 loop does (`elem_slow`), so that
+    /// neither interns a key that no object has and the two leave the same heap (D3531).
+    fn string_key_get(&mut self, o: Value, k: Value) -> Option<Value> {
+        self.heap.string_key_get(o.as_object()?, k.as_string()?)
+    }
+
     /// One instruction through `step`, with the out-of-memory retry (D1700) and the
     /// throw of a fault: `Some` when the run stops.
     #[inline(never)]
@@ -2547,6 +2554,9 @@ impl<'h> Exec<'h> {
                 {
                     self.sp -= 2;
                     self.push(v);
+                } else if let Some(v) = self.string_key_get(o, k) {
+                    self.sp -= 2;
+                    self.push(v);
                 } else {
                     let key = self.property_key(o, k)?;
                     self.sp -= 1;
@@ -2558,10 +2568,14 @@ impl<'h> Exec<'h> {
             Op::ToPropKey => {}
             Op::GetElem2 => {
                 let (o, k) = (t1, t0);
-                let key = self.property_key(o, k)?;
-                self.push(Value::UNDEFINED);
-                self.pc = next;
-                return self.get_property(o, key);
+                if let Some(v) = self.string_key_get(o, k) {
+                    self.push(v);
+                } else {
+                    let key = self.property_key(o, k)?;
+                    self.push(Value::UNDEFINED);
+                    self.pc = next;
+                    return self.get_property(o, key);
+                }
             }
             Op::GetElemMethod => {
                 let (o, k) = (t1, t0);
@@ -2597,6 +2611,11 @@ impl<'h> Exec<'h> {
                     && self.heap.set_element_fast(obj, i as u32, v)?
                 {
                     self.sp -= 3;
+                } else if let Some(s) = k.as_string()
+                    && self.heap.string_key_set(obj, s, v)
+                {
+                    // (As the tier-0 loop stores it, D3531.)
+                    self.sp -= 3;
                 } else {
                     let key = self.property_key(o, k)?;
                     // Rearrange `o k v` to `o v` for set_property.
@@ -2624,6 +2643,15 @@ impl<'h> Exec<'h> {
                 let Some(obj) = o.as_object() else {
                     return type_error("invalid 'in' operand");
                 };
+                if let Some(s) = k.as_string()
+                    && let Some(r) = self.heap.string_key_has(obj, s)
+                {
+                    // (As the tier-0 loop's exit answers it, D3531.)
+                    self.sp -= 2;
+                    self.push(Value::bool(r));
+                    self.pc = next;
+                    return Ok(None);
+                }
                 let key = self.property_key(o, k)?;
                 match self.heap.has_property_or_proxy(obj, key) {
                     Ok(r) => {
