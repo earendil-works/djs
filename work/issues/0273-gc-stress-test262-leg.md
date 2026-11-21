@@ -1,6 +1,6 @@
 # 0273: test262 under GC stress as a full-only gate leg
 
-status: open
+status: in-progress
 agent: pgc
 branch: issue/0273-gc-stress-test262
 depends-on: -
