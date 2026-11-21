@@ -21,6 +21,13 @@ use crate::value::Value;
 /// The `RetryCall` site of a collection at the heap cap (no shadow slot).
 pub(super) const COLLECT_SITE: u32 = 31;
 
+/// Tests: the calls `fused_call` made, and those whose builtin declined.
+#[cfg(test)]
+pub(crate) static FUSED: [core::sync::atomic::AtomicU32; 2] = [
+    core::sync::atomic::AtomicU32::new(0),
+    core::sync::atomic::AtomicU32::new(0),
+];
+
 /// Fuel per fast call on top of the call instruction's: a builtin's call runs a few
 /// instructions at least.
 pub(super) const FAST_FUEL: i64 = 2;
@@ -31,6 +38,10 @@ impl Exec<'_> {
     /// unchanged, and `step` makes the full call.
     #[inline]
     pub(super) fn fast_leaf_call(&mut self, op: u8) -> bool {
+        if self.fused_miss == self.code + self.pc {
+            self.fused_miss = 0;
+            return false;
+        }
         // `call argc` or a short form (`call2`, D2443).
         let (argc, size) = if op == super::fast::CALL {
             (self.imm_u16(1), Op::Call.size() as u32)
@@ -130,6 +141,104 @@ impl Exec<'_> {
                 false
             }
         }
+    }
+
+    /// From `pc`: the values that up to three plain pushes (a local, an argument, a
+    /// small integer, a constant) would push, into `args`, if a call of that many
+    /// arguments follows them. Leaves `pc` at the call; the count and the pushes' fuel.
+    fn scan_args(&mut self, args: &mut [Value; 3]) -> Option<(u32, i64)> {
+        let (mut n, mut fuel) = (0, 0);
+        loop {
+            let b = self.byte(self.pc);
+            if super::fast::is_call(b) {
+                let argc = if b == super::fast::CALL {
+                    self.imm_u16(1)
+                } else {
+                    (b - super::fast::CALL0) as u32
+                };
+                return (argc == n).then_some((n, fuel));
+            }
+            let op = Op::from_u8(b)?;
+            if n == 3 {
+                return None;
+            }
+            let i = self.operand(op);
+            args[n as usize] = match op.wide() {
+                Op::GetLoc => self.get(self.lp + i),
+                Op::GetArg => self.get(self.bp + 2 + i),
+                Op::PushI8 => Value::int(i as i32),
+                Op::PushConst => self.constant(i),
+                _ => return None,
+            };
+            n += 1;
+            let info = &OPS[op as usize];
+            fuel += info.cost.fuel() as i64;
+            self.pc += info.size as u32;
+        }
+    }
+
+    /// Whether the `get_method` before `at` may get a slot `fused_call` answers: its
+    /// value `f` is a `@fast` builtin and plain pushes lead to the call.
+    pub(super) fn fusible(&mut self, f: crate::value::Obj, at: u32) -> bool {
+        if !self.is_class(f, ObjectClass::Function) {
+            return false;
+        }
+        let t = self.template_of(f);
+        if u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::FAST == 0 {
+            return false;
+        }
+        let pc = self.pc;
+        self.pc = at;
+        let r = self.scan_args(&mut [Value::UNDEFINED; 3]).is_some();
+        self.pc = pc;
+        r
+    }
+
+    /// `o.m(args)` as a whole, for the tier-0 loop's `get_method` at `pc` whose cache
+    /// gave the `@fast` builtin `f` (D3551): what the loop, `fast_leaf_call` included,
+    /// does for the instructions from the `get_method` to the call, with the same
+    /// bytes left on the stack. `None`, for the loop to go on with `f` as the
+    /// `get_method`'s value, when a stop would fall between those instructions, the
+    /// stack is near its end (a leaf may ask for slots) or the builtin declines: its
+    /// attempt is then made, and `fast_leaf_call` leaves the call to `step`. Otherwise
+    /// the bytes to skip and, above bit 16, the fuel to charge.
+    #[inline(never)]
+    pub(super) fn fused_call(
+        &mut self,
+        f: Value,
+        o: Value,
+        sp: u32,
+        pc: u32,
+        fuel: i64,
+    ) -> Option<u32> {
+        /// Slots above the call's that a leaf's intrinsic may use (`n_leaf`).
+        const ROOM: u32 = 8;
+        let mut args = [Value::UNDEFINED; 3];
+        self.pc = pc + Op::GetMethod.size() as u32;
+        let (n, pre) = self.scan_args(&mut args)?;
+        let pre = pre + OPS[Op::GetMethod as usize].cost.fuel() as i64;
+        let top = sp + 1 + n;
+        if fuel <= pre || top + ROOM > self.heap.value_array_capacity(self.stack) {
+            return None;
+        }
+        self.set(sp - 1, f);
+        self.set(sp, o);
+        for (i, &a) in args.iter().enumerate().take(n as usize) {
+            self.set(sp + 1 + i as u32, a);
+        }
+        self.sp = top;
+        self.fuel = fuel - pre;
+        let stack = self.stack;
+        if self.fast_leaf_call(self.byte(self.pc)) {
+            debug_assert!(self.stack == stack, "a fused call moved the stack");
+            #[cfg(test)]
+            FUSED[0].fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            return Some((self.pc - pc) | ((fuel - self.fuel) as u32) << 16);
+        }
+        #[cfg(test)]
+        FUSED[1].fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        self.fused_miss = self.code + self.pc;
+        None
     }
 
     #[cfg(djs_prelude)]

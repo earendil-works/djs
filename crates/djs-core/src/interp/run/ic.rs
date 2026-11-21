@@ -25,7 +25,11 @@
 //!   entry index + 1 in the holder; word 1 = the offset of the receiver's prototype (an
 //!   object's, or the realm's prototype of a primitive); word 2 = `Roots::PROTO_EPOCH`;
 //!   word 3 = the receiver's shape word (`Heap::receiver_shape`, 0083), or 0; word 4 = 1
-//!   if the key is no canonical numeric string (a typed array receiver may then hit). The objects
+//!   if the key is no canonical numeric string (a typed array receiver may then hit).
+//!   For a string or a number receiver whose value is a builtin object, with the builtins
+//!   pristine at the fill (D3550): word 4 also has `DIRECT_STRING` or `DIRECT_NUMBER` and
+//!   word 3 is that object; the tier-0 loop's hit is then the object itself while nothing
+//!   has written to the builtin prefix. The objects
 //!   from that prototype to the holder are marked `OBJ_IS_PROTO`, so a key added to one
 //!   of them or a prototype change bumps the epoch. The receiver must not have an own
 //!   `key`: an equal shape word proves that, otherwise the hit looks it up. The holder's
@@ -68,6 +72,17 @@ const ADD_SET: u32 = 1;
 
 /// Prototype-read slot word 4: the key is no canonical numeric string (D3530).
 const NAMED_KEY: u32 = 1;
+
+/// Word 4 of a prototype-read slot filled for a string (a number) receiver while the
+/// builtins were as the base image has them (D3550): word 3 is the value itself, an
+/// object of the builtin prefix, and the hit is that object for as long as nothing has
+/// written to the prefix.
+const DIRECT_STRING: u32 = 2;
+const DIRECT_NUMBER: u32 = 4;
+/// Word 4 of a prototype-read slot of a `get_method` site whose value was a `@fast`
+/// builtin and whose arguments are plain pushes up to the call (D3551): the tier-0 loop
+/// asks `Exec::field_slow`, which makes the whole call.
+const FUSE: u32 = 8;
 
 /// Global slot word 0: the entry is in the global lexical record.
 const IN_LEX: u32 = 1 << 31;
@@ -286,15 +301,30 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
             r32(obj + Object::PROTO.offset)
         }
         None => {
-            let i = if o.as_string().is_some() {
+            let string = o.as_string().is_some();
+            if !string && !o.is_number() {
+                return None;
+            }
+            let w4 = r32(at + 16);
+            // A call `field_slow` makes as a whole (D3551).
+            if w4 & FUSE != 0 {
+                return None;
+            }
+            // A builtin's method on a primitive (`s.trim`, `n.toFixed`), with the
+            // builtins untouched: the function the slot remembers (D3550).
+            let direct = if string { DIRECT_STRING } else { DIRECT_NUMBER };
+            if w4 & direct != 0
+                && r32(Roots::FLAGS.offset) & crate::heap::cells::ROOT_PREFIX_WRITTEN == 0
+            {
+                return Some(Value::object(Obj(r32(at + 12))));
+            }
+            let i = if string {
                 if key == crate::heap::atoms::LENGTH || key.as_int().is_some() {
                     return None;
                 }
                 Intrinsic::StringProto
-            } else if o.is_number() {
-                Intrinsic::NumberProto
             } else {
-                return None;
+                Intrinsic::NumberProto
             };
             let realm = super::hot::ld(b, Roots::REALM.offset).as_internal()?;
             let p = super::hot::ld(b, crate::heap::cells::Realm::INTRINSICS.at(realm, i as u32));
@@ -408,6 +438,8 @@ pub(super) enum Hit {
     Getter(Value),
     /// The result of such a getter's `@fast` entry (`Exec::field_slow`, D3530).
     Fast(Value),
+    /// The site's whole call was made (`Exec::fused_call`, D3551): what it returned.
+    Call(u32),
 }
 
 /// A put or define site's cache hit: true if the slot at `at` (0: none) still applies to
@@ -573,6 +605,13 @@ impl Exec<'_> {
         }
     }
 
+    /// Whether slot `ic` is of a call site `fused_call` may make as a whole (D3551).
+    #[inline(always)]
+    pub(super) fn ic_fuse(&self, ic: u32) -> bool {
+        let at = slot_at(self.heap, self.template, ic);
+        at != 0 && word(self.heap, at, 4) & FUSE != 0
+    }
+
     /// A cached read: `o[key]` if slot `ic` applies.
     #[inline(always)]
     pub(super) fn ic_get(&self, o: Value, key: Atom, ic: u32) -> Option<Hit> {
@@ -597,7 +636,8 @@ impl Exec<'_> {
 
     /// After a slow lookup found data property `key` on `holder`, on the prototype chain
     /// of `o`: remembers it (D1621), with the receiver's shape word (0083).
-    /// With `accessor`, the holder's `key` is an accessor (D3470).
+    /// With `accessor`, the holder's `key` is an accessor (D3470). `call_at` is the pc
+    /// after a `get_method` (0 for a `get_field`).
     #[inline(never)]
     pub(super) fn ic_proto_fill(
         &mut self,
@@ -606,6 +646,7 @@ impl Exec<'_> {
         holder: Obj,
         accessor: bool,
         ic: u32,
+        call_at: u32,
     ) {
         if key.as_int().is_some() {
             return;
@@ -640,9 +681,30 @@ impl Exec<'_> {
         }
         let w0 = IC_OFFSET_SLOT | depth << KIND_SHIFT | (i + 1);
         let epoch = self.heap.proto_epoch();
-        let shape = o.as_object().map_or(0, |obj| self.heap.receiver_shape(obj));
-        let named = self.heap.canonical_numeric_index(key).is_none() as u32 * NAMED_KEY;
-        self.ic_write(ic, [w0, proto.offset(), epoch, shape, named]);
+        let mut shape = o.as_object().map_or(0, |obj| self.heap.receiver_shape(obj));
+        let mut w4 = self.heap.canonical_numeric_index(key).is_none() as u32 * NAMED_KEY;
+        // A string's or a number's method while the builtins are pristine: the value
+        // itself, in the word a primitive has no shape for (D3550).
+        if !accessor
+            && (o.as_string().is_some() || o.is_number())
+            && let Some(f) = self
+                .heap
+                .data_at(holder, i, key)
+                .and_then(|v| v.as_object())
+        {
+            if self.heap.builtins_pristine() && f.offset() < self.heap.base_end() {
+                shape = f.offset();
+                w4 |= if o.is_number() {
+                    DIRECT_NUMBER
+                } else {
+                    DIRECT_STRING
+                };
+            }
+            if call_at != 0 && self.fusible(f, call_at) {
+                w4 |= FUSE;
+            }
+        }
+        self.ic_write(ic, [w0, proto.offset(), epoch, shape, w4]);
     }
 
     /// After a slow lookup found `key` neither on `obj` nor on its prototype chain:

@@ -493,7 +493,14 @@ impl Exec<'_> {
     /// stack has the two slots `call_accessor` would ask for) a getter with a `@fast`
     /// entry runs here instead and its result comes back as `Hit::Fast` (D3530).
     #[inline(never)]
-    fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value, room: bool) -> Option<Hit> {
+    fn field_slow(
+        &mut self,
+        op: u8,
+        key: Atom,
+        ic: u32,
+        o: Value,
+        (sp, pc, fuel): (u32, u32, i64),
+    ) -> Option<Hit> {
         // (`hot_length` answered these in a release build.)
         #[cfg(debug_assertions)]
         if key == atoms::LENGTH && op == fast::GET_FIELD {
@@ -510,15 +517,29 @@ impl Exec<'_> {
             }
         }
         let hit = self.ic_get(o, key, ic);
-        if let Some(Hit::Getter(getter)) = hit {
-            // (`get_method` of an accessor is `step`'s.)
-            if op != fast::GET_FIELD {
-                return None;
+        match hit {
+            Some(Hit::Getter(getter)) => {
+                // (`get_method` of an accessor is `step`'s.)
+                if op != fast::GET_FIELD {
+                    return None;
+                }
+                if fuel > 0
+                    && sp + 2 <= self.heap.value_array_capacity(self.stack)
+                    && let Some(v) = self.fast_getter(getter, o)
+                {
+                    return Some(Hit::Fast(v));
+                }
+                self.hot_getter = getter;
             }
-            if room && let Some(v) = self.fast_getter(getter, o) {
-                return Some(Hit::Fast(v));
+            // A primitive's builtin method with plain arguments: the whole call (D3551).
+            Some(Hit::Value(f))
+                if op == fast::GET_METHOD && o.as_object().is_none() && self.ic_fuse(ic) =>
+            {
+                if let Some(x) = self.fused_call(f, o, sp, pc, fuel) {
+                    return Some(Hit::Call(x));
+                }
             }
-            self.hot_getter = getter;
+            _ => {}
         }
         hit
     }
@@ -1452,8 +1473,13 @@ impl Exec<'_> {
                                 Some(r) => {
                                     #[cfg(debug_assertions)]
                                     {
-                                        let want =
-                                            heap_call_op!(self.field_slow(op, key, ic, o, false));
+                                        let want = heap_call_op!(self.field_slow(
+                                            op,
+                                            key,
+                                            ic,
+                                            o,
+                                            (0, 0, 0)
+                                        ));
                                         assert!(
                                             want == Some(Hit::Value(r)),
                                             "the slice's hit differs"
@@ -1466,9 +1492,15 @@ impl Exec<'_> {
                                     key,
                                     ic,
                                     o,
-                                    sp + 2 <= cap
+                                    (sp, ip - code, fuel)
                                 )) {
                                     Some(Hit::Value(r)) => r,
+                                    // The whole call was made (D3551): past it.
+                                    Some(Hit::Call(x)) => {
+                                        ip += x & 0xFFFF;
+                                        fuel -= (x >> 16) as i64;
+                                        continue;
+                                    }
                                     // A getter with a `@fast` entry, which ran: the
                                     // fuel of such a call (D3530).
                                     Some(Hit::Fast(r)) => {

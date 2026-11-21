@@ -3741,8 +3741,9 @@ fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<St
 
 /// The paths the tier-0 loop got after D1930 (cache kinds for absent keys and accessors,
 /// getters with `@fast` entries, `typeof`, string comparisons, string keys, template
-/// literals), each read a few times at one site and stopped after every one, two and
-/// three units of fuel: the arena's bytes at every stop, dead stack slots included, equal
+/// literals, builtin method calls on strings and numbers with plain arguments: ones that
+/// succeed, throw, and convert an object), each a few times at one site and stopped after
+/// every few units of fuel: the arena's bytes at every stop, dead stack slots included, equal
 /// those of the run without the loop (0282: a stop right after a getter found a slot the
 /// loop had not written).
 #[test]
@@ -3751,6 +3752,14 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
         const p = new P(), o = { a: 1, get own() { return 5; } }, m = new Map([[1, 2]]), st = new Set([1]);\n\
         const ta = new Uint8Array(4), s = ['ab', 'c'].join(''), k = ['a'].join(''), xs = [1, 2, 3];\n\
         let acc = 0, out = '';\n\
+        function calls(str, n, pad, v) {\n\
+          const x = n + 0.25, m = 3; let r = str.charCodeAt(n) + str.indexOf(pad) + str.slice(n, m).length;\n\
+          r += str.padStart(5, pad).length + x.toFixed(2).length + str.trim().length + x.toString().length;\n\
+          r += str.indexOf(7) + str.slice(v).length + str.split(pad).length + str.at(-1).length;\n\
+          try { r += x.toFixed(101).length; } catch (e) { r += 1; }\n\
+          try { r += str.repeat(-1).length; } catch (e) { r += 2; }\n\
+          return r + str.substring(1, n + 1).length + str.startsWith(pad, 1, 2, 3);\n\
+        }\n\
         for (let i = 0; i < 4; i++) {\n\
           acc += p.g + o.own + m.size + st.size + ta.length + ta.byteLength + (o.missing ?? 3);\n\
           acc += (typeof p.m === 'function') + (typeof s === 'string') + (s === 'abc') + (s < 'abd') + (s >= 'b');\n\
@@ -3758,10 +3767,16 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
           o[k] = i; out = `${s}-${i}` + out.length + (i + s);\n\
           acc += (o['q' + i] === undefined) + ('w1' in o) + ('n' + i in o); o['w' + (i & 1)] = i;\n\
           acc += ta[1] + ta['1'] + (ta['x'] === undefined) + xs['1'] + xs['length'];\n\
+          acc += s.charCodeAt(1) + s.trim().length + (i + 0.5).toFixed(1).length + s.slice(1).length;\n\
+          acc += String(i).length + s.padStart(5).length + (typeof s.at) .length + (7).toString().length;\n\
+          acc += calls(s, i & 1, '-', i === 3 ? { valueOf() { return 1; } } : 1);\n\
+          if (i === 1) String.prototype.extra0286 = 1;\n\
           if (i === 2) { Object.defineProperty(P.prototype, 'g', { get() { return 7; } }); o.missing = 1; }\n\
         }\n\
         console.log(acc, out);\n";
-    for fuel in [1, 2, 3] {
+    // (5 and more: a fused call, D3551, needs the fuel of its instructions up to the
+    // call.)
+    for fuel in [1, 2, 3, 5, 7, 11] {
         let exec = |hot_loop| ExecOptions {
             hot_loop,
             ..Default::default()
@@ -3778,6 +3793,15 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
             first.map(|i| &without[i])
         );
     }
+    // The fused calls ran, and some of them declined.
+    let fused = &crate::interp::run::fastpath::FUSED;
+    let n = |i: usize| fused[i].load(core::sync::atomic::Ordering::Relaxed);
+    assert!(
+        n(0) > 50 && n(1) > 5,
+        "fused calls: {} made, {} declined",
+        n(0),
+        n(1)
+    );
 }
 
 /// The tier-0 loop (D1930) changes nothing observable: at every stop (fuel boundaries
