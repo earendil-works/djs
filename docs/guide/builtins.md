@@ -174,14 +174,14 @@ keeps it. Here is `String.prototype.substr` as the prelude has it, with the help
 [`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9717-L9724), lines 9717–9724:
 
 ```js
-function StringPrototypeSubstr(start, length) {
-  const s = ThisToString(this);
-  const size = (%StrLength(s));
-  const intStart = RelativeIndex(start, size, 0);
-  let intLength = size;
-  if (length !== undefined) {
-    intLength = ToIntegerOrInfinity(length);
-  }
+function StringPrototypeSubstr(start, length) {}
+
+// builtins/string.ts:308 String.prototype.concat
+function StringPrototypeConcat(...args) {
+  let r = ThisToString(this);
+  const n = LengthOfArrayLike(args);
+  for (let i = 0; i < n; i++) {
+    r += ToString(%Get(args, i));
 ```
 <!-- /gen -->
 
