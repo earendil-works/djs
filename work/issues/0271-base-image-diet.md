@@ -134,6 +134,26 @@ media, fanout, above); it needs D3140's step rounded down (pgc).
   higher-order first, and pcall's review. Build 3 and the leg's idle row now.
 - D3420 (3): global table room 16, image +256 B, idle arena 189,656 → 185,680; loop
   704 → 640 KiB, other rows unchanged; idle row in codemode-memory. Guide: snapshots.md.
+- Merged D3420 at e1d853e5.
+- Variant for the owner, keeping Proxy, Reflect and WeakMap/WeakSet, with typed arrays
+  reduced to a %TypedArray% and an Int8Array that throw (pi's lockdown reads
+  `Object.getPrototypeOf(Int8Array)`): the slim set out with D3420 gives an idle arena of
+  135,464 B (w-slimset). The stub would add about 0.6 KB; that is an estimate, because bgen
+  compiles every file, so a stub can't replace typedarray.ts in an experiment. That comes to
+  ~136.1 KB, still 3 pages. Closing the last ~5 KB:
+  (i) 4 as a 32-byte compact header: -9.7 KB (605 templates), ~126.4 KB, 4.7 KB margin. Cost
+      (compact-cost.patch: the frame entry and return selects code offset and pool on a
+      FLAGS bit, no template compact yet; slope.py -n 2M, A/A noise up to 1%): call +2.0..2.2%,
+      method +1.8..2.1%, reduce +0.3%, forEach +0.7%. Every call and return pays it.
+  (ii) one 40-byte header for every template, so DATA stays a constant and frame entry
+      doesn't change: CAPTURES goes into the cell header's free u16, INFO into a trailer,
+      IC_COUNT folded into the IC slot or into FuncInfo. -4.8 KB; plus u16 prefix indexes
+      -3.9 KB gives ~127.4 KB, 3.7 KB margin. Costs: closure creation (INFO via the cell
+      size), the first IC fill, and a width test on prefix-table probes. Not measured.
+  (iii) u16 indexes -3.9 KB plus prefix strings without HASH -2.4 KB: ~129.8 KB, 1.3 KB
+      margin. Too thin.
+  Rows would be as in the -58.1 row of the table (idle 320; seq, inspect, loop, json and
+  heavy -64; text and media 0; fanout +64 unless pgc's rounding lands).
 
 ## Follow-ups
 
