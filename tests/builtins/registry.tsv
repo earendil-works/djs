@@ -1753,3 +1753,5 @@
 1748	value	%prelude:DOMExceptionEnumerable%
 1749	intrinsic	StrPad
 1750	intrinsic	GetSite
+1751	intrinsic	SortCompareCall
+1752	intrinsic	ObjectFromEntriesDense
