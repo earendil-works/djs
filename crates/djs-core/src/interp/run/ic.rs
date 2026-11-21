@@ -392,6 +392,8 @@ pub(super) enum Hit {
     /// An accessor, the receiver's own or on its prototype chain: its getter, to call
     /// with the receiver.
     Getter(Value),
+    /// The result of such a getter's `@fast` entry (`Exec::field_slow`, D3530).
+    Fast(Value),
 }
 
 /// A put or define site's cache hit: true if the slot at `at` (0: none) still applies to

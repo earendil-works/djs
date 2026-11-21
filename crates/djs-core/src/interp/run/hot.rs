@@ -489,9 +489,11 @@ impl Exec<'_> {
     /// for those that `hot_length` and `ic::hot_get` leave (a dictionary-mode receiver, a
     /// receiver whose shape is not the remembered one, the rarer primitives, an absent
     /// key, an accessor: D3470), and debug builds compare the slice's hits with it. An
-    /// accessor's getter is left in `hot_getter` for `decline_getter`.
+    /// accessor's getter is left in `hot_getter` for `decline_getter`; with `room` (the
+    /// stack has the two slots `call_accessor` would ask for) a getter with a `@fast`
+    /// entry runs here instead and its result comes back as `Hit::Fast` (D3530).
     #[inline(never)]
-    fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Hit> {
+    fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value, room: bool) -> Option<Hit> {
         // (`hot_length` answered these in a release build.)
         #[cfg(debug_assertions)]
         if key == atoms::LENGTH && op == fast::GET_FIELD {
@@ -512,6 +514,9 @@ impl Exec<'_> {
             // (`get_method` of an accessor is `step`'s.)
             if op != fast::GET_FIELD {
                 return None;
+            }
+            if room && let Some(v) = self.fast_getter(getter, o) {
+                return Some(Hit::Fast(v));
             }
             self.hot_getter = getter;
         }
@@ -1447,7 +1452,8 @@ impl Exec<'_> {
                                 Some(r) => {
                                     #[cfg(debug_assertions)]
                                     {
-                                        let want = heap_call_op!(self.field_slow(op, key, ic, o));
+                                        let want =
+                                            heap_call_op!(self.field_slow(op, key, ic, o, false));
                                         assert!(
                                             want == Some(Hit::Value(r)),
                                             "the slice's hit differs"
@@ -1455,8 +1461,20 @@ impl Exec<'_> {
                                     }
                                     r
                                 }
-                                None => match heap_call_op!(self.field_slow(op, key, ic, o)) {
+                                None => match heap_call_op!(self.field_slow(
+                                    op,
+                                    key,
+                                    ic,
+                                    o,
+                                    sp + 2 <= cap
+                                )) {
                                     Some(Hit::Value(r)) => r,
+                                    // A getter with a `@fast` entry, which ran: the
+                                    // fuel of such a call (D3530).
+                                    Some(Hit::Fast(r)) => {
+                                        fuel -= super::fastpath::FAST_FUEL;
+                                        r
+                                    }
                                     // An accessor (D3470): `decline_fast` calls the
                                     // getter, which `field_slow` left in `hot_getter`.
                                     // (Written with the opcode's test, which

@@ -23,7 +23,7 @@ pub(super) const COLLECT_SITE: u32 = 31;
 
 /// Fuel per fast call on top of the call instruction's: a builtin's call runs a few
 /// instructions at least.
-const FAST_FUEL: i64 = 2;
+pub(super) const FAST_FUEL: i64 = 2;
 
 impl Exec<'_> {
     /// The `call` instruction at `pc` when its callee is a `@fast` builtin whose fast path
@@ -419,6 +419,27 @@ impl Exec<'_> {
         } else {
             Err(self.l_primitive_site(k, v, hint))
         }
+    }
+
+    /// A getter's `@fast` entry run for `get_field` inside the tier-0 loop (D3530):
+    /// `getter` called with `this` and no arguments, as `try_fast_call` runs it for
+    /// `call_accessor`; `None` when it has no entry in `FAST` (a closure, a generated
+    /// `@rust` builtin, a host function), declines or fails. The caller charges
+    /// `FAST_FUEL` and must have checked that `call_accessor` would not grow the stack.
+    pub(super) fn fast_getter(&mut self, getter: Value, this: Value) -> Option<Value> {
+        let f = getter
+            .as_object()
+            .filter(|&f| self.is_class(f, ObjectClass::Function))?;
+        let t = self.template_of(f);
+        if u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS))
+            & self.slow_call_flags
+            & func_flags::FAST
+            == 0
+        {
+            return None;
+        }
+        let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
+        FAST.get(idx)?.call(self.heap, this, &[]).ok().flatten()
     }
 
     pub(super) fn try_fast_call(

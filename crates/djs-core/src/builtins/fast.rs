@@ -168,8 +168,12 @@ pub(crate) static FAST: &[FastFn] = &[
     f("SetPrototypeHas", set_has),
     f("SetPrototypeAdd", set_add),
     // (The `size` getters, 0282: as bytecode they were 4.7x QuickJS.)
-    f("MapPrototypeSize", |h, this, _| size(h, this, ObjectClass::Map)),
-    f("SetPrototypeSize", |h, this, _| size(h, this, ObjectClass::Set)),
+    f("MapPrototypeSize", |h, this, _| {
+        size(h, this, ObjectClass::Map)
+    }),
+    f("SetPrototypeSize", |h, this, _| {
+        size(h, this, ObjectClass::Set)
+    }),
     // ---- Promises (0232b, D3156: `new Promise` and `then` were 4-6x QuickJS) ----
     // (GetPrototypeFromConstructor is the hot loop's leaf %ConstructorPrototype, 0236.)
     f("PromiseResolveFunction", |h, this, a| {
