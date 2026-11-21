@@ -417,7 +417,7 @@ fn hot_elem(b: &[u8], o: Value, key: Value) -> Option<Value> {
 /// Whether the strings at `x` and `y` are equal, if both are flat one-byte cells
 /// (`Heap::str_eq` for those): the lengths, then eight bytes at a time. `None` for a
 /// two-byte string, a slice or a rope.
-#[inline(always)]
+#[inline(never)]
 fn hot_str_eq(b: &[u8], x: u32, y: u32) -> Option<bool> {
     use crate::heap::CellKind;
     use crate::heap::cells::Str8;
@@ -1459,7 +1459,15 @@ impl Exec<'_> {
                                     Some(Hit::Value(r)) => r,
                                     // An accessor (D3470): `decline_fast` calls the
                                     // getter, which `field_slow` left in `hot_getter`.
-                                    Some(Hit::Getter(_)) => break Exit::Decline(GETTER),
+                                    // (Written with the opcode's test, which
+                                    // `field_slow` has made already: with the bare
+                                    // constant V8 moved the arithmetic arms, D3470.)
+                                    Some(Hit::Getter(_)) => {
+                                        if op == fast::GET_FIELD {
+                                            break Exit::Decline(GETTER);
+                                        }
+                                        break Exit::Decline(fast::GET_METHOD);
+                                    }
                                     None => break Exit::Decline(op),
                                 },
                             };
