@@ -1649,7 +1649,8 @@ pub(crate) const UNIT_STRINGS_SLOT: u32 = 76;
 impl Heap {
     /// The one-unit string of the ASCII code unit `u`, from the realm's cache (0287): a
     /// cell per unit, made at its first use, so `s[i]`, charAt, one-character slices,
-    /// split(""), string iteration and one-digit numbers don't allocate one each time.
+    /// split("") and string iteration don't allocate one each time. (Not one-digit
+    /// numbers: allocating one was cheaper than the lookup.)
     /// Strings are immutable, so which cell holds the unit is unobservable. Every
     /// collection drops the cache (`drop_unit_strings`): it holds nothing a program
     /// needs, and a run then leaves no trace of which builtins it used (D022).

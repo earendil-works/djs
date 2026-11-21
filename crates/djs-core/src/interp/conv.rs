@@ -158,9 +158,6 @@ pub(crate) fn to_number(heap: &mut Heap, v: Value) -> Result<f64, Fault> {
 /// ToString for a Number.
 pub(crate) fn number_to_string(heap: &mut Heap, v: Value) -> Result<Str, Fault> {
     if let Some(i) = v.as_int() {
-        if (0..10).contains(&i) {
-            return Ok(heap.unit_string(b'0' + i as u8)?);
-        }
         // Ints (indexes, counters) skip the float formatter.
         let mut buf = [0u8; 11];
         let d = num::u32_decimal(i.unsigned_abs(), &mut buf[1..]).len();
