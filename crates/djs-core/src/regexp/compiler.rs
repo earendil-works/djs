@@ -152,8 +152,9 @@ struct Compiler {
 
 pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
     // The words are copied into the heap afterwards: room for a typical program up
-    // front saves the doubling reallocations, which showed in compile time.
-    let mut words = crate::buf::vec_with_capacity(128);
+    // front saves the doubling reallocations, which showed in compile time (a character
+    // takes two words, a class or a group more, the first set 11 and more).
+    let mut words = crate::buf::vec_with_capacity(64 + 4 * parsed.len);
     words.resize(H_LEN, 0u32);
     words[H_FLAGS] = flags.bits() as u32;
     words[H_CAPTURES] = parsed.capture_count;
@@ -256,21 +257,11 @@ fn first_into(node: &Node, unicode: bool, acc: &mut CharSet) -> Option<bool> {
         | Node::WordBoundary { .. }
         | Node::Look { .. } => true,
         Node::Char { c, icase } => {
-            let c = *c;
-            if !*icase {
-                acc.add(c);
-            } else if c < 0x80 && !(unicode && matches!(c | 0x20, 0x6B | 0x73)) {
-                // (`k` and `s` also have a non-ASCII form in unicode mode.)
-                // The ASCII case of `CharSet::case_closure`, without building the set.
-                acc.add(c);
-                if (c as u8).is_ascii_alphabetic() {
-                    acc.add(c ^ 0x20);
-                }
-            } else {
-                let mut s = CharSet::new();
-                s.add(c);
-                add_set(acc, &s.case_closure(unicode));
-            }
+            first_char_into(*c, *icase, unicode, acc);
+            false
+        }
+        Node::Str { chars, icase } => {
+            first_char_into(chars[0], *icase, unicode, acc);
             false
         }
         Node::Class {
@@ -325,6 +316,24 @@ fn first_into(node: &Node, unicode: bool, acc: &mut CharSet) -> Option<bool> {
     })
 }
 
+/// The characters that match the (canonical) character `c` added to `acc`.
+fn first_char_into(c: u32, icase: bool, unicode: bool, acc: &mut CharSet) {
+    if !icase {
+        acc.add(c);
+    } else if c < 0x80 && !(unicode && matches!(c | 0x20, 0x6B | 0x73)) {
+        // (`k` and `s` also have a non-ASCII form in unicode mode.)
+        // The ASCII case of `CharSet::case_closure`, without building the set.
+        acc.add(c);
+        if (c as u8).is_ascii_alphabetic() {
+            acc.add(c ^ 0x20);
+        }
+    } else {
+        let mut s = CharSet::new();
+        s.add(c);
+        add_set(acc, &s.case_closure(unicode));
+    }
+}
+
 /// Adds `set` to `acc` with one allocation.
 fn add_set(acc: &mut CharSet, set: &CharSet) {
     *acc = if acc.is_empty() {
@@ -352,7 +361,7 @@ fn start_cond(node: &Node, unicode: bool) -> Option<(CharSet, Empty)> {
         | Node::LineEnd { .. }
         | Node::WordBoundary { .. }
         | Node::Look { .. } => (CharSet::new(), Empty::Anywhere),
-        Node::Char { .. } | Node::Class { .. } | Node::Dot { .. } => {
+        Node::Char { .. } | Node::Str { .. } | Node::Class { .. } | Node::Dot { .. } => {
             let (f, nullable) = first_chars(node, unicode)?;
             (f, if nullable { Empty::Anywhere } else { Empty::No })
         }
@@ -464,6 +473,7 @@ fn is_single_char(node: &Node) -> bool {
 fn min_width(node: &Node) -> u32 {
     match node {
         Node::Char { .. } | Node::Dot { .. } => 1,
+        Node::Str { chars, .. } => chars.len() as u32,
         Node::Class { strings, .. } => {
             let shortest = strings.iter().map(|s| s.len() as u32).min().unwrap_or(1);
             shortest.min(1)
@@ -513,6 +523,19 @@ impl Compiler {
             Node::Empty => {}
             Node::Char { c, icase: i } => {
                 self.emit2(CHAR | dir | icase(*i), *c);
+            }
+            Node::Str { chars, icase: i } => {
+                let op = CHAR | dir | icase(*i);
+                self.code.reserve(2 * chars.len());
+                let mut put = |&c: &u32| {
+                    self.code.push_out(op);
+                    self.code.push_out(c);
+                };
+                if back {
+                    chars.iter().rev().for_each(&mut put);
+                } else {
+                    chars.iter().for_each(&mut put);
+                }
             }
             Node::Class {
                 set,
@@ -679,7 +702,13 @@ impl Compiler {
         }
         let mut alts: Vec<Node> = sorted
             .iter()
-            .map(|s| Node::Concat(s.iter().map(|&c| Node::Char { c, icase }).collect()))
+            .map(|s| match s[..] {
+                [c] => Node::Char { c, icase },
+                _ => Node::Str {
+                    chars: s.to_vec(),
+                    icase,
+                },
+            })
             .collect();
         if !set.is_empty() {
             alts.push_out(Node::Class {

@@ -36,6 +36,12 @@ pub(crate) enum Node {
         c: u32,
         icase: bool,
     },
+    /// Two or more characters in a row, as `Char`s would match them (0267: a literal run
+    /// as one node, not a node per character).
+    Str {
+        chars: Vec<u32>,
+        icase: bool,
+    },
     /// A character class. With `icase`, the input character is canonicalized before the
     /// membership test (the set holds canonical forms where it matters). `strings` are the
     /// `v` mode strings of length != 1 (possibly empty).
@@ -91,6 +97,8 @@ pub(crate) struct Parsed {
     pub(crate) capture_count: u32,
     /// Group names by capture index (index 0 unused).
     pub(crate) names: Vec<Option<Vec<u16>>>,
+    /// The pattern's length in code units (the compiler sizes its buffer by it).
+    pub(crate) len: usize,
 }
 
 struct GroupName {
@@ -245,6 +253,7 @@ pub(crate) fn parse(
         node,
         capture_count: p.capture_count,
         names,
+        len: src.len(),
     })
 }
 
@@ -268,6 +277,31 @@ fn resolve_names(node: &mut Node, names: &[GroupName]) {
         Node::Concat(v) | Node::Alt(v) => v.iter_mut().for_each(|n| resolve_names(n, names)),
         _ => {}
     }
+}
+
+/// Appends a term to an alternative, a character to the literal run before it.
+fn push_term(terms: &mut Vec<Node>, t: Node) {
+    if let Node::Char { c, icase } = t {
+        match terms.last_mut() {
+            Some(Node::Str { chars, icase: i }) if *i == icase => {
+                chars.push_out(c);
+                return;
+            }
+            Some(last @ Node::Char { .. }) => {
+                if let Node::Char { c: c0, icase: i } = *last
+                    && i == icase
+                {
+                    let mut chars = crate::buf::vec_with_capacity(8);
+                    chars.push_out(c0);
+                    chars.push_out(c);
+                    *last = Node::Str { chars, icase };
+                    return;
+                }
+            }
+            _ => {}
+        }
+    }
+    terms.push_out(t);
 }
 
 impl Parser<'_> {
@@ -373,35 +407,79 @@ impl Parser<'_> {
     }
 
     fn alternative(&mut self, backward: bool) -> Result<Node, SyntaxError> {
-        // Room for the terms up to the next `|` or `)` if each were one character (a
-        // literal run usually is): growing from empty reallocates repeatedly.
-        let room = self.src[self.pos.min(self.src.len())..]
-            .iter()
-            .take(32)
-            .take_while(|&&c| c != '|' as u16 && c != ')' as u16)
-            .count();
-        let mut terms = crate::buf::vec_with_capacity(room);
+        // Few terms once literal runs are one each (0267): grown as needed, none for an
+        // alternative that is one term.
+        let mut terms: Vec<Node> = Vec::new();
+        let mut one: Option<Node> = None;
         while !self.at_end() && self.cur() != '|' as u32 && self.cur() != ')' as u32 {
-            // A literal ASCII character that no quantifier follows: what `term` would
-            // make of it, without its dispatch (literal runs dominate most patterns).
-            let c = self.cur();
-            if c < 0x80
-                && !b"^$\\.*+?()[]{}|".contains(&(c as u8))
-                && !b"*+?{".contains(&(self.at(self.pos + 1) as u8))
-            {
-                self.pos += 1;
-                terms.push_out(self.char_node(c));
-                continue;
+            // A run of literal ASCII characters that no quantifier follows: what `term`
+            // would make of each, without its dispatch, as one node (literal runs
+            // dominate most patterns).
+            let start = self.pos;
+            let mut end = start;
+            while end < self.src.len() && self.literal_at(end) {
+                end += 1;
             }
-            if let Some(t) = self.term(backward)? {
-                terms.push_out(t);
+            let t = if end > start {
+                self.pos = end;
+                if end - start == 1 {
+                    self.char_node(self.src[start] as u32)
+                } else {
+                    let mut chars = crate::buf::vec_with_capacity(end - start);
+                    for &u in &self.src[start..end] {
+                        chars.push_out(self.canonical(u as u32));
+                    }
+                    Node::Str {
+                        chars,
+                        icase: self.icase,
+                    }
+                }
+            } else {
+                match self.term(backward)? {
+                    Some(t) => t,
+                    None => continue,
+                }
+            };
+            match one.take() {
+                None if terms.is_empty() => one = Some(t),
+                prev => {
+                    if let Some(p) = prev {
+                        terms = crate::buf::vec_with_capacity(8);
+                        terms.push_out(p);
+                    }
+                    push_term(&mut terms, t);
+                }
             }
         }
-        Ok(match terms.len() {
-            0 => Node::Empty,
-            1 => terms.pop().unwrap(),
-            _ => Node::Concat(terms),
+        Ok(match one {
+            Some(t) => t,
+            None if terms.is_empty() => Node::Empty,
+            None => Node::Concat(terms),
         })
+    }
+
+    /// Whether the unit at `i` is a literal ASCII character no quantifier follows.
+    #[inline(always)]
+    fn literal_at(&self, i: usize) -> bool {
+        // `^$\.*+?()[]{}|` (bits of 0x20..0x7F), then the quantifier starts `*+?{`.
+        const SPECIAL: u128 = 1 << b'^'
+            | 1 << b'$'
+            | 1 << b'\\'
+            | 1 << b'.'
+            | 1 << b'*'
+            | 1 << b'+'
+            | 1 << b'?'
+            | 1 << b'('
+            | 1 << b')'
+            | 1 << b'['
+            | 1 << b']'
+            | 1 << b'{'
+            | 1 << b'}'
+            | 1 << b'|';
+        const QUANT: u128 = 1 << b'*' | 1 << b'+' | 1 << b'?' | 1 << b'{';
+        let c = self.src[i];
+        let next = self.at(i + 1);
+        c < 0x80 && SPECIAL >> c & 1 == 0 && (next >= 0x80 || QUANT >> next & 1 == 0)
     }
 
     /// Parses one term (an assertion, or an atom with an optional quantifier).
@@ -506,13 +584,18 @@ impl Parser<'_> {
     }
 
     fn char_node(&self, c: u32) -> Node {
+        Node::Char {
+            c: self.canonical(c),
+            icase: self.icase,
+        }
+    }
+
+    /// `c` as a pattern character matches it: canonicalized with `i`.
+    fn canonical(&self, c: u32) -> u32 {
         if self.icase {
-            Node::Char {
-                c: canonicalize(c, self.unicode),
-                icase: true,
-            }
+            canonicalize(c, self.unicode)
         } else {
-            Node::Char { c, icase: false }
+            c
         }
     }
 

@@ -806,3 +806,24 @@ fn one_byte_search_agrees_with_units() {
         }
     }
 }
+
+/// Literal runs are one node (0267): forward and backward (lookbehind), case-insensitive,
+/// with escaped characters in the run and a quantifier on its last character.
+#[test]
+fn literal_runs() {
+    assert_eq!(first("ab\\.c", "", "xab.c"), Some("ab.c".into()));
+    assert_eq!(first("ab\\.c", "", "xabxc"), None);
+    assert_eq!(first("(?<=ab\\.c)d", "", "ab.cd"), Some("d".into()));
+    assert_eq!(first("(?<=abc)d", "", "abdcd"), None);
+    assert_eq!(first("(?<!abc)d", "", "abcd xd"), Some("d".into()));
+    assert_eq!(first("AbC\\u0044", "i", "xaBcD"), Some("aBcD".into()));
+    assert_eq!(first("(?<=AbC)d", "i", "abcD"), Some("D".into()));
+    assert_eq!(first("abc+", "", "abccc"), Some("abccc".into()));
+    assert_eq!(first("abc{2}x", "", "abccx"), Some("abccx".into()));
+    assert_eq!(first("a\\u{1F600}b", "u", "a😀b"), Some("a😀b".into()));
+    assert_eq!(
+        first("(?:report|metric)s", "i", "METRICS"),
+        Some("METRICS".into())
+    );
+    assert_eq!(first("[ab]cd|cde", "", "xcde"), Some("cde".into()));
+}
