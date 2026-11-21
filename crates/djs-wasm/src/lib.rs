@@ -937,14 +937,18 @@ fn compile_with(
                 elastic(&mut slot.vm, |vm| vm.compile_cached(src, &opts, blob))
                     .map_err(|e| e.text())
             }
-            None => elastic(&mut slot.vm, |vm| vm.compile(src, &opts))
-                .map(|f| (f, None))
-                .map_err(|e| e.text()),
+            None => elastic(&mut slot.vm, |vm| {
+                allocator::with_zone(|| vm.compile(src, &opts))
+            })
+            .map(|f| (f, None))
+            .map_err(|e| e.text()),
         };
         #[cfg(not(feature = "dump"))]
-        let result = elastic(&mut slot.vm, |vm| vm.compile(src, &opts))
-            .map(|f| (f, None::<Vec<u8>>))
-            .map_err(|e| e.text());
+        let result = elastic(&mut slot.vm, |vm| {
+            allocator::with_zone(|| vm.compile(src, &opts))
+        })
+        .map(|f| (f, None::<Vec<u8>>))
+        .map_err(|e| e.text());
         match result {
             Err(msg) if slot.vm.needs_stack() => {
                 s.set_out(msg.as_bytes());

@@ -12475,3 +12475,17 @@ hands the section over again (`djs_base_coded_ptr`, as for an injected instance)
 hosts make one VM per instance. First-instance memory (6 perturbed runs per workload) now
 equals every other instance's: the sum of the means 13,163 → 11,509 KiB; fanout's first
 run −8%. +29 B gz.
+
+## D3361: The compile zone after all (supersedes D3342)
+date: 2026-11-21 · by: pstart · issue: 0265
+D3342's memory regressions were first instances: the zone added to the coded base that
+D3360 now drops, and dlmalloc's segment overflowed (plus a variant that never gave the
+zone back). On top of D3360 the same zone moves nothing: wasm memory per codemode workload
+is equal in first and warm instances (6 perturbed first-instance runs each) and in
+mem-perturb's eight workloads (6 runs each). So `vm_compile*` runs in a 32 KiB bump zone:
+taken from dlmalloc only if its segments have the room (never a new segment), small blocks
+bump, freeing the last block moves the top back, the last free resets it, and the zone goes
+back to dlmalloc when it is off and empty; whatever does not fit, and everything outside a
+compile, is dlmalloc's as before. Compile −2..−5% (codemode bodies), whole runs sequential
+−3.6%, inspect −1.8%, fanout ±0. +260 B gz. Run-time compiles (`eval`, `Function`, lazy
+functions) are not in the zone.

@@ -27,6 +27,8 @@
 //! - **Medium blocks** (16 KiB up to `HUGE`) are dlmalloc's while its segments have room,
 //!   else page runs of their own, and dlmalloc's first segment comes before the arena:
 //!   both keep the arena at memory's end (D2541, [`PageAlloc`]).
+//! - **A compile's small blocks** come from a bump zone taken from dlmalloc's free room for
+//!   the compile and given back after it (D3361).
 //!
 //! (Not named `alloc`: that is the `alloc` crate inside this crate.)
 
@@ -317,6 +319,49 @@ pub(crate) mod pages {
         top: (usize, usize),
         /// What a page run allocated now leaves to the top block.
         keep: Keep,
+        /// The compile zone (D3361).
+        zone: Zone,
+    }
+
+    /// The compile zone's size.
+    const ZONE: usize = 32 * 1024;
+
+    /// A bump region for the small allocations of a compile (D3361): a compile makes
+    /// 400-700 short-lived ones (code buffers, a function's state, its tables), which
+    /// cost it about a tenth of its time in dlmalloc. Allocating bumps `top`; freeing the
+    /// last block moves it back, and the last free of all resets it. A block that
+    /// outlives the compile only delays that; what does not fit goes to dlmalloc.
+    struct Zone {
+        start: usize,
+        end: usize,
+        top: usize,
+        live: usize,
+        on: bool,
+    }
+
+    impl Zone {
+        fn holds(&self, p: *mut u8) -> bool {
+            (p as usize).wrapping_sub(self.start) < self.end - self.start
+        }
+
+        fn alloc(&mut self, l: Layout) -> Option<*mut u8> {
+            let p = self.top.next_multiple_of(l.align());
+            let end = p.checked_add(l.size())?;
+            (end <= self.end).then(|| {
+                self.top = end;
+                self.live += 1;
+                p as *mut u8
+            })
+        }
+
+        fn free(&mut self, p: *mut u8, size: usize) {
+            self.live -= 1;
+            if self.live == 0 {
+                self.top = self.start;
+            } else if p as usize + size == self.top {
+                self.top = p as usize;
+            }
+        }
     }
 
     /// dlmalloc's first segment, in pages (`PageAlloc::prime`), besides the rest of the
@@ -340,6 +385,49 @@ pub(crate) mod pages {
                 medium: [(usize::MAX, 0); MEDIUM_CAP],
                 top: (usize::MAX, 0),
                 keep: NO_KEEP,
+                zone: Zone {
+                    start: 0,
+                    end: 0,
+                    top: 0,
+                    live: 0,
+                    on: false,
+                },
+            }
+        }
+
+        /// Turns the compile zone on (`true`) or off; returns whether it was on. Its memory
+        /// comes from dlmalloc while it is on or holds a block, and goes back when neither
+        /// is true any more.
+        pub(crate) fn set_zone(&mut self, on: bool) -> bool {
+            if on && self.zone.end == 0 {
+                // Only if dlmalloc has the room: a new segment would land right after the
+                // arena and keep it from growing in place (D2541).
+                self.dl.allocator().no_grow.set(true);
+                // SAFETY: a valid size and alignment.
+                let p = unsafe { self.dl.malloc(ZONE, 16) } as usize;
+                self.dl.allocator().no_grow.set(false);
+                if p != 0 {
+                    self.zone = Zone {
+                        start: p,
+                        end: p + ZONE,
+                        top: p,
+                        live: 0,
+                        on: false,
+                    };
+                }
+            }
+            let was = core::mem::replace(&mut self.zone.on, on && self.zone.end != 0);
+            self.release_zone();
+            was
+        }
+
+        /// Gives the zone's memory back to dlmalloc when it is off and empty.
+        fn release_zone(&mut self) {
+            if !self.zone.on && self.zone.live == 0 && self.zone.end != 0 {
+                // SAFETY: the block `set_zone` took, with its size and alignment.
+                unsafe { self.dl.free(self.zone.start as *mut u8, ZONE, 16) };
+                self.zone.start = 0;
+                self.zone.end = 0;
             }
         }
 
@@ -454,6 +542,11 @@ pub(crate) mod pages {
                 // SAFETY: the caller's contract.
                 unsafe { self.alloc_medium(l) }
             } else {
+                if self.zone.on
+                    && let Some(p) = self.zone.alloc(l)
+                {
+                    return p;
+                }
                 // SAFETY: the caller's contract.
                 unsafe { self.dl.malloc(l.size(), l.align()) }
             }
@@ -473,6 +566,9 @@ pub(crate) mod pages {
                 let (start, n) = self.medium[slot];
                 self.medium[slot] = (usize::MAX, 0);
                 self.pages.free(start, n);
+            } else if self.zone.holds(p) {
+                self.zone.free(p, l.size());
+                self.release_zone();
             } else {
                 // SAFETY: the caller's contract.
                 unsafe { self.dl.free(p, l.size(), l.align()) }
@@ -483,6 +579,24 @@ pub(crate) mod pages {
         ///
         /// The contract of `GlobalAlloc::realloc`; `init` has run.
         pub(crate) unsafe fn realloc(&mut self, p: *mut u8, l: Layout, new: usize) -> *mut u8 {
+            if self.zone.holds(p) {
+                let z = &mut self.zone;
+                // The last block grows or shrinks in place.
+                if p as usize + l.size() == z.top && p as usize + new <= z.end {
+                    z.top = p as usize + new;
+                    return p;
+                }
+                // SAFETY: the caller's contract, as for the moves below.
+                unsafe {
+                    let q = self.alloc(Layout::from_size_align_unchecked(new, l.align()));
+                    if !q.is_null() {
+                        ptr::copy_nonoverlapping(p, q, l.size().min(new));
+                        self.zone.free(p, l.size());
+                        self.release_zone();
+                    }
+                    return q;
+                }
+            }
             let (old_huge, new_huge) = (huge(l.size(), l.align()), huge(new, l.align()));
             if !old_huge && let Some(slot) = self.medium_slot(p) {
                 let (start, n) = self.medium[slot];
@@ -663,6 +777,16 @@ mod wasm {
         r
     }
 
+    /// Runs `f` (a compile) with its small allocations in the compile zone (D3361).
+    pub(crate) fn with_zone<R>(f: impl FnOnce() -> R) -> R {
+        // SAFETY: one thread; the reference ends before `f` allocates.
+        let was = unsafe { get().set_zone(true) };
+        let r = f();
+        // SAFETY: as above.
+        unsafe { get().set_zone(was) };
+        r
+    }
+
     /// The global allocator on wasm32 (allocator.rs docs).
     pub(crate) struct Base;
 
@@ -685,7 +809,13 @@ mod wasm {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) use wasm::{Base, with_top_room};
+pub(crate) use wasm::{Base, with_top_room, with_zone};
+
+/// Natively there is no compile zone: just `f`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn with_zone<R>(f: impl FnOnce() -> R) -> R {
+    f()
+}
 
 /// Natively there is no page allocator: just `f`.
 #[cfg(not(target_arch = "wasm32"))]

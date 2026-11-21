@@ -458,3 +458,43 @@ fn a_growing_arena_stays_in_place_and_memory_tracks_it() {
         l.size() >> 20
     );
 }
+
+#[test]
+fn the_compile_zone_bumps_frees_and_goes_back() {
+    // D3361: small blocks while the zone is on come from it; freeing the last block moves
+    // the top back, the last free resets it, and once off and empty its memory goes back
+    // to dlmalloc. Contents survive moves out of the zone.
+    let (a, _arena, _l) = with_arena(5);
+    let pages = a.pages().memory().pages();
+    assert!(!a.set_zone(true));
+    let l = |n| Layout::from_size_align(n, 8).unwrap();
+    // SAFETY: valid layouts; every block is freed with its own.
+    unsafe {
+        let p = a.alloc(l(100));
+        let q = a.alloc(l(40));
+        assert_eq!(q as usize, (p as usize + 100).next_multiple_of(8), "bumped");
+        q.write_bytes(7, 40);
+        // The last block grows in place; another one moves (out of the zone once off).
+        let q2 = a.realloc(q, l(40), 400);
+        assert_eq!(q2, q);
+        let r = a.alloc(l(16));
+        assert!(a.set_zone(false));
+        let q3 = a.realloc(q2, l(400), 8000);
+        assert_ne!(q3, q2);
+        assert!((0..40).all(|i| *q3.add(i) == 7));
+        a.dealloc(q3, l(8000));
+        a.dealloc(r, l(16));
+        a.dealloc(p, l(100));
+        // Empty and off: a new zone starts at the same place.
+        assert!(!a.set_zone(true));
+        let p2 = a.alloc(l(100));
+        assert_eq!(p2, p);
+        a.dealloc(p2, l(100));
+        a.set_zone(false);
+    }
+    assert_eq!(
+        a.pages().memory().pages(),
+        pages,
+        "no memory grown for the zone"
+    );
+}
