@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0261 | Instantiation and sandbox setup costs (exports, data segment, setup calls) | pstart | .worktrees/pstart |
+| 0263 | Compile speed for small bodies; static data audit | pstart | .worktrees/pstart |
 | 0262 | Object and collection ops: Map/Set string keys, spread, entries, comparator sort, padStart | pidle | .worktrees/pidle |
 | 0258 | GC: minor collections skip the builtin prefix; headroom, big-string survivors | pgc | .worktrees/pgc |
 | 0259 | Builtin calls without finding the callee | pcall | .worktrees/pcall |
@@ -49,6 +49,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0261 | Instantiation and sandbox setup costs | 29a129a5 (agent pstart; D3320-D3322; one export, ABI 6; new sandbox -13.7%, sequential -6.9%, -314 B gz; cold tables designed, not built) |
 | 0257 | Idle memory: elastic shadow stack, seeded dlmalloc segment | 6f25c16e (agent pidle; D3280-D3283; idle 576->448 KiB, every workload -128 KiB but heavy; +624 B gz net) |
 | 0256 | Per-VM and per-byte costs: base injection, hash keys, zeroing | 2e547378 (agent pstart; D3270-D3273; new sandbox -28%, small bodies -7..9%; zeroing dropped) |
 | 0249 | djs-embed: report and shrink an instance's heap after reset | d0957337 (coordinator; D3247; djs-embed 0.1.1, CHANGES.md) |
