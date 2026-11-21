@@ -1,0 +1,38 @@
+sizes 34 0 2
+function get size 0 0 2
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected | TypeError: Set object expected
+TypeError: Map object expected TypeError: Set object expected
+0 -2 2 0 -2 2 patched NaN 2 patched NaN 2 0 -2 2 0 -2 2
+TypeError: Map object expected TypeError: Map object expected
+TypeError: Map object expected TypeError: Map object expected
+TypeError: Map object expected TypeError: Map object expected
+typed 288
+0 2 2 undefined undefined undefined 4 undefined function undefined
+1 2 2 undefined undefined undefined 4 undefined function undefined
+2 2 2 undefined undefined undefined 4 undefined function undefined
+3 2 2 undefined undefined undefined 4 undefined function undefined
+8 8 4 4 4
+8 8 4 4 4
+12 12 4 4 4
+12 12 4 4 4
+6 6 0 0 0
+6 6 0 0 0
+TypeError: not a TypedArray
+TypeError: not a TypedArray
+TypeError: not a TypedArray
+TypeError: not a TypedArray
+TypeError: not a TypedArray
+99 2
+99 2
+99 2
+7 4
+7 4
+7 4
+=== completed

@@ -174,6 +174,16 @@ pub(crate) static FAST: &[FastFn] = &[
     f("SetPrototypeSize", |h, this, _| {
         size(h, this, ObjectClass::Set)
     }),
+    // (`bytes.length` in a loop over a typed array: 4.5x.)
+    f("TypedArrayPrototypeByteLength", |h, this, _| {
+        ta_field(h, this, 4)
+    }),
+    f("TypedArrayPrototypeByteOffset", |h, this, _| {
+        ta_field(h, this, 2)
+    }),
+    f("TypedArrayPrototypeLength", |h, this, _| {
+        ta_field(h, this, 3)
+    }),
     // ---- Promises (0232b, D3156: `new Promise` and `then` were 4-6x QuickJS) ----
     // (GetPrototypeFromConstructor is the hot loop's leaf %ConstructorPrototype, 0236.)
     f("PromiseResolveFunction", |h, this, a| {
@@ -747,6 +757,13 @@ fn has(heap: &Heap, this: Value, args: &[Value], c: ObjectClass) -> Fast {
 /// get Map.prototype.size and get Set.prototype.size.
 fn size(heap: &Heap, this: Value, c: ObjectClass) -> Fast {
     Ok(this_collection(heap, this, c).map(|m| Value::int(heap.collection_size(m) as i32)))
+}
+
+/// get %TypedArray%.prototype.length, byteLength and byteOffset: `TypedArrayField(this,
+/// field)` of a typed array (anything else throws in the builtin).
+fn ta_field(heap: &Heap, this: Value, field: i32) -> Fast {
+    Ok(this_collection(heap, this, ObjectClass::TypedArray)
+        .map(|o| crate::builtins::typed::typed_array_field(heap, o, field)))
 }
 
 fn map_has(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {

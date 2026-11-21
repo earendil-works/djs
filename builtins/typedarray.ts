@@ -335,6 +335,7 @@ function TypedArrayPrototypeBuffer(this: Value): Value {
 /**
  * get %TypedArray%.prototype.byteLength, 23.2.3.3.
  * @getter %TypedArray%.prototype.byteLength
+ * @fast
  */
 function TypedArrayPrototypeByteLength(this: Value): Value {
   return TypedArrayField(this, 4);
@@ -343,6 +344,7 @@ function TypedArrayPrototypeByteLength(this: Value): Value {
 /**
  * get %TypedArray%.prototype.byteOffset, 23.2.3.4.
  * @getter %TypedArray%.prototype.byteOffset
+ * @fast
  */
 function TypedArrayPrototypeByteOffset(this: Value): Value {
   return TypedArrayField(this, 2);
@@ -351,6 +353,7 @@ function TypedArrayPrototypeByteOffset(this: Value): Value {
 /**
  * get %TypedArray%.prototype.length, 23.2.3.21.
  * @getter %TypedArray%.prototype.length
+ * @fast
  */
 function TypedArrayPrototypeLength(this: Value): Value {
   return TypedArrayField(this, 3);

@@ -79,7 +79,10 @@ fn kind(w0: u32) -> u32 {
 #[inline(always)]
 fn exotic_own(heap: &Heap, obj: Obj, key: Atom) -> bool {
     match heap.object_class(obj) {
-        ObjectClass::Proxy | ObjectClass::TypedArray => true,
+        ObjectClass::Proxy => true,
+        // (Only the numeric keys are the typed array's own business: `length` and the
+        // methods are found as on any object, D3530.)
+        ObjectClass::TypedArray => heap.canonical_numeric_index(key).is_some(),
         ObjectClass::Array => key == crate::heap::atoms::LENGTH,
         ObjectClass::Function => {
             key == crate::heap::atoms::LENGTH || key == crate::heap::atoms::NAME
@@ -90,15 +93,20 @@ fn exotic_own(heap: &Heap, obj: Obj, key: Atom) -> bool {
 
 /// The prototype a cached prototype read on `o` starts from, if `o` cannot have an own
 /// property `key` that the cache would skip; `shape` is the receiver shape word the slot
-/// remembers (0: none). `None` for a proxy or a typed array, an object with its own
-/// `key`, nullish values, and a string's `length` and indexes.
+/// remembers (0: none); `filled`: for a hit of a filled slot, whose key was not a typed
+/// array's numeric one when it was filled (the test costs a look at the key's text).
+/// `None` for a proxy, a typed array's numeric key, an object with its own `key`, nullish
+/// values, and a string's `length` and indexes.
 #[inline(always)]
-fn proto_start(heap: &Heap, o: Value, key: Atom, shape: u32) -> Option<Obj> {
+fn proto_start(heap: &Heap, o: Value, key: Atom, shape: u32, filled: bool) -> Option<Obj> {
     match o.as_object() {
         Some(obj) => {
-            if exotic_own(heap, obj, key)
-                || ((shape == 0 || heap.receiver_shape(obj) != shape)
-                    && heap.has_own_property(obj, key))
+            if !(filled && heap.object_class(obj) == ObjectClass::TypedArray)
+                && exotic_own(heap, obj, key)
+            {
+                return None;
+            }
+            if (shape == 0 || heap.receiver_shape(obj) != shape) && heap.has_own_property(obj, key)
             {
                 return None;
             }
@@ -171,7 +179,7 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
             if w2 != heap.proto_epoch() {
                 return None;
             }
-            let proto = proto_start(heap, o, key, word(heap, at, 3))?;
+            let proto = proto_start(heap, o, key, word(heap, at, 3), true)?;
             if proto.offset() != w1 {
                 return None;
             }
@@ -596,7 +604,7 @@ impl Exec<'_> {
         if key.as_int().is_some() {
             return;
         }
-        let Some(proto) = proto_start(self.heap, o, key, 0) else {
+        let Some(proto) = proto_start(self.heap, o, key, 0, false) else {
             return;
         };
         let mut depth = 1;
