@@ -60,9 +60,6 @@ const PUT_GLOBAL: u8 = Op::PutGlobal as u8;
 const IN: u8 = Op::In as u8;
 const TO_STRING: u8 = Op::ToString as u8;
 const CONCAT: u8 = Op::Concat as u8;
-const TYPEOF: u8 = Op::Typeof as u8;
-const OBJECT: u8 = Op::Object as u8;
-const PUSH_ATOM: u8 = Op::PushAtom as u8;
 
 /// The flags word of a `PushResult` frame (`fast_return`'s condition).
 const PUSH_RESULT: i32 = Continuation::PushResult.to_flags();
@@ -502,42 +499,22 @@ impl Exec<'_> {
         self.heap.get_element_fast(obj, i)
     }
 
-    /// A declined instruction that only builds a value (`Exec::build_op`: a template
-    /// literal's `to_string` and `concat`, `typeof`, an object literal, a string constant
-    /// by atom; not `array_from`, which measured 7% slower here than through `step`), in
-    /// `decline_fast`. False, with nothing changed, when an operand
-    /// of `to_string` or `concat` is an object (ToPrimitive runs user code) or when
-    /// building fails (a symbol, the heap cap): `step` runs it then, throws or retries.
-    fn decline_build(&mut self, op: u8) -> bool {
-        let o = Op::ALL[op as usize];
-        let n = match op {
-            TO_STRING => 1,
-            CONCAT => self.imm_u16(1),
-            _ => 0,
-        };
+    /// A declined `to_string` or `concat` of a template literal (`Exec::concat_op`), in
+    /// `decline_fast`. False, with nothing changed, when an operand is an object
+    /// (ToPrimitive runs user code) or when it fails (a symbol, the heap cap): `step`
+    /// runs it then, throws or retries.
+    fn decline_concat(&mut self, op: u8) -> bool {
+        let concat = op == CONCAT;
+        let n = if concat { self.imm_u16(1) } else { 1 };
         if (0..n).any(|i| self.get(self.sp - n + i).as_object().is_some())
-            || self.build_op(o).is_err()
+            || self.concat_op(concat).is_err()
         {
             return false;
         }
-        let info = &OPS[o as usize];
+        let info = &OPS[op as usize];
         self.fuel -= info.cost.fuel() as i64;
         self.pc += info.size as u32;
         true
-    }
-
-    /// `decline_fast`'s `+` of a string and another primitive (`"id " + i`): `None` for
-    /// an object or a symbol (`step`'s, they run code or throw) and at the heap cap.
-    #[inline(never)]
-    fn add_string_and_primitive(&mut self, a: Value, c: Value) -> Option<crate::value::Str> {
-        use crate::value::Kind;
-        let plain = |v: Value| !matches!(v.kind(), Kind::Object | Kind::Symbol);
-        if !plain(a) || !plain(c) {
-            return None;
-        }
-        let x = conv::to_string(self.heap, a).ok()?;
-        let y = conv::to_string(self.heap, c).ok()?;
-        self.heap.concat(x, y).ok()
     }
 
     /// A declined `in` with a string key and an object (`decline_fast`): the heap's
@@ -618,8 +595,8 @@ impl Exec<'_> {
     /// What the loop declined, done here instead of through `step` where that is cheap:
     /// a call of a `@fast` builtin (D1850), `+` of a string and a primitive whose
     /// ToString runs no user code and cannot throw (`"id " + i`, 0231), `in` with a
-    /// string key (`decline_in`), an instruction that only builds a value
-    /// (`decline_build`), or an
+    /// string key (`decline_in`), a template literal's `to_string` and `concat`
+    /// (`decline_concat`), or an
     /// instruction of the construct path (`decline_construct`, 0236). False, with
     /// nothing changed, for anything else or at the heap cap (`step` runs it then and
     /// retries, D1700). One out-of-line call: changes to the loop's own code, even a
@@ -632,21 +609,27 @@ impl Exec<'_> {
         if op == IN {
             return self.decline_in();
         }
-        if matches!(op, TO_STRING | CONCAT | TYPEOF | OBJECT | PUSH_ATOM) {
-            return self.decline_build(op);
+        if matches!(op, TO_STRING | CONCAT) {
+            return self.decline_concat(op);
         }
         if op != fast::ADD {
             return super::construct::takes(op) && self.decline_construct(op);
         }
+        use crate::value::Kind;
         let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
-        // Two strings first (no conversion to ask for); else one string and a primitive
-        // that is no symbol.
-        let r = match (a.as_string(), c.as_string()) {
-            (Some(x), Some(y)) => self.heap.concat(x, y).ok(),
-            (None, None) => None,
-            _ => self.add_string_and_primitive(a, c),
+        if a.as_string().is_none() && c.as_string().is_none() {
+            return false;
+        }
+        let part = |ex: &mut Self, v: Value| match v.as_string() {
+            // (A string needs no conversion; asking for one cost 150 instructions.)
+            Some(s) => Some(s),
+            None if matches!(v.kind(), Kind::Object | Kind::Symbol) => None,
+            None => conv::to_string(ex.heap, v).ok(),
         };
-        let Some(s) = r else {
+        let Some(s) = part(self, a)
+            .and_then(|x| Some((x, part(self, c)?)))
+            .and_then(|(x, y)| self.heap.concat(x, y).ok())
+        else {
             return false;
         };
         self.sp -= 1;
