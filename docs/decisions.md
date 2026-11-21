@@ -12958,3 +12958,14 @@ order), so a fallthrough now sets or checks its depth directly; jumps still go t
 `reach`. Same checks and errors. Compile −2.4..−3.2% (codemode bodies, wasm), +90 B gz.
 Measured and dropped in the same round: the resolver's constant pool hashing strings with
 the parser pool's unkeyed hash instead of the heap's keyed one (±0.3%, no gain).
+## D3380: A regexp literal run is one node
+date: 2026-11-21 · by: pscan · issue: 0267
+The regexp parser makes a run of literal characters one `Node::Str` (escaped characters
+join the run before them) instead of a `Node::Char` per character; the compiler emits the
+same `CHAR` instructions, so programs and matching are unchanged. Its code buffer starts at
+64 + 4 words per pattern unit. Compile of distinct codemode-like patterns (wasm
+instructions of `new RegExp`): 41.6K → 38.8K per pattern (QuickJS 22.1K), +225 B gz.
+Measured and not kept: keeping one-term alternatives out of a `Vec` (another −3.5%, +200
+B), a bulk copy of the program into its cell (nothing), and for JSON the scan recording
+escape positions for the writer (one-layer escape-dense text −13% time, double-encoded
+text +4%, workloads within noise, +525 B).

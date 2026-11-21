@@ -55,6 +55,22 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Measuring (work/scratch/0267): rx-cm.js compiles 16 codemode-like patterns distinct
+  (a unique `|@i` alternative) 80K times; rx-cm-base.js the same loop without `new
+  RegExp`; wmeasure difference = the create path. main 5f5434e3: djs 41.6K wasm
+  instructions per pattern, QuickJS (quickjs-wasi) 22.1K (1.88x); time 2.4 vs 1.2 µs.
+  The corpus patterns (182, collect.mjs) are dominated by `\p{RGI_Emoji}` and `\p{…}`
+  with `i` (5-9x QuickJS: case closure of large sets), not codemode-typical.
+- Profiles: native (samply on a release test loop) parse 46%, compile 34%, tree drop 17%,
+  malloc ~35%; wasm (create path) parser ~15%, compiler ~14%, first/follow sets ~10%,
+  drop ~4%, allocator ~15%. Allocations per pattern: 6-27 in parse, 4-14 in compile.
+- D3380: literal runs as one node: −7% (38.8K), +225 B gz. Tried and dropped: one-term
+  alternatives without a Vec (−10.5% total but +422 B), bulk program_cell copy (0).
+- JSON escapes: ~183 machine instructions per escape (scan + write; inner 80 KB text with
+  3,266 escapes: 990K instr vs 393K with one escape). Escape positions recorded by the
+  scan (writer copies 32 B unconditionally per run): inner −13% time / −1.5% instr, outer
+  (double-encoded) +4% / +8%, heavy −1%, json/text −3% (noise), +525 B gz: not kept
+  (work/scratch/0267/json-escape-positions.patch).
 
 ## Follow-ups
 
