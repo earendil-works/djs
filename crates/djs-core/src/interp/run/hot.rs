@@ -1691,6 +1691,10 @@ impl Exec<'_> {
                                 if r == 0 {
                                     break Exit::General;
                                 }
+                                debug_assert!(
+                                    vals == ValueArray::VALUES.at(self.stack, 0),
+                                    "a leaf moved the stack"
+                                );
                                 sp -= r as u32;
                                 fuel -= const { fuel_of(Op::Call) + super::fastpath::FAST_FUEL };
                                 ip += (r >> 32) as u32;

@@ -63,15 +63,10 @@ impl Exec<'_> {
         // (The loop has these in locals.)
         self.sp = base + 2 + argc;
         self.pc = pc;
-        let stack = self.stack;
         let size = OPS[self.byte(pc) as usize].size as u32;
         if !self.fast_builtin_call(t, base, argc, pc + size) {
             return 0;
         }
-        debug_assert!(
-            self.stack == stack || !self.opts.hot_loop,
-            "a leaf moved the stack"
-        );
         u64::from(argc + 1) | u64::from(size) << 32
     }
 
