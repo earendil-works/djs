@@ -9,6 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0271 | A smaller base image: idle at QuickJS parity | pstart | .worktrees/pstart |
 | 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
 | 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
+| 0273 | test262 under GC stress as a full-only gate leg | pgc (after 0269) | .worktrees/pgc |
 | 0268 | run_hot sensitivity, receiver method calls, the general path | pcall | .worktrees/pcall |
 | 0272 | Per-element cost of callback array builtins | pscan | .worktrees/pscan |
 
