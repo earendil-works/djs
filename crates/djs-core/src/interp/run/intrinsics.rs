@@ -1374,7 +1374,7 @@ impl Exec<'_> {
                         break 'bad;
                     };
                     let offset = self.time_zone_offset();
-                    conv::number(date::parse(self.heap.str_units(s), offset))
+                    conv::number(date::parse(self.heap.str_view_flat(s)?, offset))
                 }
                 DATE_TIMEZONE_OFFSET => {
                     let t = a0.as_number().unwrap_or(f64::NAN);

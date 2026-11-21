@@ -713,12 +713,14 @@ fn parse_other(s: &[u8], f: &mut [i64; 9], local: &mut bool) -> bool {
     true
 }
 
-/// Date.parse of a string (its code units, as qjs maps them to bytes).
-pub(crate) fn parse(units: impl Iterator<Item = u16>, offset: i64) -> f64 {
-    // (On the stack: a Vec grown byte by byte was most of a short parse, 0270.)
+/// Date.parse of a string's code units (`Heap::str_view_flat`), as qjs maps them to
+/// bytes.
+pub(crate) fn parse(units: crate::heap::StrView, offset: i64) -> f64 {
+    // (On the stack, read from the string's one piece: a Vec grown byte by byte and a
+    // rope walk were most of a short parse, 0270.)
     let mut bytes = [0u8; 127];
     let mut len = 0;
-    for c in units.take(127) {
+    for c in units.units().take(127) {
         let c = c as u32;
         bytes[len] = if c != 0x2028 && c != 0x2029 && is_space(c) {
             b' '
@@ -729,7 +731,10 @@ pub(crate) fn parse(units: impl Iterator<Item = u16>, offset: i64) -> f64 {
         };
         len += 1;
     }
-    let buf = &bytes[..len];
+    parse_bytes(&bytes[..len], offset)
+}
+
+fn parse_bytes(buf: &[u8], offset: i64) -> f64 {
     let mut f = [0i64; 9];
     let mut local = false;
     if !(parse_iso(buf, &mut f, &mut local) || parse_other(buf, &mut f, &mut local)) {

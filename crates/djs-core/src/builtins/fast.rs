@@ -915,7 +915,7 @@ fn date_new(heap: &mut Heap, args: &[Value]) -> Fast {
                 let offset = realm::intrinsic(heap, Intrinsic::TimeZoneOffset)
                     .as_int()
                     .unwrap_or(0) as i64;
-                crate::builtins::date::parse(heap.str_units(s), offset)
+                crate::builtins::date::parse(heap.str_view_flat(s)?, offset)
             } else {
                 let Some(n) = num(heap, *v)? else {
                     return Ok(None);
