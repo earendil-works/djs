@@ -1,6 +1,6 @@
 # 0282: @fast entries for builtin getters (Map/Set size and friends)
 
-status: open
+status: in-progress
 agent: pcall
 branch: issue/0282-fast-getters
 depends-on: 0276, 0280 (budget change)
