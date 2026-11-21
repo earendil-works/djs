@@ -175,6 +175,49 @@ media, fanout, above); it needs D3140's step rounded down (pgc).
   header's free u16) is read at frame entry (FLAGS, counts, CODE_LEN, CONSTS), by IC ops (IC),
   or at closure creation (INFO, NAME, LENGTH).
 
+### pi end to end: a0d85b06 (before the push) vs main 968f3465
+Main module (the dump module where a dump is involved), js/pi/vm.ts of each tree, pi-private's
+PRELUDE_SOURCE (prelude-next for the next shape), two tools; work/scratch/0271/pib.ts (median of 40,
+the trees interleaved, load ~6), instructions: the whole node process over N sessions minus N=0,
+--wasm-sync-tier-up, min of 2. Memory: the measured session in an instance of its own, a fresh
+module (no pool), after a first session that is kept open.
+| case | old ms | new ms | old M instr | new M instr | new/old | old KiB | new KiB |
+| --- | --: | --: | --: | --: | --: | --: | --: |
+| start, prelude image reused (`return 1`) | 0.17 | 0.15 | 5.89 | 5.57 | 0.946 | 768 | 576 |
+| start, prelude run (no image) | 4.14 | 3.96 | 109.6 | 103.9 | 0.948 | 1472 | 1280 |
+| tool-heavy (61 calls, 120 KB of results) | 1.99 | 1.93 | 56.1 | 53.6 | 0.956 | 1216 | 1024 |
+| next shape, tool-heavy, dump module | 1.62 | 1.57 | 44.5 | 42.6 | 0.956 | 1152 | 1088 |
+| next shape, tool-heavy, main module | 1.62 | 1.47 | | | 0.913 | 1088 | 896 |
+| next shape, dump + resume at every idle point | 64.2 | 61.8 | 1544 | 1529 | 0.990 | 2816 | 2880 |
+| 12 x console.log of a 1 MiB `"x".repeat` string | 4.78 | 16.3 | 111 | 359 | 3.23 | 7488 | 5760 |
+- Every pi session is 64-192 KiB smaller and 4-9% cheaper. The exception is joining a
+  repeat-built rope, which is 3.2x slower: D3400 (0269) no longer flattens it, and
+  `collect_range` visits ~1M shared one-character leaves per join (26.9M vs 6.3M instructions
+  per `[s].join(" ")`; appended ropes got cheaper, 1.26M → 0.47M). Reported to the coordinator
+  for pgc. The dump+resume row's memory is the last of the instances the session moved
+  through, so it shows the pool more than the session.
+- pi's own tests (js/pi/pi-tests.ts, main module): the sum of test durations is 15.15-15.19 s
+  old against 16.92-17.30 s new (two runs each). The largest increases are the output-limit
+  tests (1 MiB repeat strings, the regression above, +92..+183 ms each) and wall-clock
+  timeout tests that are load-bound. Instructions per interrupt poll (FUEL_PER_POLL) fell
+  457K → 346K in a tight loop (pcall's 0268), so budgets poll ~30% more often per second of
+  CPU: they mean less CPU time than before.
+- What pi's path is made of on main (cpu profiles, names builds, prof-*.cpuprofile):
+  - start with the image reused (0.15 ms): instantiating 18% (Instance 12.9%, djsExports
+    5.3%; the pool keeps 2), **the image cache key 16%** (`preludeKeyOf` JSON-stringifies the
+    whole prelude every start, since pi passes a new `data` per run and the WeakMap misses,
+    then the Map hashes that string), restoring the image's zero-fill (`Vec::resize`) 10.6%,
+    V8 GC 4.5%. The engine itself (compile and run of the body) is under 10%.
+  - tool-heavy (1.9 ms): run_hot 20%, the JS host and the test's tool ~15% (answer, tool,
+    Encoder, outWords, Reader), JSON parse of the results ~6%, collection 2.6%.
+  - dump + resume (~7.5 ms per idle point, 8 points): writing the dump 46%
+    (`Dumper::finish`: plain::write 18%, react_upto 12%), loading it 43% (`loadPlain`:
+    compile 32%, of which parse 18%). It scales with the data the session holds (the
+    read results are string literals in every dump).
+- Cheap wins in js/pi found (not built, outside 0271's touches): key the image cache on the
+  prelude's hash kept per prelude string instead of JSON of the whole text (-16% of a
+  cached start).
+
 ## Follow-ups
 
 ## Result
