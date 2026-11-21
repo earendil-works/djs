@@ -135,9 +135,25 @@ export class Engine {
 
   /** A VM restored from `image()` (a prelude image of this process) in a new instance. */
   static restore(module: WebAssembly.Module, image: Uint8Array, memoryLimit: number | undefined): Engine {
-    const x = instantiate(module);
+    const limit = memoryLimit ?? 0;
+    // A pooled instance leaves the bytes where the image goes to the image (D3452): where a
+    // renewed instance of its size stages this image is a function of those alone.
+    const pool = pools.get(module);
+    const pooled = pool?.free.pop();
+    const where = pooled && `${pooled.memory.buffer.byteLength} ${image.length} ${limit}`;
+    const skip = where ? pool!.stagedAt.get(where) : undefined;
+    let x = pooled ? elasticStack(renew(pool!.fresh, pooled, skip, image.length), module) : instantiate(module);
     // The image's buffer becomes the arena: stage it with the arena's capacity (D1942).
-    const at = x.djs_image_staging ? x.djs_image_staging(image.length, memoryLimit ?? 0) : x.djs_staging(image.length);
+    let at = x.djs_image_staging ? x.djs_image_staging(image.length, limit) : x.djs_staging(image.length);
+    if (where) {
+      if (skip !== undefined && at !== skip) {
+        // Staged elsewhere: the skipped bytes may hold the earlier session's. A new
+        // instance instead (this one is dropped).
+        pool!.stagedAt.delete(where);
+        x = elasticStack(djsExports(module) as unknown as Exports, module);
+        at = x.djs_image_staging ? x.djs_image_staging(image.length, limit) : x.djs_staging(image.length);
+      } else pool!.stagedAt.set(where, at);
+    }
     new Uint8Array(x.memory.buffer).set(image, at);
     const vm = x.vm_from_bytes(image.length, memoryLimit ?? 0);
     if (vm === 0) throw new Error(outText(x));
@@ -529,7 +545,7 @@ export class Engine {
  * (the static data, the allocator's state, the stack), and the rest is zeroed, so nothing
  * of the session before is left in it. Small ones only, a few: memory never shrinks.
  */
-const pools = new WeakMap<WebAssembly.Module, { fresh: Uint8Array; free: Exports[] }>();
+const pools = new WeakMap<WebAssembly.Module, { fresh: Uint8Array; free: Exports[]; stagedAt: Map<string, number> }>();
 const POOLED_INSTANCES = 2;
 const POOLED_MEMORY = 64 * 1024 * 1024;
 
@@ -538,11 +554,19 @@ function release(module: WebAssembly.Module, x: Exports): void {
   if (pool && pool.free.length < POOLED_INSTANCES && x.memory.buffer.byteLength <= POOLED_MEMORY) pool.free.push(x);
 }
 
-/** A pooled instance as new: its memory as a new instance's. */
-function renew(fresh: Uint8Array, x: Exports): Exports {
+/**
+ * A pooled instance as new: its memory as a new instance's. With `skip`, the `len` bytes
+ * there are left as they are: the caller writes an image over them before anything reads
+ * them (D3452).
+ */
+function renew(fresh: Uint8Array, x: Exports, skip?: number, len = 0): Exports {
   const m = new Uint8Array(x.memory.buffer);
   m.set(fresh, 0);
-  m.fill(0, fresh.length);
+  if (skip === undefined || skip < fresh.length || skip + len > m.length) m.fill(0, fresh.length);
+  else {
+    m.fill(0, fresh.length, skip);
+    m.fill(0, skip + len);
+  }
   return x;
 }
 
@@ -553,7 +577,7 @@ function instantiate(module: WebAssembly.Module): Exports {
   if (pool && pooled) return elasticStack(renew(pool.fresh, pooled), module);
   const x = elasticStack(djsExports(module) as unknown as Exports, module);
   // (Its memory before any call: what a pooled instance is made as again.)
-  if (!pool) pools.set(module, { fresh: new Uint8Array(x.memory.buffer).slice(), free: [] });
+  if (!pool) pools.set(module, { fresh: new Uint8Array(x.memory.buffer).slice(), free: [], stagedAt: new Map() });
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {
     throw new Error(`The module is not djs-wasm of ABI version ${ABI_VERSION}`);
   }
