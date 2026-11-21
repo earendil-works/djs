@@ -135,8 +135,10 @@ enum Empty {
     Anywhere,
 }
 
-struct Compiler {
+struct Compiler<'a> {
     code: Vec<u32>,
+    /// The characters of the literal runs (`Parsed::lits`).
+    lits: &'a [u32],
     reg_top: u32,
     reg_max: u32,
     /// The characters that can start what follows the node being compiled (forward
@@ -154,7 +156,7 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
     // The words are copied into the heap afterwards: room for a typical program up
     // front saves the doubling reallocations, which showed in compile time (a character
     // takes two words, a class or a group more, the first set 11 and more).
-    let mut words = crate::buf::vec_with_capacity(64 + 4 * parsed.len);
+    let mut words = crate::buf::vec_with_capacity(128.max(64 + 4 * parsed.len));
     words.resize(H_LEN, 0u32);
     words[H_FLAGS] = flags.bits() as u32;
     words[H_CAPTURES] = parsed.capture_count;
@@ -169,6 +171,7 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
     }
     let mut c = Compiler {
         code: words,
+        lits: &parsed.lits,
         reg_top: 0,
         reg_max: 0,
         follow: None,
@@ -260,8 +263,8 @@ fn first_into(node: &Node, unicode: bool, acc: &mut CharSet) -> Option<bool> {
             first_char_into(*c, *icase, unicode, acc);
             false
         }
-        Node::Str { chars, icase } => {
-            first_char_into(chars[0], *icase, unicode, acc);
+        Node::Str { first, icase, .. } => {
+            first_char_into(*first, *icase, unicode, acc);
             false
         }
         Node::Class {
@@ -473,7 +476,7 @@ fn is_single_char(node: &Node) -> bool {
 fn min_width(node: &Node) -> u32 {
     match node {
         Node::Char { .. } | Node::Dot { .. } => 1,
-        Node::Str { chars, .. } => chars.len() as u32,
+        Node::Str { len, .. } => *len,
         Node::Class { strings, .. } => {
             let shortest = strings.iter().map(|s| s.len() as u32).min().unwrap_or(1);
             shortest.min(1)
@@ -486,7 +489,7 @@ fn min_width(node: &Node) -> u32 {
     }
 }
 
-impl Compiler {
+impl Compiler<'_> {
     fn here(&self) -> u32 {
         self.code.len() as u32
     }
@@ -524,8 +527,11 @@ impl Compiler {
             Node::Char { c, icase: i } => {
                 self.emit2(CHAR | dir | icase(*i), *c);
             }
-            Node::Str { chars, icase: i } => {
+            Node::Str {
+                at, len, icase: i, ..
+            } => {
                 let op = CHAR | dir | icase(*i);
+                let chars = &self.lits[*at as usize..(*at + *len) as usize];
                 self.code.reserve(2 * chars.len());
                 let mut put = |&c: &u32| {
                     self.code.push_out(op);
@@ -702,13 +708,7 @@ impl Compiler {
         }
         let mut alts: Vec<Node> = sorted
             .iter()
-            .map(|s| match s[..] {
-                [c] => Node::Char { c, icase },
-                _ => Node::Str {
-                    chars: s.to_vec(),
-                    icase,
-                },
-            })
+            .map(|s| Node::Concat(s.iter().map(|&c| Node::Char { c, icase }).collect()))
             .collect();
         if !set.is_empty() {
             alts.push_out(Node::Class {

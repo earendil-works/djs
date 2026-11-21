@@ -37,9 +37,12 @@ pub(crate) enum Node {
         icase: bool,
     },
     /// Two or more characters in a row, as `Char`s would match them (0267: a literal run
-    /// as one node, not a node per character).
+    /// as one node, not a node per character): `len` of `Parsed::lits` from `at`, the
+    /// first one also here.
     Str {
-        chars: Vec<u32>,
+        first: u32,
+        at: u32,
+        len: u32,
         icase: bool,
     },
     /// A character class. With `icase`, the input character is canonicalized before the
@@ -99,6 +102,8 @@ pub(crate) struct Parsed {
     pub(crate) names: Vec<Option<Vec<u16>>>,
     /// The pattern's length in code units (the compiler sizes its buffer by it).
     pub(crate) len: usize,
+    /// The characters of the literal runs (`Node::Str`).
+    pub(crate) lits: Vec<u32>,
 }
 
 struct GroupName {
@@ -203,6 +208,8 @@ struct Parser<'a> {
     /// The pattern went past `max_depth` on the small stack: whatever came of the parse,
     /// it needs the larger one.
     need_stack: bool,
+    /// The characters of the literal runs (`Node::Str`).
+    lits: Vec<u32>,
     /// The property tables, if this build or the host has them (D3350).
     #[cfg_attr(not(feature = "regexp-unicode-props"), allow(dead_code))]
     props: Option<&'a [u8]>,
@@ -232,6 +239,7 @@ pub(crate) fn parse(
         max_depth: if deep { MAX_DEPTH } else { SMALL_DEPTH },
         need_stack: false,
         props,
+        lits: Vec::new(),
     };
     let node = p.disjunction(false);
     if p.need_stack {
@@ -254,6 +262,7 @@ pub(crate) fn parse(
         capture_count: p.capture_count,
         names,
         len: src.len(),
+        lits: core::mem::take(&mut p.lits),
     })
 }
 
@@ -300,32 +309,6 @@ const QUANT: [u64; 2] = ascii_set(b"*+?{");
 fn in_set(m: [u64; 2], c: u32) -> bool {
     let b = c.wrapping_sub(0x20);
     b < 0x60 && m[b as usize / 64] >> (b % 64) & 1 != 0
-}
-
-/// Appends a term to an alternative, a character to the literal run before it.
-#[inline(never)]
-fn push_term(terms: &mut Vec<Node>, t: Node) {
-    if let Node::Char { c, icase } = t {
-        match terms.last_mut() {
-            Some(Node::Str { chars, icase: i }) if *i == icase => {
-                chars.push_out(c);
-                return;
-            }
-            Some(last @ Node::Char { .. }) => {
-                if let Node::Char { c: c0, icase: i } = *last
-                    && i == icase
-                {
-                    let mut chars = crate::buf::vec_with_capacity(8);
-                    chars.push_out(c0);
-                    chars.push_out(c);
-                    *last = Node::Str { chars, icase };
-                    return;
-                }
-            }
-            _ => {}
-        }
-    }
-    terms.push_out(t);
 }
 
 impl Parser<'_> {
@@ -431,8 +414,8 @@ impl Parser<'_> {
     }
 
     fn alternative(&mut self, backward: bool) -> Result<Node, SyntaxError> {
-        // Few terms once literal runs are one each (0267): grown as needed.
-        let mut terms: Vec<Node> = Vec::new();
+        // Few terms once literal runs are one each (0267).
+        let mut terms: Vec<Node> = crate::buf::vec_with_capacity(8);
         while !self.at_end() && self.cur() != '|' as u32 && self.cur() != ')' as u32 {
             // A run of literal ASCII characters that no quantifier follows: what `term`
             // would make of each, without its dispatch, as one node (literal runs
@@ -446,7 +429,7 @@ impl Parser<'_> {
                 self.pos = end;
                 terms.push_out(self.literal_run(start, end));
             } else if let Some(t) = self.term(backward)? {
-                push_term(&mut terms, t);
+                self.push_term(&mut terms, t);
             }
         }
         Ok(match terms.len() {
@@ -458,18 +441,60 @@ impl Parser<'_> {
 
     /// The literal characters `start..end` as one node.
     #[inline(never)]
-    fn literal_run(&self, start: usize, end: usize) -> Node {
+    fn literal_run(&mut self, start: usize, end: usize) -> Node {
         if end - start == 1 {
             return self.char_node(self.src[start] as u32);
         }
-        let mut chars = crate::buf::vec_with_capacity(end - start);
-        for &u in &self.src[start..end] {
-            chars.push_out(self.canonical(u as u32));
+        let at = self.lits.len() as u32;
+        if self.lits.capacity() == 0 {
+            // Room for every literal left in the pattern: one allocation.
+            self.lits = crate::buf::vec_with_capacity(self.src.len() - start);
+        }
+        for i in start..end {
+            let c = self.canonical(self.src[i] as u32);
+            self.lits.push_out(c);
         }
         Node::Str {
-            chars,
+            first: self.lits[at as usize],
+            at,
+            len: (end - start) as u32,
             icase: self.icase,
         }
+    }
+
+    /// Appends a term to an alternative, a character to the literal run before it.
+    #[inline(never)]
+    fn push_term(&mut self, terms: &mut Vec<Node>, t: Node) {
+        if let Node::Char { c, icase } = t {
+            let end = self.lits.len() as u32;
+            match terms.last_mut() {
+                // (Only a run that ends the literals: nothing was parsed after it.)
+                Some(Node::Str {
+                    at, len, icase: i, ..
+                }) if *i == icase && *at + *len == end => {
+                    self.lits.push_out(c);
+                    *len += 1;
+                    return;
+                }
+                Some(last @ Node::Char { .. }) => {
+                    if let Node::Char { c: c0, icase: i } = *last
+                        && i == icase
+                    {
+                        self.lits.push_out(c0);
+                        self.lits.push_out(c);
+                        *last = Node::Str {
+                            first: c0,
+                            at: end,
+                            len: 2,
+                            icase,
+                        };
+                        return;
+                    }
+                }
+                _ => {}
+            }
+        }
+        terms.push_out(t);
     }
 
     /// Whether the unit at `i` is a literal ASCII character no quantifier follows.

@@ -58,9 +58,11 @@ fn regexp_compile_allocations() {
     let cases = [
         (r"\d+", "", 7),
         (r"[\w.+-]+@[\w-]+\.[\w.]+", "", 22),
-        (r"https?://([^/\s]+)(/[^\s?#]*)?", "", 30),
+        (r"https?://([^/\s]+)(/[^\s?#]*)?", "", 28),
         (r"(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})", "", 32),
-        (r"\bfox\b", "i", 5),
+        // 6 since 0267: the characters of literal runs (`fox`) are one buffer of the
+        // parse; compiling a pattern costs 7% fewer instructions (D3380).
+        (r"\bfox\b", "i", 6),
         (r"^\s+|\s+$", "g", 15),
     ];
     let mut over = Vec::new();
