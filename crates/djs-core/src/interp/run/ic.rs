@@ -24,7 +24,8 @@
 //! - prototype property reads (D1621): word 0 = offset slot, kind = depth of the holder,
 //!   entry index + 1 in the holder; word 1 = the offset of the receiver's prototype (an
 //!   object's, or the realm's prototype of a primitive); word 2 = `Roots::PROTO_EPOCH`;
-//!   word 3 = the receiver's shape word (`Heap::receiver_shape`, 0083), or 0. The objects
+//!   word 3 = the receiver's shape word (`Heap::receiver_shape`, 0083), or 0; word 4 = 1
+//!   if the key is no canonical numeric string (a typed array receiver may then hit). The objects
 //!   from that prototype to the holder are marked `OBJ_IS_PROTO`, so a key added to one
 //!   of them or a prototype change bumps the epoch. The receiver must not have an own
 //!   `key`: an equal shape word proves that, otherwise the hit looks it up. The holder's
@@ -65,6 +66,9 @@ const MAX_DEPTH: u32 = KIND_ABSENT - 1;
 /// Addition slot word 0: a `put_field` site.
 const ADD_SET: u32 = 1;
 
+/// Prototype-read slot word 4: the key is no canonical numeric string (D3530).
+const NAMED_KEY: u32 = 1;
+
 /// Global slot word 0: the entry is in the global lexical record.
 const IN_LEX: u32 = 1 << 31;
 
@@ -93,15 +97,16 @@ fn exotic_own(heap: &Heap, obj: Obj, key: Atom) -> bool {
 
 /// The prototype a cached prototype read on `o` starts from, if `o` cannot have an own
 /// property `key` that the cache would skip; `shape` is the receiver shape word the slot
-/// remembers (0: none); `filled`: for a hit of a filled slot, whose key was not a typed
-/// array's numeric one when it was filled (the test costs a look at the key's text).
-/// `None` for a proxy, a typed array's numeric key, an object with its own `key`, nullish
-/// values, and a string's `length` and indexes.
+/// remembers (0: none); `named`: the slot says that `key` is no canonical numeric string
+/// (word 4, written when it was filled: the test looks at the key's text), so a typed
+/// array has it only as a named property. `None` for a proxy, a typed array's numeric
+/// key, an object with its own `key`, nullish values, and a string's `length` and
+/// indexes.
 #[inline(always)]
-fn proto_start(heap: &Heap, o: Value, key: Atom, shape: u32, filled: bool) -> Option<Obj> {
+fn proto_start(heap: &Heap, o: Value, key: Atom, shape: u32, named: bool) -> Option<Obj> {
     match o.as_object() {
         Some(obj) => {
-            if !(filled && heap.object_class(obj) == ObjectClass::TypedArray)
+            if !(named && heap.object_class(obj) == ObjectClass::TypedArray)
                 && exotic_own(heap, obj, key)
             {
                 return None;
@@ -179,7 +184,8 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
             if w2 != heap.proto_epoch() {
                 return None;
             }
-            let proto = proto_start(heap, o, key, word(heap, at, 3), true)?;
+            let named = word(heap, at, 4) == NAMED_KEY;
+            let proto = proto_start(heap, o, key, word(heap, at, 3), named)?;
             if proto.offset() != w1 {
                 return None;
             }
@@ -635,7 +641,8 @@ impl Exec<'_> {
         let w0 = IC_OFFSET_SLOT | depth << KIND_SHIFT | (i + 1);
         let epoch = self.heap.proto_epoch();
         let shape = o.as_object().map_or(0, |obj| self.heap.receiver_shape(obj));
-        self.ic_write(ic, [w0, proto.offset(), epoch, shape, 0]);
+        let named = self.heap.canonical_numeric_index(key).is_none() as u32 * NAMED_KEY;
+        self.ic_write(ic, [w0, proto.offset(), epoch, shape, named]);
     }
 
     /// After a slow lookup found `key` neither on `obj` nor on its prototype chain:
@@ -659,7 +666,8 @@ impl Exec<'_> {
         }
         let w0 = IC_OFFSET_SLOT | KIND_ABSENT << KIND_SHIFT;
         let epoch = self.heap.proto_epoch();
-        self.ic_write(ic, [w0, proto.offset(), epoch, shape, 0]);
+        // (No numeric key gets here.)
+        self.ic_write(ic, [w0, proto.offset(), epoch, shape, NAMED_KEY]);
     }
 
     /// After a slow lookup found the accessor `key` on `obj` itself, a shape-mode object:
