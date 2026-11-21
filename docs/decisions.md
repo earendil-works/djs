@@ -12431,3 +12431,17 @@ machine → `n_call_closure`'s frame write) that D3125 left: sort with a compara
 2.56x → 1.57x). Semantics: the same comparisons in the same order with the same
 arguments and `this`; a throw unwinds the callback's frame into the builtin as before;
 the state stays on the heap and the stack, so suspension and images see ordinary frames.
+
+## D3331: Object.fromEntries of an Array of entry arrays in one leaf
+date: 2026-11-21 · by: pidle (size approved by the coordinator) · issue: 0262
+`%ObjectFromEntriesDense(iterable)` builds the object at once when nothing in the spec's
+loop can run user code or see a difference: `iterable` is an Array whose iteration is the
+original (`iteration_unmodified`: @@iterator and %ArrayIteratorPrototype%.next as
+installed, found as data properties), every element is a present dense element that is
+an object whose "0" and "1" are present dense elements (what Get reads, with no getter or
+Proxy), and every key is a string (ToPropertyKey runs nothing). The entries are checked
+first (read-only), then defined with CreateDataProperty in order, so repeated keys keep
+their first place and last value. Anything else (holes, Maps, generators, number or
+symbol keys, a modified iterator) returns undefined and the general loop runs from the
+start: nothing observable happened. 105k → 14.9k wasm instructions per 8-key call
+(QuickJS 2026 14.7k); +374 B gzip (the coordinator approved the room).

@@ -91,6 +91,11 @@ function ArrayFromIterator(a: Obj, items: Value, method: Value, mapfn: Value, th
  * @builtin Object.fromEntries
  */
 function ObjectFromEntries(iterable: Value): Obj {
+  // An Array of entry arrays in one step, where that is unobservable (0262).
+  const dense: Value = ObjectFromEntriesDense(iterable);
+  if (dense !== undefined) {
+    return AsObj(dense);
+  }
   // RequireObjectCoercible is GetIterator's TypeError on null and undefined (qjs's
   // message); nothing observable happens in between.
   const obj: Obj = ObjectCreate(RealmIntrinsic("ObjectPrototype"));

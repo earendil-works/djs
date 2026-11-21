@@ -115,6 +115,31 @@ impl Exec<'_> {
         ))
     }
 
+    /// `%ObjectFromEntriesDense(iterable)` (builtins/intrinsics.d.ts): when the Array's
+    /// iteration is the original one, each step reads a present dense element, and
+    /// reading "0" and "1" of an entry whose elements are present and dense is what Get
+    /// does; with a string key nothing in the loop runs user code. So once every entry
+    /// is checked, the properties are defined in one go. Undefined otherwise.
+    pub(super) fn object_from_entries_dense(&mut self, v: Value) -> Result<Value, Fault> {
+        let Some(a) = v.as_object().filter(|_| self.iteration_unmodified(v)) else {
+            return Ok(Value::UNDEFINED);
+        };
+        let n = self.heap.array_length(a);
+        if (0..n).any(|i| entry_pair(self.heap, a, i).is_none()) {
+            return Ok(Value::UNDEFINED);
+        }
+        self.charge_elements(n);
+        let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+        let o = self.heap.new_object(Some(proto))?;
+        for i in 0..n {
+            if let Some((k, x)) = entry_pair(self.heap, a, i) {
+                let k = self.heap.intern(k)?;
+                self.heap.create_data_property(o, k, x)?;
+            }
+        }
+        Ok(Value::object(o))
+    }
+
     /// `%TypedArraySetFromDense(o, values)`.
     pub(super) fn typed_array_set_from_dense(&mut self, o: Obj, values: Obj) -> bool {
         if self.heap.object_class(o) != ObjectClass::TypedArray
@@ -160,4 +185,15 @@ impl Exec<'_> {
             None => Ok(Value::UNDEFINED),
         }
     }
+}
+
+/// Element `i` of `a` as an entry of Object.fromEntries' one-step path: a present dense
+/// element that is an object whose "0" (a string) and "1" are present dense elements.
+#[inline(never)]
+fn entry_pair(heap: &crate::heap::Heap, a: Obj, i: u32) -> Option<(Str, Value)> {
+    let e = heap.get_element_fast(a, i)?.as_object()?;
+    Some((
+        heap.get_element_fast(e, 0)?.as_string()?,
+        heap.get_element_fast(e, 1)?,
+    ))
 }

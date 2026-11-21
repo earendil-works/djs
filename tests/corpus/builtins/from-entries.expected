@@ -1,0 +1,24 @@
+[["ts","2026"],["service","api"],["status",200],["ok",true],["nested",{"a":1}],["nil",null]]
+[["1","one"],["2","two"],["b",3],["a",2],["__proto__",5]] true 1,2,b,a,__proto__
+[] [["k",null]]
+300 0 299
+{"value":1,"writable":true,"enumerable":true,"configurable":true}
+[["0","z"],["1","n"],["1.5","f"]] 1
+[["a",1],["obj",2]] toString
+[["s",null]] [["undefined","v"]] [["o","p"]]
+[["m",1],["n",2]]
+[["g",1],["h",2]]
+[["a","b"]] [["1",2]]
+[["a",1],["g","lazy"]] get 1
+[["a",1],["c",3]] outer 1
+[["p",9]] proxy 0,proxy 1
+hole in the iterable -> TypeError: not an object
+null -> TypeError: cannot read property 'Symbol.iterator' of null
+not iterable -> TypeError: value is not iterable
+primitive entry -> TypeError: not an object
+number entry -> TypeError: not an object
+throwing toString -> Error: key
+[["it",1]] custom
+[["a",1],["b",2]] next,next,next
+[["own",2]]
+=== completed

@@ -264,6 +264,7 @@ const IS_ORIGINAL_COLLECTION_ADDER: u16 = id("IsOriginalCollectionAdder");
 const MAP_PROTOTYPE_SET: u16 = id("MapPrototypeSet");
 const SET_PROTOTYPE_ADD: u16 = id("SetPrototypeAdd");
 const ENUMERABLE_OWN_DATA_PROPERTIES: u16 = id("EnumerableOwnDataProperties");
+const OBJECT_FROM_ENTRIES_DENSE: u16 = id("ObjectFromEntriesDense");
 const TYPED_ARRAY_SET_FROM_DENSE: u16 = id("TypedArraySetFromDense");
 const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
@@ -1090,6 +1091,9 @@ impl Exec<'_> {
                     return bad_argument(id);
                 };
                 decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
+            }
+            OBJECT_FROM_ENTRIES_DENSE => {
+                decline_oom(self.object_from_entries_dense(a0), Value::UNDEFINED)?
             }
             IS_ARRAY_CONSTRUCTOR => {
                 Value::bool(a0 == realm::installed_intrinsic(self.heap, ARRAY_CONSTRUCTOR))

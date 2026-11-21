@@ -2689,6 +2689,10 @@ function ArrayFromIterator(a, items, method, mapfn, thisArg) {
 
 // builtins/iterable.ts:93 Object.fromEntries
 function ObjectFromEntries(iterable) {
+  const dense = %ObjectFromEntriesDense(iterable);
+  if (dense !== undefined) {
+    return %AsObj(dense);
+  }
   const obj = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
@@ -2718,7 +2722,7 @@ function ObjectFromEntries(iterable) {
   }
 }
 
-// builtins/iterable.ts:131
+// builtins/iterable.ts:136
 function GroupByProperty(items, callback) {
   if (!%IsCallable(callback)) {
     throw %NewTypeError("not a function");
@@ -2756,17 +2760,17 @@ function GroupByProperty(items, callback) {
   }
 }
 
-// builtins/iterable.ts:176 Object.groupBy
+// builtins/iterable.ts:181 Object.groupBy
 function ObjectGroupBy(items, callback) {
   return GroupByProperty(items, callback);
 }
 
-// builtins/iterable.ts:185 String.prototype[Symbol.iterator] %StringPrototypeIterator
+// builtins/iterable.ts:190 String.prototype[Symbol.iterator] %StringPrototypeIterator
 function StringPrototypeIterator() {
   return %CreateStringIterator(ThisToString(this));
 }
 
-// builtins/iterable.ts:194 %StringIteratorPrototype%.next %StringIteratorPrototypeNext
+// builtins/iterable.ts:199 %StringIteratorPrototype%.next %StringIteratorPrototypeNext
 function StringIteratorPrototypeNext() {
   const target = %StringIteratorTarget(this);
   if (target === undefined) {
@@ -2783,7 +2787,7 @@ function StringIteratorPrototypeNext() {
   return %CreateIterResultObject(cp, false);
 }
 
-// builtins/iterable.ts:215 value %StringIteratorPrototype%[Symbol.toStringTag]
+// builtins/iterable.ts:220 value %StringIteratorPrototype%[Symbol.toStringTag]
 function StringIteratorToStringTag() {
   return "String Iterator";
 }

@@ -204,6 +204,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("EachDense", R, 7, false),
     i("ArrayJoinDense", L, 3, false),
     i("EnumerableOwnDataProperties", L, 2, false),
+    i("ObjectFromEntriesDense", L, 1, false),
     i("TypedArraySetFromDense", L, 2, false),
     i("StrLocaleCompare", L, 2, false),
     i("StrCharCodeAt", L, 2, false),

@@ -571,6 +571,13 @@ declare function ArrayJoinDense(o: Obj, len: f64, sep: Str): Value;
  */
 declare function EnumerableOwnDataProperties(o: Obj, kind: i32): Value;
 /**
+ * Object.fromEntries ( iterable ) in one step when iterating `iterable` runs no user code
+ * (an Array with the original iteration) and each element is an object whose "0" and "1"
+ * are present dense elements, "0" a string (ToPropertyKey runs no user code): the new
+ * object, or undefined for the general loop (0262). @leaf
+ */
+declare function ObjectFromEntriesDense(iterable: Value): Value;
+/**
  * Writes values[0 .. length) into the typed array `o` (at least that long) when
  * `values` is an Array whose elements are all present in dense storage and primitives
  * of `o`'s content type (ToNumber / ToBigInt run no user code). False, with nothing

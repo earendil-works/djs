@@ -101,7 +101,7 @@ The subset is small on purpose:
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
 function, whose result completes the operation, such as `Get` calling a getter).
-<!--n intrinsics/leaf-->296<!--/n--> are leaves and <!--n intrinsics/reentrant-->30<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
+<!--n intrinsics/leaf-->297<!--/n--> are leaves and <!--n intrinsics/reentrant-->30<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -171,7 +171,7 @@ keeps it. Here is `String.prototype.substr` as the prelude has it, with the help
 `RelativeIndex` called:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substr" "function StringPrototypeSubstr(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9699-L9706), lines 9699–9706:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9703-L9710), lines 9703–9710:
 
 ```js
 function StringPrototypeSubstr(start, length) {

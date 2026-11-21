@@ -444,6 +444,7 @@ const I = {
   EachDense: (mode, o, k, len, f, thisArg, a) => k,
   ArrayJoinDense: (o, len, sep) => undefined,
   EnumerableOwnDataProperties: (o, kind) => undefined,
+  ObjectFromEntriesDense: (iterable) => undefined,
   IteratorFastReady: (it, next) => false,
   IteratorFastDrain: (it, next, arr, n) => n,
   IsOriginalCollectionAdder: (adder, kind) => false,
