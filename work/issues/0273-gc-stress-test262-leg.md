@@ -1,6 +1,6 @@
 # 0273: test262 under GC stress as a full-only gate leg
 
-status: in-progress
+status: done
 agent: pgc
 branch: issue/0273-gc-stress-test262
 depends-on: -
@@ -18,13 +18,29 @@ in a bounded time (say ≤ 20 min on 6 jobs), a ratchet or an explicit expected 
 summary even on timeout. Then run it once on current main and route anything it finds.
 
 ## Acceptance criteria
-- [ ] the leg exists, is documented in TESTING.md, and finishes within its bound
-- [ ] one run on current main, findings in the Log (routed to the coordinator)
-- [ ] gate green; decisions recorded
+- [x] the leg exists, is documented in TESTING.md, and finishes within its bound
+- [x] one run on current main, findings in the Log (routed to the coordinator)
+- [x] gate green; decisions recorded
 
 
 ## Log
+- djs-test262: `--gc-stress`, `--exclude`/`--exclude-from`, `--shard K/N`, `--deadline SECS`
+  (not-started tests leave the tables and the ratchet; `deadline:` line). Under
+  `--gc-stress` the fuel slice between wall-clock checks is 100x smaller.
+- First full stressed run (all active, wall timeout 20 s): 31 failures, all wall-clock
+  timeouts (TypedArray copyWithin/fill/slice, RegExp class escapes, decodeURI A2.5,
+  Array 15.4.4.x long loops, Iterator zip); the generated property-escape tests take
+  minutes each. These 60 + the property-escapes dir are tests/test262/gc-stress-skip.txt.
+- The leg on main e0c804e4 (scripts/gate.sh --full --only "test262 gc stress"): eager and
+  lazy, 38,836 tests each, 189 s for both with all cores at load ~45; slowest remaining
+  15 s; ratchet OK (the 40 expected). Findings: none (0258's unlatched write is fixed;
+  nothing new). Shards of 1/40 were also run while sizing it: same result.
 
 ## Follow-ups
 
 ## Result
+`scripts/gate.sh --full` runs "test262 gc stress" (D3440): test262's active group, eager and
+lazy, under GC stress in the debug build, against the regular ratchet, minus
+tests/test262/gc-stress-skip.txt; ~3 min, bounded by a 10-min deadline per mode with a
+summary. TESTING.md "Full runs" and guide testing.md describe it. No findings on main
+e0c804e4.
