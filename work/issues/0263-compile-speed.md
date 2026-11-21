@@ -68,6 +68,20 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   lexer 8%, dlmalloc+Vec growth ~10%. Natively (samply, cbench in work/scratch/0263): the same
   shape, malloc 22% there. A compile allocates 425-605 times (alloc-stats module), peak
   ~40 KB above the arena.
+- Merged batch 1 (eba51b55).
+- D3341 stack walk in code order: compile −3..−4%, +126 B gz.
+- D3342 compile bump zone: −2..−7% compile but +320 KiB (sequential) / +1.3 MiB (fanout)
+  wasm memory through dlmalloc placement: dropped (zone.patch).
+- D3343 string literals without copies: compile −2..−5%, −59 B gz.
+- EarlyStop of pattern scans in every build: no change, +390 B: dropped.
+- A/B (work/scratch/0263/cab.ts: compile only, interleaved, 2,000 compiles per body, load
+  ~10; main eba51b55 vs branch): sequential 57.9 → 53.3 µs (−7.8%), inspect −5.3%, media
+  −6.0%, fanout −6.7%, json −4.7%. Whole runs (ab2.ts, 800 interleaved fresh sandboxes):
+  sequential −2.1..−3.0%, inspect −1.7%, fanout −2.1%; media −15..−17% (repeated three
+  times, both orders) from D3341 alone, though media's compile is only 6% faster: the
+  profile of media is JSON and GC, so the walk's smaller scratch buffers likely change
+  dlmalloc placement and the arena's growth; not pinned, may not hold under other changes.
+  Memory per workload unchanged (mem.ts).
 
 ## Follow-ups
 

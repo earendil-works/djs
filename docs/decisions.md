@@ -12381,3 +12381,36 @@ date: 2026-11-21 · by: pscan · issue: 0260
 0263 (D3340) landed under 0260's held kernels and freed 4,145 B gz: with them the shipped
 module is 425,457 B gz, so the ceiling goes back from 429,660 to 429,648 (D3312's +12
 was not needed).
+
+## D3341: The stack checker walks in code order
+date: 2026-11-21 · by: pstart · issue: 0263
+`bytecode::stack::walk` (the depth check and `STACK` of every template, ~8% of a compile)
+decoded all code into a list of instructions plus a `u32` per code byte, then walked a
+work list. It now makes one pass in code order: each instruction is decoded once, marks
+its start, and is checked right away when its depth is known by then (from the entry, a
+fallthrough or a forward jump), which in compiled code is nearly every instruction; what
+only a backward jump reaches waits in a work list and is decoded again. Forward targets
+and handler bounds are checked to be instruction starts once the pass has seen them all;
+decoding errors still win over stack errors. Same checks and results (the bytecode tests
+and every compile in the suites). Compile −3 to −4% (wasm, codemode bodies), +126 B gz.
+
+## D3342: A bump zone for compile allocations: measured, not adopted
+date: 2026-11-21 · by: pstart · issue: 0263
+A compile makes 425-717 allocations (58-130 KB in total, peak ~40 KB live), about a
+tenth of its time in dlmalloc. A 32 KiB bump zone in djs-wasm's allocator during
+`vm_compile` (bump, LIFO free, reset at the last free, fallback to dlmalloc) took
+compile time −2..−5% (128 KiB: −5..−7%), but moved wasm memory: sequential 576 → 896 KiB
+and fanout 1,664 → 3,008 KiB, also with the zone taken only from dlmalloc's free room
+and given back after the compile. Taking 32 KiB out of dlmalloc's segment for a moment
+changes where later blocks land and keeps the arena from growing in place (D2541). The
+patch is in work/scratch/0263/zone.patch of the primary checkout.
+
+## D3343: String literals without copies
+date: 2026-11-21 · by: pstart · issue: 0263
+A string literal was cooked into a new `Vec<u16>`, copied again into the unit's string
+pool (`str_pool` kept each string's units to compare), and narrowed through another
+`Vec<u8>` before the heap allocation. Now the cooked units go into a reused buffer, the
+pool compares against the heap string it already holds, and `alloc_units`/`atom_of_units`
+call `alloc_utf16`, which narrows Latin-1 units itself. Same strings and constants.
+Compile −2..−5%; −59 B gz. Also measured and dropped: the dumper's early stop of pattern
+scans in every build (no change on the codemode bodies, +390 B gz).
