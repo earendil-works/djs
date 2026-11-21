@@ -27,10 +27,10 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use super::cells::{Header, Rope, Slice, Str8, Str16, flags};
+use super::cells::{Header, Realm, Rope, Slice, Str8, Str16, ValueArray, flags};
 use super::layout::Ref;
 use super::{CellKind, Heap, HeapError};
-use crate::value::{Obj, Str};
+use crate::value::{Obj, Str, Value};
 
 /// Maximum string length in code units (the same as QuickJS).
 pub const MAX_LEN: u32 = (1 << 30) - 1;
@@ -1641,3 +1641,52 @@ impl Heap {
         self.str_units(s).collect()
     }
 }
+
+/// The realm slot of the one-unit strings (`Intrinsic::UnitStrings`, interp/realm.rs
+/// checks the number).
+pub(crate) const UNIT_STRINGS_SLOT: u32 = 76;
+
+impl Heap {
+    /// The one-unit string of the ASCII code unit `u`, from the realm's cache (0287): a
+    /// cell per unit, made at its first use, so `s[i]`, charAt, one-character slices,
+    /// split(""), string iteration and one-digit numbers don't allocate one each time.
+    /// Strings are immutable, so which cell holds the unit is unobservable. Every
+    /// collection drops the cache (`drop_unit_strings`): it holds nothing a program
+    /// needs, and a run then leaves no trace of which builtins it used (D022).
+    pub(crate) fn unit_string(&mut self, u: u8) -> Result<Str, HeapError> {
+        const N: u32 = 128;
+        let slot = Realm::INTRINSICS.at(self.realm_cell(), UNIT_STRINGS_SLOT);
+        let t = match self.arena().read::<Value>(slot).as_internal() {
+            Some(t) => t,
+            None => {
+                let t = self.alloc_value_array(N)?;
+                for k in 0..N {
+                    self.value_array_set(t, k, Value::UNDEFINED);
+                }
+                self.arena_mut().set(t, ValueArray::LEN, N);
+                let slot = Realm::INTRINSICS.at(self.realm_cell(), UNIT_STRINGS_SLOT);
+                self.arena_mut().write(slot, Value::internal(t));
+                t
+            }
+        };
+        if let Some(s) = self.value_array_get(t, u32::from(u)).as_string() {
+            return Ok(s);
+        }
+        let s = self.alloc_latin1(&[u])?;
+        self.value_array_set(t, u32::from(u), Value::string(s));
+        Ok(s)
+    }
+
+    /// Drops the one-unit string cache (before a collection).
+    pub(crate) fn drop_unit_strings(&mut self) {
+        if let Some(r) = self.realm().as_internal() {
+            let slot = Realm::INTRINSICS.at(r, UNIT_STRINGS_SLOT);
+            self.arena_mut().write(slot, Value::UNDEFINED);
+        }
+    }
+
+    fn realm_cell(&self) -> u32 {
+        self.realm().as_internal().expect("realm")
+    }
+}
+

@@ -68,6 +68,11 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     if start >= end {
         return Ok(heap.alloc_latin1(&[])?);
     }
+    if end - start == 1
+        && let Some(u) = heap.char_code_at(s, start).filter(|&u| u < 128)
+    {
+        return Ok(heap.unit_string(u as u8)?);
+    }
     if let Some(slice) = heap.substring_slice(s, start, end)? {
         return Ok(slice);
     }

@@ -3529,8 +3529,7 @@ impl<'h> Exec<'h> {
                 if let Some(i) = key.as_int()
                     && i < len
                 {
-                    let u = self.heap.char_code_at(s, i).unwrap();
-                    let c = self.heap.alloc_utf16(&[u])?;
+                    let c = crate::builtins::string::substring(self.heap, s, i, i + 1)?;
                     return Ok(Got::Value(Value::string(c)));
                 }
                 self.lookup_primitive(o, key)

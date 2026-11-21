@@ -200,9 +200,14 @@ pub enum Intrinsic {
     /// The names of the known builtins (interp/known.rs, D3300): a u32 array, or
     /// undefined in a realm whose prelude has not run.
     KnownNames,
+    /// The one-unit strings of ASCII code units (0287, builtins/string.rs `unit_string`):
+    /// an internal ValueArray of 128 strings or undefineds, made at the first use; or
+    /// undefined.
+    UnitStrings,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::KnownNames as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::UnitStrings as u32 + 1;
+const _: () = assert!(Intrinsic::UnitStrings as u32 == crate::heap::string::UNIT_STRINGS_SLOT);
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -407,6 +412,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
     set(heap, Intrinsic::RegExpCache, Value::UNDEFINED);
     set(heap, Intrinsic::KnownNames, Value::UNDEFINED);
+    set(heap, Intrinsic::UnitStrings, Value::UNDEFINED);
     set(heap, Intrinsic::Registries, Value::UNDEFINED);
     set(heap, Intrinsic::GlobalLexEpoch, Value::int(0));
     let ctors = heap.new_object(None)?;

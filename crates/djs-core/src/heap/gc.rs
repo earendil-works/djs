@@ -268,6 +268,7 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let base = self.base_end();
+        self.drop_unit_strings();
         let c = self.without_barrier(|h| h.mark_compact(base, true))?;
         let (before, mut after) = (c.before, c.after);
         self.set_old_region(c.old_end, 0);
@@ -325,6 +326,7 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let old = self.old_end();
+        self.drop_unit_strings();
         let c = self.without_barrier(|h| h.mark_compact(old, false))?;
         let minors = self.arena.get(0, Roots::MINORS);
         self.set_old_region(old, minors + 1);
@@ -387,6 +389,7 @@ impl Heap {
     /// canonical hash (D1730, on a copy) and the base image. Needs a to-space as big as
     /// the arena; on `Err(HostOutOfMemory)` the heap is unchanged.
     pub fn collect_canonical(&mut self) -> Result<GcStats, HeapError> {
+        self.drop_unit_strings();
         let before = self.arena.len();
         #[cfg(test)]
         if core::mem::take(&mut self.fail_next_gc_reserve) {
