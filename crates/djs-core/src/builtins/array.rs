@@ -4,7 +4,6 @@ use crate::PushOut;
 
 use alloc::vec::Vec;
 
-use crate::builtins::string;
 use crate::heap::{Heap, ObjectClass, StrView};
 use crate::interp::conv::{self, Fault};
 use crate::value::{Kind, Obj, Str, Value};
@@ -41,7 +40,7 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
         views.push_out((heap.str_view(s).unwrap_or(StrView::Latin1(&[])), v));
     }
     // A stable sort by code units, as IsLessThan compares strings.
-    crate::sort::sort_by(&mut views, |a, b| string::view_cmp(a.0, b.0).is_lt());
+    crate::sort::sort_by(&mut views, |a, b| heap.view_cmp(a.0, b.0).is_lt());
     let keyed: Vec<Value> = views.into_iter().map(|(_, v)| v).collect();
     let mut i = 0;
     for v in keyed {

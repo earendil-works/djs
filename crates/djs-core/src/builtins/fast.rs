@@ -416,7 +416,7 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     {
         let mut cuts: Vec<(u32, u32)> = crate::buf::vec_with_capacity(16);
         let mut p = 0;
-        while let Some(q) = string::find_latin1(h, t, p) {
+        while let Some(q) = string::find_latin1_charged(heap, h, t, p) {
             cuts.push_out((p as u32, q as u32));
             if cuts.len() as u32 == lim {
                 break;
@@ -644,7 +644,7 @@ fn array_index_of(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     if n < 0.0 {
         n = (len_f + n).max(0.0);
     }
-    let (r, _) = dense::search(heap, o, arg(args, 0), n as u32, len, 0);
+    let r = dense::search(heap, o, arg(args, 0), n as u32, len, 0);
     Ok(found(r).map(conv::number))
 }
 
@@ -666,7 +666,7 @@ fn array_includes(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     if n < 0.0 {
         n = (len_f + n).max(0.0);
     }
-    let (r, _) = dense::search(heap, o, arg(args, 0), n as u32, len, 2);
+    let r = dense::search(heap, o, arg(args, 0), n as u32, len, 2);
     Ok(found(r).map(|r| Value::bool(r >= 0.0)))
 }
 

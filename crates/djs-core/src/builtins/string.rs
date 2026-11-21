@@ -11,23 +11,10 @@ use crate::value::{Obj, Str, Value};
 
 /// IsLessThan for two strings, as -1, 0 or 1 (code unit order).
 pub(crate) fn compare(heap: &Heap, a: Str, b: Str) -> f64 {
-    let order = match (heap.str_view(a), heap.str_view(b)) {
-        (Some(x), Some(y)) => view_cmp(x, y),
-        _ => heap.str_units(a).cmp(heap.str_units(b)),
-    };
-    match order {
+    match heap.str_cmp(a, b) {
         core::cmp::Ordering::Less => -1.0,
         core::cmp::Ordering::Equal => 0.0,
         core::cmp::Ordering::Greater => 1.0,
-    }
-}
-
-/// Code unit order of two flat strings: bytes for two one-byte ones (most), units
-/// otherwise.
-pub(crate) fn view_cmp(a: StrView, b: StrView) -> core::cmp::Ordering {
-    match (a, b) {
-        (StrView::Latin1(x), StrView::Latin1(y)) => x.cmp(y),
-        _ => a.units().cmp(b.units()),
     }
 }
 
@@ -54,8 +41,9 @@ pub(crate) fn code_points(heap: &mut Heap, s: Str) -> Result<Obj, Fault> {
     Ok(heap.new_array_from_values(Some(proto), &values)?)
 }
 
-/// The code units of `s` (flattening a rope once).
+/// The code units of `s` (flattening a rope once), charged as a scan of them.
 fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, Fault> {
+    heap.charge_units(heap.str_len(s) as usize);
     Ok(heap.str_view_flat(s)?.units().collect())
 }
 
@@ -99,7 +87,35 @@ pub(crate) use crate::swar::find_byte;
 /// (0116): with the first byte alone, a common letter flagged most positions of a line.
 /// The last candidates take one overlapping word, not a byte loop (0260: on a short line
 /// the loop was a third of the search).
+#[cfg(test)]
 pub(crate) fn find_latin1(h: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+    find_latin1_counted(h, needle, from, &mut 0)
+}
+
+/// [`find_latin1`], charging the heap for the bytes it scanned and the candidates it
+/// compared (0289).
+pub(crate) fn find_latin1_charged(
+    heap: &Heap,
+    h: &[u8],
+    needle: &[u8],
+    from: usize,
+) -> Option<usize> {
+    let mut compared = 0;
+    let r = find_latin1_counted(h, needle, from, &mut compared);
+    let end = r.map_or(h.len(), |i| i + needle.len());
+    heap.charge_units(end.saturating_sub(from) + compared);
+    r
+}
+
+/// [`find_latin1`], adding to `compared` the bytes of the candidates it compared in
+/// full (the search's work beyond the scan).
+#[inline(always)]
+fn find_latin1_counted(
+    h: &[u8],
+    needle: &[u8],
+    from: usize,
+    compared: &mut usize,
+) -> Option<usize> {
     use crate::swar::{eq8, first8};
     let m = needle.len();
     let (&first, rest) = needle.split_first()?;
@@ -132,6 +148,7 @@ pub(crate) fn find_latin1(h: &[u8], needle: &[u8], from: usize) -> Option<usize>
         };
         while f != 0 {
             let at = base + first8(f);
+            *compared += m;
             if hay[at..at + m] == *needle {
                 return Some(from + at);
             }
@@ -162,7 +179,7 @@ pub(crate) fn index_of(
         if t.is_empty() {
             return Ok(if from > h.len() { -1.0 } else { from as f64 });
         }
-        return Ok(find_latin1(h, t, from).map_or(-1.0, |i| i as f64));
+        return Ok(find_latin1_charged(heap, h, t, from).map_or(-1.0, |i| i as f64));
     }
     // The needle on the stack when short (no Rust heap allocation, 0081 F6).
     let m = heap.str_len(search) as usize;
@@ -183,22 +200,31 @@ pub(crate) fn index_of(
     if m > n {
         return Ok(-1.0);
     }
-    let matches = |i: usize| (0..m).all(|j| hay.get(i + j) == needle[j]);
-    if last {
+    // (The units compared, for fuel: a position costs one more than its matching prefix.)
+    let compared = core::cell::Cell::new(0usize);
+    let matches = |i: usize| {
+        let k = (0..m).take_while(|&j| hay.get(i + j) == needle[j]).count();
+        compared.set(compared.get() + k + 1);
+        k == m
+    };
+    let r = if last {
         let mut i = from.min(n - m);
         loop {
             if matches(i) {
-                return Ok(i as f64);
+                break i as f64;
             }
             if i == 0 {
-                return Ok(-1.0);
+                break -1.0;
             }
             i -= 1;
         }
-    }
-    Ok((from..=n - m)
-        .find(|&i| matches(i))
-        .map_or(-1.0, |i| i as f64))
+    } else {
+        (from..=n - m)
+            .find(|&i| matches(i))
+            .map_or(-1.0, |i| i as f64)
+    };
+    heap.charge_units(compared.get());
+    Ok(r)
 }
 
 /// The code point at `i` (a surrogate pair combined), as a Number.
@@ -512,6 +538,7 @@ pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>
     // Nothing below U+0300 (NFC) or U+00A0 (other forms) changes: checked in place,
     // without copying the units out.
     let limit = if form == 0 { 0x300 } else { 0xA0 };
+    heap.charge_units(heap.str_len(s) as usize);
     if heap.str_view_flat(s)?.units().all(|u| u < limit) {
         return Ok(Some(s));
     }
@@ -558,6 +585,7 @@ pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fau
         (heap.str_view(a), heap.str_view(b))
     {
         let i = x.iter().zip(y).take_while(|(p, q)| p == q).count();
+        heap.charge_units(i);
         return Ok(match (x.get(i), y.get(i)) {
             (Some(&p), Some(&q)) => f64::from(p) - f64::from(q),
             _ => x.len().cmp(&y.len()) as i8 as f64,

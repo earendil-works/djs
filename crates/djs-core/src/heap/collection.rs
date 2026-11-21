@@ -216,6 +216,8 @@ impl Heap {
     /// `m.set(key, value)` / `s.add(key)` (a Set passes `true` as the value). String
     /// keys should be flat (the caller flattens them) so their hash is cheap.
     pub fn collection_set(&mut self, o: Obj, key: Value, value: Value) -> Result<(), HeapError> {
+        // (A fraction of fuel: what a loop of them adds up to, `new Set(a)`'s.)
+        self.charge_elements(1);
         let key = normalize_key(key);
         let h = match key.as_string() {
             // Cached in the string (D2433): later lookups with it skip the keyed hash.

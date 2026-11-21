@@ -38,6 +38,7 @@ pub(crate) fn format(heap: &mut Heap, op: u8, x: f64, arg: Value) -> Result<Str,
 /// `parseFloat` (radix None) or `parseInt` of a string.
 pub(crate) fn parse(heap: &mut Heap, s: Str, radix: Option<i32>) -> Result<f64, Fault> {
     let flat = heap.contiguous(s)?;
+    heap.charge_units(heap.str_len(flat) as usize);
     let run = |units: &[u8]| match radix {
         None => num::parse_float(units),
         Some(r) => num::parse_int(units, r),

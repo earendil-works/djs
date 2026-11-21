@@ -577,6 +577,7 @@ impl Heap {
         let (alo, ahi) = if upper { (b'a', b'z') } else { (b'A', b'Z') };
         let changes = |c: u8| (alo..=ahi).contains(&c) || ((lo..=hi).contains(&c) && c != skip);
         let len = self.str_len(s);
+        self.charge_units(len as usize);
         let data = s.0 + Str8::DATA.offset;
         let bytes = self.arena().slice(data, len);
         if upper && bytes.iter().any(|&c| matches!(c, 0xB5 | 0xDF | 0xFF)) {
@@ -615,6 +616,7 @@ impl Heap {
         pieces: &[(Str, u32, u32)],
         total: u32,
     ) -> Result<Str, HeapError> {
+        self.charge_elements(pieces.len());
         // A few pieces without ropes (a substring, a short join) need no list on the heap.
         let mut small = [(0, 0, 0); 4];
         let mut list = Vec::new();
@@ -713,6 +715,7 @@ impl Heap {
                 None => return Ok(None),
             }
         }
+        self.charge_elements(pieces.len());
         if total > u64::from(MAX_LEN) {
             return Err(HeapError::StringTooLong);
         }
@@ -1559,6 +1562,18 @@ impl Heap {
 
     /// Code unit equality.
     pub fn str_eq(&self, a: Str, b: Str) -> bool {
+        self.str_eq_in(a, b, false)
+    }
+
+    /// Code unit equality for the language's equality operators and searches: charges
+    /// the units it compared (`work.rs`). Interning and hash lookups use the uncharged
+    /// [`Heap::str_eq`].
+    pub(crate) fn str_eq_charged(&self, a: Str, b: Str) -> bool {
+        self.str_eq_in(a, b, true)
+    }
+
+    #[inline(always)]
+    fn str_eq_in(&self, a: Str, b: Str, charge: bool) -> bool {
         if a == b {
             return true;
         }
@@ -1580,6 +1595,9 @@ impl Heap {
         if ha != 0 && hb != 0 && ha != hb && (a.0 >= base) == (b.0 >= base) {
             return false;
         }
+        if charge {
+            return self.str_eq_charged_slow(a, b);
+        }
         match (self.str_view(a), self.str_view(b)) {
             // Same width (checked above), so equal content means equal bytes.
             (Some(x), Some(y)) => x.bytes() == y.bytes(),
@@ -1588,6 +1606,24 @@ impl Heap {
             (Some(x), None) => self.view_eq_chunks(x, b),
             (None, Some(y)) => self.view_eq_chunks(y, a),
             (None, None) => self.str_units(a).eq(self.str_units(b)),
+        }
+    }
+
+    /// The comparison of [`Heap::str_eq_charged`] of two strings of the same length and
+    /// width.
+    #[inline(never)]
+    fn str_eq_charged_slow(&self, a: Str, b: Str) -> bool {
+        match (self.str_view(a), self.str_view(b)) {
+            (Some(x), Some(y)) => {
+                let (x, y) = (x.bytes(), y.bytes());
+                let i = super::work::equal_blocks(x, y);
+                self.charge_units(i >> u32::from(self.str_is_two_byte(a)));
+                x[i..] == y[i..]
+            }
+            _ => {
+                self.charge_units(self.str_len(a) as usize);
+                self.str_eq(a, b)
+            }
         }
     }
 
@@ -1607,14 +1643,33 @@ impl Heap {
         })
     }
 
-    /// Code unit order (what `<` on strings means in JS).
+    /// Code unit order (what `<` on strings means in JS), charging the units compared.
     pub fn str_cmp(&self, a: Str, b: Str) -> Ordering {
         if a == b {
             return Ordering::Equal;
         }
         match (self.str_view(a), self.str_view(b)) {
-            (Some(StrView::Latin1(x)), Some(StrView::Latin1(y))) => x.cmp(y),
-            _ => self.str_units(a).cmp(self.str_units(b)),
+            (Some(x), Some(y)) => self.view_cmp(x, y),
+            _ => {
+                self.charge_units(self.str_len(a).min(self.str_len(b)) as usize);
+                self.str_units(a).cmp(self.str_units(b))
+            }
+        }
+    }
+
+    /// Code unit order of two flat strings, charging the units compared: bytes for two
+    /// one-byte ones (most), units otherwise.
+    pub(crate) fn view_cmp(&self, a: StrView, b: StrView) -> Ordering {
+        match (a, b) {
+            (StrView::Latin1(x), StrView::Latin1(y)) => {
+                let i = super::work::equal_blocks(x, y);
+                self.charge_units(i);
+                x[i..].cmp(&y[i..])
+            }
+            _ => {
+                self.charge_units(a.len().min(b.len()));
+                a.units().cmp(b.units())
+            }
         }
     }
 

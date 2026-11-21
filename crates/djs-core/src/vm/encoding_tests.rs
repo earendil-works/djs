@@ -156,7 +156,9 @@ fn fuel_by_bytes() {
     };
     eval(
         &mut vm,
-        "var big = new Uint8Array(1 << 20).fill(0x61); var s = 'a'.repeat(1 << 20);",
+        // (`indexOf` flattens the repeat once: the first `slice` would pay for that.)
+        "var big = new Uint8Array(1 << 20).fill(0x61); var s = 'a'.repeat(1 << 20); \
+         s.indexOf('b');",
     );
     let small = fuel(&mut vm, "new TextDecoder().decode(big.subarray(0, 8))");
     let large = fuel(&mut vm, "new TextDecoder().decode(big)");

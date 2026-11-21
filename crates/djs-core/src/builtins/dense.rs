@@ -8,7 +8,7 @@
 //! object) declines with nothing changed, or with only plain stores the general loop
 //! repeats, and the builtin runs its general loop. The leaf intrinsics of the builtin
 //! language (interp/run/dense.rs) and the `@fast` entries (builtins/fast.rs) share
-//! these. Each returns the number of elements it handled, for fuel.
+//! these. Each charges the heap for the elements it handled (`heap/work.rs`).
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -31,6 +31,7 @@ pub(crate) fn dense_range(heap: &Heap, o: Obj, from: u32, to: u32) -> Option<Vec
     for i in from..to {
         out.push(heap.get_element_fast(o, i)?);
     }
+    heap.charge_elements(out.len());
     Some(out)
 }
 
@@ -50,13 +51,21 @@ pub(crate) fn fill(heap: &mut Heap, o: Obj, value: Value, k: u32, fin: u32) -> R
     while i < fin && heap.set_element_fast(o, i, value)? {
         i += 1;
     }
+    heap.charge_elements((i - k) as usize);
     Ok(i)
 }
 
 /// The loops of indexOf (mode 0: `from` up to `len`, strict equality), lastIndexOf
 /// (1: `from` down to 0) and includes (2: up to `len`, SameValueZero): the index found,
-/// -1, or [`DECLINE`]; and the number of elements compared.
-pub(crate) fn search(
+/// -1, or [`DECLINE`]. Charges the elements compared.
+pub(crate) fn search(heap: &Heap, o: Obj, search: Value, from: u32, len: u32, mode: i32) -> f64 {
+    let (r, scanned) = search_counted(heap, o, search, from, len, mode);
+    heap.charge_elements(scanned as usize);
+    r
+}
+
+/// [`search`] and the number of elements it compared.
+fn search_counted(
     heap: &Heap,
     o: Obj,
     search: Value,

@@ -52,6 +52,7 @@ pub mod string;
 pub mod typed;
 pub mod walk;
 pub mod weakref;
+pub(crate) mod work;
 
 use core::fmt;
 
@@ -220,6 +221,10 @@ pub struct Heap {
     #[cfg(feature = "unicode-normalization")]
     pub(crate) norm: Option<&'static [u8]>,
     pub(crate) tables_need: u8,
+    /// Fuel owed for the work of leaf primitives, which the interpreter takes into its
+    /// fuel (`work.rs`, 0289). Zero between runs: not part of the image. A `Cell`, so
+    /// that the primitives that only read the heap (comparisons, searches) charge too.
+    work: core::cell::Cell<u64>,
     /// While a compile is recorded for the compile cache (D3040): every interning, in
     /// order (`compile_cache::Intern`).
     #[cfg(feature = "compile-cache")]
@@ -364,6 +369,7 @@ impl Heap {
             #[cfg(feature = "unicode-normalization")]
             norm: crate::unicode::builtin_norm(),
             tables_need: 0,
+            work: core::cell::Cell::new(0),
             #[cfg(feature = "compile-cache")]
             intern_log: None,
             #[cfg(test)]
@@ -482,16 +488,18 @@ impl Heap {
     /// exists only when a fuel slice ends inside an intrinsic, so if it counted, the GC
     /// and out-of-memory points would depend on the slice size. Returns what `end`
     /// restores.
-    pub(crate) fn begin_unbudgeted(&mut self) -> (u32, bool) {
-        let saved = (self.arena.limit(), self.gc_pending);
+    /// It charges no fuel either (`work.rs`).
+    pub(crate) fn begin_unbudgeted(&mut self) -> (u32, bool, u64) {
+        let saved = (self.arena.limit(), self.gc_pending, self.work_mark());
         self.arena.set_limit(arena::MAX_ARENA);
         saved
     }
 
     /// Ends [`Heap::begin_unbudgeted`].
-    pub(crate) fn end_unbudgeted(&mut self, (limit, pending): (u32, bool)) {
+    pub(crate) fn end_unbudgeted(&mut self, (limit, pending, work): (u32, bool, u64)) {
         self.arena.set_limit(limit);
         self.gc_pending = pending;
+        self.work_reset(work);
     }
 
     /// Frees the cells from `start` to `end` if they are the last ones in the arena: a
@@ -596,6 +604,7 @@ impl Heap {
     pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {
         let size = align8(size.max(kind.min_size()));
         let off = self.arena.alloc(size)?;
+        self.charge_alloc(size);
         if self.arena.len() >= self.gc_threshold {
             self.gc_pending = true;
         }
@@ -615,6 +624,7 @@ impl Heap {
     ) -> Result<u32, HeapError> {
         let size = align8(size.max(kind.min_size()));
         let off = self.arena.alloc_init(size, at, data)?;
+        self.charge_alloc(size);
         if self.arena.len() >= self.gc_threshold {
             self.gc_pending = true;
         }
@@ -635,6 +645,7 @@ impl Heap {
     ) -> Result<u32, HeapError> {
         let size = align8(size.max(kind.min_size()));
         let off = self.arena.alloc_from_iter(size, at, n, data)?;
+        self.charge_alloc(size);
         if self.arena.len() >= self.gc_threshold {
             self.gc_pending = true;
         }

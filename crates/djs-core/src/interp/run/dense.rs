@@ -10,12 +10,6 @@ use crate::builtins::dense::{self, dense_range, index};
 use crate::value::Str;
 
 impl Exec<'_> {
-    /// Fuel for a loop over `n` elements done in one leaf call: one unit per four
-    /// elements (the leaves run to completion, so they pay afterwards, as D1561's do).
-    fn charge_elements(&mut self, n: u32) {
-        self.fuel -= i64::from(n / 4);
-    }
-
     /// `%ArrayFillDense(o, value, k, fin)`: the index the general loop continues from.
     pub(super) fn array_fill_dense(
         &mut self,
@@ -27,9 +21,7 @@ impl Exec<'_> {
         let (Some(k), Some(fin)) = (index(k), index(fin)) else {
             return Ok(k);
         };
-        let i = dense::fill(self.heap, o, value, k, fin)?;
-        self.charge_elements(i - k);
-        Ok(i as f64)
+        Ok(dense::fill(self.heap, o, value, k, fin)? as f64)
     }
 
     /// `%ArraySearchDense(o, search, from, len, mode)` (builtins/intrinsics.d.ts).
@@ -44,9 +36,7 @@ impl Exec<'_> {
         let (Some(from), Some(len)) = (index(from), index(len)) else {
             return dense::DECLINE;
         };
-        let (r, scanned) = dense::search(self.heap, o, search, from, len, mode);
-        self.charge_elements(scanned);
-        r
+        dense::search(self.heap, o, search, from, len, mode)
     }
 
     /// `%ArraySliceDense(o, k, fin, a)`.
@@ -60,11 +50,7 @@ impl Exec<'_> {
         let (Some(k), Some(fin)) = (index(k), index(fin)) else {
             return Ok(false);
         };
-        let done = dense::slice(self.heap, o, k, fin, a)?;
-        if done {
-            self.charge_elements(fin - k);
-        }
-        Ok(done)
+        dense::slice(self.heap, o, k, fin, a)
     }
 
     /// `%EnumerableOwnDataProperties(o, kind)`: Object.values (kind 1) / entries (2)
@@ -84,7 +70,6 @@ impl Exec<'_> {
             return Ok(Value::UNDEFINED);
         }
         let keys = self.heap.own_keys(o);
-        self.charge_elements(keys.len() as u32);
         let mut props = crate::buf::vec_with_capacity(keys.len());
         for k in keys {
             if k.is_symbol() {
@@ -128,7 +113,7 @@ impl Exec<'_> {
         if (0..n).any(|i| entry_pair(self.heap, a, i).is_none()) {
             return Ok(Value::UNDEFINED);
         }
-        self.charge_elements(n);
+        self.heap.charge_elements(n as usize);
         let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
         let o = self.heap.new_object(Some(proto))?;
         for i in 0..n {
@@ -162,7 +147,6 @@ impl Exec<'_> {
         for (i, e) in elems.into_iter().enumerate() {
             self.heap.ta_set(o, i as u32, e);
         }
-        self.charge_elements(n);
         true
     }
 
@@ -177,13 +161,7 @@ impl Exec<'_> {
         let Some(len) = index(len) else {
             return Ok(Value::UNDEFINED);
         };
-        match dense::join(self.heap, o, len, sep)? {
-            Some(s) => {
-                self.charge_elements(len);
-                Ok(Value::string(s))
-            }
-            None => Ok(Value::UNDEFINED),
-        }
+        Ok(dense::join(self.heap, o, len, sep)?.map_or(Value::UNDEFINED, Value::string))
     }
 }
 

@@ -263,6 +263,14 @@ impl Heap {
     ///
     /// [`Handle`]: super::Handle
     pub fn collect(&mut self) -> Result<GcStats, HeapError> {
+        // A collection charges no fuel (`work.rs`): where it runs depends on the schedule.
+        let work = self.work_mark();
+        let r = self.collect_uncharged();
+        self.work_reset(work);
+        r
+    }
+
+    fn collect_uncharged(&mut self) -> Result<GcStats, HeapError> {
         #[cfg(test)]
         if core::mem::take(&mut self.fail_next_gc_reserve) {
             return Err(HeapError::HostOutOfMemory);
@@ -321,6 +329,14 @@ impl Heap {
     /// and compacted down to its end. Dead old cells, and young cells only they reach,
     /// survive until the next full collection.
     pub fn collect_minor(&mut self) -> Result<GcStats, HeapError> {
+        // A collection charges no fuel (`work.rs`): where it runs depends on the schedule.
+        let work = self.work_mark();
+        let r = self.collect_minor_uncharged();
+        self.work_reset(work);
+        r
+    }
+
+    fn collect_minor_uncharged(&mut self) -> Result<GcStats, HeapError> {
         #[cfg(test)]
         if core::mem::take(&mut self.fail_next_gc_reserve) {
             return Err(HeapError::HostOutOfMemory);
@@ -389,6 +405,14 @@ impl Heap {
     /// canonical hash (D1730, on a copy) and the base image. Needs a to-space as big as
     /// the arena; on `Err(HostOutOfMemory)` the heap is unchanged.
     pub fn collect_canonical(&mut self) -> Result<GcStats, HeapError> {
+        // A collection charges no fuel (`work.rs`): where it runs depends on the schedule.
+        let work = self.work_mark();
+        let r = self.collect_canonical_uncharged();
+        self.work_reset(work);
+        r
+    }
+
+    fn collect_canonical_uncharged(&mut self) -> Result<GcStats, HeapError> {
         self.drop_unit_strings();
         let before = self.arena.len();
         #[cfg(test)]

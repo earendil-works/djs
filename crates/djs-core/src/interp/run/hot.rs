@@ -456,13 +456,15 @@ fn index_key(k: Value) -> Option<u32> {
 enum Exit {
     /// The next instruction (this opcode) needs the general path.
     Decline(u8),
-    /// Fuel ran out, or the frame has no bytecode left (a native frame): the general
-    /// path. (Not `Decline(0)`: that payload made LLVM set the opcode's local at the
-    /// loop head, two more instructions per instruction in V8's baseline code, D2443.)
+    /// The frame has no bytecode left (a native frame), or a `@fast` builtin declined
+    /// its call: the general path. (Not `Decline(0)`: that payload made LLVM set the
+    /// opcode's local at the loop head, two more instructions per instruction in V8's
+    /// baseline code, D2443.)
     General,
     /// A safepoint completed with a collection wanted: run it now.
     Safepoint,
-    /// A backward jump after `hot_fuel` fuel: return to the run loop (V8 tier-up).
+    /// Fuel ran out, or a backward jump after `hot_fuel` fuel: return to the run loop
+    /// (V8 tier-up).
     Budget,
     /// `%EachDense`'s callback returned this value (0137).
     Each(Value),
@@ -831,6 +833,8 @@ impl Exec<'_> {
                 macro_rules! heap_call {
                     ($e:expr) => {{
                         let r = $e;
+                        // The fuel of the call's work (0289).
+                        fuel -= self.heap.take_work();
                         collect = self.opts.gc_stress || self.heap.gc_pending();
                         b = self.heap.arena_mut().hot_bytes();
                         r
@@ -848,7 +852,7 @@ impl Exec<'_> {
                 }
                 loop {
                     if fuel <= 0 {
-                        break Exit::General;
+                        break Exit::Budget;
                     }
                     debug_assert!(ip < end, "pc past the end of the code");
                     let w = word(b, ip);
@@ -1853,7 +1857,12 @@ impl Exec<'_> {
                         Exit::Decline(op) => op,
                         _ => 0,
                     };
-                    if self.fuel <= 0 {
+                    // The instruction started with fuel left: an attempt that declined
+                    // may have charged its work (0289), but the instruction completes
+                    // before the run stops (else a slice smaller than the attempt's work
+                    // would make it again at every resume). A host refusal (which set
+                    // the fuel to 0) stops here.
+                    if self.host_oom && self.fuel <= 0 {
                         return None;
                     }
                     // A call of a `@fast` builtin (D1850) or `%EachDense` (D2307), else the
@@ -1874,6 +1883,8 @@ impl Exec<'_> {
                     }
                 }
             }
+            // The work of what ran outside the loop (0289).
+            self.fuel -= self.heap.take_work();
             if self.fuel <= 0 {
                 return None;
             }

@@ -132,6 +132,7 @@ fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, Fault> {
 
 pub(crate) fn string_to_number(heap: &mut Heap, s: Str) -> Result<f64, Fault> {
     let flat = heap.contiguous(s)?;
+    heap.charge_units(heap.str_len(flat) as usize);
     if let Some(StrView::Latin1(b)) = heap.str_view(flat) {
         return Ok(num::string_to_number(b));
     }
@@ -279,7 +280,7 @@ pub(crate) fn strict_equals(heap: &Heap, a: Value, b: Value) -> bool {
         return x == y;
     }
     if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
-        return heap.str_eq(x, y);
+        return heap.str_eq_charged(x, y);
     }
     if a.as_bigint().is_some() && b.as_bigint().is_some() {
         return heap.bigint_eq(a, b);

@@ -1098,6 +1098,8 @@ impl<'h> Exec<'h> {
     /// Runs with `fuel`.
     pub fn run(&mut self, fuel: u64) -> Status {
         let st = self.run_loop(fuel);
+        // What the last leaf did (0289), before the overshoot is counted.
+        self.fuel -= self.heap.take_work();
         // D1740: a run that stops mid-call (out of fuel, or parked on a host call) carries
         // its overshoot to the next one (having paid the debt it started with). Once the
         // VM is quiescent (done, threw, idle) nothing is owed: the next run starts a fresh
@@ -1128,6 +1130,8 @@ impl<'h> Exec<'h> {
 
     fn run_loop(&mut self, fuel: u64) -> Status {
         self.fuel = fuel.min(i64::MAX as u64) as i64;
+        // The host's work since the last run is not the run's (0289).
+        self.heap.take_work();
         match state::state(self.heap) {
             RunState::Running | RunState::ThrowPending => self.load_frame(),
             RunState::Idle | RunState::Done | RunState::Threw => {
@@ -1158,6 +1162,7 @@ impl<'h> Exec<'h> {
         self.fuel = self.fuel.saturating_sub(state::fuel_debt(self.heap));
         self.fuel_start = Some(self.fuel);
         loop {
+            self.fuel -= self.heap.take_work();
             if self.fuel <= 0 {
                 self.flush();
                 if self.host_oom {
@@ -1231,7 +1236,10 @@ impl<'h> Exec<'h> {
         let sp0 = self.sp;
         let fuel0 = self.fuel;
         let retry = self.retry_operands();
-        match self.step() {
+        let r = self.step();
+        // The work of the instruction's leaves (0289).
+        self.fuel -= self.heap.take_work();
+        match r {
             Ok(None) => None,
             Ok(Some(st)) => Some(st),
             Err(f) => {

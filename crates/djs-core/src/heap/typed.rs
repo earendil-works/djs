@@ -692,6 +692,7 @@ impl Heap {
     /// The integer keys of a typed array (0 .. length), for [[OwnPropertyKeys]].
     pub(crate) fn ta_keys(&self, o: Obj) -> alloc::vec::Vec<Atom> {
         let len = self.ta_length(o).unwrap_or(0);
+        self.charge_elements(len as usize);
         (0..len).filter_map(Atom::int).collect()
     }
 }

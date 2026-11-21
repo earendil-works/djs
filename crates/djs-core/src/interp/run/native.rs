@@ -369,7 +369,8 @@ impl Exec<'_> {
     #[cfg_attr(target_arch = "wasm32", inline(never))]
     #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
     pub(crate) fn n_backedge(&mut self, s: u32) -> bool {
-        self.fuel -= BACKEDGE_FUEL;
+        // With the work of the leaves of the iteration (0289).
+        self.fuel -= BACKEDGE_FUEL + self.heap.take_work();
         self.pc = s;
         if self.fuel <= 0 {
             return true;
