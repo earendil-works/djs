@@ -54,10 +54,7 @@ Number.isInteger.isFinite.isNaN String.fromCharCode Array.isArray parseInt parse
 #[inline(never)]
 pub(crate) fn lookup(heap: &Heap, global: Atom, member: u32) -> Option<(u16, u16)> {
     if heap.realm().as_internal().is_none() {
-        #[cfg(any(feature = "dump", test))]
         return by_text(heap, global, member);
-        #[cfg(not(any(feature = "dump", test)))]
-        return None;
     }
     let names = intrinsic(heap, Intrinsic::KnownNames).as_internal()?;
     let n = heap.u32_array_len(names);
@@ -82,6 +79,12 @@ pub(crate) fn lookup(heap: &Heap, global: Atom, member: u32) -> Option<(u16, u16
 
 /// No member for [`lookup`]: no member's word has the bit.
 pub(crate) const NO_MEMBER: u32 = GLOBAL;
+
+/// [`lookup`] in a heap without a realm, where only the dumper and tests compile.
+#[cfg(not(any(feature = "dump", test)))]
+fn by_text(_: &Heap, _: Atom, _: u32) -> Option<(u16, u16)> {
+    None
+}
 
 /// [`lookup`] in a heap without a realm: by the names, the values numbered from 0.
 #[cfg(any(feature = "dump", test))]
