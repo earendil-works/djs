@@ -312,6 +312,20 @@ faster loop in front of it:
   caches never change what a program does. The collector empties the slots that hold
   heap offsets, so a VM restored with warm caches behaves exactly like one with cold
   caches.
+- **Known builtins.** `Math.floor(x)`, `String(x)`, `Number.isInteger(x)` and a few
+  other globals and functions of theirs that loops call are read from a table instead of
+  being looked up. For such a name the compiler emits `get_builtin k` (the function,
+  and for a method call the object as `this`), a jump over the ordinary lookup, and the
+  ordinary lookup. The table holds these values in a VM made from a base image, where
+  every builtin lies in the builtin prefix, and only while the builtins are the base's:
+  the first write to an object of the prefix, a change of one of these globals'
+  bindings in the global object, or a global `let`, `const` or `class` of its name
+  shortens the table for good. `get_builtin` then declines, and the general path turns
+  the instruction into a jump to the ordinary lookup, so a site pays for that once. While
+  the table has the value, it is what the lookup would find, with no getter or proxy on
+  the way, so the shortcut cannot be observed. The call `Math.floor(i)` takes about a
+  fifth fewer instructions with it. The list is in
+  [`crates/djs-core/src/interp/known.rs`](../../crates/djs-core/src/interp/known.rs).
 - **Iteration without result objects.** `for-of` and array destructuring over arrays,
   strings, Maps and Sets step the iterator inside the interpreter when `next` is the
   original builtin, without allocating `{value, done}` objects (`iter_next`); a loop

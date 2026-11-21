@@ -12583,3 +12583,79 @@ date: 2026-11-21 · by: pscan · issue: 0264
   (3,840 → 3,776 KiB); the page comes back when dlmalloc needs less room or the seed
   reaches 36 KB (static data under ~30 KB, or a smaller stack). Size 426,545 → 426,858 B gz
   (+313).
+## D3300: Known builtins: `Math.floor`, `String`, `Number.isInteger` without the lookup
+date: 2026-11-21 · by: pcall · issue: 0259
+A builtin-call statement spends more on finding its callee than on the call
+(`Math.floor(i)`: ~400 of ~1,040 machine instructions are `get_global Math` and
+`get_method floor`, both inline-cache hits). For a short static list of globals and
+members of theirs (interp/known.rs `KNOWN`: Math.floor/ceil/round/trunc/abs/sqrt/max/
+min/pow/sign/random/PI, Number and isInteger/isFinite/isNaN, String and fromCharCode,
+Array.isArray, parseInt, parseFloat, isNaN) the compiler emits
+`get_builtin kf; [get_builtin kx;] jump8 +7|14; get_global X; [get_method|get_field m]`:
+the value from the realm's prelude function table (D2440), which the base image's build
+extends with the known values, then the ordinary lookup, skipped.
+- The guard is `get_builtin`'s own bounds check, so `run_hot` is byte-identical (the
+  D1352/D3122 sensitivity; D3265's separate call opcode lost 1-2% elsewhere). The table's
+  length covers the known values while the builtins are the base's. The first change
+  shortens it to the prelude's functions, for good (`known::unpristine`): the latch of
+  D3290 (any property operation that changes an object of the builtin prefix), a change
+  of a known global's entry in the global object, which is above the prefix
+  (`STORE_WATCHED` on the entry: `prop_set_value` declines such an entry by a wider mask
+  of its existing test, `prop_write` and `table_remove` call `entry_changes`), or a
+  global lexical declaration of a known name (`known::shadowed`). The flip is one way:
+  restoring the value does not bring the table back.
+- A declined `get_builtin` reaches `step`, which continues at the ordinary lookup and
+  rewrites the instruction as `jump8` there (`known_declined`), so a site pays once.
+  A call in progress keeps the function it read, as the lookup would have.
+- The values are in the table only where a change is noticed: `known::arm` runs in
+  `prepare_base_image`, when the realm becomes the builtin prefix. A VM without a prefix
+  (`Vm::new` without frozen builtins) has the names and emits the same code, whose
+  `get_builtin` declines. The table moves from the prefix to the image's tail (a VM
+  writes its length): the tail grows by 2.3 KB (7.8 → 10.1 KB), the base by the 24 values
+  and names.
+- What the compiler emits depends on the names alone, never on what a script did:
+  `Intrinsic::KnownNames` holds the atoms (renumbered with the base's, `known::renumber`).
+  A compile-cache replay (D3040) therefore gets the code a compile would, and the dumper's
+  recompile in a scratch heap (dump_flight `script_maps`) the same pcs: a heap without a
+  realm resolves the names by text (`by_text`, dump and test builds only) and numbers
+  the values from 0. A unit test compares the two.
+- The jump is emitted with a fixed offset (`CodeBuf::skip8`): the lookup's instructions
+  have one size and no short form, so no label and no fixup.
+- Not done by value identity at compile time (find the global's current value in the
+  table): the code's shape would depend on the heap's state, and a dump of a VM that
+  replaced `Math` could not find its suspension sites again.
+Measured (wasm, node --no-liftoff, machine instructions per statement, main 5a3891f6 +
+D3290 vs this): `Math.floor(i / 3)` 1,177 → 948 (−19%), `Math.floor(i)` 1,033 → 813,
+`Number.isInteger(i)` 917 → 696 (−24%), `Math.max(i, 3)` 1,167 → 950, `Array.isArray(a)`
+1,049 → 831, `String(i)` 1,409 → 1,257 (−11%), `Math.floor;` 436 → 160; method calls on
+receivers, closures and property access unchanged. wmeasure tight −0.3%, calls +0.2%,
+prop1 +0.7%, loop −0.1% (spread 0.2-0.8%). ops.ts (load ~6): Math.floor 100k 3.77 → 3.22
+ms, Number.isInteger 2.90 → 2.39, Math.max per line 0.86 → 0.75, String(i) 4.45 → 4.24.
+Size: +699 B gz (428,771 → 429,470; code +1,119 B raw, the rest the base image).
+The image's descriptor changes with `Intrinsic` (RECORDS_HASH): no `COMPAT_VERSION` bump.
+
+## D3301: Builtin calls: what was measured and not adopted (0259)
+date: 2026-11-21 · by: pcall · issue: 0259
+- `%FastCall(f, this, x)` instead of `call` for method calls with at most one argument,
+  run by the hot loop's existing `call_intrinsic` arm as a pure leaf that runs a `@fast`
+  builtin's leaf in place (no loop exit, `run_hot` unchanged; a miss patches the site to
+  `%Call`): `Math.floor`, `s.trim()`, `s.charCodeAt(k)` ±0, `m.get(k)`/`st.has(k)` −8%,
+  but `p.m()` +10% (a closure through the intrinsic arm costs ~80 instructions more than
+  through `call0`) and `a.push(i)` +4%, for +370 B gz. Dropped: with D3265 this is the
+  second measurement that leaving the loop is not what a builtin call pays for. Leaves
+  that fall back to `n_leaf` would also need a guard, since the loop holds the stack
+  pointer. Patch: work/scratch/0259 of the primary checkout.
+- Integer fast cases (`Math.floor` of an int32 is the int): −300 instructions for that
+  call only, and the calls scripts make pass a quotient or a product, not an int. Not
+  built.
+- `fast_leaf_call` and `try_fast_call` passed a 48-byte copy of `Shadow::EMPTY` per call;
+  they pass the promoted constant (−55 B gz, −20 instructions per call; merged first).
+- Where a builtin-call statement's instructions are after D3300 (cpu profile and wmicro,
+  `Math.floor(i)`, 813): the loop's own instructions (`for`, `+=`) ~280, the three
+  one-word instructions of the known lookup ~130, the failed closure attempt, the exit
+  and the re-entry ~150, `decline_fast` with `fast_leaf_call` and the generated leaf
+  ~250, spread over argument copies, the indirect call, `l_math`'s dispatch, the number
+  result and the `Result` return, none above ~30. The stack accessors are unchecked
+  loads in the shipped module already. No further zero-size cut was found there; a
+  receiver's method (`s.trim`) still pays ~300 for the prototype inline-cache hit,
+  which is inlined in `run_hot`.

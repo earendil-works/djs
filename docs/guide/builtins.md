@@ -332,6 +332,13 @@ a conversion site: `"a,b".split(",")`, `xs.indexOf(3)`, `xs.push(v)`, `m.get(k)`
 A call first runs the entry, which either returns the builtin's result or *declines*,
 and then the builtin runs as usual. <!--n builtins/fast-->43<!--/n--> builtins have one.
 
+Before a call can run an entry it has to find the builtin: `Math.floor(x)` reads the
+global `Math` and its property `floor`, which costs more than the entry does. For the
+names loops call most (`Math.floor`, `Math.max`, `String`, `Number.isInteger`,
+`Array.isArray`, `parseInt` and their like) the interpreter reads the function from a
+table while no builtin has been changed: the known builtins of
+[Making it fast](interpreter.md#making-it-fast).
+
 A constructor's entry can also answer `new`: `new Map()`, `new Set()`, `new Array(n)`
 and `new Date(v)` for a primitive or a Date. It runs only when `new.target` is the
 constructor itself, whose `prototype` property can never change, so the new object's
