@@ -501,25 +501,54 @@ fn unescape<const E: u8>(b: &[u8], i: usize) -> (u32, usize) {
     }
 }
 
-/// `write_string` of an escaped one-byte string from one-byte input: the runs between
-/// escapes are copied whole (0116: a long text has an escaped newline every line or so).
-/// Out of line, so that `write_string` stays small for the common unescaped strings.
+/// `write_string` of an escaped one-byte string from one-byte input. The plain bytes go
+/// a word at a time, loaded, stored and tested in one step (0260): a long text has an
+/// escape every line or so, and a separate search plus a `memory.copy` per run cost more
+/// than the run. Out of line, so that `write_string` stays small for the common
+/// unescaped strings.
 #[inline(never)]
 fn write_escaped_latin1(b: &[u8], s: &StrTok, dst: &mut [u8]) -> usize {
-    let mut k = 0;
-    let mut i = s.start;
+    let (mut i, mut k) = (s.start, 0);
     while i < s.end {
-        let run = crate::builtins::string::find_byte(&b[i..s.end], b'\\').unwrap_or(s.end - i);
-        dst[k..k + run].copy_from_slice(&b[i..i + run]);
-        k += run;
-        i += run;
-        if i < s.end {
-            // An escape (validated by the scan), decoded in place.
-            let (u, len) = unescape::<LATIN1>(b, i);
-            dst[k] = u as u8;
-            k += 1;
-            i += len;
+        // Whole words while both sides have them; stored whole: the bytes past the run
+        // are rewritten by what follows, as `dst` is written in order.
+        let src = b[i..].as_chunks::<8>().0;
+        let out = dst[k..].as_chunks_mut::<8>().0;
+        let mut stop = None;
+        for (j, (w, o)) in src.iter().zip(out.iter_mut()).enumerate() {
+            *o = *w;
+            // Inside a validated string only `\\` stops this; the closing quote ends it.
+            let x = u64::from_le_bytes(*w);
+            let m = swar::eq8(x, b'\\') | swar::eq8(x, b'"');
+            if m != 0 {
+                stop = Some(8 * j + swar::first8(m));
+                break;
+            }
         }
+        match stop {
+            Some(t) => {
+                i += t;
+                k += t;
+            }
+            None => {
+                // The last bytes (fewer than 8 left of `dst`): one at a time.
+                let t = 8 * src.len().min(out.len());
+                i += t;
+                k += t;
+                while i < s.end && b[i] != b'\\' {
+                    dst[k] = b[i];
+                    i += 1;
+                    k += 1;
+                }
+            }
+        }
+        if i >= s.end {
+            break;
+        }
+        let (u, len) = unescape::<LATIN1>(b, i);
+        dst[k] = u as u8;
+        k += 1;
+        i += len;
     }
     k
 }
