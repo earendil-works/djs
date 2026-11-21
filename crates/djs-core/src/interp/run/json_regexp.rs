@@ -524,13 +524,17 @@ impl Exec<'_> {
             return Ok(false);
         };
         let proto = intrinsic_obj(self.heap, Intrinsic::RegExpProto);
-        if self.heap.get_prototype_of(r) != Some(proto) || self.heap.own_keys(r).len() != 1 {
+        if self.heap.get_prototype_of(r) != Some(proto) {
             return Ok(false);
         }
-        let last_index = atoms::LAST_INDEX;
-        match self.heap.get_own_property(r, last_index) {
-            Some(Property::Data { value, flags }) if flags.writable() && value.is_number() => {}
+        match self.heap.sole_property(r) {
+            Some((atoms::LAST_INDEX, Property::Data { value, flags }))
+                if flags.writable() && value.is_number() => {}
             _ => return Ok(false),
+        }
+        // Builtins as the base image has them (D3460): the checks below hold there.
+        if self.heap.builtins_pristine() {
+            return Ok(true);
         }
         let installed = |ex: &Self, id: u16| realm::installed_intrinsic(ex.heap, id);
         let data = |ex: &Self, o: Obj, key: Atom| match ex.heap.get_own_property(o, key) {

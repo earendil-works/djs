@@ -41,6 +41,11 @@ function RegExpFromPattern(pattern: Value, flags: Str): Obj {
  */
 function StringPrototypeMatch(this: Value, regexp: Value): Value {
   RequireThisCoercible(this);
+  // A string and a pristine non-global RegExp: @@match and what it reads are the
+  // originals, so it is RegExpExec (D3460).
+  if (IsString(this) && IsPristineRegExp(regexp) && !RegExpHasFlag(AsObj(regexp), "g")) {
+    return RegExpExecOwn(regexp, AsStr(this), false, undefined);
+  }
   if (IsObject(regexp)) {
     const matcher: Value = GetMethod(regexp, WellKnownSymbol("match"));
     if (matcher !== undefined) {
@@ -106,6 +111,15 @@ function StringReplacement(
  */
 function StringPrototypeReplace(this: Value, searchValue: Value, replaceValue: Value): Value {
   RequireThisCoercible(this);
+  // Strings and a pristine global RegExp: @@replace's leaf (D1503, D3460).
+  if (
+    IsString(this) &&
+    IsString(replaceValue) &&
+    IsPristineRegExp(searchValue) &&
+    RegExpHasFlag(AsObj(searchValue), "g")
+  ) {
+    return RegExpReplaceRaw(AsObj(searchValue), AsStr(this), AsStr(replaceValue), undefined);
+  }
   if (IsObject(searchValue)) {
     const replacer: Value = GetMethod(searchValue, WellKnownSymbol("replace"));
     if (replacer !== undefined) {

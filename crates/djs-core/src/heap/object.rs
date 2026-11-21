@@ -1226,6 +1226,13 @@ impl Heap {
         }
     }
 
+    /// `o`'s key and property when that is all it has (one property slot, no elements):
+    /// a whole-object check without listing its keys (RegExp's pristine test, D3460).
+    pub(crate) fn sole_property(&self, o: Obj) -> Option<(Atom, Property)> {
+        (self.elements(o) == 0 && self.prop_slots(o) == 1)
+            .then(|| (self.prop_key(o, 0), self.prop_read(o, 0)))
+    }
+
     /// The key of slot `i` (null for a deleted dictionary entry).
     #[inline]
     fn prop_key(&self, o: Obj, i: u32) -> Atom {
