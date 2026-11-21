@@ -49,14 +49,14 @@ for whole function bodies, does not do.
 most of a start. The adapter collects the heap right after it, keeps that VM image, keyed
 by everything the prelude saw (the tools, the globals, the store, the heap limit), and
 starts the next script with the same inputs from a copy of it. A start then takes
-<!--n pi/bench/start/djs .2-->0.14<!--/n--> ms instead of <!--n pi/bench/start/djs-prelude .1-->4.9<!--/n--> ms, against <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms on QuickJS. The prelude's work is not counted
+<!--n pi/bench/start/djs .2-->0.04<!--/n--> ms instead of <!--n pi/bench/start/djs-prelude .1-->3.2<!--/n--> ms, against <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms on QuickJS. The prelude's work is not counted
 against the script's interrupt budget, so a start from an image and one that runs the
 prelude behave the same. The image never leaves the process: it is a cache, not a
 persistence format.
 
 **Interrupts.** pi's contract polls `shouldInterrupt`; the adapter runs the script in
 slices of 10,000 fuel and polls between them. A tight loop then polls about
-<!--n pi/bench/polls/djs ~1000-->77,000<!--/n--> times a second, against <!--n pi/bench/polls/qjs ~1000-->61,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
+<!--n pi/bench/polls/djs ~1000-->108,000<!--/n--> times a second, against <!--n pi/bench/polls/qjs ~1000-->61,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
 mean somewhat less CPU time on djs ([limits](limits.md#fuel)). Code that allocates or calls builtins
 polls more often than on QuickJS, since djs charges fuel for that work too. When the
 poll says stop, the adapter abandons the run, which the script cannot catch.
@@ -112,7 +112,7 @@ the default mode, in the next mode, and with a dump and a resume at every idle p
   messages, TypeScript, dquickts' own tests): **652 of 663** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
-  next mode and with a dump at every idle point (measured at 7167411f0f, 2026-11-05).
+  next mode and with a dump at every idle point (measured at 93f515bb17, 2026-11-21).
 <!-- /gen -->
 
 The tests that fail come from djs being always strict, from a test that expects
@@ -126,27 +126,27 @@ script):
 <!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 5.6G | 15.3G | 0.37 |
-| property access (prop1) | 2.2G | 5.4G | 0.41 |
-| strings (split, slice, join, ...) | 2.0G | 5.8G | 0.34 |
-| arrays | 7.7G | 16.3G | 0.47 |
-| JSON round trips | 1.0G | 2.0G | 0.51 |
+| tight loop | 3.9G | 15.3G | 0.26 |
+| property access (prop1) | 1.5G | 5.4G | 0.28 |
+| strings (split, slice, join, ...) | 1.6G | 5.8G | 0.28 |
+| arrays | 5.2G | 16.3G | 0.32 |
+| JSON round trips | 1.0G | 2.0G | 0.50 |
 | JSON with Dates | 0.8G | 1.7G | 0.46 |
-| for-of | 4.1G | 7.0G | 0.59 |
-| calls | 2.7G | 3.9G | 0.68 |
-| push/pop and string methods | 3.1G | 2.9G | 1.08 |
-| a pi-like script | 5.1G | 6.9G | 0.73 |
-| forEach | 4.5G | 5.8G | 0.77 |
-| map/filter/reduce (higher-order) | 6.3G | 4.5G | 1.40 |
+| for-of | 3.5G | 7.0G | 0.50 |
+| calls | 2.1G | 3.9G | 0.53 |
+| push/pop and string methods | 2.9G | 2.9G | 1.00 |
+| a pi-like script | 5.4G | 6.9G | 0.78 |
+| forEach | 3.6G | 5.8G | 0.62 |
+| map/filter/reduce (higher-order) | 3.9G | 4.5G | 0.85 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
-2026-11-05; lower is better.
+Machine instructions per workload (`scripts/perf/w/`), measured at 1a4c20de31,
+2026-11-21; lower is better.
 <!-- /gen -->
 
 Through the VM contract, as pi runs them (`js/bench/pi.bench.ts`, on the calling
 thread): a tool-heavy script, which searches, reads 60 files in parallel batches,
-filters and prints, takes <!--n pi/bench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs from the prelude image and
-<!--n pi/bench/tool-heavy/qjs .1-->4.5<!--/n--> ms on QuickJS; a script that only returns takes <!--n pi/bench/start/djs .2-->0.14<!--/n--> ms against <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms.
+filters and prints, takes <!--n pi/bench/tool-heavy/djs .1-->1.7<!--/n--> ms on djs from the prelude image and
+<!--n pi/bench/tool-heavy/qjs .1-->4.4<!--/n--> ms on QuickJS; a script that only returns takes <!--n pi/bench/start/djs .2-->0.04<!--/n--> ms against <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms.
 
 The measurements behind this section, from `tests/scores/status.tsv`
 (`scripts/status.py pi` and `speed`):
@@ -154,23 +154,24 @@ The measurements behind this section, from `tests/scores/status.tsv`
 <!-- gen:status recorded -->
 | measurement | value | measured at |
 | --- | ---: | --- |
-| `pi/bench/polls/djs` | 76782 | 7167411f0f, 2026-11-05 |
-| `pi/bench/polls/djs-prelude` | 74205 | 7167411f0f, 2026-11-05 |
-| `pi/bench/polls/qjs` | 60652 | 7167411f0f, 2026-11-05 |
-| `pi/bench/start/djs` | 0.14 | 7167411f0f, 2026-11-05 |
-| `pi/bench/start/djs-prelude` | 4.87 | 7167411f0f, 2026-11-05 |
-| `pi/bench/start/qjs` | 2.9 | 7167411f0f, 2026-11-05 |
-| `pi/bench/tool-heavy/djs` | 2.43 | 7167411f0f, 2026-11-05 |
-| `pi/bench/tool-heavy/djs-prelude` | 6.82 | 7167411f0f, 2026-11-05 |
-| `pi/bench/tool-heavy/qjs` | 4.45 | 7167411f0f, 2026-11-05 |
-| `pi/dump/passed` | 221 | 7167411f0f, 2026-11-05 |
-| `pi/dump/total` | 226 | 7167411f0f, 2026-11-05 |
-| `pi/next/passed` | 221 | 7167411f0f, 2026-11-05 |
-| `pi/next/total` | 226 | 7167411f0f, 2026-11-05 |
-| `pi/passed` | 221 | 7167411f0f, 2026-11-05 |
-| `pi/total` | 226 | 7167411f0f, 2026-11-05 |
-| `speed/pi-like/djs-wasm` | 5050.7 | 669ce55099, 2026-11-05 |
-| `speed/pi-like/qjs-wasi` | 6872.4 | 669ce55099, 2026-11-05 |
+| `pi/bench/polls/djs` | 108437 | 93f515bb17, 2026-11-21 |
+| `pi/bench/polls/djs-prelude` | 108273 | 93f515bb17, 2026-11-21 |
+| `pi/bench/polls/qjs` | 61204 | 93f515bb17, 2026-11-21 |
+| `pi/bench/start/djs` | 0.04 | 93f515bb17, 2026-11-21 |
+| `pi/bench/start/djs-prelude` | 3.25 | 93f515bb17, 2026-11-21 |
+| `pi/bench/start/qjs` | 2.91 | 93f515bb17, 2026-11-21 |
+| `pi/bench/tool-heavy/djs` | 1.7 | 93f515bb17, 2026-11-21 |
+| `pi/bench/tool-heavy/djs-prelude` | 4.85 | 93f515bb17, 2026-11-21 |
+| `pi/bench/tool-heavy/qjs` | 4.42 | 93f515bb17, 2026-11-21 |
+| `pi/dump/passed` | 221 | 93f515bb17, 2026-11-21 |
+| `pi/dump/total` | 226 | 93f515bb17, 2026-11-21 |
+| `pi/load` | 3.8 | 93f515bb17, 2026-11-21 |
+| `pi/next/passed` | 221 | 93f515bb17, 2026-11-21 |
+| `pi/next/total` | 226 | 93f515bb17, 2026-11-21 |
+| `pi/passed` | 221 | 93f515bb17, 2026-11-21 |
+| `pi/total` | 226 | 93f515bb17, 2026-11-21 |
+| `speed/pi-like/djs-wasm` | 5370.1 | 1a4c20de31, 2026-11-21 |
+| `speed/pi-like/qjs-wasi` | 6879.9 | 1a4c20de31, 2026-11-21 |
 <!-- /gen -->
 
 ## Wiring up another agent host

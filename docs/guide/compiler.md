@@ -374,7 +374,7 @@ compiles all its lazy functions first, so no run pays for them.
 > and stack traces. The cost: a function that runs is parsed twice, so it costs more
 > than an eager compile, while a function that never runs costs well under one. Lazy
 > compilation wins where most functions never run (dumps, libraries: TypeScript's own
-> compiler, a single 9 MB file, loads in <!--n compile/typescript-lazy-time-pct .0-->56<!--/n-->% of the time) and loses on codemode
+> compiler, a single 9 MB file, loads in <!--n compile/typescript-lazy-time-pct .0-->57<!--/n-->% of the time) and loses on codemode
 > scripts, whose callbacks nearly all run, which is why the codemode modules leave it
 > out.
 

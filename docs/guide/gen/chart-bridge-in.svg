@@ -101,103 +101,103 @@
 <line class="grid" x1="52.0" y1="58.7" x2="712.0" y2="58.7"/>
 <text class="small" x="46.0" y="62.2" text-anchor="end">100</text>
 <text class="small" x="46.0" y="40.0" text-anchor="end">ms</text>
-<rect class="s0" x="57.0" y="225.0" width="6.1" height="23.0"/>
+<rect class="s0" x="57.0" y="224.3" width="6.1" height="23.7"/>
 <rect class="s3" x="64.1" y="230.0" width="6.1" height="18.0"/>
 <rect class="s1" x="71.3" y="234.4" width="6.1" height="13.6"/>
 <rect class="s2" x="78.4" y="237.3" width="6.1" height="10.7"/>
-<rect class="s5" x="85.6" y="223.0" width="6.1" height="25.0"/>
-<rect class="s6" x="92.7" y="222.4" width="6.1" height="25.6"/>
-<rect class="s4" x="99.9" y="187.2" width="6.1" height="60.8"/>
+<rect class="s5" x="85.6" y="221.3" width="6.1" height="26.7"/>
+<rect class="s6" x="92.7" y="223.0" width="6.1" height="25.0"/>
+<rect class="s4" x="99.9" y="187.3" width="6.1" height="60.7"/>
 <text class="" x="82.0" y="264.0" text-anchor="middle">call</text>
 <text class="" x="82.0" y="278.0" text-anchor="middle">arguments</text>
-<rect class="s0" x="117.0" y="209.7" width="6.1" height="38.3"/>
+<rect class="s0" x="117.0" y="209.5" width="6.1" height="38.5"/>
 <rect class="s3" x="124.1" y="202.3" width="6.1" height="45.7"/>
-<rect class="s1" x="131.3" y="205.2" width="6.1" height="42.8"/>
-<rect class="s2" x="138.4" y="204.8" width="6.1" height="43.2"/>
+<rect class="s1" x="131.3" y="205.4" width="6.1" height="42.6"/>
+<rect class="s2" x="138.4" y="205.0" width="6.1" height="43.0"/>
 <rect class="s5" x="145.6" y="194.9" width="6.1" height="53.1"/>
-<rect class="s6" x="152.7" y="188.9" width="6.1" height="59.1"/>
-<rect class="s4" x="159.9" y="176.0" width="6.1" height="72.0"/>
+<rect class="s6" x="152.7" y="189.1" width="6.1" height="58.9"/>
+<rect class="s4" x="159.9" y="175.6" width="6.1" height="72.4"/>
 <text class="" x="142.0" y="264.0" text-anchor="middle">JSON,</text>
 <text class="" x="142.0" y="278.0" text-anchor="middle">1 KB</text>
-<rect class="s0" x="177.0" y="148.1" width="6.1" height="99.9"/>
-<rect class="s3" x="184.1" y="134.1" width="6.1" height="113.9"/>
-<rect class="s1" x="191.3" y="136.8" width="6.1" height="111.2"/>
-<rect class="s2" x="198.4" y="135.6" width="6.1" height="112.4"/>
-<rect class="s5" x="205.6" y="128.9" width="6.1" height="119.1"/>
-<rect class="s6" x="212.7" y="127.6" width="6.1" height="120.4"/>
+<rect class="s0" x="177.0" y="147.9" width="6.1" height="100.1"/>
+<rect class="s3" x="184.1" y="134.3" width="6.1" height="113.7"/>
+<rect class="s1" x="191.3" y="137.0" width="6.1" height="111.0"/>
+<rect class="s2" x="198.4" y="135.7" width="6.1" height="112.3"/>
+<rect class="s5" x="205.6" y="128.8" width="6.1" height="119.2"/>
+<rect class="s6" x="212.7" y="127.7" width="6.1" height="120.3"/>
 <rect class="s4" x="219.9" y="133.1" width="6.1" height="114.9"/>
 <text class="" x="202.0" y="264.0" text-anchor="middle">JSON,</text>
 <text class="" x="202.0" y="278.0" text-anchor="middle">100 KB</text>
-<rect class="s0" x="237.0" y="112.3" width="6.1" height="135.7"/>
-<rect class="s3" x="244.1" y="99.1" width="6.1" height="148.9"/>
+<rect class="s0" x="237.0" y="112.4" width="6.1" height="135.6"/>
+<rect class="s3" x="244.1" y="99.2" width="6.1" height="148.8"/>
 <rect class="s1" x="251.3" y="101.4" width="6.1" height="146.6"/>
-<rect class="s2" x="258.4" y="100.0" width="6.1" height="148.0"/>
+<rect class="s2" x="258.4" y="100.1" width="6.1" height="147.9"/>
 <rect class="s5" x="265.6" y="92.9" width="6.1" height="155.1"/>
-<rect class="s6" x="272.7" y="91.6" width="6.1" height="156.4"/>
-<rect class="s4" x="279.9" y="98.1" width="6.1" height="149.9"/>
+<rect class="s6" x="272.7" y="91.7" width="6.1" height="156.3"/>
+<rect class="s4" x="279.9" y="98.2" width="6.1" height="149.8"/>
 <text class="" x="262.0" y="264.0" text-anchor="middle">JSON,</text>
 <text class="" x="262.0" y="278.0" text-anchor="middle">1 MB</text>
-<rect class="s0" x="297.0" y="76.7" width="6.1" height="171.3"/>
-<rect class="s3" x="304.1" y="61.7" width="6.1" height="186.3"/>
+<rect class="s0" x="297.0" y="76.6" width="6.1" height="171.4"/>
+<rect class="s3" x="304.1" y="61.9" width="6.1" height="186.1"/>
 <rect class="s1" x="311.3" y="63.7" width="6.1" height="184.3"/>
-<rect class="s2" x="318.4" y="62.6" width="6.1" height="185.4"/>
+<rect class="s2" x="318.4" y="62.5" width="6.1" height="185.5"/>
 <rect class="s5" x="325.6" y="56.2" width="6.1" height="191.8"/>
-<rect class="s6" x="332.7" y="54.8" width="6.1" height="193.2"/>
-<rect class="s4" x="339.9" y="58.8" width="6.1" height="189.2"/>
+<rect class="s6" x="332.7" y="54.9" width="6.1" height="193.1"/>
+<rect class="s4" x="339.9" y="59.0" width="6.1" height="189.0"/>
 <text class="" x="322.0" y="264.0" text-anchor="middle">JSON,</text>
 <text class="" x="322.0" y="278.0" text-anchor="middle">10 MB</text>
-<rect class="s0" x="357.0" y="160.2" width="6.1" height="87.8"/>
-<rect class="s3" x="364.1" y="143.7" width="6.1" height="104.3"/>
-<rect class="s1" x="371.3" y="145.0" width="6.1" height="103.0"/>
-<rect class="s2" x="378.4" y="144.7" width="6.1" height="103.3"/>
-<rect class="s5" x="385.6" y="110.0" width="6.1" height="138.0"/>
-<rect class="s6" x="392.7" y="109.5" width="6.1" height="138.5"/>
-<rect class="s4" x="399.9" y="116.6" width="6.1" height="131.4"/>
+<rect class="s0" x="357.0" y="160.5" width="6.1" height="87.5"/>
+<rect class="s3" x="364.1" y="143.9" width="6.1" height="104.1"/>
+<rect class="s1" x="371.3" y="145.1" width="6.1" height="102.9"/>
+<rect class="s2" x="378.4" y="144.9" width="6.1" height="103.1"/>
+<rect class="s5" x="385.6" y="109.9" width="6.1" height="138.1"/>
+<rect class="s6" x="392.7" y="109.8" width="6.1" height="138.2"/>
+<rect class="s4" x="399.9" y="117.5" width="6.1" height="130.5"/>
 <text class="" x="382.0" y="264.0" text-anchor="middle">ASCII,</text>
 <text class="" x="382.0" y="278.0" text-anchor="middle">1 MB</text>
-<rect class="s0" x="417.0" y="128.8" width="6.1" height="119.2"/>
-<rect class="s3" x="424.1" y="108.3" width="6.1" height="139.7"/>
-<rect class="s1" x="431.3" y="109.4" width="6.1" height="138.6"/>
-<rect class="s2" x="438.4" y="109.0" width="6.1" height="139.0"/>
+<rect class="s0" x="417.0" y="127.2" width="6.1" height="120.8"/>
+<rect class="s3" x="424.1" y="107.9" width="6.1" height="140.1"/>
+<rect class="s1" x="431.3" y="109.5" width="6.1" height="138.5"/>
+<rect class="s2" x="438.4" y="109.3" width="6.1" height="138.7"/>
 <rect class="s5" x="445.6" y="74.3" width="6.1" height="173.7"/>
 <rect class="s6" x="452.7" y="74.2" width="6.1" height="173.8"/>
-<rect class="s4" x="459.9" y="80.1" width="6.1" height="167.9"/>
+<rect class="s4" x="459.9" y="81.0" width="6.1" height="167.0"/>
 <text class="" x="442.0" y="264.0" text-anchor="middle">ASCII,</text>
 <text class="" x="442.0" y="278.0" text-anchor="middle">10 MB</text>
-<rect class="s0" x="477.0" y="120.3" width="6.1" height="127.7"/>
-<rect class="s3" x="484.1" y="105.2" width="6.1" height="142.8"/>
-<rect class="s1" x="491.3" y="114.7" width="6.1" height="133.3"/>
-<rect class="s2" x="498.4" y="111.6" width="6.1" height="136.4"/>
+<rect class="s0" x="477.0" y="119.7" width="6.1" height="128.3"/>
+<rect class="s3" x="484.1" y="105.1" width="6.1" height="142.9"/>
+<rect class="s1" x="491.3" y="114.9" width="6.1" height="133.1"/>
+<rect class="s2" x="498.4" y="111.8" width="6.1" height="136.2"/>
 <rect class="s5" x="505.6" y="104.0" width="6.1" height="144.0"/>
-<rect class="s6" x="512.7" y="101.8" width="6.1" height="146.2"/>
-<rect class="s4" x="519.9" y="116.7" width="6.1" height="131.3"/>
+<rect class="s6" x="512.7" y="102.0" width="6.1" height="146.0"/>
+<rect class="s4" x="519.9" y="117.1" width="6.1" height="130.9"/>
 <text class="" x="502.0" y="264.0" text-anchor="middle">non-ASCII,</text>
 <text class="" x="502.0" y="278.0" text-anchor="middle">1 MB</text>
-<rect class="s0" x="537.0" y="129.6" width="6.1" height="118.4"/>
-<rect class="s3" x="544.1" y="110.4" width="6.1" height="137.6"/>
+<rect class="s0" x="537.0" y="130.0" width="6.1" height="118.0"/>
+<rect class="s3" x="544.1" y="110.9" width="6.1" height="137.1"/>
 <rect class="s1" x="551.3" y="96.4" width="6.1" height="151.6"/>
-<rect class="s2" x="558.4" y="85.1" width="6.1" height="162.9"/>
-<rect class="s5" x="565.6" y="97.0" width="6.1" height="151.0"/>
-<rect class="s6" x="572.7" y="88.7" width="6.1" height="159.3"/>
-<rect class="s4" x="579.9" y="100.5" width="6.1" height="147.5"/>
+<rect class="s2" x="558.4" y="84.1" width="6.1" height="163.9"/>
+<rect class="s5" x="565.6" y="97.1" width="6.1" height="150.9"/>
+<rect class="s6" x="572.7" y="89.4" width="6.1" height="158.6"/>
+<rect class="s4" x="579.9" y="101.0" width="6.1" height="147.0"/>
 <text class="" x="562.0" y="264.0" text-anchor="middle">100k</text>
 <text class="" x="562.0" y="278.0" text-anchor="middle">numbers</text>
-<rect class="s0" x="597.0" y="155.4" width="6.1" height="92.6"/>
-<rect class="s3" x="604.1" y="159.8" width="6.1" height="88.2"/>
-<rect class="s1" x="611.3" y="160.9" width="6.1" height="87.1"/>
-<rect class="s2" x="618.4" y="159.6" width="6.1" height="88.4"/>
-<rect class="s5" x="625.6" y="168.4" width="6.1" height="79.6"/>
-<rect class="s6" x="632.7" y="168.0" width="6.1" height="80.0"/>
-<rect class="s4" x="639.9" y="163.7" width="6.1" height="84.3"/>
+<rect class="s0" x="597.0" y="152.8" width="6.1" height="95.2"/>
+<rect class="s3" x="604.1" y="160.6" width="6.1" height="87.4"/>
+<rect class="s1" x="611.3" y="161.3" width="6.1" height="86.7"/>
+<rect class="s2" x="618.4" y="159.8" width="6.1" height="88.2"/>
+<rect class="s5" x="625.6" y="168.5" width="6.1" height="79.5"/>
+<rect class="s6" x="632.7" y="167.9" width="6.1" height="80.1"/>
+<rect class="s4" x="639.9" y="167.7" width="6.1" height="80.3"/>
 <text class="" x="622.0" y="264.0" text-anchor="middle">bytes,</text>
 <text class="" x="622.0" y="278.0" text-anchor="middle">1 MiB</text>
-<rect class="s0" x="657.0" y="190.9" width="6.1" height="57.1"/>
+<rect class="s0" x="657.0" y="191.0" width="6.1" height="57.0"/>
 <rect class="s3" x="664.1" y="181.7" width="6.1" height="66.3"/>
 <rect class="s1" x="671.3" y="185.3" width="6.1" height="62.7"/>
-<rect class="s2" x="678.4" y="183.3" width="6.1" height="64.7"/>
-<rect class="s5" x="685.6" y="176.2" width="6.1" height="71.8"/>
+<rect class="s2" x="678.4" y="183.4" width="6.1" height="64.6"/>
+<rect class="s5" x="685.6" y="176.4" width="6.1" height="71.6"/>
 <rect class="s6" x="692.7" y="175.7" width="6.1" height="72.3"/>
-<rect class="s4" x="699.9" y="167.1" width="6.1" height="80.9"/>
+<rect class="s4" x="699.9" y="167.8" width="6.1" height="80.2"/>
 <text class="" x="682.0" y="264.0" text-anchor="middle">nested 100</text>
 <text class="" x="682.0" y="278.0" text-anchor="middle">deep</text>
 <line class="axis" x1="52.0" y1="248.0" x2="712.0" y2="248.0"/>

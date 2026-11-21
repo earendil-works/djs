@@ -126,7 +126,7 @@ incompatible change to the operations, and the `Sandbox` checks it.
 
 ## The operations
 
-The shipped module has <!--n wasm/ops-->66<!--/n--> operations. By area:
+The shipped module has <!--n wasm/ops-->69<!--/n--> operations. By area:
 
 | area | operations |
 | --- | --- |
@@ -235,7 +235,7 @@ results, which is what [deterministic runs](determinism.md) build on.
 
 A VM created with `vm_new` is a copy of the [base snapshot](snapshots.md#the-base-snapshot),
 so creating one is a memory copy, not an initialization. The module carries the base
-coded with djs's own small compressor (<!--n wasm/base-coded kb-->46 KB<!--/n--> for the full build's <!--n base/bytes kb-->191 KB<!--/n-->), in a
+coded with djs's own small compressor (<!--n wasm/base-coded kb-->45 KB<!--/n--> for the full build's <!--n base/bytes kb-->191 KB<!--/n-->), in a
 custom section named `djs_base`. A custom section is outside the instance's linear
 memory: a copy in memory would cost every instance pages for bytes it reads once.
 
@@ -256,7 +256,7 @@ would otherwise sit in the allocator's first pages and push later blocks behind 
 arena, where they keep it from growing in place. Only an instance that makes a second VM
 needs the base again: the host hands over the section once more, and the instance decodes
 it and keeps that copy for any further VMs. A fresh sandbox is
-<!--n heap/sandbox-memory kib-->640 KiB<!--/n--> of wasm memory: the stack, the static data, the allocator's first pages and the
+<!--n heap/sandbox-memory kib-->384 KiB<!--/n--> of wasm memory: the stack, the static data, the allocator's first pages and the
 base.
 
 ## Values in: the wire format
@@ -286,13 +286,13 @@ string of that length (`vm_string_reserve`), finds its characters in the arena (
 past the string's offset, which `vm_handle_bits` gives), and copies the encoded bytes
 straight there. That saves the staging copy and the transcode, and the staging buffer,
 which would otherwise keep the size of the largest result for the life of the instance,
-does not grow: a 10 MiB result leaves a sandbox with <!--n heap/string-10mib-memory mib-->13.4 MiB<!--/n--> of wasm memory, against
-<!--n heap/string-10mib-staged-memory mib-->33.5 MiB<!--/n--> for one with a non-ASCII character.
+does not grow: a 10 MiB result leaves a sandbox with <!--n heap/string-10mib-memory mib-->15.2 MiB<!--/n--> of wasm memory, against
+<!--n heap/string-10mib-staged-memory mib-->30.5 MiB<!--/n--> for one with a non-ASCII character.
 Any other string goes through the wire, so text with a single non-ASCII character pays
 nothing for the attempt.
 
 > **Trade-off.** A binary format over JSON. Measured in wasm, the VM decodes it
-> <!--n wire/decode-vs-json-objects .1-->2.1<!--/n--> times as fast as it parses the same objects as JSON, and <!--n wire/decode-vs-json-string .0-->16<!--/n--> times as fast for one
+> <!--n wire/decode-vs-json-objects .1-->2.2<!--/n--> times as fast as it parses the same objects as JSON, and <!--n wire/decode-vs-json-string .0-->3<!--/n--> times as fast for one
 > large string, which becomes a memory copy instead of an escaping serializer and a
 > parser. The one place it loses is the encoder on many small objects, where V8's
 > native `JSON.stringify` is faster than the JavaScript encoder; the decoder more than
@@ -339,9 +339,9 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->414 KB<!--/n--> with gzip |
-| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.8 MB<!--/n-->, <!--n slim/gzip kb-->349 KB<!--/n--> with gzip |
-| dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.8 MB<!--/n-->, <!--n dump/gzip kb-->754 KB<!--/n--> with gzip |
+| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->429 KB<!--/n--> with gzip |
+| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->363 KB<!--/n--> with gzip |
+| dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->774 KB<!--/n--> with gzip |
 | docs module | the dump module's and `docs` | this site's live examples: the dump module plus `djs_disasm`, the bytecode listing an edited example shows |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording

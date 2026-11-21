@@ -469,8 +469,8 @@ their <!--n dumps/idle-points-->1,063<!--/n--> idle points, with a dump at each:
 | --- | ---: | ---: |
 | dump text | <!--n dumps/raw-p50 kb.1-->2.6 KB<!--/n--> | <!--n dumps/raw-p99 kb.1-->12.4 KB<!--/n--> |
 | zstd level 3 | <!--n dumps/zstd-p50 kb.1-->1.0 KB<!--/n--> | <!--n dumps/zstd-p99 kb.1-->3.0 KB<!--/n--> |
-| writing the dump | <!--n dumps/write-ms-p50 .2-->0.26<!--/n--> ms | <!--n dumps/write-ms-p99 .1-->1.7<!--/n--> ms |
-| resuming it, a new sandbox included | <!--n dumps/resume-ms-p50 .2-->0.39<!--/n--> ms | <!--n dumps/resume-ms-p99 .1-->2.5<!--/n--> ms |
+| writing the dump | <!--n dumps/write-ms-p50 .2-->0.23<!--/n--> ms | <!--n dumps/write-ms-p99 .1-->1.6<!--/n--> ms |
+| resuming it, a new sandbox included | <!--n dumps/resume-ms-p50 .2-->0.28<!--/n--> ms | <!--n dumps/resume-ms-p99 .1-->2.1<!--/n--> ms |
 
 Times are in wasm. A run that holds a large log is about as large as the log: one that
 keeps a 20,000-line log across its tool calls dumps to <!--n dumps/log-raw mb-->1.8 MB<!--/n--> and
@@ -488,7 +488,7 @@ already read (`pages.push` above) as a second read of it. Without frozen builtin
 writing a dump throws a `misuse` error that says so. The live examples with `debugger;`
 run with frozen builtins for this reason.
 
-**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->339 KB<!--/n--> more
+**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->345 KB<!--/n--> more
 with gzip), and only hosts which persist runs need it, so the module djs ships leaves it
 out. Such a host loads the same
 build with the dumper as a second module and passes it as `dumpModule`: to dump, the

@@ -80,7 +80,7 @@ into the buffer in place and makes a new 24-byte append rope with the longer len
 old string is still the shorter rope over the same buffer, and still reads the same
 units, because the units past its length are not part of it. Only the rope at the end of
 the buffer may write into it; any other append copies first. Ten million
-single-character appends in a function leave a sandbox with <!--n heap/append-10m-memory mb-->40.5 MB<!--/n--> of wasm memory
+single-character appends in a function leave a sandbox with <!--n heap/append-10m-memory mb-->33.9 MB<!--/n--> of wasm memory
 this way; a rope node per append would add 24 bytes for each, 240 MB.
 
 ```js live

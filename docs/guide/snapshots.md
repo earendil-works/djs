@@ -184,7 +184,7 @@ Every VM's memory holds the base, so it is built to be small:
 - the final collection is a copying one, so the layout depends only on the object graph,
   not on how the prelude allocated.
 
-The base is <!--n base/bytes kb-->191 KB<!--/n--> in the full build and <!--n slim/base kb-->135 KB<!--/n--> in the
+The base is <!--n base/bytes kb-->191 KB<!--/n--> in the full build and <!--n slim/base kb-->134 KB<!--/n--> in the
 [slim one](builtins.md#two-builds-full-and-slim). Building it twice gives the same bytes,
 and the base built natively is byte for byte the realm that djs-wasm builds inside
 wasm32, which a test checks, so nothing in it depends on the platform.

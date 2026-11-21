@@ -25,9 +25,9 @@ the module as the default:
 
 | import | module | for |
 | --- | --- | --- |
-| `@earendil-works/djs` | the shipped module: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->414 KB<!--/n--> with gzip | every host |
-| `@earendil-works/djs/slim` | the slim module: <!--n slim/bytes mb-->0.8 MB<!--/n-->, <!--n slim/gzip kb-->349 KB<!--/n--> with gzip | hosts that can do without typed arrays, BigInt and the other families of [the slim build](language.md#the-slim-build) |
-| `@earendil-works/djs/dump` | the dump module: <!--n dump/bytes mb-->1.8 MB<!--/n-->, <!--n dump/gzip kb-->754 KB<!--/n--> with gzip | hosts that write [dumps](#continuation-dumps): the shipped module plus the dumper |
+| `@earendil-works/djs` | the shipped module: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->429 KB<!--/n--> with gzip | every host |
+| `@earendil-works/djs/slim` | the slim module: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->363 KB<!--/n--> with gzip | hosts that can do without typed arrays, BigInt and the other families of [the slim build](language.md#the-slim-build) |
+| `@earendil-works/djs/dump` | the dump module: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->774 KB<!--/n--> with gzip | hosts that write [dumps](#continuation-dumps): the shipped module plus the dumper |
 | `@earendil-works/djs/dump-runtime` | none | the helpers a [dump](dumps.md#djs-what-the-loading-host-provides) needs in a host without djs |
 
 A host that persists runs usually imports the main entry point and gives its sandboxes
