@@ -107,6 +107,7 @@ fn renumber_atoms(heap: &mut Heap, map: &[u32]) -> Result<(), HeapError> {
     use crate::heap::cells::FuncInfo;
     heap.renumber_heap_atoms(map)?;
     let moved = |a: u32| Heap::moved_atom(map, Atom::from_id(a)).id();
+    crate::interp::known::renumber(heap, moved);
     let templates: alloc::vec::Vec<u32> = heap
         .cells()
         .filter(|c| c.kind == CellKind::FuncTemplate)

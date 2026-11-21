@@ -4,5 +4,5 @@ function <anonymous> @1..1043
   node 0 Body @0..1042: Params 6..22 Stmt 468..487 Stmt 488..521 Stmt 522..870 Stmt 871..1039 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
   node 1 Return @871..1039: Operand 878..1038
   node 2 Await @878..1038: Operand 884..1038
-  await#1 @878 (20:8) pc 134: -
+  await#1 @878 (20:8) pc 121: -
     path 0.4 1.0 2

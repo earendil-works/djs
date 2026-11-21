@@ -4,7 +4,7 @@ function <anonymous> @1..2593
   node 0 Body @0..2592: Params 6..22 Stmt 468..1306 Stmt 1307..1340 Stmt 1341..1689 Stmt 1690..2151 Stmt 2152..2174 Stmt 2175..2349 Stmt 2350..2589 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const stored@0#4 Const realLoad@0#5 Const fakeLoad@0#6
   node 1 Return @2350..2589: Operand 2357..2588
   node 2 Await @2357..2588: Operand 2363..2588
-  await#1 @2357 (41:8) pc 227: -
+  await#1 @2357 (41:8) pc 214: -
     path 0.7 1.0 2
 function <anonymous> @2365..2572
   arg0 tools@0, arg1 load@0

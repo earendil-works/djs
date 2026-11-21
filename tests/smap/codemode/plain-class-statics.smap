@@ -6,9 +6,9 @@ function <anonymous> @1..877
   node 2 Await @603..622: Operand 609..622
   node 3 Expr @770..790: Operand 770..789
   node 4 Await @770..789: Operand 776..789
-  await#1 @603 (16:1) pc 164: -
+  await#1 @603 (16:1) pc 151: -
     path 0.5 1.0 2
-  await#2 @770 (19:1) pc 321: -
+  await#2 @770 (19:1) pc 300: -
     path 0.8 3.0 4
 function <anonymous> @500..539
   loc0 <state>

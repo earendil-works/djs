@@ -25,19 +25,19 @@ function <anonymous> @0..2044
   node 21 Block @1530..1552: Stmt 1534..1550
   node 22 Expr @1534..1550: Operand 1534..1549
   node 23 Await @1534..1549: Operand 1540..1549
-  await#1 @1065 (36:11) pc 271: - (out: loc10 loc15)
+  await#1 @1065 (36:11) pc 255: - (out: loc10 loc15)
     path 0.13 1.1 2
-  await#2 @1250 (40:13) pc 324: call.callee@1238 call.this@1238 (out: loc10 loc15)
+  await#2 @1250 (40:13) pc 308: call.callee@1238 call.this@1238 (out: loc10 loc15)
     path 0.16 3.0 4.2 5
-  await#3 @1331 (42:52) pc 402: for-of.iterator@1280 for-of.next@1280 assign.old@1324 (out: loc15)
+  await#3 @1331 (42:52) pc 378: for-of.iterator@1280 for-of.next@1280 assign.old@1324 (out: loc15)
     path 0.18 6.2 7.0 8.2 9
-  await#4 @1386 (43:47) pc 442: assign.old@1379 (out: loc10)
+  await#4 @1386 (43:47) pc 418: assign.old@1379 (out: loc10)
     path 0.19 10.3 11.1 12.0 13.2 14
-  await#5 @1421 (44:27) pc 491: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 (out: loc10 loc15)
+  await#5 @1421 (44:27) pc 467: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 (out: loc10 loc15)
     path 0.20 15.0 16.3 17.2 18
-  await#6 @1430 (44:36) pc 519: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 call.arg@1421 (out: loc10 loc15)
+  await#6 @1430 (44:36) pc 487: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 call.arg@1421 (out: loc10 loc15)
     path 0.20 15.0 16.3 17.3 19
-  await#7 @1534 (47:3) pc 529: - (out: loc10 loc15)
+  await#7 @1534 (47:3) pc 497: - (out: loc10 loc15)
     path 0.21 20.0 21.0 22.0 23
 function f @163..277
   arg0 x@0
@@ -63,7 +63,7 @@ function m @333..513
   node 2 Block @25..79: Stmt 33..73
   node 3 Expr @33..73: Operand 33..72
   node 4 Await @33..72: Operand 39..72
-  await#1 @33 (15:7) pc 51: -
+  await#1 @33 (15:7) pc 41: -
     path 0.1 1.0 2.0 3.0 4
 function thrower @518..590
   loc0 <state>

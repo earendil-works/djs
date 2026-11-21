@@ -4,7 +4,7 @@ function <anonymous> @1..4483
   node 0 Body @0..4482: Params 6..22 Stmt 468..676 Stmt 677..710 Stmt 711..1059 Stmt 1060..1172 Stmt 1173..1354 Stmt 1355..2837 Stmt 2838..4479 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
   node 1 Return @2838..4479: Operand 2845..4478
   node 2 Await @2845..4478: Operand 2851..4478
-  await#1 @2845 (75:8) pc 263: -
+  await#1 @2845 (75:8) pc 250: -
     path 0.7 1.0 2
 function <anonymous> @2853..4460
   arg0 tools@0, arg1 argument 1
@@ -16,5 +16,5 @@ function <anonymous> @2853..4460
   node 4 Await @944..1168: Operand 950..1168
   await#1 @37 (76:11) pc 53: -
     path 0.1 1.1 2
-  await#2 @944 (95:17) pc 410: -
+  await#2 @944 (95:17) pc 402: -
     path 0.7 3.1 4

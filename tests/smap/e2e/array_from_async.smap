@@ -15,17 +15,17 @@ function agen @167..305
     path 0.1 1.0 2.0 3.0 4
   yield.return#1 @37 (6:5) pc 15: -
     path 0.1 1.0 2.0 3.0 4
-  yield.await#2 @50 (7:5) pc 49: -
+  yield.await#2 @50 (7:5) pc 41: -
     path 0.1 1.0 2.1 5.0 6
-  yield#2 @50 (7:5) pc 52: -
+  yield#2 @50 (7:5) pc 44: -
     path 0.1 1.0 2.1 5.0 6
-  yield.return#2 @50 (7:5) pc 57: -
+  yield.return#2 @50 (7:5) pc 49: -
     path 0.1 1.0 2.1 5.0 6
-  yield.await#3 @80 (8:5) pc 68: -
+  yield.await#3 @80 (8:5) pc 60: -
     path 0.1 1.0 2.2 7.0 8
-  yield#3 @80 (8:5) pc 71: -
+  yield#3 @80 (8:5) pc 63: -
     path 0.1 1.0 2.2 7.0 8
-  yield.return#3 @80 (8:5) pc 76: -
+  yield.return#3 @80 (8:5) pc 68: -
     path 0.1 1.0 2.2 7.0 8
 function <anonymous> @769..2278
   loc0 <state>, loc1 C@0, loc3 <fields 0>, loc4 c@0, loc5 d@0, loc6 order@0, loc7 p@0
@@ -62,31 +62,31 @@ function <anonymous> @769..2278
   node 30 Await @1467..1477: Operand 1473..1477
   await#1 @16 (32:3) pc 47: -
     path 0.1 1.0 2
-  await#2 @55 (33:3) pc 137: -
+  await#2 @55 (33:3) pc 121: -
     path 0.2 3.0 4
-  await#3 @153 (34:3) pc 229: -
+  await#3 @153 (34:3) pc 205: -
     path 0.3 5.0 6
-  await#4 @240 (35:3) pc 281: -
+  await#4 @240 (35:3) pc 257: -
     path 0.4 7.0 8
-  await#5 @346 (37:3) pc 373: -
+  await#5 @346 (37:3) pc 349: -
     path 0.6 9.0 10
-  await#6 @468 (39:3) pc 460: -
+  await#6 @468 (39:3) pc 436: -
     path 0.8 11.0 12
-  await#7 @620 (41:3) pc 573: -
+  await#7 @620 (41:3) pc 539: -
     path 0.10 13.0 14
-  await#8 @692 (42:3) pc 612: -
+  await#8 @692 (42:3) pc 578: -
     path 0.11 15.0 16
-  await#9 @731 (43:3) pc 646: -
+  await#9 @731 (43:3) pc 612: -
     path 0.12 17.0 18
-  await#10 @768 (44:3) pc 681: -
+  await#10 @768 (44:3) pc 647: -
     path 0.13 19.0 20
-  await#11 @897 (50:13) pc 738: -
+  await#11 @897 (50:13) pc 704: -
     path 0.15 21.1 22
-  await#12 @948 (51:13) pc 789: -
+  await#12 @948 (51:13) pc 755: -
     path 0.16 23.1 24
-  await#13 @1442 (58:3) pc 1069: -
+  await#13 @1442 (58:3) pc 1022: -
     path 0.22 25.0 26
-  await#14 @1453 (59:3) pc 1074: -
+  await#14 @1453 (59:3) pc 1027: -
     path 0.23 27.0 28
-  await#15 @1467 (60:3) pc 1079: -
+  await#15 @1467 (60:3) pc 1032: -
     path 0.24 29.0 30

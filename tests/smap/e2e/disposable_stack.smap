@@ -21,23 +21,23 @@ function <anonymous> @1827..3285
   node 18 Expr @1397..1456: Operand 1397..1455
   node 19 Call @1397..1455: Callee 1397..1408 Open 1408..1409 Arg 1409..1439 Arg 1441..1454
   node 20 Await @1409..1439: Operand 1415..1439
-  await#1 @511 (71:3) pc 233: -
+  await#1 @511 (71:3) pc 220: -
     path 0.9 1.0 2
-  await#2 @525 (72:3) pc 238: -
+  await#2 @525 (72:3) pc 225: -
     path 0.10 3.0 4
-  await#3 @539 (73:3) pc 243: -
+  await#3 @539 (73:3) pc 230: -
     path 0.11 5.0 6
-  await#4 @553 (74:3) pc 248: -
+  await#4 @553 (74:3) pc 235: -
     path 0.12 7.0 8
-  await#5 @635 (76:15) pc 326: call.callee@623 call.this@623
+  await#5 @635 (76:15) pc 313: call.callee@623 call.this@623
     path 0.14 9.0 10.2 11
-  await#6 @852 (83:3) pc 426: -
+  await#6 @852 (83:3) pc 413: -
     path 0.19 12.0 13
-  await#7 @1154 (88:3) pc 550: -
+  await#7 @1154 (88:3) pc 537: -
     path 0.24 14.0 15
-  await#8 @1379 (97:3) pc 568: -
+  await#8 @1379 (97:3) pc 555: -
     path 0.27 16.0 17
-  await#9 @1409 (98:15) pc 609: call.callee@1397 call.this@1397
+  await#9 @1409 (98:15) pc 591: call.callee@1397 call.this@1397
     path 0.28 18.0 19.2 20
 function <anonymous> @2029..2094
   loc0 <state>

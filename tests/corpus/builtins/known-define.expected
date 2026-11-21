@@ -1,0 +1,11 @@
+2 2 3 2.5 
+2 2 3 2.5 
+2 2 3 2.5 
+1 4 9 8 7 6 5
+got 2.5 2 3 2.5 get floor
+got 2.5 defined max 3 2.5 get floor
+got 2.5 defined max 3 2.5 get Math|get floor|get Math
+got 2.5 defined max S3 2.5 get Math|get floor|get Math
+got 2.5 defined max S3 pf get Math|get floor|get Math|get parseFloat
+true function
+=== completed

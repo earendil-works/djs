@@ -358,6 +358,13 @@ impl<M: LabelMode> CodeBuf<M> {
 }
 
 impl CodeBuf<Final> {
+    /// `jump8` over the next `skip` bytes: instructions that keep their size (no jumps,
+    /// which `finish` shortens). No label, no fixup.
+    pub fn skip8(&mut self, skip: u8) {
+        self.last = None;
+        self.code.extend_from_slice(&[Op::Jump8 as u8, skip]);
+    }
+
     /// Resolves the jump targets, shortens the jumps whose offset fits a byte
     /// (D2443), and returns the code.
     pub fn finish(self) -> Result<Code, CodeError> {

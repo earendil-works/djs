@@ -1,0 +1,11 @@
+pristine 7 1,-2 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+pristine 7 1,-2 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+pristine 7 1,-2 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+patch in arguments 2
+patched patched 7.5 patched 1.5,patched -1.5 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+patched patched 7.5 patched 1.5,patched -1.5 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+patched patched 7.5 patched 1.5,patched -1.5 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+restored 7 1,-2 12 true 42 15 2 1 true A true false true object true 2 2 3 -2 4 1024 -1 true 16
+max true 2 max false 3
+7 1,-2 12 never 42 15 max true 2 1 true <65> true false true object true 2 2 3 -2 4 1024 -1 true 16
+=== completed

@@ -4,7 +4,7 @@ function <anonymous> @1..2849
   node 0 Body @0..2848: Params 6..22 Stmt 468..1150 Stmt 1151..1184 Stmt 1185..1533 Stmt 1534..2845 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
   node 1 Return @1534..2845: Operand 1541..2844
   node 2 Await @1541..2844: Operand 1547..2844
-  await#1 @1541 (43:8) pc 242: -
+  await#1 @1541 (43:8) pc 229: -
     path 0.4 1.0 2
 function <anonymous> @1549..2838
   arg0 tools@0
@@ -19,7 +19,7 @@ function <anonymous> @1549..2838
   node 7 Member @1162..1286: Object 1162..1279 Property 1280..1286
   await#1 @27 (44:9) pc 41: -
     path 0.1 1.1 2
-  await#2 @1097 (56:1) pc 118: -
+  await#2 @1097 (56:1) pc 113: -
     path 0.5 3.0 4
-  await#3 @1163 (57:9) pc 153: -
+  await#3 @1163 (57:9) pc 148: -
     path 0.6 5.0 7.0 6

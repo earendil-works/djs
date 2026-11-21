@@ -23,7 +23,7 @@ function <anonymous> @1..1424
     path 0.11 9
   for-await.next#1 @1193 (41:1) pc 258: for-await.iterator@1193 for-await.next@1193
     path 0.11 9
-  await#4 @1308 (43:17) pc 344: - (out: loc11)
+  await#4 @1308 (43:17) pc 339: - (out: loc11)
     path 0.13 10.1 11
 function fetchAll @141..319
   arg0 paths@0
@@ -65,11 +65,11 @@ function results @1031..1176
   node 3 Expr @77..139: Operand 77..138
   node 4 Yield @77..138: Operand 83..138
   node 5 Await @83..138: Operand 89..138
-  yield.await#1 @77 (37:5) pc 86: for-of.iterator@34 for-of.next@34
+  yield.await#1 @77 (37:5) pc 78: for-of.iterator@34 for-of.next@34
     path 0.1 1.2 2.0 3.0 4
-  yield#1 @77 (37:5) pc 89: for-of.iterator@34 for-of.next@34
+  yield#1 @77 (37:5) pc 81: for-of.iterator@34 for-of.next@34
     path 0.1 1.2 2.0 3.0 4
-  yield.return#1 @77 (37:5) pc 94: for-of.iterator@34
+  yield.return#1 @77 (37:5) pc 86: for-of.iterator@34
     path 0.1 1.2 2.0 3.0 4
-  await#1 @83 (37:11) pc 83: for-of.iterator@34 for-of.next@34
+  await#1 @83 (37:11) pc 75: for-of.iterator@34 for-of.next@34
     path 0.1 1.2 2.0 3.0 4.0 5

@@ -341,7 +341,7 @@ impl Heap {
     /// The number of the base image's atoms (D2431), the first index of a VM's own; 0
     /// without a base.
     #[inline]
-    pub(crate) fn atom_base_count(&self) -> u32 {
+    fn atom_base_count(&self) -> u32 {
         self.arena().get(self.atom_table(), AtomTable::BASE_COUNT)
     }
 
@@ -935,6 +935,7 @@ impl Heap {
     }
 
     /// The string of a string atom; `None` for an array index or a symbol.
+    #[cfg(feature = "dump")]
     pub fn atom_string_of(&self, a: Atom) -> Option<crate::value::Str> {
         if a.is_int() || a.is_null() || a.is_symbol() {
             return None;

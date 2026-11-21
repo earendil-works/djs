@@ -1217,8 +1217,6 @@ fn emit_function(
         }
     };
     let mut i = 0;
-    // The phase-1 index a known builtin's label goes before (`emit_known`).
-    let mut known_end = usize::MAX;
     // After an instruction without fallthrough, code up to the next label is
     // unreachable (the `return_undef` after a function's last `return`): not emitted.
     let mut dead = false;
@@ -1227,10 +1225,6 @@ fn emit_function(
         i += 1;
         if dead && insn.op != Op::Label {
             continue;
-        }
-        if i - 1 == known_end {
-            // After a known builtin's ordinary lookup (`emit_known`'s label).
-            out.place_label(Label(out.label_count() - 1));
         }
         dead = insn.info().no_fallthrough();
         flush(&out, &mut li, &mut lines, insn.pc);
@@ -1373,14 +1367,12 @@ fn emit_function(
                 {
                     return Err(internal("assignment to a prelude function"));
                 }
-                // A known builtin (D3300): the ordinary lookup ends at `known_end`.
+                // A known builtin (D3300): its value, then a jump over the lookup.
                 if insn.op == Op::NameGet
                     && !privileged
                     && matches!(resolved[r].target, Target::Global)
-                    && let Some(member) = emit_known(heap, &mut out, atom, all.get(i))
                 {
-                    known_end = i + member as usize;
-                    continue;
+                    emit_known(heap, &mut out, atom, all.get(i));
                 }
                 emit_name(
                     &mut out,
@@ -1685,29 +1677,28 @@ fn fold_const_enum<'d>(
     None
 }
 
-/// A read of the global `name` that is a known builtin (interp/known.rs, D3300), `next`
-/// the instruction after it: emits its value from the realm's table, which is there while
-/// the builtins are pristine (for `Math.floor`, the function, and for a method call the
-/// object as `this`), a jump to a new label (the last one: the caller places it), and
-/// the ordinary `get_global` for when they are not. `Some(true)`: `next` is the access
-/// of a known member, which goes before the label too.
+/// Before a read of the global `name`, `next` the instruction after it: if the name is a
+/// known builtin (interp/known.rs, D3300), emits its value from the realm's table, which
+/// is there while the builtins are pristine, and a jump over the ordinary lookup that
+/// follows for when they are not. With `next` the access of a known member (`Math.floor`)
+/// the value is the member's (for a method call the object follows, as `this`), and the
+/// jump skips that access too.
 #[inline(never)]
-fn emit_known(
-    heap: &Heap,
-    out: &mut CodeBuf,
-    name: Atom,
-    next: Option<&crate::bytecode::Insn>,
-) -> Option<bool> {
+fn emit_known(heap: &Heap, out: &mut CodeBuf, name: Atom, next: Option<&crate::bytecode::Insn>) {
     let member = next.filter(|m| matches!(m.op, Op::GetMethod | Op::GetField));
-    let (kx, kf) = crate::interp::known::lookup(heap, name, member.map(|m| m.atom(0)))?;
-    let l = out.new_label();
+    let Some((kx, kf)) = crate::interp::known::lookup(heap, name, member.map(|m| m.atom(0))) else {
+        return;
+    };
+    // (`get_global`, `get_field` and `get_method` have one size and no short form.)
+    let mut skip = Op::GetGlobal.size();
     out.get_builtin(kf.unwrap_or(kx));
-    if kf.is_some() && member.is_some_and(|m| m.op == Op::GetMethod) {
-        out.get_builtin(kx);
+    if let (Some(_), Some(m)) = (kf, member) {
+        skip += m.op.size();
+        if m.op == Op::GetMethod {
+            out.get_builtin(kx);
+        }
     }
-    out.jump(l);
-    out.get_global(name, 0);
-    Some(kf.is_some())
+    out.skip8(skip as u8);
 }
 
 /// The prelude function table slot of a reference, if it resolved to one.

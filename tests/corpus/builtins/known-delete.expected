@@ -1,0 +1,13 @@
+2 12 true object function
+2 12 true object function
+2 12 true object function
+true
+TypeError 12 true object function
+true
+TypeError ReferenceError true object undefined
+false false 0
+-2.5 p12 true object function
+true
+-2.5 p12 ReferenceError object function
+ReferenceError
+=== completed

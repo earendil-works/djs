@@ -28,19 +28,19 @@ function <anonymous> @1..1295
   node 24 Await @980..1100: Operand 986..1100
   node 25 Decl(Const) @1188..1225: Target 1194..1195 Init 1198..1224
   node 26 Await @1198..1224: Operand 1204..1224
-  await#1 @508 (6:28) pc 76: call.callee@481 call.this@481 call.callee@493 call.this@493
+  await#1 @508 (6:28) pc 68: call.callee@481 call.this@481 call.callee@493 call.this@493
     path 0.2 1.0 2.2 3.2 4
-  await#2 @566 (7:28) pc 143: call.callee@539 call.this@539 call.callee@551 call.this@551
+  await#2 @566 (7:28) pc 127: call.callee@539 call.this@539 call.callee@551 call.this@551
     path 0.3 5.0 6.2 7.2 8
-  await#3 @674 (8:28) pc 259: call.callee@647 call.this@647 call.callee@659 call.this@659
+  await#3 @674 (8:28) pc 235: call.callee@647 call.this@647 call.callee@659 call.this@659
     path 0.4 9.0 10.2 11.2 12
-  await#4 @789 (9:28) pc 349: call.callee@762 call.this@762 call.callee@774 call.this@774
+  await#4 @789 (9:28) pc 317: call.callee@762 call.this@762 call.callee@774 call.this@774
     path 0.5 13.0 14.2 15.2 16
-  await#5 @913 (10:28) pc 430: call.callee@886 call.this@886 call.callee@898 call.this@898
+  await#5 @913 (10:28) pc 390: call.callee@886 call.this@886 call.callee@898 call.this@898
     path 0.6 17.0 18.2 19.2 20
-  await#6 @980 (12:3) pc 465: -
+  await#6 @980 (12:3) pc 425: -
     path 0.7 21.0 22.0 23.0 24
-  await#7 @1198 (15:11) pc 555: -
+  await#7 @1198 (15:11) pc 515: -
     path 0.9 25.1 26
 function g @336..481
   arg0 n@0

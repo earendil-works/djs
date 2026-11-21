@@ -76,7 +76,7 @@ function <anonymous> @3514..3665
 function <anonymous> @3689..3840
   loc0 <state>, loc4 a@0, loc5 b@0, loc6 c@0
   node 0 Body @0..151: Params 6..8 Stmt 18..50 Stmt 55..87 Stmt 92..118 Stmt 123..147 | AwaitUsing a@0#1 AwaitUsing b@0#2 Using c@0#3
-  await-using#1 @151 (189:4) pc 109: using.record@30 completion.kind@30 completion.value@30
+  await-using#1 @151 (189:4) pc 104: using.record@30 completion.kind@30 completion.value@30
     path 0
 function <anonymous> @3867..3982
   loc0 <state>, loc4 n@26, loc5 u@26
@@ -112,12 +112,12 @@ function <anonymous> @4258..4501
 function <anonymous> @4527..4709
   loc0 <state>, loc4 x@0
   node 0 Body @0..182: Params 6..8 Stmt 18..178 | AwaitUsing x@0#1
-  await-using#1 @182 (221:4) pc 65: using.record@30 completion.kind@30 completion.value@30
+  await-using#1 @182 (221:4) pc 60: using.record@30 completion.kind@30 completion.value@30
     path 0
 function <anonymous> @4738..4887
   loc0 <state>, loc4 x@0
   node 0 Body @0..149: Params 6..8 Stmt 18..122 Stmt 127..145 | AwaitUsing x@0#1
-  await-using#1 @149 (229:4) pc 83: using.record@30 completion.kind@30 completion.value@30
+  await-using#1 @149 (229:4) pc 78: using.record@30 completion.kind@30 completion.value@30
     path 0
 function <anonymous> @4920..5133
   loc0 <state>, loc1 g@0, loc2 v@131

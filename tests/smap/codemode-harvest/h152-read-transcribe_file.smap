@@ -4,7 +4,7 @@ function <anonymous> @1..11730
   node 0 Body @0..11729: Params 6..22 Stmt 468..10465 Stmt 10466..10499 Stmt 10500..10848 Stmt 10849..11726 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
   node 1 Return @10849..11726: Operand 10856..11725
   node 2 Await @10856..11725: Operand 10862..11725
-  await#1 @10856 (145:8) pc 694: -
+  await#1 @10856 (145:8) pc 681: -
     path 0.4 1.0 2
 function <anonymous> @10864..11719
   arg0 tools@0
@@ -17,7 +17,7 @@ function <anonymous> @10864..11719
   node 5 Block @255..719: Stmt 259..312 Stmt 315..351 Stmt 355..408 Stmt 411..451 Stmt 454..590 Stmt 593..636 Stmt 639..717 | Const t@259#0 Const a@259#1 Const b@259#1 Const d@259#2 Const wer@259#5
   node 6 Decl(Const) @259..312: Target 265..266 Init 269..311
   node 7 Await @269..311: Operand 275..311
-  await#1 @40 (146:22) pc 63: call.callee@29 call.this@29 (out: loc4 loc9 loc10 loc11 loc12 loc16)
+  await#1 @40 (146:22) pc 55: call.callee@29 call.this@29 (out: loc4 loc9 loc10 loc11 loc12 loc16)
     path 0.1 1.1 2.2 3
-  await#2 @269 (150:13) pc 145: for-of.iterator@236 for-of.next@236
+  await#2 @269 (150:13) pc 137: for-of.iterator@236 for-of.next@236
     path 0.4 4.2 5.0 6.1 7

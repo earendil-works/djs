@@ -1908,28 +1908,27 @@ impl<'h> Exec<'h> {
     }
 
     /// A known builtin's `get_builtin` (D3300) after the builtins changed: on to the
-    /// ordinary lookup, which follows the jump after it and its sibling, and the
+    /// ordinary lookup, which follows the `jump8` after it and its sibling, and the
     /// instruction becomes a jump there (`jump8; nop` in its three bytes), so the site
     /// pays this once. False if no such jump follows (bad bytecode).
     #[cold]
     #[inline(never)]
     fn known_declined(&mut self, next: u32) -> bool {
         // (Final code's bytes end with zeros enough for these reads.)
-        let mut pc = next;
-        if self.byte(pc) == fast::GET_BUILTIN {
-            pc += Op::GetBuiltin.size() as u32;
+        let mut skip = Op::Jump8.size() as u32;
+        if self.byte(next) == fast::GET_BUILTIN {
+            skip += Op::GetBuiltin.size() as u32;
         }
-        let lookup = match self.byte(pc) {
-            fast::JUMP8 => pc + Op::Jump8.size() as u32,
-            fast::JUMP => pc + Op::Jump.size() as u32,
-            _ => return false,
-        };
+        if self.byte(next + skip - 2) != fast::JUMP8 {
+            return false;
+        }
         let at = self.code + self.pc;
         let a = self.heap.arena_mut();
         a.write(at, fast::JUMP8);
-        a.write(at + 1, (lookup - self.pc - Op::Jump8.size() as u32) as u8);
+        // (From the end of the two-byte jump: over the nop too.)
+        a.write(at + 1, skip as u8 + 1);
         a.write(at + 2, Op::Nop as u8);
-        self.pc = lookup;
+        self.pc = next + skip;
         true
     }
 

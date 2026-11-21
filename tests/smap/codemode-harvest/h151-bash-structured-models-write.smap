@@ -4,7 +4,7 @@ function <anonymous> @1..17123
   node 0 Body @0..17122: Params 6..22 Stmt 468..13040 Stmt 13041..13074 Stmt 13075..13423 Stmt 13424..13536 Stmt 13537..13718 Stmt 13719..15201 Stmt 15202..17119 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
   node 1 Return @15202..17119: Operand 15209..17118
   node 2 Await @15209..17118: Operand 15215..17118
-  await#1 @15209 (301:8) pc 1395: -
+  await#1 @15209 (301:8) pc 1382: -
     path 0.7 1.0 2
 function <anonymous> @15217..17100
   arg0 tools@0, arg1 argument 1
@@ -43,9 +43,9 @@ function <anonymous> @15217..17100
     path 0.1 1.1 2.2 6.0 5.0 4.0 3
   await#2 @144 (303:24) pc 103: call.callee@134 call.this@134 (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
     path 0.2 7.1 8.2 12.0 11.0 10.0 9
-  await#3 @1031 (316:18) pc 324: - (out: loc14 loc15 loc16)
+  await#3 @1031 (316:18) pc 316: - (out: loc14 loc15 loc16)
     path 0.8 13.3 14.0 15.1 23.0 22.0 21.0 20.0 19.0 18.0 17.0 16
-  await#4 @1367 (321:17) pc 475: -
+  await#4 @1367 (321:17) pc 454: -
     path 0.8 13.3 14.3 24.3 25.1 26.1 27
-  await#5 @1689 (324:3) pc 591: - (out: loc14 loc15 loc16)
+  await#5 @1689 (324:3) pc 570: - (out: loc14 loc15 loc16)
     path 0.8 13.3 14.4 28.0 29

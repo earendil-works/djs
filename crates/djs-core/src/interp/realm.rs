@@ -197,12 +197,12 @@ pub enum Intrinsic {
     /// registry a hidden object from module key to module record and the traps the
     /// prototype of the namespace handlers; undefined until the first module loads.
     Modules,
-    /// The index of the first known builtin (interp/known.rs, D3300) in the prelude
-    /// function table: an int, or undefined in a realm whose prelude has not run.
-    KnownFirst,
+    /// The names of the known builtins (interp/known.rs, D3300): a u32 array, or
+    /// undefined in a realm whose prelude has not run.
+    KnownNames,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::KnownFirst as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::KnownNames as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -406,7 +406,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::TypedArrayCtor, Value::UNDEFINED);
     set(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
     set(heap, Intrinsic::RegExpCache, Value::UNDEFINED);
-    set(heap, Intrinsic::KnownFirst, Value::UNDEFINED);
+    set(heap, Intrinsic::KnownNames, Value::UNDEFINED);
     set(heap, Intrinsic::Registries, Value::UNDEFINED);
     set(heap, Intrinsic::GlobalLexEpoch, Value::int(0));
     let ctors = heap.new_object(None)?;
@@ -631,10 +631,9 @@ pub(crate) fn declare_global_lexical(
     let lex = global_lex(heap);
     let d = PropertyDescriptor::data(Value::UNINITIALIZED, PropFlags::new(writable, true, true));
     heap.define_own_property(lex, key, &d)?;
-    // It may shadow a known builtin (D3300),
-    let g = intrinsic_obj(heap, Intrinsic::Global);
-    heap.unwatch(g, key);
-    // or a global object property a cache remembers.
+    // It may shadow a known builtin (D3300), or a global object property a cache
+    // remembers.
+    super::known::shadowed(heap, key);
     let epoch = intrinsic(heap, Intrinsic::GlobalLexEpoch)
         .as_int()
         .unwrap_or(0);

@@ -59,9 +59,9 @@ pub const EMPTY_SHAPE: u32 = 1;
 /// Storage-only flag bit: the entry is an accessor.
 pub(crate) const STORE_ACCESSOR: u32 = 8;
 /// Stored flags of a dictionary entry: a known builtin's binding in the global object
-/// (D3300). The first change of the entry (its value, its attributes, its removal) or a
-/// lexical binding of its name clears the bit and ends the known builtins' fast path
-/// (`interp::known::unpristine`). Only the base image's build sets it.
+/// (D3300). The first change of the entry (its value, its attributes, its removal) ends
+/// the known builtins' fast path (`interp::known::unpristine`); a write of the entry
+/// drops the bit. Only the base image's build sets it.
 pub(crate) const STORE_WATCHED: u32 = 16;
 
 /// The object class, stored in [`Object::CLASS`]. Issue 0006 adds more.
@@ -1300,45 +1300,22 @@ impl Heap {
             self.become_dictionary(o, 0, Dict::Attributes)?;
         }
         let t = self.props(o);
+        self.entry_changes(t, i);
+        self.write_entry(t, i, key, p)
+    }
+
+    /// Entry `i` of table `t` is about to change (its value, its attributes, its
+    /// removal). If it is a known builtin's binding (`STORE_WATCHED`), the known builtins
+    /// are no longer what the base image has (D3300).
+    #[inline(never)]
+    fn entry_changes(&mut self, t: u32, i: u32) {
         if self
             .arena()
             .get(PropTable::ENTRIES.at(t, i), PropEntry::FLAGS)
             & STORE_WATCHED
             != 0
         {
-            self.watched_change(t, i);
-        }
-        self.write_entry(t, i, key, p)
-    }
-
-    /// Entry `i` of table `t`, a known builtin's binding (`STORE_WATCHED`), changes:
-    /// the known builtins are no longer what the base image has (D3300).
-    #[cold]
-    #[inline(never)]
-    fn watched_change(&mut self, t: u32, i: u32) {
-        let e = PropTable::ENTRIES.at(t, i);
-        let fl = self.arena().get(e, PropEntry::FLAGS);
-        self.arena_mut()
-            .set(e, PropEntry::FLAGS, fl & !STORE_WATCHED);
-        crate::interp::known::unpristine(self);
-    }
-
-    /// Before own property `key` of `o` is shadowed (a global lexical binding of that
-    /// name): as for a change of it, if it is a known builtin's binding.
-    #[inline(never)]
-    pub(crate) fn unwatch(&mut self, o: Obj, key: Atom) {
-        if self.is_dictionary(o)
-            && let Some(i) = self.prop_find(o, key)
-        {
-            let t = self.props(o);
-            if self
-                .arena()
-                .get(PropTable::ENTRIES.at(t, i), PropEntry::FLAGS)
-                & STORE_WATCHED
-                != 0
-            {
-                self.watched_change(t, i);
-            }
+            crate::interp::known::unpristine(self);
         }
     }
 
@@ -1882,14 +1859,7 @@ impl Heap {
     /// Removes entry `i` of `o`'s table.
     fn table_remove(&mut self, o: Obj, i: u32) {
         let t = self.props(o);
-        if self
-            .arena()
-            .get(PropTable::ENTRIES.at(t, i), PropEntry::FLAGS)
-            & STORE_WATCHED
-            != 0
-        {
-            self.watched_change(t, i);
-        }
+        self.entry_changes(t, i);
         let count = self.arena().get(t, PropTable::COUNT);
         let index = self.arena().get(t, PropTable::INDEX).0;
         let esize = PropTable::ENTRIES.elem_size();

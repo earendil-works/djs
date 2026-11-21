@@ -22,7 +22,7 @@ function <anonymous> @1..582
     path 0.3 3.0 4.2 5
   await#3 @260 (5:13) pc 110: call.callee@248 call.this@248
     path 0.4 6.0 7.2 8
-  await#4 @300 (6:11) pc 148: -
+  await#4 @300 (6:11) pc 143: -
     path 0.5 9.1 10
-  await#5 @438 (10:3) pc 238: -
+  await#5 @438 (10:3) pc 233: -
     path 0.8 11.0 12.0 13.0 14
