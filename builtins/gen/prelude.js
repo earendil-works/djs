@@ -9445,6 +9445,9 @@ function RegExpFromPattern(pattern, flags) {
 // builtins/string-regexp.ts:42 String.prototype.match
 function StringPrototypeMatch(regexp) {
   RequireThisCoercible(this);
+  if (%IsString(this) && %IsPristineRegExp(regexp) && !%RegExpHasFlag(%AsObj(regexp), "g")) {
+    return %RegExpExecOwn(regexp, %AsStr(this), false, undefined);
+  }
   if (%IsObject(regexp)) {
     const matcher = GetMethod(regexp, %WellKnownSymbol("match"));
     if (matcher !== undefined) {
@@ -9455,7 +9458,7 @@ function StringPrototypeMatch(regexp) {
   return InvokeSymbol(RegExpFromPattern(regexp, ""), "match", s);
 }
 
-// builtins/string-regexp.ts:58 String.prototype.matchAll
+// builtins/string-regexp.ts:63 String.prototype.matchAll
 function StringPrototypeMatchAll(regexp) {
   RequireThisCoercible(this);
   if (%IsObject(regexp)) {
@@ -9469,7 +9472,7 @@ function StringPrototypeMatchAll(regexp) {
   return InvokeSymbol(RegExpFromPattern(regexp, "g"), "matchAll", s);
 }
 
-// builtins/string-regexp.ts:75 String.prototype.search
+// builtins/string-regexp.ts:80 String.prototype.search
 function StringPrototypeSearch(regexp) {
   RequireThisCoercible(this);
   if (%IsObject(regexp)) {
@@ -9482,7 +9485,7 @@ function StringPrototypeSearch(regexp) {
   return InvokeSymbol(RegExpFromPattern(regexp, ""), "search", s);
 }
 
-// builtins/string-regexp.ts:88
+// builtins/string-regexp.ts:93
 function StringReplacement(functionalReplace, replaceValue, replaceStr, searchString, position, string) {
   if (functionalReplace) {
     return ToString(%Call(replaceValue, undefined, searchString, position, string));
@@ -9490,9 +9493,12 @@ function StringReplacement(functionalReplace, replaceValue, replaceStr, searchSt
   return GetSubstitution(searchString, string, position, %ArrayCreate(0), 0, undefined, replaceStr);
 }
 
-// builtins/string-regexp.ts:107 String.prototype.replace
+// builtins/string-regexp.ts:112 String.prototype.replace
 function StringPrototypeReplace(searchValue, replaceValue) {
   RequireThisCoercible(this);
+  if (%IsString(this) && %IsString(replaceValue) && %IsPristineRegExp(searchValue) && %RegExpHasFlag(%AsObj(searchValue), "g")) {
+    return %RegExpReplaceRaw(%AsObj(searchValue), %AsStr(this), %AsStr(replaceValue), undefined);
+  }
   if (%IsObject(searchValue)) {
     const replacer = GetMethod(searchValue, %WellKnownSymbol("replace"));
     if (replacer !== undefined) {
@@ -9515,7 +9521,7 @@ function StringPrototypeReplace(searchValue, replaceValue) {
   return %StrSubstring(string, 0, position) + replacement + %StrSubstring(string, following, (%StrLength(string)));
 }
 
-// builtins/string-regexp.ts:143 String.prototype.replaceAll
+// builtins/string-regexp.ts:157 String.prototype.replaceAll
 function StringPrototypeReplaceAll(searchValue, replaceValue) {
   RequireThisCoercible(this);
   if (%IsObject(searchValue)) {
@@ -9557,7 +9563,7 @@ function StringPrototypeReplaceAll(searchValue, replaceValue) {
   return result;
 }
 
-// builtins/string-regexp.ts:196 String.prototype.split
+// builtins/string-regexp.ts:210 String.prototype.split
 function StringPrototypeSplit(separator, limit) {
   RequireThisCoercible(this);
   if (%IsObject(separator)) {
