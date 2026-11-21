@@ -1217,6 +1217,8 @@ fn emit_function(
         }
     };
     let mut i = 0;
+    // The phase-1 index a known builtin's label goes before (`emit_known`).
+    let mut known_end = usize::MAX;
     // After an instruction without fallthrough, code up to the next label is
     // unreachable (the `return_undef` after a function's last `return`): not emitted.
     let mut dead = false;
@@ -1225,6 +1227,10 @@ fn emit_function(
         i += 1;
         if dead && insn.op != Op::Label {
             continue;
+        }
+        if i - 1 == known_end {
+            // After a known builtin's ordinary lookup (`emit_known`'s label).
+            out.place_label(Label(out.label_count() - 1));
         }
         dead = insn.info().no_fallthrough();
         flush(&out, &mut li, &mut lines, insn.pc);
@@ -1367,37 +1373,14 @@ fn emit_function(
                 {
                     return Err(internal("assignment to a prelude function"));
                 }
-                // A known builtin (interp/known.rs, D3300): its value from the realm's
-                // table while the builtins are pristine, with the object as `this` for a
-                // method call; the lookup itself follows for when they are not.
+                // A known builtin (D3300): the ordinary lookup ends at `known_end`.
                 if insn.op == Op::NameGet
                     && !privileged
                     && matches!(resolved[r].target, Target::Global)
+                    && let Some(member) = emit_known(heap, &mut out, atom, all.get(i))
                 {
-                    let member = all
-                        .get(i)
-                        .filter(|m| matches!(m.op, Op::GetMethod | Op::GetField));
-                    if let Some((kx, kf)) =
-                        crate::interp::known::lookup(heap, atom, member.map(|m| m.atom(0)))
-                    {
-                        let l = out.new_label();
-                        out.get_builtin(kf.unwrap_or(kx));
-                        if let (Some(_), Some(m)) = (kf, member) {
-                            if m.op == Op::GetMethod {
-                                out.get_builtin(kx);
-                            }
-                            out.jump(l);
-                            out.get_global(atom, 0);
-                            flush(&out, &mut li, &mut lines, m.pc);
-                            out.emit_insn(m);
-                            i += 1;
-                        } else {
-                            out.jump(l);
-                            out.get_global(atom, 0);
-                        }
-                        out.place_label(l);
-                        continue;
-                    }
+                    known_end = i + member as usize;
+                    continue;
                 }
                 emit_name(
                     &mut out,
@@ -1700,6 +1683,31 @@ fn fold_const_enum<'d>(
         }
     }
     None
+}
+
+/// A read of the global `name` that is a known builtin (interp/known.rs, D3300), `next`
+/// the instruction after it: emits its value from the realm's table, which is there while
+/// the builtins are pristine (for `Math.floor`, the function, and for a method call the
+/// object as `this`), a jump to a new label (the last one: the caller places it), and
+/// the ordinary `get_global` for when they are not. `Some(true)`: `next` is the access
+/// of a known member, which goes before the label too.
+#[inline(never)]
+fn emit_known(
+    heap: &Heap,
+    out: &mut CodeBuf,
+    name: Atom,
+    next: Option<&crate::bytecode::Insn>,
+) -> Option<bool> {
+    let member = next.filter(|m| matches!(m.op, Op::GetMethod | Op::GetField));
+    let (kx, kf) = crate::interp::known::lookup(heap, name, member.map(|m| m.atom(0)))?;
+    let l = out.new_label();
+    out.get_builtin(kf.unwrap_or(kx));
+    if kf.is_some() && member.is_some_and(|m| m.op == Op::GetMethod) {
+        out.get_builtin(kx);
+    }
+    out.jump(l);
+    out.get_global(name, 0);
+    Some(kf.is_some())
 }
 
 /// The prelude function table slot of a reference, if it resolved to one.

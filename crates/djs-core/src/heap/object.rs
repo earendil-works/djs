@@ -1264,15 +1264,11 @@ impl Heap {
             let s = self.arena().get(p, PropValues::SHAPE).0;
             (self.shape_desc(s, i).1, PropValues::VALUES.at(p, i))
         };
+        // (A known builtin's binding, `STORE_WATCHED`, takes the general path, whose
+        // `prop_write` notes the change.)
         if fl & (STORE_ACCESSOR | STORE_WATCHED) != 0 || !PropFlags::from_bits(fl as u8).writable()
         {
-            // (One test for the common case: neither an accessor nor watched.)
-            if fl & (STORE_ACCESSOR | STORE_WATCHED) != STORE_WATCHED
-                || !PropFlags::from_bits(fl as u8).writable()
-            {
-                return false;
-            }
-            self.watched_change(p, i);
+            return false;
         }
         self.arena_mut().write(at, v);
         true
@@ -1329,6 +1325,7 @@ impl Heap {
 
     /// Before own property `key` of `o` is shadowed (a global lexical binding of that
     /// name): as for a change of it, if it is a known builtin's binding.
+    #[inline(never)]
     pub(crate) fn unwatch(&mut self, o: Obj, key: Atom) {
         if self.is_dictionary(o)
             && let Some(i) = self.prop_find(o, key)

@@ -36,6 +36,7 @@ const MEMBER: u32 = 1 << 31;
 
 /// The table indexes of the known global `global`, and of its known function `member`
 /// when that is given and known.
+#[inline(never)]
 pub(crate) fn lookup(
     heap: &Heap,
     global: Atom,
@@ -46,16 +47,23 @@ pub(crate) fn lookup(
         return None;
     }
     let names = intrinsic(heap, Intrinsic::KnownNames).as_internal()?;
-    let n = heap.u32_array_len(names);
-    let name = |i: u32| heap.u32_array_get(names, i);
-    let k = |i: u32| (name(0) + i - 1) as u16;
-    let g = (1..n).find(|&i| name(i) == global.id())?;
-    let m = member.and_then(|m| {
-        (g + 1..n)
-            .take_while(|&i| name(i) & MEMBER != 0)
-            .find(|&i| name(i) == m.id() | MEMBER)
-    });
-    Some((k(g), m.map(k)))
+    let (n, first) = (heap.u32_array_len(names), heap.u32_array_get(names, 0));
+    let (mut want, mut found, mut i) = (global.id(), None, 1);
+    while i < n {
+        let name = heap.u32_array_get(names, i);
+        if name == want {
+            let k = Some((first + i - 1) as u16);
+            match (found, member) {
+                (Some(g), _) => return Some((g, k)),
+                (None, None) => return Some((k?, None)),
+                (None, Some(m)) => (found, want) = (k, m.id() | MEMBER),
+            }
+        } else if found.is_some() && name & MEMBER == 0 {
+            break;
+        }
+        i += 1;
+    }
+    Some((found?, None))
 }
 
 /// The builtins changed: `get_builtin` of a known builtin declines from now on.

@@ -1914,12 +1914,10 @@ impl<'h> Exec<'h> {
     #[cold]
     #[inline(never)]
     fn known_declined(&mut self, next: u32) -> bool {
+        // (Final code's bytes end with zeros enough for these reads.)
         let mut pc = next;
-        if pc < self.code_len && self.byte(pc) == Op::GetBuiltin as u8 {
+        if self.byte(pc) == fast::GET_BUILTIN {
             pc += Op::GetBuiltin.size() as u32;
-        }
-        if pc >= self.code_len {
-            return false;
         }
         let lookup = match self.byte(pc) {
             fast::JUMP8 => pc + Op::Jump8.size() as u32,
@@ -1927,12 +1925,10 @@ impl<'h> Exec<'h> {
             _ => return false,
         };
         let at = self.code + self.pc;
-        if let Ok(d) = i8::try_from(lookup - (self.pc + Op::Jump8.size() as u32)) {
-            let a = self.heap.arena_mut();
-            a.write(at, fast::JUMP8);
-            a.write(at + 1, d as u8);
-            a.write(at + 2, Op::Nop as u8);
-        }
+        let a = self.heap.arena_mut();
+        a.write(at, fast::JUMP8);
+        a.write(at + 1, (lookup - self.pc - Op::Jump8.size() as u32) as u8);
+        a.write(at + 2, Op::Nop as u8);
         self.pc = lookup;
         true
     }
