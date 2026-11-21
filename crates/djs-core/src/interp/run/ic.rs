@@ -687,10 +687,8 @@ impl Exec<'_> {
         // itself, in the word a primitive has no shape for (D3550).
         if !accessor
             && (o.as_string().is_some() || o.is_number())
-            && let Some(f) = self
-                .heap
-                .data_at(holder, i, key)
-                .and_then(|v| v.as_object())
+            && let Some(v) = self.heap.data_at(holder, i, key)
+            && let Some(f) = v.as_object()
         {
             if self.heap.builtins_pristine() && f.offset() < self.heap.base_end() {
                 shape = f.offset();
@@ -700,7 +698,7 @@ impl Exec<'_> {
                     DIRECT_STRING
                 };
             }
-            if call_at != 0 && self.fusible(f, call_at) {
+            if call_at != 0 && self.fusible(v, call_at) {
                 w4 |= FUSE;
             }
         }

@@ -3751,7 +3751,7 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
     let src = "class P { constructor() { this.v = 1; } get g() { return this.v + 1; } m() { return 2; } }\n\
         const p = new P(), o = { a: 1, get own() { return 5; } }, m = new Map([[1, 2]]), st = new Set([1]);\n\
         const ta = new Uint8Array(4), s = ['ab', 'c'].join(''), k = ['a'].join(''), xs = [1, 2, 3];\n\
-        let acc = 0, out = '';\n\
+        let acc = 0, out = '', saved;\n\
         function calls(str, n, pad, v) {\n\
           const x = n + 0.25, m = 3; let r = str.charCodeAt(n) + str.indexOf(pad) + str.slice(n, m).length;\n\
           r += str.padStart(5, pad).length + x.toFixed(2).length + str.trim().length + x.toString().length;\n\
@@ -3760,7 +3760,7 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
           try { r += str.repeat(-1).length; } catch (e) { r += 2; }\n\
           return r + str.substring(1, n + 1).length + str.startsWith(pad, 1, 2, 3);\n\
         }\n\
-        for (let i = 0; i < 4; i++) {\n\
+        for (let i = 0; i < 6; i++) {\n\
           acc += p.g + o.own + m.size + st.size + ta.length + ta.byteLength + (o.missing ?? 3);\n\
           acc += (typeof p.m === 'function') + (typeof s === 'string') + (s === 'abc') + (s < 'abd') + (s >= 'b');\n\
           acc += o[k] + (k in o) + xs[i & 1] + xs.length + s.length + p.m() + ('zz' in o);\n\
@@ -3771,6 +3771,8 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
           acc += String(i).length + s.padStart(5).length + (typeof s.at) .length + (7).toString().length;\n\
           acc += calls(s, i & 1, '-', i === 3 ? { valueOf() { return 1; } } : 1);\n\
           if (i === 1) String.prototype.extra0286 = 1;\n\
+          if (i === 2) { saved = String.prototype.at; String.prototype.at = function () { return 'zz'; }; }\n\
+          if (i === 4) String.prototype.at = saved;\n\
           if (i === 2) { Object.defineProperty(P.prototype, 'g', { get() { return 7; } }); o.missing = 1; }\n\
         }\n\
         console.log(acc, out);\n";

@@ -38,6 +38,7 @@ impl Exec<'_> {
     /// unchanged, and `step` makes the full call.
     #[inline]
     pub(super) fn fast_leaf_call(&mut self, op: u8) -> bool {
+        // (`fused_call` made this call's attempt already, D3551.)
         if self.fused_miss == self.code + self.pc {
             self.fused_miss = 0;
             return false;
@@ -49,23 +50,33 @@ impl Exec<'_> {
             ((op - super::fast::CALL0) as u32, Op::Call0.size() as u32)
         };
         let base = self.sp - 2 - argc;
-        let Some(o) = self.get(base).as_object() else {
+        let Some(t) = self.fast_template(self.get(base)) else {
             return false;
         };
+        self.fast_builtin_call(t, base, argc, self.pc + size)
+    }
+
+    /// The template of `f` if it is a `@fast` builtin.
+    #[inline(always)]
+    fn fast_template(&self, f: Value) -> Option<u32> {
+        let o = f.as_object()?;
         if !self.is_class(o, ObjectClass::Function) {
-            return false;
+            return None;
         }
         let t = self.template_of(o);
-        if u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS))
+        (u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS))
             & self.slow_call_flags
             & func_flags::FAST
-            == 0
-        {
-            return false;
-        }
+            != 0)
+            .then_some(t)
+    }
+
+    /// [`Exec::fast_leaf_call`] of the `@fast` builtin template `t`, called at `base`
+    /// with `argc` arguments by the call instruction before `next`.
+    #[inline(always)]
+    fn fast_builtin_call(&mut self, t: u32, base: u32, argc: u32, next: u32) -> bool {
         // (`call0`..`call3` cost as much as `call`: the table's check.)
         let info = &OPS[Op::Call as usize];
-        let next = self.pc + size;
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
         // A generated (`@rust`) builtin: straight to its function (a conversion or an
         // error goes the general way, `own_call` through `step`).
@@ -179,12 +190,8 @@ impl Exec<'_> {
 
     /// Whether the `get_method` before `at` may get a slot `fused_call` answers: its
     /// value `f` is a `@fast` builtin and plain pushes lead to the call.
-    pub(super) fn fusible(&mut self, f: crate::value::Obj, at: u32) -> bool {
-        if !self.is_class(f, ObjectClass::Function) {
-            return false;
-        }
-        let t = self.template_of(f);
-        if u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::FAST == 0 {
+    pub(super) fn fusible(&mut self, f: Value, at: u32) -> bool {
+        if self.fast_template(f).is_none() {
             return false;
         }
         let pc = self.pc;
@@ -199,9 +206,10 @@ impl Exec<'_> {
     /// does for the instructions from the `get_method` to the call, with the same
     /// bytes left on the stack. `None`, for the loop to go on with `f` as the
     /// `get_method`'s value, when a stop would fall between those instructions, the
-    /// stack is near its end (a leaf may ask for slots) or the builtin declines: its
-    /// attempt is then made, and `fast_leaf_call` leaves the call to `step`. Otherwise
-    /// the bytes to skip and, above bit 16, the fuel to charge.
+    /// stack is near its end (a leaf may ask for slots), `f` is no `@fast` builtin now,
+    /// or the builtin declines: its attempt is then made, and `fast_leaf_call`, which
+    /// the call instruction of a `@fast` builtin always reaches, leaves the call to
+    /// `step`. Otherwise the bytes to skip and, above bit 16, the fuel to charge.
     #[inline(never)]
     pub(super) fn fused_call(
         &mut self,
@@ -213,6 +221,7 @@ impl Exec<'_> {
     ) -> Option<u32> {
         /// Slots above the call's that a leaf's intrinsic may use (`n_leaf`).
         const ROOM: u32 = 8;
+        let t = self.fast_template(f)?;
         let mut args = [Value::UNDEFINED; 3];
         self.pc = pc + Op::GetMethod.size() as u32;
         let (n, pre) = self.scan_args(&mut args)?;
@@ -229,7 +238,8 @@ impl Exec<'_> {
         self.sp = top;
         self.fuel = fuel - pre;
         let stack = self.stack;
-        if self.fast_leaf_call(self.byte(self.pc)) {
+        let next = self.pc + OPS[self.byte(self.pc) as usize].size as u32;
+        if self.fast_builtin_call(t, sp - 1, n, next) {
             debug_assert!(self.stack == stack, "a fused call moved the stack");
             #[cfg(test)]
             FUSED[0].fetch_add(1, core::sync::atomic::Ordering::Relaxed);
