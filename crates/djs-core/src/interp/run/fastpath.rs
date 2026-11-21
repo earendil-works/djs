@@ -36,27 +36,27 @@ impl Exec<'_> {
     #[inline]
     pub(super) fn fast_leaf_call(&mut self, op: u8) -> bool {
         // `call argc` or a short form (`call2`, D2443).
-        let (argc, size) = if op == super::fast::CALL {
-            (self.imm_u16(1), Op::Call.size() as u32)
+        let argc = if op == super::fast::CALL {
+            self.imm_u16(1)
         } else {
-            ((op - super::fast::CALL0) as u32, Op::Call0.size() as u32)
+            (op - super::fast::CALL0) as u32
         };
         let base = self.sp - 2 - argc;
-        let Some(t) = self.fast_template(self.get(base)) else {
-            return false;
-        };
-        self.fast_builtin_call(t, base, argc, self.pc + size)
+        // (The loop makes these calls itself, D3551: this is for one near the stack's
+        // end, and for the tests' run without the loop. One copy of the code.)
+        self.fast_template(self.get(base)).is_some()
+            && self.loop_leaf_call(base, argc, self.pc) != 0
     }
 
-    /// [`Exec::fast_leaf_call`] for the tier-0 loop's call instruction at `pc`, whose
-    /// callee at `base` the loop found to be a `@fast` builtin, without leaving the loop
-    /// (D3551). The loop keeps the stack's place and checked that [`LEAF_ROOM`] slots
-    /// are left. 0 when the builtin declined: the loop then leaves the instruction to
-    /// `step`, not to `decline_fast`, whose `fast_leaf_call` would run the builtin's
-    /// entry a second time. Else the call completed, its result at `base`: the slots
-    /// to take from sp and, above bit 32, the instruction's size (the loop keeps
-    /// nothing of its own across this call but ip, sp and fuel, D3391); it charges the
-    /// fuel of such a call.
+    /// The call instruction at `pc`, whose callee at `base` is a `@fast` builtin: its
+    /// fast path. The tier-0 loop calls this without leaving the loop (D3551): it keeps
+    /// the stack's place and has checked that [`LEAF_ROOM`] slots are left. 0 when the
+    /// builtin declined: the loop then leaves the instruction to `step`, not to
+    /// `decline_fast`, whose `fast_leaf_call` would run the builtin's entry a second
+    /// time. Else the call completed, its result at `base`, `pc` past the instruction
+    /// and its fuel taken from `Exec::fuel`: the slots to take from sp and, above bit
+    /// 32, the instruction's size (the loop keeps nothing of its own across this call
+    /// but ip, sp and fuel, D3391, and charges the fuel itself).
     #[inline(never)]
     pub(super) fn loop_leaf_call(&mut self, base: u32, argc: u32, pc: u32) -> u64 {
         let t = self.template_of(self.get(base).as_object().expect("a function"));
@@ -68,7 +68,10 @@ impl Exec<'_> {
         if !self.fast_builtin_call(t, base, argc, pc + size) {
             return 0;
         }
-        debug_assert!(self.stack == stack, "a leaf moved the stack");
+        debug_assert!(
+            self.stack == stack || !self.opts.hot_loop,
+            "a leaf moved the stack"
+        );
         u64::from(argc + 1) | u64::from(size) << 32
     }
 

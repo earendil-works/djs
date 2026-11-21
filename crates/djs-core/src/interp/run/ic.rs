@@ -27,9 +27,9 @@
 //!   word 3 = the receiver's shape word (`Heap::receiver_shape`, 0083), or 0; word 4 = 1
 //!   if the key is no canonical numeric string (a typed array receiver may then hit).
 //!   For a string or a number receiver whose value is a builtin object, with the builtins
-//!   pristine at the fill (D3550): word 4 also has `DIRECT_STRING` or `DIRECT_NUMBER` and
-//!   word 3 is that object; the tier-0 loop's hit is then the object itself while nothing
-//!   has written to the builtin prefix. The objects
+//!   untouched at the fill (D3550): word 4 also has `DIRECT_STRING` or `DIRECT_NUMBER` and
+//!   word 3 is that object, which the tier-0 loop's hit is (the first write to a builtin
+//!   changes the epoch). The objects
 //!   from that prototype to the holder are marked `OBJ_IS_PROTO`, so a key added to one
 //!   of them or a prototype change bumps the epoch. The receiver must not have an own
 //!   `key`: an equal shape word proves that, otherwise the hit looks it up. The holder's
@@ -73,10 +73,11 @@ const ADD_SET: u32 = 1;
 /// Prototype-read slot word 4: the key is no canonical numeric string (D3530).
 const NAMED_KEY: u32 = 1;
 
-/// Word 4 of a prototype-read slot filled for a string (a number) receiver while the
-/// builtins were as the base image has them (D3550): word 3 is the value itself, an
-/// object of the builtin prefix, and the hit is that object for as long as nothing has
-/// written to the prefix.
+/// Word 4 of a prototype-read slot filled for a string (a number) receiver whose value
+/// is an object of the builtin prefix, while the builtins were as the base image has
+/// them (D3550): word 3 is that object, and the tier-0 loop's hit is it without a look
+/// at the prototype. The first write to a builtin changes the prototype epoch
+/// (`Heap::set_prefix_written`), so such a slot is stale from then on.
 const DIRECT_STRING: u32 = 2;
 const DIRECT_NUMBER: u32 = 4;
 
@@ -306,7 +307,7 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
             }
             let direct = if string { DIRECT_STRING } else { DIRECT_NUMBER };
             if r32(at + 16) & direct != 0 {
-                return Some(super::hot::ld(b, r32(at + 12)));
+                return Some(Value::object(Obj(r32(at + 12))));
             }
             let i = if string {
                 if key == crate::heap::atoms::LENGTH || key.as_int().is_some() {
@@ -338,12 +339,6 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
 /// `h` if that slot is the data property `key`.
 #[inline(always)]
 fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Value> {
-    Some(super::hot::ld(b, hot_data_slot(b, h, index, key)?))
-}
-
-/// Where [`hot_data_at`]'s value is.
-#[inline(always)]
-fn hot_data_slot(b: &[u8], h: u32, index: u32, key: Atom) -> Option<u32> {
     use crate::heap::cells::flags::OBJ_DICTIONARY;
     use crate::heap::cells::{Header, Object, PropEntry, PropTable, PropValues, Shape};
     use crate::heap::layout::arena_read;
@@ -375,7 +370,7 @@ fn hot_data_slot(b: &[u8], h: u32, index: u32, key: Atom) -> Option<u32> {
     if k != key.id() || fl & STORE_ACCESSOR != 0 {
         return None;
     }
-    Some(value)
+    Some(super::hot::ld(b, value))
 }
 
 /// Slot `i` of `h` if it is the accessor `key` (D3470): its getter, or undefined for an
@@ -668,19 +663,18 @@ impl Exec<'_> {
         let epoch = self.heap.proto_epoch();
         let mut shape = o.as_object().map_or(0, |obj| self.heap.receiver_shape(obj));
         let mut w4 = self.heap.canonical_numeric_index(key).is_none() as u32 * NAMED_KEY;
-        // A string's or a number's method while the builtins are pristine: the value
-        // itself, in the word a primitive has no shape for (D3550).
+        // A string's or a number's builtin method while the builtins are untouched
+        // (or frozen): the value itself, in the word a primitive has no shape for
+        // (D3550). The first write to a builtin changes the epoch.
         if !accessor
             && (o.as_string().is_some() || o.is_number())
-            && self.heap.builtins_pristine()
             && let Some(f) = self
                 .heap
                 .data_at(holder, i, key)
                 .and_then(|v| v.as_object())
-            && f.offset() < self.heap.base_end()
-            && let Some(at) = hot_data_slot(self.heap.arena().bytes(), holder.offset(), i, key)
+            && self.heap.gated(f)
         {
-            shape = at;
+            shape = f.offset();
             w4 |= if o.is_number() {
                 DIRECT_NUMBER
             } else {
