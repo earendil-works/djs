@@ -607,12 +607,15 @@ fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         if (l_intMaxLength_13 <= l_stringLength_16) {
             break 'b7 (p_s_3);
         }
-        let mut l_filler_17: Value = (if (p_fillString_5).is_undefined() { ex.l_str(" ")? } else { ex.l_to_string_at(p_fillString_5, sh, 2)? });
-        let mut l_fillerLength_20: f64 = ('b19: { let mut p_s_18: Value = l_filler_17; 
-        break 'b19 (ex.l_str_len(p_s_18));
-        unreachable!() });
-        if (l_fillerLength_20 == d.lits[5]) {
-            break 'b7 (p_s_3);
+        let mut l_filler_17: Value = Value::UNDEFINED;
+        if !(p_fillString_5).is_undefined() {
+            let mut l_f_18: Value = ex.l_to_string_at(p_fillString_5, sh, 2)?;
+            if (('b20: { let mut p_s_19: Value = l_f_18; 
+        break 'b20 (ex.l_str_len(p_s_19));
+        unreachable!() }) == d.lits[5]) {
+                break 'b7 (p_s_3);
+            }
+            l_filler_17 = l_f_18;
         }
         break 'b7 ({ let s = p_s_3; let f = l_filler_17; let k = (l_intMaxLength_13 - l_stringLength_16); let a = p_atStart_6; ex.l_pad(s, f, k, a)? });
         unreachable!() }));

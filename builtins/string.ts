@@ -338,10 +338,14 @@ function StringPad(s: Str, maxLength: Value, fillString: Value, atStart: boolean
   if (intMaxLength <= stringLength) {
     return s;
   }
-  const filler: Str = fillString === undefined ? " " : ToString(fillString);
-  const fillerLength: f64 = StrLen(filler);
-  if (fillerLength === 0) {
-    return s;
+  // Undefined pads with spaces (StrPad's default, so no " " is looked up per call).
+  let filler: Value = undefined;
+  if (fillString !== undefined) {
+    const f: Str = ToString(fillString);
+    if (StrLen(f) === 0) {
+      return s;
+    }
+    filler = f;
   }
   return StrPad(s, filler, intMaxLength - stringLength, atStart);
 }

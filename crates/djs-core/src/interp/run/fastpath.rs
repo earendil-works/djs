@@ -596,12 +596,13 @@ impl Exec<'_> {
         n: f64,
         at_start: bool,
     ) -> Result<Value, Fault> {
-        let (s, f) = (
-            s.as_string().expect("string"),
-            f.as_string().expect("string"),
-        );
+        let s = s.as_string().expect("string");
         Ok(Value::string(crate::builtins::string::pad(
-            self.heap, s, f, n as u32, at_start,
+            self.heap,
+            s,
+            f.as_string(),
+            n as u32,
+            at_start,
         )?))
     }
 

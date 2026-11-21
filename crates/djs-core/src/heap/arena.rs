@@ -424,7 +424,9 @@ impl Arena {
 /// memset natively and at opt-level "s" and up (`memory.fill` in wasm). At "z" it is a
 /// byte loop; no safe way to extend a Vec is better there (static-block or doubling
 /// copies cost 15% natively), and `alloc_init` avoids zeroing where it matters most.
-#[inline]
+/// Out of line: it runs once per frontier move, and inlined `resize` at its three sites
+/// costs ~0.7 KB of code.
+#[inline(never)]
 fn zero_to(bytes: &mut Vec<u8>, len: usize) {
     if len > bytes.len() {
         bytes.resize(len, 0);

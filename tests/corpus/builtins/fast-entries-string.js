@@ -43,6 +43,13 @@ attempt("repeat null this", () => String.prototype.repeat.call(null, 2));
 // padStart / padEnd
 console.log(JSON.stringify(["42".padStart(6, "0"), "x".padEnd(4, "ab"), "abc".padStart(2), "abc".padEnd(6), "a".padStart(5, ""), "a".padEnd(3, undefined), "\u0151".padStart(3, "\u00e9"), "5".padStart(3, 0), "5".padEnd(4, null)]));
 console.log(JSON.stringify(["x".padStart(NaN, "y"), "x".padStart(-3, "y"), "x".padEnd(3.9, "-"), "x".padEnd("4", "12"), "abc".padStart(10, "123"), two.padEnd(20, "\ud83d")]));
+// Receivers and fillers that are slices, ropes and append ropes (written in place, 0262).
+{
+  const big = "0123456789".repeat(40), sl = big.slice(5, 300), rope = big + sl;
+  let app = "ab"; for (let i = 0; i < 50; i++) app += "c";
+  const fill = big.slice(7, 8), fill2 = big.slice(3, 200);
+  console.log(JSON.stringify([sl.padStart(300).slice(0, 8), sl.padEnd(299, fill).slice(-6), rope.padStart(700, "*").slice(0, 4), app.padStart(60, fill).slice(0, 10), app.padEnd(55), "q".padStart(5, fill2), "q".padEnd(4, sl), "\u0151".padEnd(3, fill), "x".padStart(3, "\u00ff"), "\u00ff".padEnd(3, "\u0100")]));
+}
 const long = "x".padStart(100001, "ab"), long2 = "ő".padEnd(9000), long3 = "y".padEnd(70000);
 console.log(long.length, long.slice(0, 5), long.slice(-3), long2.length, long2.slice(0, 2), "a".padStart(8193, "é").slice(-3), long3.length, long3.slice(0, 2) + "|", "z".padStart(66000, "\u0151").slice(-2));
 log.length = 0;

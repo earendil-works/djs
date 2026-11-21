@@ -18,6 +18,7 @@ repeat symbol -> TypeError: cannot convert symbol to number
 repeat null this -> TypeError: null or undefined are forbidden
 ["000042","xaba","abc","abc   ","a","a  ","ééő","005","5nul"]
 ["x","x","x--","x121","1231231abc","héllo wőrld 😀\ud83d\ud83d\ud83d\ud83d\ud83d\ud83d"]
+["     567","897777","****","77777777ab","abcccccccccccccccccccccccccccccccccccccccccccccccccc   ","3456q","q567","ő77","ÿÿx","ÿĀĀ"]
 100001 ababa abx 9000 ő  ééa 70000 y | őz
 001 1 valueOf 3;toString 0;valueOf 1
 padEnd huge -> RangeError: invalid string length

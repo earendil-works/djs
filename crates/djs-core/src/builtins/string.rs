@@ -363,44 +363,46 @@ pub(crate) fn well_formed(heap: &mut Heap, s: Str, fix: bool) -> Result<Value, F
     Ok(Value::string(if ok { s } else { heap.alloc_utf16(&out)? }))
 }
 
-/// `s` padded with `fill` units of `filler` cycled (StringPad's last steps). One-byte
-/// strings are written into one buffer; others repeat, cut and join.
+/// `s` padded with `fill` units of `filler` cycled, or of spaces when `filler` is `None`
+/// (StringPad's last steps). A one-byte string padded with one one-byte unit (a space or
+/// a zero, nearly always) is written once into the result cell; anything else repeats,
+/// cuts and joins.
 pub(crate) fn pad(
     heap: &mut Heap,
     s: Str,
-    filler: Str,
+    filler: Option<Str>,
     fill: u32,
     at_start: bool,
 ) -> Result<Str, Fault> {
     let s = heap.contiguous(s)?;
-    let filler = heap.contiguous(filler)?;
     let n = heap.str_len(s);
-    if fill <= 65536
-        && let (Some(StrView::Latin1(a)), Some(StrView::Latin1(f))) =
-            (heap.str_view(s), heap.str_view(filler))
-    {
-        let mut out: Vec<u8> = crate::buf::vec_with_capacity((n + fill) as usize);
-        let run = |out: &mut Vec<u8>| {
-            if let [c] = f {
-                out.resize(out.len() + fill as usize, *c);
-            } else {
-                let mut left = fill as usize;
-                while left > 0 {
-                    let k = left.min(f.len());
-                    out.extend_from_slice(&f[..k]);
-                    left -= k;
-                }
-            }
-        };
-        if at_start {
-            run(&mut out);
-            out.extend_from_slice(a);
-        } else {
-            out.extend_from_slice(a);
-            run(&mut out);
+    let unit = match filler {
+        None => Some(b' '),
+        Some(f) if heap.str_len(f) == 1 => {
+            heap.char_code_at(f, 0).and_then(|c| u8::try_from(c).ok())
         }
-        return Ok(heap.alloc_latin1(&out)?);
+        Some(_) => None,
+    };
+    if fill <= 65536
+        && !heap.str_is_two_byte(s)
+        && let Some(c) = unit
+    {
+        let out = heap.alloc_latin1_pieces(&[(s, 0, n)], n + fill)?;
+        let d = Heap::str_data_offset(out);
+        let a = heap.arena_mut();
+        let run = if at_start {
+            a.copy_within(d, n, d + fill);
+            d
+        } else {
+            d + n
+        };
+        a.slice_mut(run, fill).fill(c);
+        return Ok(out);
     }
+    let filler = match filler {
+        Some(f) => f,
+        None => heap.alloc_latin1(b" ")?,
+    };
     let fl = heap.str_len(filler);
     let rep = repeat(heap, filler, fill.div_ceil(fl))?;
     let run = substring(heap, rep, 0, fill)?;
