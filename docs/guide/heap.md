@@ -124,6 +124,12 @@ and a snapshot of it 6.9 MiB against 11.7. A slice keeps its whole parent alive,
 short piece could pin a huge text; [the collector](gc.md#slices-and-the-strings-they-keep)
 copies such slices out.
 
+One-character strings of ASCII units are not even copied: `s[i]`, `charAt`, a
+one-character slice, `split("")` and iterating a string return the VM's one string for
+that character, from a small table the realm keeps. Strings never change, so sharing a
+cell is invisible to a program. Every collection drops the table, so it holds memory only
+while it is in use and leaves nothing behind in a heap image.
+
 > **Trade-off.** Two widths, ropes and slices over one UTF-16 representation. A single
 > representation would make every string operation simpler. But Latin-1 halves the
 > memory of almost every string a codemode script sees, and the host reads a `Str8` with

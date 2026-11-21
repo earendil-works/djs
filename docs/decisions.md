@@ -13748,3 +13748,22 @@ hash defined on code units (independent of width and rope shape), never 0.
   the others within noise; compile (test_builtin.js) −1.3%. Most keys hit cached hashes,
   so the gains are bounded. Module −117 B gz (430,844 vs 430,961). Codemode memory
   unchanged.
+
+## D3560: One-unit ASCII strings from a per-VM cache that every collection drops
+date: 2026-11-21 · by: pidle · issue: 0287
+`Heap::unit_string(u)`: the strings of the 128 ASCII code units, kept in a realm slot
+(`Intrinsic::UnitStrings`, an internal ValueArray made at the first use) and returned
+instead of a new cell by `string::substring` of one unit (charAt, at, slices,
+split(""), string iteration) and by `s[i]`. Strings are immutable, so which cell holds a
+unit is unobservable. Every collection (full, minor, canonical) drops the slot first: the
+cache holds nothing a program needs, its state is a function of the program between
+collections (so images, suspension and determinism see the same heap), and a run leaves
+no trace of the builtins it used (D022's touching-builtins test). One-digit numbers
+(String(i) for 0-9) were tried through the cache and were slower than allocating.
+COMPAT_VERSION 12 (the realm has a new slot).
+Wasm instructions per op (`--wasm-sync-tier-up`), main → branch (QuickJS 2026): `s[i]`
+1.9k → 1.45-1.6k (1.6k), `split("")` of 10 8.1k → 6.8k (10.7k), charAt about −10%
+(2.0k). +187 B gz.
+Parked (work/research/0287/for-of-strings.patch): finishing the tier-0 loop's declined
+`iter_next_loc` of string iterators out of line (one `iter_plan`, ASCII units from the
+cache): for-of over a 10-character string 22.9k → 17.3k (11.2k), +243 B gz.

@@ -1,6 +1,6 @@
 # 0287: Short result strings: allocation cost of tiny strings
 
-status: in-progress
+status: done
 agent: pidle
 branch: issue/0287-short-result-strings
 depends-on: -
@@ -49,4 +49,27 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
 
+2026-11-21 (pidle)
+- Measured with `--wasm-sync-tier-up` (wasm instructions per op, main 63fc1f4b; QuickJS
+  2026 in parentheses). Most short-string ops already beat QuickJS in instructions:
+  String(i) 1.7k (1.9k), '' + i 1.3k (2.1k), (i/7).toFixed(1) 2.5k (2.8k),
+  String(i).padStart(6) 3.1k (3.0k), 'abc'.padEnd(28) 1.5k (2.7k), slice(0,20) 1.7k
+  (2.2k), substring(1,4) 1.8k (2.3k), charAt 1.8k (2.0k), at(0) 1.7k (2.1k), template
+  `${i}: x` 2.4k (3.3k), split("") of 10 8.0k (10.7k). The ops chart's red rows for these
+  are wall-clock ratios (node's default tiering, load, the Liftoff phase), not instruction
+  ratios: read that chart's short-string rows with this in mind. The outliers in
+  instructions: `s[i]` 1.9k (1.6k) and for-of over a string 22.9k for 10 characters
+  (11.2k).
+- D3560: one-unit ASCII strings from a per-VM cache dropped at every collection: `s[i]`
+  → 1.45-1.6k, split("") → 6.8k, charAt ~−10%; +187 B gz; COMPAT 12. A one-digit
+  String(i) through the cache was slower than allocating (dropped).
+- Parked: for-of over strings out of line (22.9k → 17.3k, +243 B gz),
+  work/research/0287/for-of-strings.patch, until 0286 reports its bytes.
+- Tests: lib (incl. touching_builtins_in_any_order_leaves_the_same_image), difftest
+  --determinism on language/builtins/codemode, stress, e2e; corpus case
+  builtins/unit-strings.js.
+
 ## Result
+The one-unit string cache (D3560) landed (+187 B gz); string iteration parked with its
+numbers. Most short-string ops already beat QuickJS 2026 in instructions; the chart's red
+rows are wall-clock effects.
