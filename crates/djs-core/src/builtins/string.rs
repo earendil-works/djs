@@ -108,68 +108,52 @@ pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<St
     Ok(heap.alloc_utf16(&units)?)
 }
 
-/// The index of the first `b` in `h`, eight bytes at a time: wasm has no SIMD by default
-/// (D016), and a byte loop was most of `includes` (0110). The zero-byte test
-/// `(x - 0x01..) & !x & 0x80..` can flag bytes above a real match, never below it, so its
-/// lowest flag is exact.
-#[inline]
-pub(crate) fn find_byte(h: &[u8], b: u8) -> Option<usize> {
-    const LO: u64 = 0x0101_0101_0101_0101;
-    const HI: u64 = 0x8080_8080_8080_8080;
-    let pat = LO * b as u64;
-    let (chunks, rest) = h.as_chunks::<8>();
-    for (k, c) in chunks.iter().enumerate() {
-        let x = u64::from_le_bytes(*c) ^ pat;
-        let z = x.wrapping_sub(LO) & !x & HI;
-        if z != 0 {
-            return Some(8 * k + (z.trailing_zeros() / 8) as usize);
-        }
-    }
-    let at = 8 * chunks.len();
-    rest.iter().position(|&c| c == b).map(|k| at + k)
-}
+pub(crate) use crate::swar::find_byte;
 
 /// The first index ≥ `from` of the non-empty `needle` in `h` (one-byte strings). Eight
 /// candidate positions at a time, testing the needle's first and last byte together
 /// (0116): with the first byte alone, a common letter flagged most positions of a line.
+/// The last candidates take one overlapping word, not a byte loop (0260: on a short line
+/// the loop was a third of the search).
 pub(crate) fn find_latin1(h: &[u8], needle: &[u8], from: usize) -> Option<usize> {
-    const LO: u64 = 0x0101_0101_0101_0101;
-    const HI: u64 = 0x8080_8080_8080_8080;
+    use crate::swar::{eq8, first8};
     let m = needle.len();
     let (&first, rest) = needle.split_first()?;
+    let hay = h.get(from..)?;
     if rest.is_empty() {
-        return h
-            .get(from..)
-            .and_then(|t| find_byte(t, first))
-            .map(|k| from + k);
+        return find_byte(hay, first).map(|k| from + k);
     }
     let last = needle[m - 1];
-    let mid = &needle[1..m - 1];
-    let word = |i: usize| u64::from_le_bytes(h[i..i + 8].try_into().unwrap());
-    // `(x - 0x01..) & !x & 0x80..` flags every zero byte (and maybe some above one): a
-    // flagged position is only a candidate, checked in full.
-    let zero = |x: u64| x.wrapping_sub(LO) & !x & HI;
-    let (pf, pl) = (LO * first as u64, LO * last as u64);
-    let mut i = from;
-    while i + m - 1 + 8 <= h.len() {
-        let mut flags = zero(word(i) ^ pf) & zero(word(i + m - 1) ^ pl);
-        while flags != 0 {
-            let at = i + (flags.trailing_zeros() / 8) as usize;
-            if h[at] == first
-                && h[at + m - 1] == last
-                && h[at + 1..at + m - 1].iter().zip(mid).all(|(a, b)| a == b)
-            {
-                return Some(at);
+    // Candidates 0..n, eight a time; the flags (maybe more than the matches, never fewer)
+    // are checked in full.
+    let n = (hay.len() + 1).checked_sub(m)?;
+    let word = |i: usize| u64::from_le_bytes(hay[i..i + 8].try_into().unwrap());
+    let flags = |i: usize| eq8(word(i), first) & eq8(word(i + m - 1), last);
+    let mut i = 0;
+    while i < n {
+        let (mut f, base) = if i + 8 <= n {
+            (flags(i), i)
+        } else if n >= 8 {
+            // The last 1 to 7 candidates: the block of the last eight, without those done.
+            (flags(n - 8) & (!0u64 << (8 * (i + 8 - n))), n - 8)
+        } else {
+            // A haystack shorter than the needle plus seven.
+            let mut f = 0;
+            for k in 0..n {
+                if hay[k] == first && hay[k + m - 1] == last {
+                    f |= 0x80 << (8 * k);
+                }
             }
-            flags &= flags - 1;
+            (f, 0)
+        };
+        while f != 0 {
+            let at = base + first8(f);
+            if hay[at..at + m] == *needle {
+                return Some(from + at);
+            }
+            f &= f - 1;
         }
         i += 8;
-    }
-    while i + m <= h.len() {
-        if h[i] == first && h[i + m - 1] == last && h[i + 1..i + m - 1] == *mid {
-            return Some(i);
-        }
-        i += 1;
     }
     None
 }
@@ -634,6 +618,47 @@ mod tests {
             let from = next(n as u64 + 2) as usize;
             let naive = (from..(n + 1).saturating_sub(m)).find(|&i| h[i..i + m] == t[..]);
             assert_eq!(find_latin1(&h, &t, from), naive, "{h:?} {t:?} {from}");
+        }
+    }
+
+    /// Needles of 1 to 9 bytes at every offset of haystacks of 0 to 24 bytes, from every
+    /// start, with near misses (first and last byte right, a middle one wrong) and
+    /// non-ASCII bytes around them (0260: the word loop, the overlapping last word and the
+    /// byte loop of short haystacks).
+    #[test]
+    fn find_latin1_every_offset() {
+        let naive = |h: &[u8], t: &[u8], from: usize| {
+            (from..(h.len() + 1).saturating_sub(t.len())).find(|&i| h[i..i + t.len()] == *t)
+        };
+        for m in 1..=9usize {
+            let t: alloc::vec::Vec<u8> = (0..m).map(|i| [0xE9, b'x', 0xFF][i % 3]).collect();
+            let mut miss = t.clone();
+            if m > 2 {
+                miss[1] = b'y';
+            }
+            for n in 0..=24usize {
+                for at in 0..=n.saturating_sub(m) {
+                    for (pat, other) in [(&t, None), (&miss, Some(n / 2))] {
+                        let mut h = alloc::vec![0x80u8; n];
+                        if at + m <= n {
+                            h[at..at + m].copy_from_slice(pat);
+                        }
+                        // A second copy of the needle, or nothing.
+                        if let Some(o) = other
+                            && o + m <= n
+                        {
+                            h[o..o + m].copy_from_slice(&t);
+                        }
+                        for from in 0..=n + 1 {
+                            assert_eq!(
+                                find_latin1(&h, &t, from),
+                                naive(&h, &t, from),
+                                "{h:?} {t:?} {from}"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 }
