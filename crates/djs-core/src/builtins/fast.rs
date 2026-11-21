@@ -798,17 +798,24 @@ fn array_call(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 /// `new Map()`, `new Map(undefined)`, `new Map(null)`: no entries to add; `new
 /// Map(array)` of entry arrays, `new Set(array)` (`filled_collection`).
 fn map_new(heap: &mut Heap, args: &[Value]) -> Fast {
-    if let Some(m) = filled_collection(heap, arg(args, 0), ObjectClass::Map)? {
-        return Ok(Some(m));
-    }
-    empty_collection(heap, args, ObjectClass::Map, Intrinsic::MapProto)
+    collection_new(heap, args, ObjectClass::Map)
 }
 
 fn set_new(heap: &mut Heap, args: &[Value]) -> Fast {
-    if let Some(s) = filled_collection(heap, arg(args, 0), ObjectClass::Set)? {
-        return Ok(Some(s));
+    collection_new(heap, args, ObjectClass::Set)
+}
+
+#[inline(never)]
+fn collection_new(heap: &mut Heap, args: &[Value], class: ObjectClass) -> Fast {
+    if let Some(c) = filled_collection(heap, arg(args, 0), class)? {
+        return Ok(Some(c));
     }
-    empty_collection(heap, args, ObjectClass::Set, Intrinsic::SetProto)
+    let proto = if class == ObjectClass::Set {
+        Intrinsic::SetProto
+    } else {
+        Intrinsic::MapProto
+    };
+    empty_collection(heap, args, class, proto)
 }
 
 /// Whether iterating the Array `a` runs its original @@iterator and `next` (data
