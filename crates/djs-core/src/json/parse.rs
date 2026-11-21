@@ -574,6 +574,51 @@ fn write_escaped_latin1(b: &[u8], s: &StrTok, dst: &mut [u8]) -> usize {
     k
 }
 
+/// `write_string` of an escaped string from two-byte input: the runs between escapes
+/// copied (two-byte output) or narrowed whole, found four units at a time.
+#[inline(never)]
+fn write_escaped_utf16(b: &[u8], s: &StrTok, dst: &mut [u8], two_byte: bool) -> usize {
+    let w = if two_byte { 2 } else { 1 };
+    let body = &b[..2 * s.end];
+    let (mut i, mut k) = (s.start, 0);
+    while i < s.end {
+        let mut j = i;
+        loop {
+            let Some(x) = swar::word_at(body, 2 * j) else {
+                // The last units of the string: one at a time.
+                while j < s.end && peek::<UTF16>(body, j) != 0x5C {
+                    j += 1;
+                }
+                break;
+            };
+            let m = swar::eq16(x, 0x5C);
+            if m != 0 {
+                j += swar::first16(m);
+                break;
+            }
+            j += 4;
+        }
+        let run = j - i;
+        let src = &b[2 * i..2 * (i + run)];
+        if two_byte {
+            dst[k..k + 2 * run].copy_from_slice(src);
+        } else {
+            for (d, p) in dst[k..k + run].iter_mut().zip(src.as_chunks::<2>().0) {
+                *d = p[0];
+            }
+        }
+        k += w * run;
+        i += run;
+        if i < s.end {
+            let (u, len) = unescape::<UTF16>(b, i);
+            dst[k..k + w].copy_from_slice(&(u as u16).to_le_bytes()[..w]);
+            k += w;
+            i += len;
+        }
+    }
+    k
+}
+
 /// Writes the decoded token into the data of a flat string (`dst`, exactly sized).
 fn write_string<const E: u8>(b: &[u8], s: &StrTok, dst: &mut [u8], two_byte: bool) {
     if !s.escaped {
@@ -602,6 +647,8 @@ fn write_string<const E: u8>(b: &[u8], s: &StrTok, dst: &mut [u8], two_byte: boo
     let mut k = 0;
     if E == LATIN1 && !two_byte {
         k = write_escaped_latin1(b, s, dst);
+    } else if E == UTF16 {
+        k = write_escaped_utf16(b, s, dst, two_byte);
     } else if two_byte {
         decode_units::<E>(b, s, |u| {
             dst[k..k + 2].copy_from_slice(&u.to_le_bytes());
