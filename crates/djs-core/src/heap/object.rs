@@ -2762,13 +2762,22 @@ impl Heap {
     /// `[[OwnPropertyKeys]]` in spec order: array indexes ascending, then string keys in
     /// creation order, then symbols in creation order.
     pub fn own_keys(&self, o: Obj) -> Vec<Atom> {
+        self.keys_of(o, false)
+    }
+
+    /// [`Heap::own_keys`] without the keys of non-enumerable properties (for-in, 0278).
+    pub fn own_enumerable_keys(&self, o: Obj) -> Vec<Atom> {
+        self.keys_of(o, true)
+    }
+
+    fn keys_of(&self, o: Obj, enumerable: bool) -> Vec<Atom> {
         if self.object_class(o) == ObjectClass::TypedArray {
             // The element indexes, then the ordinary keys (never numeric).
             let mut keys = self.ta_keys(o);
-            keys.extend(self.ordinary_own_keys(o));
+            keys.extend(self.ordinary_keys(o, enumerable));
             return keys;
         }
-        self.ordinary_own_keys(o)
+        self.ordinary_keys(o, enumerable)
     }
 
     /// The private names (D1400) `o` holds, in table order, with their properties:
@@ -2784,7 +2793,15 @@ impl Heap {
         out
     }
 
+    #[cfg(feature = "dump")]
     pub(crate) fn ordinary_own_keys(&self, o: Obj) -> Vec<Atom> {
+        self.ordinary_keys(o, false)
+    }
+
+    /// The ordinary [[OwnPropertyKeys]], or with `enumerable` only those of enumerable
+    /// properties (dense elements always are; `length` and a closure's lazy `length` and
+    /// `name` never).
+    fn ordinary_keys(&self, o: Obj, enumerable: bool) -> Vec<Atom> {
         let mut indexes: Vec<(u32, Atom)> = Vec::new();
         let mut strings = Vec::new();
         let mut symbols = Vec::new();
@@ -2801,7 +2818,7 @@ impl Heap {
         {
             for i in 0..self.prop_slots(o) {
                 let key = self.prop_key(o, i);
-                if key.is_null() {
+                if key.is_null() || enumerable && !self.prop_read(o, i).flags().enumerable() {
                     continue;
                 }
                 if key.is_symbol() {
@@ -2823,16 +2840,18 @@ impl Heap {
         let mut out =
             crate::buf::vec_with_capacity(indexes.len() + strings.len() + symbols.len() + 3);
         out.extend(indexes.into_iter().map(|(_, k)| k));
-        if self.object_class(o) == ObjectClass::Array {
-            out.push_out(atoms::LENGTH);
-        }
         // A closure's lazy `length` and `name` come before its stored keys (D2445).
         let f = self.obj_flags(o);
-        if f & OBJ_LAZY_LENGTH != 0 {
-            out.push(atoms::LENGTH);
-        }
-        if f & OBJ_LAZY_NAME != 0 {
-            out.push(atoms::NAME);
+        if !enumerable {
+            if self.object_class(o) == ObjectClass::Array {
+                out.push_out(atoms::LENGTH);
+            }
+            if f & OBJ_LAZY_LENGTH != 0 {
+                out.push(atoms::LENGTH);
+            }
+            if f & OBJ_LAZY_NAME != 0 {
+                out.push(atoms::NAME);
+            }
         }
         out.extend(strings);
         out.extend(symbols);

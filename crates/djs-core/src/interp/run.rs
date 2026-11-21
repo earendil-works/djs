@@ -3936,17 +3936,13 @@ impl<'h> Exec<'h> {
             let mut below: alloc::vec::Vec<Obj> = alloc::vec::Vec::new();
             let mut cur = Some(o);
             while let Some(c) = cur {
-                for k in self.heap.own_keys(c) {
+                // (Enumerable ones first: a builtin prototype's many keys are not, and
+                // need no lookup below.)
+                for k in self.heap.own_enumerable_keys(c) {
                     if k.is_symbol() || below.iter().any(|&b| self.heap.has_own_property(b, k)) {
                         continue;
                     }
-                    if self
-                        .heap
-                        .get_own_property(c, k)
-                        .is_some_and(|p| p.flags().enumerable())
-                    {
-                        keys.push(self.heap.atom_to_value(k)?);
-                    }
+                    keys.push(self.heap.atom_to_value(k)?);
                 }
                 below.push(c);
                 cur = self.heap.get_prototype_of(c);
