@@ -3776,8 +3776,6 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
           if (i === 2) { Object.defineProperty(P.prototype, 'g', { get() { return 7; } }); o.missing = 1; }\n\
         }\n\
         console.log(acc, out);\n";
-    // (5 and more: a fused call, D3551, needs the fuel of its instructions up to the
-    // call.)
     for fuel in [1, 2, 3, 5, 7, 11] {
         let exec = |hot_loop| ExecOptions {
             hot_loop,
@@ -3795,15 +3793,6 @@ fn hot_loop_paths_are_invisible_at_every_stop() {
             first.map(|i| &without[i])
         );
     }
-    // The fused calls ran, and some of them declined.
-    let fused = &crate::interp::run::fastpath::FUSED;
-    let n = |i: usize| fused[i].load(core::sync::atomic::Ordering::Relaxed);
-    assert!(
-        n(0) > 50 && n(1) > 5,
-        "fused calls: {} made, {} declined",
-        n(0),
-        n(1)
-    );
 }
 
 /// The tier-0 loop (D1930) changes nothing observable: at every stop (fuel boundaries
@@ -4554,13 +4543,4 @@ fn known_builtins_across_suspension() {
     };
     let (_, out) = finish_script(based_vm(stress), SRC, 13, true);
     assert_eq!(out, plain);
-}
-
-#[test]
-fn tmp_fused_probe() {
-    let fused = &crate::interp::run::fastpath::FUSED;
-    let n = |i: usize| fused[i].load(core::sync::atomic::Ordering::Relaxed);
-    let (a, b) = (n(0), n(1));
-    let _ = run_js("function f() { const s = ['  ab', 'c  '].join(''); let t = 0; for (let i = 0; i < 1000; i++) { t += s.trim().length + s.charCodeAt(1); } return t; } console.log(f());");
-    panic!("probe: made {} declined {}", n(0) - a, n(1) - b);
 }

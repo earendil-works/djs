@@ -102,7 +102,7 @@ mod class;
 mod construct;
 mod dense;
 mod each;
-pub(crate) mod fastpath;
+mod fastpath;
 mod hot;
 #[cfg(test)]
 pub(crate) use hot::HOT_FUEL;
@@ -333,9 +333,6 @@ pub(crate) struct Exec<'h> {
     pub(super) own_shadow: Option<crate::builtins::fast::Shadow>,
     /// The host refused memory (D1690): the run stops at the next instruction boundary.
     host_oom: bool,
-    /// The call instruction (its arena offset) whose `@fast` attempt `fused_call` made
-    /// and saw decline: `fast_leaf_call` does not make it a second time (D3551).
-    fused_miss: u32,
     /// The operands of the instruction being executed, if it can be retried after a
     /// collection when it runs out of memory (D1700): their count, or `NO_RETRY`.
     retry_len: u32,
@@ -392,7 +389,6 @@ impl<'h> Exec<'h> {
             native_callee: None,
             own_shadow: None,
             host_oom: false,
-            fused_miss: 0,
             retry_len: NO_RETRY,
             retry_ops: [Value::UNDEFINED; 4],
             n_retrying: false,
@@ -2497,14 +2493,14 @@ impl<'h> Exec<'h> {
                 let ic = self.imm_u16(5);
                 let o = t0;
                 self.pc = next;
-                let got = self.lookup_ic(o, key, ic, 0)?;
+                let got = self.lookup_ic(o, key, ic)?;
                 return self.get_property_got(o, key, got);
             }
             Op::GetMethod => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
                 let o = t0;
-                match self.lookup_ic(o, key, ic, next)? {
+                match self.lookup_ic(o, key, ic)? {
                     Got::Value(f) => {
                         self.set(self.sp - 1, f);
                         self.push(o);
@@ -3562,7 +3558,7 @@ impl<'h> Exec<'h> {
     /// [`Exec::lookup`] for an access site with inline cache `ic`: an own data property
     /// of an object receiver fills the cache (D1620).
     #[inline]
-    fn lookup_ic(&mut self, o: Value, key: Atom, ic: u32, call_at: u32) -> Result<Got, Fault> {
+    fn lookup_ic(&mut self, o: Value, key: Atom, ic: u32) -> Result<Got, Fault> {
         let start = match o.as_object() {
             Some(obj) => obj,
             None => match realm::primitive_proto(self.heap, o) {
@@ -3582,7 +3578,7 @@ impl<'h> Exec<'h> {
                 if Value::object(h) == o {
                     self.ic_own_fill(h, key, ic);
                 } else {
-                    self.ic_proto_fill(o, key, h, false, ic, call_at);
+                    self.ic_proto_fill(o, key, h, false, ic);
                 }
             }
             // An accessor on the prototype chain, and a key nothing has (D3470).
@@ -3590,7 +3586,7 @@ impl<'h> Exec<'h> {
                 if Value::object(h) == o {
                     self.ic_own_accessor_fill(h, key, ic);
                 } else {
-                    self.ic_proto_fill(o, key, h, true, ic, 0);
+                    self.ic_proto_fill(o, key, h, true, ic);
                 }
             }
             Lookup::Absent => {

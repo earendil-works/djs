@@ -493,14 +493,15 @@ impl Exec<'_> {
     /// stack has the two slots `call_accessor` would ask for) a getter with a `@fast`
     /// entry runs here instead and its result comes back as `Hit::Fast` (D3530).
     #[inline(never)]
-    fn field_slow(
-        &mut self,
-        op: u8,
-        key: Atom,
-        ic: u32,
-        o: Value,
-        (sp, pc, fuel): (u32, u32, i64),
-    ) -> Option<Hit> {
+    fn field_slow(&mut self, pc: u32, o: Value, room: bool) -> Option<Hit> {
+        // The instruction at `pc`, read again: the loop then keeps its key and cache
+        // index only up to its own slice read (D3550).
+        let w: u64 = self.heap.arena().read(self.code + pc);
+        let (op, key, ic) = (
+            w as u8,
+            Atom::from_id((w >> 8) as u32),
+            (w >> 40) as u16 as u32,
+        );
         // (`hot_length` answered these in a release build.)
         #[cfg(debug_assertions)]
         if key == atoms::LENGTH && op == fast::GET_FIELD {
@@ -517,29 +518,15 @@ impl Exec<'_> {
             }
         }
         let hit = self.ic_get(o, key, ic);
-        match hit {
-            Some(Hit::Getter(getter)) => {
-                // (`get_method` of an accessor is `step`'s.)
-                if op != fast::GET_FIELD {
-                    return None;
-                }
-                if fuel > 0
-                    && sp + 2 <= self.heap.value_array_capacity(self.stack)
-                    && let Some(v) = self.fast_getter(getter, o)
-                {
-                    return Some(Hit::Fast(v));
-                }
-                self.hot_getter = getter;
+        if let Some(Hit::Getter(getter)) = hit {
+            // (`get_method` of an accessor is `step`'s.)
+            if op != fast::GET_FIELD {
+                return None;
             }
-            // A primitive's builtin method with plain arguments: the whole call (D3551).
-            Some(Hit::Value(f))
-                if op == fast::GET_METHOD && o.as_object().is_none() && self.ic_fuse(ic) =>
-            {
-                if let Some(x) = self.fused_call(f, o, sp, pc, fuel) {
-                    return Some(Hit::Call(x));
-                }
+            if room && let Some(v) = self.fast_getter(getter, o) {
+                return Some(Hit::Fast(v));
             }
-            _ => {}
+            self.hot_getter = getter;
         }
         hit
     }
@@ -984,8 +971,10 @@ impl Exec<'_> {
                     // Enters the frame of the closure template `t` called at `base` with `argc`
                     // arguments for instruction `$op` (`push_frame` with `PushResult`), or
                     // declines when the template needs the general path or the stack is full.
+                    // `$slow`, given the callee's template: what to do with a callee the
+                    // loop makes no frame for; true if the call is done.
                     macro_rules! call_closure {
-                        ($size:expr, $fuel:expr, $base:expr, $argc:expr) => {{
+                        ($size:expr, $fuel:expr, $base:expr, $argc:expr, |$fl:ident| $slow:block) => {{
                             let (base, argc): (u32, u32) = ($base, $argc);
                             let Some(f) = ld(b, slot!(base)).as_object() else {
                                 break Exit::Decline(op);
@@ -1005,47 +994,54 @@ impl Exec<'_> {
                                 code_len,
                                 consts_ref,
                             } = template_head(b, t);
-                            let n = argc.max(params);
-                            let new_hp = base + 2 + n;
-                            let new_lp = new_hp + HEADER;
-                            if flags & slow_call_flags != 0
-                                || new_lp + locals + stack > cap
-                                || !fetchable(b, FuncTemplate::DATA.at(t, 0) + code_len)
-                            {
-                                break Exit::Decline(op);
-                            }
-                            fuel -= $fuel;
-                            let ret_pc = ip + $size - code;
-                            write_frame(
-                                b,
-                                vals,
-                                (base, argc, n, new_hp, locals),
-                                [
-                                    Value::int(bp as i32),
-                                    Value::int(hp as i32),
-                                    Value::int(ret_pc as i32),
-                                    Value::int(argc as i32),
-                                    Value::int(PUSH_RESULT),
-                                    Value::UNDEFINED,
-                                ],
-                            );
-                            self.bp = base;
-                            self.hp = new_hp;
-                            self.lp = new_lp;
-                            self.template = t;
-                            self.code = FuncTemplate::DATA.at(t, 0);
-                            self.code_len = code_len;
-                            self.consts = consts_ref;
-                            self.native = 0;
-                            code = self.code;
-                            end = code + code_len;
-                            (bp, hp, lp) = (base, new_hp, new_lp);
-                            consts = consts_ref;
-                            sp = new_lp + locals;
-                            ip = code;
-                            // Frame entry is a safepoint.
-                            if collect {
-                                break Exit::Safepoint;
+                            let done: bool = if flags & slow_call_flags != 0 {
+                                let $fl = t;
+                                $slow
+                            } else {
+                                false
+                            };
+                            if !done {
+                                let n = argc.max(params);
+                                let new_hp = base + 2 + n;
+                                let new_lp = new_hp + HEADER;
+                                if new_lp + locals + stack > cap
+                                    || !fetchable(b, FuncTemplate::DATA.at(t, 0) + code_len)
+                                {
+                                    break Exit::Decline(op);
+                                }
+                                fuel -= $fuel;
+                                let ret_pc = ip + $size - code;
+                                write_frame(
+                                    b,
+                                    vals,
+                                    (base, argc, n, new_hp, locals),
+                                    [
+                                        Value::int(bp as i32),
+                                        Value::int(hp as i32),
+                                        Value::int(ret_pc as i32),
+                                        Value::int(argc as i32),
+                                        Value::int(PUSH_RESULT),
+                                        Value::UNDEFINED,
+                                    ],
+                                );
+                                self.bp = base;
+                                self.hp = new_hp;
+                                self.lp = new_lp;
+                                self.template = t;
+                                self.code = FuncTemplate::DATA.at(t, 0);
+                                self.code_len = code_len;
+                                self.consts = consts_ref;
+                                self.native = 0;
+                                code = self.code;
+                                end = code + code_len;
+                                (bp, hp, lp) = (base, new_hp, new_lp);
+                                consts = consts_ref;
+                                sp = new_lp + locals;
+                                ip = code;
+                                // Frame entry is a safepoint.
+                                if collect {
+                                    break Exit::Safepoint;
+                                }
                             }
                         }};
                     }
@@ -1473,13 +1469,8 @@ impl Exec<'_> {
                                 Some(r) => {
                                     #[cfg(debug_assertions)]
                                     {
-                                        let want = heap_call_op!(self.field_slow(
-                                            op,
-                                            key,
-                                            ic,
-                                            o,
-                                            (0, 0, 0)
-                                        ));
+                                        let want =
+                                            heap_call_op!(self.field_slow(ip - code, o, false));
                                         assert!(
                                             want == Some(Hit::Value(r)),
                                             "the slice's hit differs"
@@ -1487,48 +1478,36 @@ impl Exec<'_> {
                                     }
                                     r
                                 }
-                                None => match heap_call_op!(self.field_slow(
-                                    op,
-                                    key,
-                                    ic,
-                                    o,
-                                    (sp, ip - code, fuel)
-                                )) {
-                                    Some(Hit::Value(r)) => r,
-                                    // The whole call was made and its result is in
-                                    // the receiver's slot (D3551): past the pushes
-                                    // and the call, and on like a `get_field`, which
-                                    // pushes no receiver. (No jump of its own: a
-                                    // `continue` here made V8 keep the loop's values
-                                    // in memory, every instruction +32.)
-                                    Some(Hit::Call(x)) => {
-                                        ip += x & 0xFFFF;
-                                        fuel -= (x >> 16) as i64;
-                                        op = fast::GET_FIELD;
-                                        ld(b, slot!(sp - 1))
-                                    }
-                                    // A getter with a `@fast` entry, which ran: the
-                                    // fuel of such a call (D3530).
-                                    Some(Hit::Fast(r)) => {
-                                        fuel -= super::fastpath::FAST_FUEL;
-                                        // (`call_accessor` pushes the receiver above
-                                        // the getter: the same bytes in that slot.)
-                                        st(b, slot!(sp), o);
-                                        r
-                                    }
-                                    // An accessor (D3470): `decline_fast` calls the
-                                    // getter, which `field_slow` left in `hot_getter`.
-                                    // (Written with the opcode's test, which
-                                    // `field_slow` has made already: with the bare
-                                    // constant V8 moved the arithmetic arms, D3470.)
-                                    Some(Hit::Getter(_)) => {
-                                        if op == fast::GET_FIELD {
-                                            break Exit::Decline(GETTER);
+                                None => {
+                                    match heap_call_op!(self.field_slow(
+                                        ip - code,
+                                        o,
+                                        sp + 2 <= cap
+                                    )) {
+                                        Some(Hit::Value(r)) => r,
+                                        // A getter with a `@fast` entry, which ran: the
+                                        // fuel of such a call (D3530).
+                                        Some(Hit::Fast(r)) => {
+                                            fuel -= super::fastpath::FAST_FUEL;
+                                            // (`call_accessor` pushes the receiver above
+                                            // the getter: the same bytes in that slot.)
+                                            st(b, slot!(sp), o);
+                                            r
                                         }
-                                        break Exit::Decline(fast::GET_METHOD);
+                                        // An accessor (D3470): `decline_fast` calls the
+                                        // getter, which `field_slow` left in `hot_getter`.
+                                        // (Written with the opcode's test, which
+                                        // `field_slow` has made already: with the bare
+                                        // constant V8 moved the arithmetic arms, D3470.)
+                                        Some(Hit::Getter(_)) => {
+                                            if op == fast::GET_FIELD {
+                                                break Exit::Decline(GETTER);
+                                            }
+                                            break Exit::Decline(fast::GET_METHOD);
+                                        }
+                                        None => break Exit::Decline(op),
                                     }
-                                    None => break Exit::Decline(op),
-                                },
+                                }
                             };
                             st(b, slot!(sp - 1), r);
                             if op == fast::GET_METHOD {
@@ -1634,7 +1613,9 @@ impl Exec<'_> {
                             let base = sp - argc;
                             if id == CALL && argc >= 2 {
                                 // `f this a1 .. an`, as in `call_intrinsic`.
-                                call_closure!(size, FUEL, base, argc - 2);
+                                call_closure!(size, FUEL, base, argc - 2, |_f| {
+                                    break Exit::Decline(op);
+                                });
                             } else {
                                 let mut a = [Value::UNDEFINED; 3];
                                 for (k, x) in a.iter_mut().enumerate().take(argc.min(3) as usize) {
@@ -1688,7 +1669,33 @@ impl Exec<'_> {
                             } else {
                                 ((op - fast::CALL0) as u32, size_of(Op::Call0))
                             };
-                            call_closure!(size, fuel_of(Op::Call), sp - 2 - argc, argc);
+                            let base = sp - 2 - argc;
+                            call_closure!(size, fuel_of(Op::Call), base, argc, |t| {
+                                // A `@fast` builtin: its call without leaving the
+                                // loop (D3551). One that declines made its attempt:
+                                // the call is `step`'s, not `decline_fast`'s. (Nothing
+                                // but ip, sp and fuel is kept across the call, D3391:
+                                // it answers with what to take from sp and the size.)
+                                // Near the stack's end a leaf's intrinsic might
+                                // move the stack (`n_leaf`): out of the loop then.
+                                // (The flags read again: with the test on the
+                                // frame's copy the closure's path loads them as
+                                // two bytes, +3 instructions.)
+                                if ld32(b, t + FuncTemplate::FLAGS.offset) & super::func_flags::FAST
+                                    == 0
+                                    || sp + super::fastpath::LEAF_ROOM > cap
+                                {
+                                    break Exit::Decline(op);
+                                }
+                                let r = heap_call!(self.loop_leaf_call(base, argc, ip - code));
+                                if r == 0 {
+                                    break Exit::General;
+                                }
+                                sp -= r as u32;
+                                fuel -= const { fuel_of(Op::Call) + super::fastpath::FAST_FUEL };
+                                ip += (r >> 32) as u32;
+                                true
+                            });
                         }
                         fast::RETURN | fast::RETURN_UNDEF => {
                             // `fast_return`: into a PushResult frame of a bytecode caller.

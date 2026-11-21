@@ -102,6 +102,10 @@ impl Heap {
     /// as pristine.
     pub(crate) fn set_prefix_written(&mut self) {
         let f = self.arena.get(0, Roots::FLAGS);
+        // The inline caches that remember a builtin itself (D3550) go stale with it.
+        if f & cells::ROOT_PREFIX_WRITTEN == 0 {
+            self.bump_proto_epoch();
+        }
         self.arena
             .set(0, Roots::FLAGS, f | cells::ROOT_PREFIX_WRITTEN);
         // Frozen builtins keep refusing writes.
