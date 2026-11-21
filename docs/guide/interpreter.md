@@ -343,7 +343,9 @@ faster loop in front of it:
   slot stale, and `o.missing ?? 1` reads the slot instead of looking the key up on every
   object of the chain. And an accessor, the
   receiver's own or on its prototype chain: the slot leads to the getter, which is then
-  called without the lookup. The collector empties the slots that hold
+  called without the lookup, or, for a builtin getter with a fast entry such as
+  `map.size`, answered inside the loop. A typed array takes part like any object for its
+  named keys (`bytes.length`, its methods); only its numeric keys are its own business. The collector empties the slots that hold
   heap offsets, so a VM restored with warm caches behaves exactly like one with cold
   caches.
 - **Known builtins.** `Math.floor(x)`, `String(x)`, `Number.isInteger(x)` and a few

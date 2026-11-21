@@ -13636,3 +13636,82 @@ keys as existing atoms) unless a getter would run or a key is not a string; the 
 handles those. No opcode or tier-0 loop change. `const {id, ...rest} = o5`: 48.8k →
 13.3k wasm instructions with `--wasm-sync-tier-up` (QuickJS 2026 9.5k). Shipped ceiling
 430,037 → 430,436 B gz (+399), slim 363,953 → 364,419. Corpus case language/object-rest.js.
+
+## D3530: Fast entries for builtin getters, run inside the loop; typed arrays' named keys in the caches
+date: 2026-11-22 · by: pcall · issue: 0282
+Every builtin getter was a bytecode builtin whose body is one or two intrinsic calls:
+`map.size` 3,283 machine instructions in steady state (4.7x quickjs-wasi), a typed
+array's `length` 3,295 (4.5x), and a typed array receiver had no cache at all (a method
+lookup `bytes.at` 1,796, 3.5x).
+- **Entries** (builtins/fast.rs, `@fast` on the getters): `Map.prototype.size`,
+  `Set.prototype.size` (`size`), `%TypedArray%.prototype.length`, `byteLength` and
+  `byteOffset` (`ta_field`: `TypedArrayField` of a typed array). Anything else as `this`
+  declines and the builtin throws as before. `@rust` was tried first for `size` (bgen
+  takes it on a getter): 1,748 instructions, because the generated function calls its
+  two intrinsics through `call_intrinsic`; the hand entry through `call` is 1,066.
+- **Inside the loop.** `field_slow`, which the `get_field` arm asks when its slice read
+  misses, runs the entry itself when the slot leads to a getter that has one
+  (`Exec::fast_getter`: an entry of `FAST`, not a generated one) and the stack has the
+  two slots `call_accessor` would ask for (`room`), and answers `Hit::Fast`: the arm
+  charges `FAST_FUEL` and stores the receiver in the slot above the result, which is
+  what `call_accessor` and `try_fast_call` leave. No exit, no frame: 620.
+- **Typed array receivers.** `exotic_own` took every key of a typed array for its own
+  business; only canonical numeric strings are. The test looks at the key's text, so a
+  prototype-read slot records in word 4 (`NAMED_KEY`) that its key is none, and a typed
+  array receiver hits only such a slot. (Skipping the test for any filled slot was wrong:
+  a slot for `o["1.5"]` filled by an ordinary object would have answered for a typed
+  array; tests/data/e2e/proto_caches.js caught it.) The loop's slice read still leaves
+  typed arrays to `field_slow`.
+- `COMPAT_VERSION` 10: word 4 of a prototype-read slot has a meaning, and D3470's
+  kinds 61 and 62 were depths before.
+- Not adopted: a hint in the slot that its getter has an entry, to spare the other
+  getters the look (it did not make them faster, and the hint depends on
+  `slow_call_flags`, which differs with the loop off: the two modes' images differed).
+  And 0276's follow-up 6, undoing `exec`'s operand preload: +718 B gz for props −1.5%;
+  after this batch 1,079 B of the owner's allowance are left.
+Measured (steady state, instructions per operation, main 4f37c547 → branch; ratio to
+quickjs-wasi before → after):
+
+| read | main | branch | x QuickJS |
+| --- | ---: | ---: | --- |
+| `m.size` | 3,283 | 620 | 4.71 → 0.89 |
+| `st.size` | 3,279 | 618 | 4.84 → 0.91 |
+| `ta.length` | 3,295 | 842 | 4.50 → 1.15 |
+| `ta.byteLength` | 3,158 | 884 | 4.16 → 1.17 |
+| `ta.at` (a method lookup) | 1,796 | 387 | 3.54 → 0.76 |
+| `ta[j]` | 746 | 603 | 2.42 → 1.96 |
+| class getter `p.g` | 1,291 | 1,331 | 1.22 → 1.26 |
+| own getter `o.g` | 945 | 976 | 1.41 → 1.46 |
+| `o.missing` | 270 | 293 | 0.90 → 0.98 |
+
+The last three pay for `field_slow`'s two new tests (+3%, +3%, +8%). The other builtin
+getters are unchanged and still slow: `re.global` 4,741 (6.9x), `sym.description` 3,144
+(5.2x), `e.stack` 2,926 (4.2x), `re.source` 4,102 (3.4x), `ab.byteLength` 1,953 (2.8x).
+The ten loop cases of slope.py are within ±0.25%. wmeasure (n=3) is +0.0..+0.5% on all
+sixteen workloads under default tiering and ±0.1% with `--wasm-sync-tier-up` (tight
+3826.1 → 3825.0, loop 3764.7 → 3769.0, call1 2597.3 → 2595.7): the difference is the
+tier-up of a `run_hot` that is 38 bytes of wasm larger, not its code. V8's shared path
+is unchanged (dispatch 14, tail 4; hotcode.sh).
+Size: shipped 430,436 → 430,951 B gz (+515), slim 364,419 → 364,897 (+478); the
+ceilings rise to those (from the owner's allowance, D3510: 1,079 B of it remain).
+
+## D3531: The loop off and the loop on leave the same bytes for string keys and getters; a test that stops after every instruction
+date: 2026-11-22 · by: pcall · issue: 0282
+`hot_loop_is_invisible` hashes the arena after every fuel slice, but its slices are 997
+units long after the first 600 stops, and its program has no string-key access. Two
+differences between the two modes had gone unseen:
+- **String keys (since D3393).** The loop reads `o[k]`, stores `o[k] = v` and answers
+  `k in o` through the heap's string-key helpers, which do not intern a key that no
+  object has; `step` interned it (`property_key`). The heaps differed from then on (an
+  atom, a cached hash). `exec` now asks the same helpers first (`get_elem`,
+  `get_elem2`, `put_elem`, `in`), so neither mode interns such a key, and the general
+  path is as fast as the loop's for these.
+- **The slot above a fast getter's result (this issue).** `call_accessor` pushes the
+  getter and the receiver before the entry runs, so the receiver stays in the dead slot
+  above the result; the loop's `Hit::Fast` path did not write it. After a rebase moved
+  the stops of `hot_loop_is_invisible`, one landed right there.
+`vm::tests::hot_loop_paths_are_invisible_at_every_stop` runs a program made of the
+paths the loop got since D1930 (the cache kinds for absent keys and accessors, getters
+with entries, typed arrays, `typeof`, string comparisons and equality, string keys with
+known and unknown keys, template literals, `in`) with 1, 2 and 3 units of fuel per
+slice and compares the arena's bytes at every stop with the loop off.

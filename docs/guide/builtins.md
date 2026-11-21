@@ -331,6 +331,9 @@ a conversion site: `"a,b".split(",")`, `xs.indexOf(3)`, `xs.push(v)`, `m.get(k)`
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 A call first runs the entry, which either returns the builtin's result or *declines*,
 and then the builtin runs as usual. <!--n builtins/fast-->45<!--/n--> builtins have one.
+Getters can have one too: `map.size`, `set.size` and a typed array's `length`,
+`byteLength` and `byteOffset`. A read whose cache slot leads to such a getter runs the
+entry inside the interpreter's loop, without a call.
 
 Before a call can run an entry it has to find the builtin: `Math.floor(x)` reads the
 global `Math` and its property `floor`, which costs more than the entry does. For the
