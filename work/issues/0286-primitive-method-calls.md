@@ -1,6 +1,6 @@
 # 0286: Builtin method calls on primitives, outside the loop's shared path
 
-status: open
+status: in-progress
 agent: pcall
 branch: issue/0286-primitive-method-calls
 depends-on: 0282
