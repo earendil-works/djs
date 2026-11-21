@@ -355,7 +355,9 @@ fn scan_rest<const E: u8>(
         // The plain units up to the next one to look at, a word at a time (0260): a long
         // text has an escaped newline every line or so.
         let k = if E == UTF16 {
-            0
+            let (k, wide) = plain_units16(b, p);
+            two_byte |= wide;
+            k
         } else {
             plain_bytes(b, p, utf8)
         };
@@ -433,6 +435,27 @@ fn plain_bytes(b: &[u8], p: usize, utf8: bool) -> usize {
         }
     }
     8 * words.len()
+}
+
+/// `plain_bytes` of two-byte input: the plain units from unit `p`, four at a time, and
+/// whether one of them is above 0xFF.
+#[inline(always)]
+fn plain_units16(b: &[u8], p: usize) -> (usize, bool) {
+    const WIDE: u64 = 0xFF00_FF00_FF00_FF00;
+    let mut at = p;
+    let mut wide = 0;
+    while let Some(w) = swar::word_at(b, 2 * at) {
+        let m = swar::lt16(w, 0x20) | swar::eq16(w, 0x22) | swar::eq16(w, 0x5C);
+        if m != 0 {
+            let k = swar::first16(m);
+            // Only the units before the stop count: those after it may be past the string.
+            wide |= w & WIDE & ((1u64 << (16 * k)) - 1);
+            return (at - p + k, wide != 0);
+        }
+        wide |= w & WIDE;
+        at += 4;
+    }
+    (at - p, wide != 0)
 }
 
 /// Calls `f` with every decoded code unit of a (validated) string token.
