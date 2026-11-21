@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0265 | Allocator placement effects; the resolver re-emit | pstart | .worktrees/pstart |
 | 0266 | Promise construction, then, async without await, new Error | pidle | .worktrees/pidle |
-| 0258 | GC: minor collections skip the builtin prefix; headroom, big-string survivors | pgc | .worktrees/pgc |
+| 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
 | 0268 | run_hot sensitivity, receiver method calls, the general path | pcall | .worktrees/pcall |
 | 0267 | Regexp compile speed; escape-dense JSON | pscan | .worktrees/pscan |
 
@@ -22,6 +22,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | GC nursery with a holder write barrier (D3294: heavy -13% memory; barrier-less version +5-9% CPU); test262 under gc-stress as a (nightly?) leg (0258 scratch patch) | owner (design) |
 | - | Flaky gate leg "pi tests (slim without lockdown)" (0260: failed once, passed on rerun); pi worker lifetime timing test at load ~50 (0256) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
@@ -50,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0258 | GC: prefix latch and skip, growth past the target, knee at 1 MiB | c1dd82cb (agent pgc; D3290-D3294; heavy 4736->3904 KiB, strbuild 24.2->11.9 MiB, json-objects -18%; retune, survivor discount, nursery w/o barrier measured, not built) |
 | 0264 | Cold Unicode tables out of linear memory | eed09e26 (agent pscan; D3350, ABI 7; data 92->41 KB, 2 initial pages; -64 KiB/row waits for dlmalloc need <= 88 KB) |
 | 0259 | Known builtins skip the lookup | 6dcf06cb (agent pcall; D3300, D3301; Math.floor/isInteger/max/isArray -20..-25% instr; +648 B gz; FastCall and int cases measured, dropped) |
 | 0262 | Object and collection ops | 2ea5091f (agent pidle; D3330-D3332; spread 0.32x QJS, fromEntries 1.02x, padEnd 1.09x, comparator sort 2.56->1.55x, Map/Set ~1.4x; +803 B gz) |
