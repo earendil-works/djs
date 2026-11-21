@@ -578,6 +578,35 @@ impl Heap {
         Ok(Str(off))
     }
 
+    /// One flat string of the units `s[a .. b)` of each piece, written once straight from
+    /// their leaves (D3400): a rope is read in place, not flattened first, and only the
+    /// leaves in the range are copied. `total` is the sum of the lengths.
+    pub(crate) fn concat_ranges(
+        &mut self,
+        pieces: &[(Str, u32, u32)],
+        total: u32,
+    ) -> Result<Str, HeapError> {
+        let mut leaves = Vec::new();
+        for &(s, a, b) in pieces {
+            if a < b {
+                self.collect_range(s, a, b, &mut leaves);
+            }
+        }
+        // Two-byte only with a unit above 0xFF (a part of a two-byte leaf may have none).
+        let two_byte = leaves.iter().any(|&(leaf, first, len)| {
+            self.cell_kind(leaf) == CellKind::Str16
+                && ((first == 0 && len == self.str_len(Str(leaf)))
+                    || self
+                        .prefix_view(leaf, first + len)
+                        .units()
+                        .skip(first as usize)
+                        .any(|u| u > 0xFF))
+        });
+        let dst = self.alloc_flat(total, two_byte)?;
+        self.write_leaves(&leaves, dst, 0);
+        Ok(Str(dst))
+    }
+
     /// A one-byte string of the pieces `s[a .. b)`, copied within the arena once (no
     /// bounce through a Rust buffer, 0110). Each piece must be flat, an append rope or a
     /// slice (`str_view_flat` first) and one-byte; `total` is the sum of the lengths.
@@ -900,7 +929,7 @@ impl Heap {
     fn short_leaves(
         &self,
         parts: [(u32, u32); 2],
-        out: &mut [(u32, u32); ROPE_MIN_LEN as usize],
+        out: &mut [(u32, u32, u32); ROPE_MIN_LEN as usize],
     ) -> usize {
         let mut stack = [(0, 0); ROPE_MIN_LEN as usize];
         stack[0] = parts[1];
@@ -916,32 +945,56 @@ impl Heap {
                     sp += 1;
                 }
             } else {
-                out[n] = (off, len);
+                out[n] = (off, 0, len);
                 n += 1;
             }
         }
         n
     }
 
-    fn collect_leaves(&self, s: Str, out: &mut Vec<(u32, u32)>) {
+    fn collect_leaves(&self, s: Str, out: &mut Vec<(u32, u32, u32)>) {
+        self.collect_range(s, 0, self.str_len(s), out);
+    }
+
+    /// The leaves of `s` that hold its units `[a, b)`, as `(cell, first unit, units)` in
+    /// order, appended to `out`: subtrees outside the range are not entered.
+    pub(crate) fn collect_range(&self, s: Str, a: u32, b: u32, out: &mut Vec<(u32, u32, u32)>) {
+        if self.cell_kind(s.0) != CellKind::Rope {
+            // A flat cell or a slice (most pieces): no walk.
+            out.push_out((s.0, a, b - a));
+            return;
+        }
         let mut stack = alloc::vec![(s.0, self.str_len(s))];
+        let mut pos = 0;
         while let Some((off, len)) = stack.pop() {
+            if pos >= b {
+                break;
+            }
+            if pos + len <= a {
+                pos += len;
+                continue;
+            }
             match self.cell_kind(off) {
                 CellKind::Rope => self.push_children(off, &mut stack),
-                _ => out.push_out((off, len)),
+                _ => {
+                    let from = a.saturating_sub(pos);
+                    let to = len.min(b - pos);
+                    out.push_out((off, from, to - from));
+                    pos += len;
+                }
             }
         }
     }
 
-    /// Copies the first `len` units of each flat cell in `leaves`, back to back, into the
-    /// data of the flat cell `dst` from code unit `at` on. The leaves must lie below `dst`
-    /// in the arena.
-    fn write_leaves(&mut self, leaves: &[(u32, u32)], dst: u32, at: u32) {
+    /// Copies units `[first, first + len)` of each flat cell (or slice) in `leaves`, back
+    /// to back, into the data of the flat cell `dst` from code unit `at` on. The leaves
+    /// must lie below `dst` in the arena.
+    fn write_leaves(&mut self, leaves: &[(u32, u32, u32)], dst: u32, at: u32) {
         let two_byte = self.cell_kind(dst) == CellKind::Str16;
         let (src, out) = self.arena_mut().split_mut(dst);
         let unit = if two_byte { 2 } else { 1 };
         let mut pos = Str8::DATA.offset as usize + unit * at as usize;
-        for &(leaf, len) in leaves {
+        for &(leaf, first, len) in leaves {
             let leaf = leaf as usize;
             let len = len as usize;
             let leaf_two = src[leaf] == CellKind::Str16 as u8;
@@ -954,7 +1007,7 @@ impl Heap {
                     + word(leaf + Slice::OFF.offset as usize) as usize
             } else {
                 leaf + Str8::DATA.offset as usize
-            };
+            } + if leaf_two { 2 } else { 1 } * first as usize;
             match (leaf_two, two_byte) {
                 (false, false) => {
                     out[pos..pos + len].copy_from_slice(&src[data..data + len]);
@@ -977,7 +1030,14 @@ impl Heap {
                     out[pos..pos + 2 * len].copy_from_slice(&src[data..data + 2 * len]);
                     pos += 2 * len;
                 }
-                (true, false) => unreachable!("two-byte leaf in a one-byte string"),
+                (true, false) => {
+                    // A part of a two-byte leaf with no unit above 0xFF (`concat_ranges`).
+                    let units = src[data..data + 2 * len].as_chunks::<2>().0;
+                    for (d, u) in out[pos..pos + len].iter_mut().zip(units) {
+                        *d = u[0];
+                    }
+                    pos += len;
+                }
             }
         }
     }
@@ -1261,10 +1321,10 @@ impl Heap {
             // and its two zeroed 32-entry arrays.
             if self.cell_kind(a.0) != CellKind::Rope && self.cell_kind(b.0) != CellKind::Rope {
                 let dst = self.alloc_flat(len, two_byte)?;
-                self.write_leaves(&[(a.0, la), (b.0, lb)], dst, 0);
+                self.write_leaves(&[(a.0, 0, la), (b.0, 0, lb)], dst, 0);
                 return Ok(Str(dst));
             }
-            let mut leaves = [(0, 0); ROPE_MIN_LEN as usize];
+            let mut leaves = [(0, 0, 0); ROPE_MIN_LEN as usize];
             let n = self.short_leaves([(a.0, la), (b.0, lb)], &mut leaves);
             let dst = self.alloc_flat(len, two_byte)?;
             self.write_leaves(&leaves[..n], dst, 0);

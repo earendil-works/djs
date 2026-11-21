@@ -78,34 +78,13 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
 }
 
 /// The concatenation of the pieces `s[start .. end)` as one flat string, written once
-/// (no ropes and no intermediate strings). One-byte pieces are copied within the arena;
-/// pieces are read like `str_view_flat` reads them (an append rope in place).
+/// from their leaves (no ropes, no intermediate strings, no flattening, D3400).
 pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<Str, Fault> {
-    let mut total: u64 = 0;
-    let mut two_byte = false;
-    for p in pieces.iter_mut() {
-        total += u64::from(p.2 - p.1);
-        two_byte |= heap.str_is_two_byte(p.0);
-    }
+    let total: u64 = pieces.iter().map(|p| u64::from(p.2 - p.1)).sum();
     if total > u64::from(crate::heap::string::MAX_LEN) {
         return Err(crate::heap::HeapError::StringTooLong.into());
     }
-    let total = total as usize;
-    if !two_byte {
-        for &(s, _, _) in pieces.iter() {
-            // (Flat pieces need nothing; ropes are flattened, append ropes read in place.)
-            if heap.str_view(s).is_none() {
-                heap.str_view_flat(s)?;
-            }
-        }
-        return Ok(heap.alloc_latin1_pieces(pieces, total as u32)?);
-    }
-    let mut units: Vec<u16> = crate::buf::vec_with_capacity(total);
-    for &(s, a, b) in pieces.iter() {
-        let v = heap.str_view_flat(s)?;
-        units.extend((a as usize..b as usize).map(|i| v.get(i)));
-    }
-    Ok(heap.alloc_utf16(&units)?)
+    Ok(heap.concat_ranges(pieces, total as u32)?)
 }
 
 pub(crate) use crate::swar::find_byte;

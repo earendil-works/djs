@@ -1,0 +1,9 @@
+44 "e 0\nline 1\nline 2\nline 3 ŝ\n" "line 0\nline 1\nline 2"
+"e 3 ŝ\nline 4\nlin" 16
+322 "ne 13\nline 14\nline 15\nline 16\nline 17 ŝ\n" "0\nli"
+false 30
+91 "a|yyyyyyyyyy|line 0\nline 1\nline 2\nline 3" "line 4\nline 5\nline 6\nline 7\nli"
+669 "0\nline 0\nline 1\nline 2\nline 3 ŝ\nline 4\nl"
+"\nline 3 ŝ\nline 4\nline 5\nline 0\nline 1\nli" lin
+"ababababa"
+=== completed
