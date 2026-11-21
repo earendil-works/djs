@@ -1456,8 +1456,28 @@ impl Heap {
         match (self.str_view(a), self.str_view(b)) {
             // Same width (checked above), so equal content means equal bytes.
             (Some(x), Some(y)) => x.bytes() == y.bytes(),
-            _ => self.str_units(a).eq(self.str_units(b)),
+            // A concatenation rope against a flat string (interning `o[a + b]`'s key):
+            // chunk by chunk, not a unit at a time (0261).
+            (Some(x), None) => self.view_eq_chunks(x, b),
+            (None, Some(y)) => self.view_eq_chunks(y, a),
+            (None, None) => self.str_units(a).eq(self.str_units(b)),
         }
+    }
+
+    /// Whether the units of `r` (as long as `x`) are `x`'s, compared a chunk at a time.
+    #[inline(never)]
+    fn view_eq_chunks(&self, x: StrView<'_>, r: Str) -> bool {
+        let mut at = 0;
+        self.str_chunks(r).all(|c| {
+            let n = c.len();
+            let eq = match (x, c) {
+                (StrView::Latin1(a), StrView::Latin1(b)) => a.get(at..at + n) == Some(b),
+                (StrView::Utf16(a), StrView::Utf16(b)) => a.get(2 * at..2 * (at + n)) == Some(b),
+                _ => (at..at + n).map(|i| x.get(i)).eq(c.units()),
+            };
+            at += n;
+            eq
+        })
     }
 
     /// Code unit order (what `<` on strings means in JS).
