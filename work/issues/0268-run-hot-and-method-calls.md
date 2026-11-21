@@ -141,6 +141,29 @@ threaded form needs 339 vs 253 instructions per iteration of `s += i` (+34%) and
 and teardown, table bounds check, instance check, signature check, target load) against
 ~21 in the loop.
 
+### Batch 1: the frame-level checks land (D3390, D3391)
+
+- hot.rs: P1 as described above, with `end` kept for a debug assertion at the fetch
+  (`ip < end`; the tests, difftest and the stress modes run it), `fetchable` with a unit
+  test, the invariant in `run_hot`'s doc comment. Who guarantees it: the stack checker in
+  `alloc_template_in`, the only maker of templates (D3390).
+- Tools committed: scripts/perf/slope.py with its cases in scripts/perf/s/, hotcode.sh,
+  v8arm.py; README rows; TESTING.md "Measuring the tier-0 loop" (the --no-liftoff trap,
+  --wasm-sync-tier-up, steady state, reading V8's code).
+- Guide: interpreter.md "Making it fast" has a new item "What every instruction pays"
+  and lost the sentence that small additions slow every call.
+- Checked: lib tests (625), e2e in the four modes, difftest with `--suspend-every 97
+  --gc-stress`, `--lazy --suspend-every 97 --gc-stress --determinism` and `--plain-dumps`
+  (also `--lazy`) over language/, codemode/, codemode-harvest/ and dquickts/: no new
+  failures, stressed runs identical. All of these are dev builds, so the assertion ran.
+- Numbers: D3390 (wmeasure −1.1% pi-like … −23.0% tight; steady state −8.5% … −30.2%;
+  +49 B gz).
+
 ## Follow-ups
+- Superinstructions are open again: a new arm does not disturb the shared path (D3391),
+  and a dispatch is ~18 of a simple instruction's 21 machine instructions. `s += i` runs 9
+  bytecodes per iteration; `get_loc; push_i8; lt; jump_if_true8` as one compare-and-branch
+  and `get_loc; get_loc; add` would make it 5. Needs the compiler's emitter and the
+  bytecode table (outside this issue's `touches:`).
 
 ## Result

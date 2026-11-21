@@ -299,12 +299,26 @@ faster loop in front of it:
   `arr.push(x)` appended straight to the array), `+` of a string with a primitive, and the
   instructions of `new`: the construct itself, the return into the constructing frame,
   `new.target`, the class constructor checks and `super()`. A trip through `step` costs
-  more than most of these instructions do, and one `new C()` meets several of them. V8
-  compiles the whole loop as one function, and even small additions to it slowed every
-  plain call. Nothing the tier-0 loop does itself can collect or run user code, which
+  more than most of these instructions do, and one `new C()` meets several of them.
+  Nothing the tier-0 loop does itself can collect or run user code, which
   is why it may hold the state in locals. It charges the same fuel and stops at the same
   safepoints as the general path, so turning it off changes no result, no fuel count and
   no image.
+- **What every instruction pays.** V8 compiles the tier-0 loop as one function, and all
+  its arms share one path: the block that fetches and dispatches, and the tail that
+  checks the fuel and jumps back. A simple instruction such as `drop` is 21 machine
+  instructions there, 18 of them on that shared path, so the loop keeps it short. The
+  instruction is fetched as one 8-byte word and its operands are taken from the word. The
+  loop does not compare `pc` with the end of the code for each instruction: every
+  function's code is checked when its template is made, so execution cannot run off its
+  end and every jump lands on an instruction inside it. That the frame has bytecode at
+  all (a native frame has none) and that its last instruction can be fetched as a whole
+  word is checked where the frame changes: on entry, at a call and at a return. Debug
+  builds still assert it at every fetch. For the same reason the loop keeps nothing
+  alive around itself that it does not need: one more value that V8 has to move or
+  reload on the shared path costs every instruction of every program a twentieth, which
+  is how an edit to the loop can slow code it never touches. New arms do not do that;
+  values that stay live across a call, or a second way back into the loop, do.
 - **Inline caches.** Property and global accesses carry a cache slot number (the `ic0`
   in the disassembly), and the slots live with the function's template. A slot remembers
   where a property was found: a shape, a table index, or a prototype holder validated by

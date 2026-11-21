@@ -464,6 +464,41 @@ So when reading a ratio:
 Compare djs builds with each other (same baseline) for decisions. Use the quickjs-wasi
 ratio as the user-visible figure, a process that runs one script.
 
+## Measuring the tier-0 loop (0268, D3391)
+
+`run_hot` is one wasm function that V8 compiles twice: Liftoff first, TurboFan once the
+function is hot (about 7 ms of compiling on another thread, during which the Liftoff
+code, 1.75x slower, keeps running). What ships is the TurboFan code made **after
+Liftoff ran**. Three things follow for anyone who measures the loop:
+
+- **Not `--no-liftoff`.** Without Liftoff's call counts V8 inlines callees into `run_hot`
+  and produces another function: 32.9 KB of arm64 with 142 calls instead of 21.4 KB with
+  41, every arm about two instructions longer, other moves on the shared path. A twin
+  that is 1.5% faster under default tiering measured −0.1% there. Use
+  `--wasm-sync-tier-up` when the run must be deterministic: it compiles the same code,
+  at the same point in every run (`wmeasure.py --node-flag=--wasm-sync-tier-up`;
+  `slope.py` does it by itself).
+- **Totals contain what happens once.** A `tight` run is 7.3 G instructions, of which
+  2.0 G are node's start and the module's compilation (`wmeasure.py` subtracts an empty
+  run) and about 2% are the Liftoff phase. `scripts/perf/slope.py` measures the steady
+  state instead: the same body at N and 2N iterations, the difference divided by N. With
+  N = 10M two identical builds agree to 0.05%, which resolves one machine instruction
+  per bytecode. A difference of two single runs carries ±6 M instructions of noise each,
+  so per-statement numbers from a few hundred thousand iterations are ±2 instructions.
+- **Read the code.** `scripts/perf/hotcode.sh NAME` builds the module with names, prints
+  V8's TurboFan code of `run_hot` and summarizes it with `v8arm.py`: the dispatch block,
+  the tail every arm jumps to, the moves on the back edge, and the path of each opcode.
+  A trivial bytecode (`drop`) is 21 machine instructions: 14 of dispatch (V8's interrupt
+  check, the fetch, the table jump), 3 of its own, 4 of tail. One more move, stack load
+  or store on the shared path is 5% of that for every bytecode, and that is how an edit
+  to the loop slows code it never touches: do this before and after every change to
+  `run_hot`, and diff the two summaries.
+
+What moves the shared path (measured with twin builds, D3391): edits that change which
+values are live around the inner loop, such as a second way from the exit path back into
+it, a value kept across a call in an arm (D2441), or a per-instruction value used after a
+call. A new arm, with or without an out-of-line call, left it unchanged.
+
 ## The prefix write barrier (D2065)
 
 The builtin prefix (the base image's cells below `Roots::BASE_END`, D022) must not change

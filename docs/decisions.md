@@ -12804,3 +12804,102 @@ gets it injected) and compares the wasm memory after the run with
 tests/scores/codemode-memory.tsv: any row above its record fails, a lower one is reported
 as stale (`--update` rewrites the file). Checked: the seed shrunk by 3 KB (text's arena
 moves) fails it on text, first and warm. About 2 s.
+
+## D3390: The tier-0 loop checks the end of the code where the frame changes
+date: 2026-11-21 · by: pcall · issue: 0268
+`run_hot` compared `ip` with the code's end and bounds-checked its 8-byte fetch
+(`b.get(o..o + 8)`, checked even in the unsafe-heap build) for every instruction. In V8's
+TurboFan code that was 12 of the 33 machine instructions of a trivial bytecode: the
+overflow and length checks of the fetch (6), `len` stored to and reloaded from its spill
+slot (2), and `end` loaded from its slot, compared and stored back (4). Now:
+- **The fetch** is `arena_read`: one compare natively, in the dump and docs modules and in
+  every test build, which panic on a read outside the arena; a plain load in the shipped
+  and slim modules, on D3100's argument (an out-of-range offset is an engine bug confined
+  to the instance's own memory).
+- **The checks run where the frame changes**: on entry to the inner loop, in the call
+  arm (a callee whose code is not `fetchable` declines) and in the return arm (a native
+  caller, or a caller whose code is not fetchable, leaves for the general path). They are
+  `ip < end` (a native frame has no code) and `end + 7 <= len` (the last instruction may
+  be one byte, and a word is fetched). The arena only grows while the loop runs.
+- **The invariant** that replaces the per-instruction compare: execution cannot run off
+  the end of a function's code, and every jump lands on an instruction inside it. The
+  stack checker (bytecode/stack.rs: `FallsOffEnd`, `BadTarget`) rejects code that breaks
+  it, and `alloc_template_in`, the only place that makes a `FuncTemplate`, runs it on
+  every function: the compiler's units, lazily compiled functions (the same compiler) and
+  the builtins (djs-bgen through the same call). Images hold templates made that way in
+  the same process (D2560); dumps are source and go through the compiler. The two
+  instructions rewritten at run time keep it: an inline-cache number, and D3300's
+  `get_builtin` → `jump8`, whose target is the next instruction of the same code. `step`
+  already called `pc >= code_len` in a bytecode frame "bad bytecode", so the compare only
+  ever caught native frames. Debug builds (the tests, difftest, the stress modes) assert
+  `ip < end` at every fetch.
+Measured, main 5f5434e3 → branch, shipped module, wasm in node 26:
+- V8's code (scripts/perf/hotcode.sh): dispatch block 21 → 14 instructions, shared tail
+  and back edge 9 → 4; `drop` 33 → 21, `get_loc0` 41 → 29, `add` of two ints 61 → 50.
+- Steady state, instructions per iteration (slope.py, N = 10M): empty `for` 292.4 → 220.5
+  (−24.6%), `s += i` 506.0 → 384.9 (−23.9%), ten `x;` 1042.6 → 728.1 (−30.2%), property
+  get and put 860.1 → 689.8 (−19.8%), `s = f(s)` 1006.9 → 824.6 (−18.1%), `p.m()`
+  1391.1 → 1182.5 (−15.0%), `a.push(i)` 1412.6 → 1213.4 (−14.1%), `Math.floor(i / 3)`
+  1275.6 → 1097.1 (−14.0%), `str.charCodeAt(i & 7)` 1589.0 → 1412.7 (−11.1%),
+  `str.trim().length` 1775.8 → 1625.0 (−8.5%).
+- wmeasure (M instructions, n=3, spread ≤ 0.9% but props' 1.5): tight 5335.3 → 4107.2
+  (−23.0%), loop 5220.9 → 4054.4 (−22.3%), prop1 2129.0 → 1735.7 (−18.5%), call1 3369.1 →
+  2824.5 (−16.2%), calls 2577.7 → 2179.1 (−15.5%), arrays 7053.9 → 6075.7 (−13.9%), forof
+  −10.4%, foreach −8.0%, props −7.9%, pushpop −7.0%, higher-order −5.4%, indexof −3.5%,
+  strings −3.1%, regexp-compile −2.8%, strbuild −2.6%, json −1.8%, json-date −1.8%,
+  pi-like −1.1%. Two builds of the same source measure within the spread.
+- Codemode workloads (js/bench/engines/run.ts, ms, min of three runs of 25 at load 11–19,
+  so ±30%): sequential 0.48 → 0.31, fanout 1.17 → 0.93, media 0.25 → 0.21, inspect 0.29 →
+  0.25, loop 0.84 → 0.75, text 1.58 → 1.34, json 1.79 → 1.64, heavy 12.5 → 10.4.
+- Size: +49 B gz (427,465 → 427,514), 2,142 B under the ceiling; slim 361,316.
+
+## D3391: Why edits to run_hot move the whole loop, and how to measure it (0268)
+date: 2026-11-21 · by: pcall · issue: 0268
+D1352, D3122, D3128 and D3265 each recorded 1–6% on unrelated code for one edit to
+`run_hot`. What happens, read from V8's code for twin builds (scripts/perf/hotcode.sh,
+v8arm.py) and measured in steady state (slope.py):
+- **Every bytecode runs one shared path**: the dispatch block (loop header to the table
+  jump), the tail all arms jump to (LLVM merges the arm ends, and V8 gives a loop one
+  back edge anyway) and the back-edge block. After D3390 that is 18 of the 21
+  instructions of a `drop`. ip, sp and fuel each have a phi at the tail and one at the
+  header; everything else that is live around the inner loop competes with them for
+  registers there. Where V8's linear scan puts a value differently at the two phis, or
+  keeps it in a stack slot, it emits a move, a load or a store **on that shared path**:
+  one such instruction is 5% of a trivial bytecode (3% before D3390) on every bytecode of
+  every program. The choices change with anything that changes the function's live
+  ranges, so the effect of an edit has no sign: D3128's `continue` after `decline_fast`
+  (skip `load_frame!`), +4–6% on its base, is −1.5% on `s += i` on main (a move less in
+  `get_loc`, a `sub` for a reload in `add`) and +3 instructions on every bytecode on top
+  of D3390 (fuel moved at the header, ip on the back edge, two shuffles per arm).
+- **New arms are not the problem.** On top of D3390, a new call-free arm (`neg` of an
+  int) and a new arm with an out-of-line call (`typeof`) left the dispatch block, the
+  tail and every hot arm as they were (three element arms and `define_field` lost two
+  instructions). What moved the shared path in every case seen is an edit to what is live
+  **around** the inner loop: the outer loop and the exit path, a value kept across a call
+  in an arm (D2441: V8 spills it where it is defined, for every instruction), or a value
+  computed for every instruction and used after a call.
+- **The rule**: the per-instruction path uses only ip, sp, fuel, the arena pointer and
+  values that never change in the loop; state used by few arms is read where it is used.
+  After every edit to `run_hot`, `scripts/perf/hotcode.sh` before and after, and diff the
+  summaries: dispatch 14, tail and back edge 4 (one move, fuel's), no stack traffic on
+  the simple arms. An edit that adds to those is to be reshaped until it does not, or
+  dropped. These artifacts are one V8 version's allocator; what holds on every engine
+  is the work in the wasm itself, which D3390 removed.
+- **Measuring** (TESTING.md "Measuring the tier-0 loop"): `--no-liftoff` makes V8 compile
+  another `run_hot` (it inlines callees without Liftoff's call counts: 32.9 KB of arm64
+  and 142 calls against 21.4 KB and 41; arms ~2 instructions longer); the per-statement
+  numbers of D3300 and D3301 were taken that way and are relative to that code.
+  `--wasm-sync-tier-up` keeps the shipped code and makes runs repeat. wmeasure's totals
+  contain about 2% of Liftoff phase (run_hot's TurboFan compile takes ~7 ms; Liftoff code
+  is 1.75x slower).
+- **Threaded dispatch (one function per opcode, tail calls), measured and dropped.** A
+  toy with run_hot's shape (8-byte fetch, fuel per instruction, nine opcodes;
+  work/scratch/0268/toy of the primary checkout), as a `br_table` loop and as handlers
+  ending in `return_call_indirect`: 339 vs 253 instructions per iteration of `s += i`
+  (+34%) and 446 vs 336 for four `x;` (+33%) in node 26. A trivial handler is 46 machine
+  instructions: frame setup and teardown, the table's bounds check, the instance check,
+  the signature check and the target load, against 21 in the loop. And the toolchain:
+  stable rustc 1.99.1 (LLVM 23.1.1) with `-C target-feature=+tail-call` emits no
+  `return_call` for a call in tail position (nor with `-C llvm-args=-tailcallopt`); only
+  `become` (`explicit_tail_calls`, unstable and marked incomplete) does, so the
+  DJS_STABLE_ONLY build would keep the loop and two dispatchers would have to agree.

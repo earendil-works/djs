@@ -14,11 +14,13 @@ from `~/Development/pi-private/node_modules/quickjs-wasi`.
 | tool | what |
 | --- | --- |
 | `measure.py [--djs BIN]... names` | native djs vs qjs per workload (instructions, cycles, peak memory) |
-| `wmeasure.py [--wasm X[@SRCROOT]]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run; the counts include V8's TurboFan tier-up of each module (~0.5 G for djs, ~0.3 G for quickjs-wasi; TESTING.md "Instruction ratios to quickjs-wasi"). `X.wasm@SRCROOT` runs a build with its own checkout's `wasm-run.ts` and JS heap reader (a build with another heap layout fails with LayoutMismatch otherwise). A failed run (an exception, a LayoutMismatch, no timing line) stops the measurement with its error; measure.py and perelem.py also stop on a failed run. 0159 measured twins under node's default tiering: `--no-liftoff` lowers the noise but hides costs that only Liftoff code shows |
+| `wmeasure.py [--wasm X[@SRCROOT]]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run; the counts include V8's TurboFan tier-up of each module (~0.5 G for djs, ~0.3 G for quickjs-wasi; TESTING.md "Instruction ratios to quickjs-wasi"). `X.wasm@SRCROOT` runs a build with its own checkout's `wasm-run.ts` and JS heap reader (a build with another heap layout fails with LayoutMismatch otherwise). A failed run (an exception, a LayoutMismatch, no timing line) stops the measurement with its error; measure.py and perelem.py also stop on a failed run. 0159 measured twins under node's default tiering: `--no-liftoff` lowers the noise but hides costs that only Liftoff code shows, and it makes V8 compile another `run_hot` (0268): `--node-flag=--wasm-sync-tier-up` keeps the shipped code and makes the tier-up deterministic |
 | `micro.py` / `wmicro.py [--wasm A --wasm B]` | instructions per JS-level operation (loop body x10 minus x0), natively vs qjs and in wasm vs quickjs-wasi; the cases are in `cases.py`; several `--wasm` builds compare side by side (A/B) |
 | `wasm-compile.ts`, `wcompile.py [--qjs] --wasm X... files` | compile-only time (MB/s) and instructions per compile and per source byte in the wasm build, vs quickjs-wasi (0092) |
 | `perelem.py [--djs B].. [--wasm W].. [--noqjs] [-r R] [names]` | instructions per array element of the iteration builtins, for native and wasm builds side by side (0100) |
 | `mem-perturb.sh [-n N] [--root DIR] WASM names` | peak wasm memory as a distribution over N perturbed runs (D2048): use it for every memory claim, since one run shows allocator placement, not policy |
+| `slope.py [-n N] --wasm A [--wasm B]... [names]` | steady-state instructions per loop iteration in the wasm build: each case of `s/` (a body with the bound `N_ITER`) at N and 2N iterations, difference / N, under `--wasm-sync-tier-up`. Start-up, compiling and the Liftoff phase cancel; two identical builds agree to ~0.05% at N = 10M, so it resolves a single machine instruction per bytecode (0268) |
+| `hotcode.sh NAME [workload]`, `v8arm.py code.txt [Op...]` | what V8 makes of `run_hot`: a names build, V8's TurboFan code of the function under default tiering, and per opcode the path from the jump table back to the loop header (dispatch block, shared tail, back-edge moves, calls and stack traffic per arm). Run it before and after every change to `run_hot` and diff the summaries: an edit that changes what is live around the loop shows up as moves or stack loads on the path every bytecode shares (0268, D3391) |
 | `wasm-run.ts`, `qjs-wasm-run.mjs` | run a workload in the wasm engines (`ONCE=1`, `FUEL`, `REPS`); `node --cpu-prof` on them profiles |
 | `cpuprof.py file.cpuprofile` | self time by function of a node CPU profile (wasm function names) |
 | `prof.py name` | samply profile of the native build: self time by inlined function and line, buckets, malloc/memcpy by caller |
@@ -36,4 +38,6 @@ after a rebuild (the fast_step entry loads pc and code_len right after the check
 
 Instruction counts of node include V8's background compilers; for ops of a few hundred
 instructions, single runs of wmicro vary by up to ~10% with tier-up timing, so judge
-small per-op changes with whole workloads (wmeasure.py, n ≥ 3).
+small per-op changes with slope.py (steady state) and whole workloads (wmeasure.py,
+n ≥ 3). Do not judge them under `--no-liftoff`: V8 then compiles another `run_hot`
+(TESTING.md "Measuring the tier-0 loop").
