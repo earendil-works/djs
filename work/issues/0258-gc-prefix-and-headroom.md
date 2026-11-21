@@ -90,6 +90,19 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   instructions (one more collection). To be redone on top of D3291.
 - Guide: gc.md (skipping the prefix), arena.md (growth past the threshold).
 
+### Batch 2 (D3292-D3294)
+- D3292 (negative): allowance retune after D3291 is −0.3..−0.8% memory geomean for +2–4%
+  instr on json/ts; fanout's ≤160 KiB cliff is an arena move behind a compile peak (pstart).
+  Survivor-only big-string discount made heavy worse (3840 → 3904–3968). Patch:
+  work/scratch/0258/survivor-discount-wip.patch.
+- D3293 (landed): growth past 1 MiB counts half. json-objects 7.1→5.8 MiB, strbuild
+  24.2→11.9, jsonh 4.3→3.7, json 4.4→3.9; instr +0..3.3%; codemode equal (heavy +128 KiB
+  by chance). Module −6 B gz.
+- D3294 (measured, not built): fixed nursery without barrier: heavy −13% but +5–9% instr.
+  Slice parents don't set heavy's peak.
+- Experiment scaffolding in work/scratch/0258: trace.py on/off (GC + page trace, trace.ts
+  reads it), vbuild.sh + v-*.py variant builds, mem.sh/perturb.sh/instr.sh.
+
 ## Follow-ups
 
 ## Result
