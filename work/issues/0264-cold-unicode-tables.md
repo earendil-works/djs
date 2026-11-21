@@ -1,6 +1,6 @@
 # 0264: Cold Unicode tables out of the data segment: stack + data in two pages
 
-status: open
+status: in-progress
 agent: pscan
 branch: issue/0264-cold-unicode-tables
 depends-on: 0261, 0263 (batch 1)
