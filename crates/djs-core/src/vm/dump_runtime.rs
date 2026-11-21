@@ -177,7 +177,7 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
     // where the dump writes the continuation (D2909); returns it.
     (
         "k",
-        "(K, f, at, r, h, p) => { Object.defineProperty(K, '$djs', { value: [f, at, r, h] }); if (p !== undefined) K.prototype = p; else if ('prototype' in K) K.prototype = f.prototype; return K; }",
+        "(K, f, at, r, h, p) => { Object.defineProperty(K, '$djs', { value: [f, at, r, h] }); const n = Reflect.getOwnPropertyDescriptor(f, 'name'); if (n && typeof n.value === 'string') Object.defineProperty(K, 'name', { value: n.value }); if (p !== undefined) K.prototype = p; else if ('prototype' in K) K.prototype = f.prototype; return K; }",
     ),
     (
         "keep",

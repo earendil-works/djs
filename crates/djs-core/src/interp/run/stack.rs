@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use super::*;
 use crate::heap::atoms;
 use crate::heap::cells::Script;
-use crate::heap::cells::flags::OBJ_BUILTIN;
+use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_LAZY_NAME};
 use crate::value::Str;
 
 /// One frame of a trace. Names and files stay heap strings (no Rust `String` per frame,
@@ -153,6 +153,8 @@ impl Exec<'_> {
                     Name::None
                 } else if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY) {
                     Name::Eval
+                } else if let Some(n) = self.own_name(f) {
+                    n
                 } else {
                     let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
                     match self.heap.atom_str_value(name) {
@@ -224,6 +226,26 @@ impl Exec<'_> {
             native: true,
             construct: false,
         }
+    }
+
+    /// `f`'s own `name` when it is a data property holding a string (read without
+    /// running code, as V8 does): a renamed function and a dump's continuation show
+    /// the name the program knows. A closure whose `name` is still the lazy one (D2445)
+    /// has the compiled name: no lookup.
+    fn own_name(&self, f: Obj) -> Option<Name> {
+        if self.heap.cell_flags(f.offset()) & OBJ_LAZY_NAME != 0 {
+            return None;
+        }
+        let s = self
+            .heap
+            .get_own_property(f, atoms::NAME)
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_string())?;
+        Some(if self.heap.str_len(s) > 0 {
+            Name::Str(s)
+        } else {
+            Name::None
+        })
     }
 
     /// A builtin's `name` property, if a non-empty string.
