@@ -84,7 +84,7 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   over builtins, language, codemode; new corpus case builtins/collection-drain.js.
   Guide: builtins.md (the Set/Map `new` entries), interpreter.md (the drain).
 
-### The sweep (wasm instructions per op, incl. a ~350 (djs) / ~450 (QuickJS) loop; main builds of 2026-11-21)
+### The sweep (wasm instructions per op, incl. a ~350 (djs) / ~450 (QuickJS) loop; main builds of 2026-11-21; measured with `--no-liftoff`, which V8 compiles differently: 0278 re-measured the destructuring and for-in rows with `--wasm-sync-tier-up`)
 
 | op | djs | QuickJS 2026 | ratio | cause / owner |
 | --- | ---: | ---: | ---: | --- |
@@ -92,7 +92,7 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 | x.replace("TODO","DONE") | 14.9k | 3.6k | 4.2 | strings, pgc 0269 |
 | Date.parse(ISO) | 8.3k → 4.4k | 2.0k | 2.2 | fixed partly (D3412); the rest: builtin frame + two intrinsics through step |
 | Math.max(...10) | 32.6k | 8.8k | 3.7 | spread into a builtin call: spread_args + generic call path, pcall 0268 |
-| for-in over 5 keys | 21.4k | 6.5k | 3.3 | for_in_next through step per key, re-interning each key string and has_property; keys could be kept as atoms (format change; follow-up) |
+| for-in over 5 keys | 20.5k → 13.2k | 8.6k | 1.5 | 0278 (D3490): enumerable keys only, no interning per step |
 | LINE.match(/^([^:]+):(\d+):/) | 37.9k | 11.6k | 3.3 | regexp exec, pscan 0267 |
 | localeCompare | 7.0k | 2.5k | 2.8 | strings, pgc 0269 (sort of 10 with it 199k vs 75k) |
 | replace(/\s+/g,' ') | 40.4k | 16.3k | 2.5 | regexp, pscan 0267 |
@@ -102,8 +102,8 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 | Array.from({length:10}, fn) | 29.7k | 15.5k | 1.9 | EachDense FROM mode setup + array-like path; follow-up |
 | for-of over a Set | 1.9k/elem | 0.7k | 2.7 | iter_next_loc declines collection iterators to step, pcall 0268 (a GetIterator fast path for Set/Map: −30%, +gz) |
 | sort 10 numbers ([...N10].sort) | 55k | 30k | 1.8 | comparator calls via SortCompareCall; spread copy |
-| destructure {a, b, c = 1} | 2.9k | 1.7k | 1.8 | per-property get_field + default check; compiler (pstart) |
-| destructure [a, b] | 6.1k | 3.4k | 1.8 | array destructuring builds an iterator (GetIterator fast) |
+| destructure {a, b, c = 1} | 2.5k | 2.9k | 0.87 | fine: the 1.8x measured under `--no-liftoff` was an artifact (0278, `--wasm-sync-tier-up`) |
+| destructure [a, b] | 5.1k | 4.5k | 1.13 | (0278, `--wasm-sync-tier-up`); object rest `{a, ...r}` 48k vs 9.5k: parked (D3491) |
 | template `${a}-${i}` | 4.4k | 2.7k | 1.6 | strings, pgc 0269 |
 | < on strings / === non-interned | 1.4k / 1.3k | 0.9k / 0.9k | 1.5 / 1.4 | strings, pgc 0269 |
 | Math.floor + Math.round | 2.5k | 1.6k | 1.5 | builtin calls, pcall 0268 |

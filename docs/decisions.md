@@ -13466,3 +13466,29 @@ each two or three times on a five-key object. They start at 8, 16, 16 and 32 ent
 through `buf::vec_with_capacity` (inline `Vec::with_capacity` cost +59 B; out of line it
 is −30 B). JSON.parse of a five-key object −4..−9% (20.6-23.0k → 18.7-22.0k under load
 noise; QuickJS 18.9k).
+
+## D3490: for-in reads only enumerable keys and interns nothing per step
+date: 2026-11-21 · by: pidle · issue: 0278
+- The key snapshot asks each object of the chain for its enumerable keys only
+  (`Heap::own_enumerable_keys`: the slot's stored flags, read with its key; dense
+  elements are enumerable, `length` and a closure's lazy `length`/`name` never are), and
+  checks shadowing only for those: Object.prototype's and Array.prototype's many keys
+  cost no lookups. The shadowing check walks the chain from the object up to the current
+  one instead of keeping a list.
+- A step asks for an existing atom of the key (`existing_key_atom`): a string no atom
+  exists for names no property, so the step skips it without interning; the step cannot
+  fail.
+Wasm instructions per loop (`--wasm-sync-tier-up`), main → branch (QuickJS 2026): 5 keys
+20.5k → 13.2k (8.6k), 20 keys 51.3k → 37.7k (23.1k), an array of 10 60.5k → 29.9k
+(17.1k). Shipped module −50 B gz (429,601 → 429,551). Tried and dropped: skipping
+Object.prototype/Array.prototype while the builtins are pristine (−1k more, +100 B gz),
+the step outside `step` (−0.5k, +64 B gz).
+
+## D3491: Object rest without the builtin loop (parked)
+date: 2026-11-21 · by: pidle · issue: 0278
+Parked, not merged: rare in codemode (0130: a handful of 2,535 scripts) and ~+400 B gz.
+The change is work/research/0278/object-rest.patch (branch issue/0278-object-rest-parked):
+`%CopyDataPropertiesExcluding(src, excluded)` is answered in Rust where no getter runs
+(`copy_data_props` with excluded keys, the excluded strings as existing atoms), else the
+builtin runs. `const {id, ...rest} = o5`: 48.0k → 13.6k wasm instructions (QuickJS 2026
+9.5k); +851 B raw.
