@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0286 | Builtin method calls on primitives outside the loop | pcall | .worktrees/pcall |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 
 ## Open (ready)
@@ -23,6 +22,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
 | - | Parked: for-of over strings (0287, work/research/0287/for-of-strings.patch, +243 B, 22.9k->17.3k); EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
 | - | Next quiet re-record (load < 4): engines/ops/bridge records (0279 values kept in 0284), with the lengthened Object.entries/fromEntries ops case (work/scratch/0279/ops-entries.patch) | ready, needs a quiet machine |
+| - | Ratios vs QuickJS 2026 -O2 (slope.py --qjs2) are 15-35% stricter than vs quickjs-wasi: refresh the --qjs ratios quoted in D3530 and 0276-0282; remaining: startsWith 1.69, own/class getter 1.82/1.71, o.missing 1.70, typed-array length 1.48, number formatting 1.13-1.21 (0286 follow-ups) | ready |
 | - | GC nursery with a holder write barrier (D3294: heavy -13% memory; barrier-less version +5-9% CPU); test262 under gc-stress as a (nightly?) leg (0258 scratch patch) | owner (design) |
 | - | Flaky gate leg "pi tests (slim without lockdown)" (0260: failed once, passed on rerun); pi worker lifetime timing test at load ~50 (0256) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
@@ -52,6 +52,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0286 | @fast/@rust calls inside the tier-0 loop; primitive methods from the slot | 584968e1 (agent pcall; D3550, D3551, COMPAT 13; builtin calls -55 instr, trim 1.14->1.04x QuickJS 2026, all 16 workloads -0.2..-6.1%; +403 B gz; slope.py --qjs2) |
 | 0287 | One-unit ASCII string cache (for-of over strings parked) | dcf889b8 (agent pidle; D3560, COMPAT 12; s[i] 1.9k->1.5k, split('') -16%; most short-string ops already below QuickJS in instructions; +187 B gz) |
 | 0284 | Refresh of size/speed/startup/pi records after 0280-0282 (engines/ops/bridge kept from 0279: load) | e64d552d (agent pstart) |
 | 0285 | Fast keyed hash (owner: no strong flood resistance) | b1c5e9c9 (agent pgc; D3540, COMPAT 11; Map/Set/o[k]/JSON keys -4..-10%, json -2%, compile -1.3%; -117 B gz) |
