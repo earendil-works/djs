@@ -59,6 +59,31 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- 2026-11-21: Measured first (main a0d85b06, wasm keep-names profiles, kernels in
+  work/scratch/0260/: k-*.js through kt.ts (interleaved min-of-R µs) and kern.py/ins.py
+  (instructions, `--single-threaded --no-liftoff` for kernels)). The kernels were already
+  SWAR (find_latin1, find_byte, plain_run, stringify's quote); the costs were elsewhere:
+  scan_string a byte loop up to the first escape (media's 177 KB base64 string), per
+  escape a jump-table match plus a find_byte call plus a `memory.copy` (V8 calls out for
+  it: 4-6 ns vs 1 ns for a word store at 8-16 B), two-byte input unit by unit (fanout's
+  __DATA has a ✓, so every string of it), find_latin1's byte tail on short lines, the
+  regexp first set a bitmap test per byte. Instruction counts miss the mispredict wins
+  (escape table, find tail): use time.
+- Split into 8 commits with cumulative size and effect (coordinator's request); steps 1-4
+  merged (D3310), 5-8 held on branch 0260-rest for the owner's budget answer:
+  | step | gz B | effect |
+  | --- | ---: | --- |
+  | 1 swar + overlapping tail | +17 | find_latin1 self −30% (includes kernel) |
+  | 2 one-byte scan | +113 | media −14% instr / −10% time, json −1.4% |
+  | 3 escape table | +3 (−602 raw) | mispredicts |
+  | 4 fused escaped writer | +32 | heavy −2.6%, fanout −2% |
+  | 5 two-byte scan | +221 | fanout −8.5% instr / −6% time |
+  | 6 two-byte escaped writer | +202 | fanout −0.6% (kernel −20%) |
+  | 7 regexp first set 1-4 bytes | +377 | heavy −3% |
+  | 8 multiline ^ | +57 | text −2.8% |
+  All 8 (wall, load ~12): heavy 0.95, fanout 0.90, media 0.83, text 0.96; +1,022 B.
+- Guide: no page describes these kernels (builtins.md lists the fast entries only); none
+  updated.
 
 ## Follow-ups
 

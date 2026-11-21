@@ -12315,3 +12315,22 @@ date: 2026-11-21 · by: pstart · issue: 0261
 iterators (0.8% of `sequential`). It now compares each chunk of the rope with the flat
 string's slice at its offset (bytes for equal widths). sequential −2.5% (800 interleaved
 runs, load ~21); +185 B gz.
+## D3310: Byte kernels share one SWAR module; JSON strings scan and decode a word at a time
+date: 2026-11-21 · by: pscan · issue: 0260
+- `swar.rs` holds the lane tests (`eq8`, `lt8`, `zero8`, the lowest flag of a mask is
+  exact, higher ones are candidates) and `find_byte`; `json::escape_mask8` and
+  `find_latin1` use them. Searches take their last 1-7 candidates as one overlapping
+  word, masking the lanes already done, instead of a byte loop.
+- JSON strings in one-byte input skip plain words from the first byte (scan_string was a
+  byte loop up to the first escape) and before every byte scan_rest looks at
+  (`plain_run` after escapes is gone). Escapes are validated and decoded through a
+  128-byte table (`UNESCAPE`): the `match` was a jump table that mispredicted as `\n` and
+  `\"` alternate, and the table is 602 B smaller raw. Escaped one-byte strings are copied
+  and tested in one pass, a word stored whole before its test (the bytes past the run are
+  rewritten after), replacing a search plus a `memory.copy` per run (a host call in V8).
+- Measured (wasm, node, main 6f25c16e vs this): media −15% instructions / −17% time,
+  heavy −2.6%, fanout −4%; JSON.parse of an 80 KB plain text 0.2x, of an escaped text
+  0.87x. +139 B gz (429,353 → 429,492).
+- Held back for the size budget (branch 0260-rest): two-byte input four units a word
+  (fanout −8.5%, +221 B), its escaped writer (+202 B), regexp first sets of 1-4 Latin-1
+  bytes through `find_any` (heavy −3%, +377 B), multiline `^` (text −2.8%, +57 B).
