@@ -52,6 +52,15 @@ impl Exec<'_> {
         if let Some(Some(k)) = start
             && let Some(x) = self.each_element(base, k)
         {
+            if self.get(base + MODE).as_int() == Some(REDUCE) {
+                // Room in the box for the accumulator, which `each_finish` writes there
+                // without allocating (the steps keep it in THIS).
+                let (bx, acc) = (self.get(base + A), self.get(base + THIS));
+                let bx = bx.as_object().expect("each: reduce box");
+                if !self.heap.create_element_fast(bx, 0, acc)? {
+                    return type_error("could not define property");
+                }
+            }
             self.ensure(base + STATE)?;
             self.sp = base + STATE;
             return self.each_enter(base, k, x, next);
@@ -176,22 +185,35 @@ impl Exec<'_> {
 
     /// Element `k` of the loop's array if it is below `len` and present in the dense store
     /// (for Array.from, Get of it if that observes nothing).
+    #[inline]
     fn each_element(&self, base: u32, k: u32) -> Option<Value> {
-        let len = self.get(base + LEN).as_number()?;
-        if f64::from(k) >= len {
+        let len = self.get(base + LEN);
+        // (A length below 2^31 is an int: the common case, without the float compare.)
+        if !len.as_int().map_or_else(
+            || len.as_number().is_some_and(|n| f64::from(k) < n),
+            |n| (k as i32) < n && (k as i32) >= 0,
+        ) {
             return None;
         }
         let o = self.get(base + O).as_object()?;
-        if self.get(base + MODE).as_int() == Some(SORT) {
+        let mode = self.get(base + MODE).as_int();
+        if mode != Some(SORT)
+            && let Some(v) = self.heap.get_element_fast(o, k)
+        {
+            return Some(v);
+        }
+        self.each_element_slow(o, mode, k)
+    }
+
+    /// `each_element` past the dense store: a sort's pending comparison, Array.from's Get.
+    #[inline(never)]
+    fn each_element_slow(&self, o: Obj, mode: Option<i32>, k: u32) -> Option<Value> {
+        if mode == Some(SORT) {
             // The left value of the pending comparison (the right one is `each_args`'s).
             return array::sort_pending(self.heap, o)
                 .then(|| array::sort_operand(self.heap, o, false));
         }
-        // The array modes' element first: the per-element path.
-        if let Some(v) = self.heap.get_element_fast(o, k) {
-            return Some(v);
-        }
-        if self.get(base + MODE).as_int() == Some(FROM) {
+        if mode == Some(FROM) {
             return self.plain_get_index(o, k);
         }
         None
@@ -289,6 +311,13 @@ impl Exec<'_> {
     /// The builtin (current frame) gets `r`: the k its loop goes on from, or -1 - k when
     /// the callback's result at k decided the search.
     fn each_finish(&mut self, base: u32, r: Value) {
+        if self.get(base + MODE).as_int() == Some(REDUCE) {
+            // The accumulator into the box's element 0, made at the loop's start.
+            // (An overwrite of a present element: it allocates nothing and cannot fail.)
+            let bx = self.get(base + A).as_object().expect("each: reduce box");
+            let acc = self.get(base + THIS);
+            let _ = self.heap.create_element_fast(bx, 0, acc);
+        }
         self.sp = base;
         self.push(r);
         // A return is a safepoint (as in `do_return`).
@@ -307,7 +336,7 @@ impl Exec<'_> {
         let stop = if mode == FOR_EACH {
             Ok(false)
         } else {
-            self.each_complete(base, v)
+            self.each_complete(base, mode, k, v)
         };
         let next = match stop {
             Ok(false) => k + 1,
@@ -369,6 +398,7 @@ impl Exec<'_> {
     }
 
     /// The loop's current k.
+    #[inline]
     fn each_k(&self, base: u32) -> u32 {
         let k = self.get(base + K);
         match k.as_int() {
@@ -382,9 +412,12 @@ impl Exec<'_> {
     /// filter at its length, find's and reduce's box at 0) of KVALUE: map and reduce put
     /// `v` there first, which the step no longer needs. At the heap cap the store
     /// collects and is tried once more (D1900).
-    fn each_complete(&mut self, base: u32, v: Value) -> Result<bool, Fault> {
-        let mode = self.get(base + MODE).as_int().unwrap_or(FOR_EACH);
-        let truthy = !matches!(mode, MAP | REDUCE | FROM | SORT) && conv::to_boolean(self.heap, v);
+    fn each_complete(&mut self, base: u32, mode: i32, k: u32, v: Value) -> Result<bool, Fault> {
+        let truthy = !matches!(mode, MAP | REDUCE | FROM | SORT)
+            && match v.as_bool() {
+                Some(b) => b,
+                None => conv::to_boolean(self.heap, v),
+            };
         let (stop, store) = match mode {
             SORT => match v.as_number() {
                 Some(n) => {
@@ -395,11 +428,14 @@ impl Exec<'_> {
                 // ToNumber may run user code: the builtin does it.
                 None => (true, false),
             },
-            MAP | REDUCE | FROM => {
+            // The accumulator stays in THIS; the box gets it when the loop ends
+            // (`each_finish`).
+            REDUCE => {
+                self.set(base + THIS, v);
+                (false, false)
+            }
+            MAP | FROM => {
                 self.set(base + KVALUE, v);
-                if mode == REDUCE {
-                    self.set(base + THIS, v);
-                }
                 (false, true)
             }
             FILTER => (false, truthy),
@@ -414,7 +450,7 @@ impl Exec<'_> {
         let put = |ex: &mut Self| {
             let a = ex.get(base + A).as_object().expect("each: a");
             let i = match mode {
-                MAP | FROM => ex.each_k(base),
+                MAP | FROM => k,
                 FILTER => ex.heap.array_length(a),
                 _ => 0,
             };
