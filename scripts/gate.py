@@ -277,7 +277,7 @@ def jobs():
         # --- The shipped modules (D020, D2411): LTO, one codegen unit, one core each, and
         # unchecked arena access, as scripts/build-wasm.sh builds them (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap --quiet",
+          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode --quiet",
           group="target/size", build=True),
         J("build:size-slim", "CARGO_TARGET_DIR=target/size-slim scripts/with-wasm-env.sh cargo build -p djs-wasm"
           " --target wasm32-unknown-unknown --profile wasm --no-default-features --features unsafe-heap --quiet",
