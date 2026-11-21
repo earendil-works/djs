@@ -142,6 +142,13 @@ pub const ROOT_WEAK_STRONG: u32 = 2;
 /// properties on other receivers.
 pub const ROOT_FROZEN_BUILTINS: u32 = 4;
 
+/// `Roots::FLAGS`: the builtin prefix was written (D3290), a latch never cleared. Set by
+/// the JS-visible property operations of `object.rs` when they change an object below
+/// `Roots::BASE_END` (`Heap::refuse_write`). Without it the prefix references nothing
+/// above `BASE_END` (the image has no such reference, D2063), so collections skip its
+/// walk; and the builtins are as the base image has them (`Heap::builtins_pristine`).
+pub const ROOT_PREFIX_WRITTEN: u32 = 8;
+
 records! {
     /// One property in a [`PropTable`]. For a data property `VALUE` is the value and
     /// `SETTER` is unused (0). For an accessor `VALUE` is the getter and `SETTER` the
@@ -198,7 +205,7 @@ cells! {
         /// `FEATURES`, `OPS`, `INTRINSICS` and `RECORDS`, what an image must match to load.
         COMPAT: u32 = 48,
         /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600), [`ROOT_WEAK_STRONG`] (D1680),
-        /// [`ROOT_FROZEN_BUILTINS`] (D2304).
+        /// [`ROOT_FROZEN_BUILTINS`] (D2304), [`ROOT_PREFIX_WRITTEN`] (D3290).
         FLAGS: u32 = 52,
         /// The arena size at which the next collection is requested (D1601: part of the
         /// image, so a restored VM collects at the same points). 0 for a fresh heap.

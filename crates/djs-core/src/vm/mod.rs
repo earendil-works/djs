@@ -1310,6 +1310,8 @@ impl Vm {
         self.heap
             .arena_mut()
             .set(0, crate::heap::cells::Roots::BASE_END, len - tail_bytes);
+        // The write gate's boundary (D3290).
+        self.heap.refresh_frozen();
         // The prefix's strings cache the fixed hash, not the building VM's keyed one (D2433).
         self.heap.prefix_hashes_to_base();
         // `Heap::set_hash_key` rebuilds Map and Set indexes above the prefix only (D3270).

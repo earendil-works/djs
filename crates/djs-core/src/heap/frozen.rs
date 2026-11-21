@@ -38,12 +38,69 @@ impl Heap {
     /// Recomputes the cached boundary after anything that can move `Roots::BASE_END` or
     /// the flag: loading, collections, truncation.
     pub(crate) fn refresh_frozen(&mut self) {
-        self.frozen_end = if self.frozen_builtins() {
-            self.arena.get(0, Roots::BASE_END)
-        } else {
-            0
-        };
+        let end = self.base_end();
+        let frozen = self.frozen_builtins();
+        self.frozen_end = if frozen { end } else { 0 };
+        let written = self.prefix_written();
+        self.gate_end = if frozen || !written { end } else { 0 };
+        self.pristine = end > 0 && !written;
         self.refresh_barrier();
+    }
+
+    /// Whether the builtin prefix was written ([`cells::ROOT_PREFIX_WRITTEN`], D3290).
+    pub fn prefix_written(&self) -> bool {
+        self.arena.len() >= Roots::LAYOUT.min_size
+            && self.arena.get(0, Roots::FLAGS) & cells::ROOT_PREFIX_WRITTEN != 0
+    }
+
+    /// Whether the builtins are as the base image has them (D3290): there is a builtin
+    /// prefix and the [`cells::ROOT_PREFIX_WRITTEN`] latch is not set (with frozen builtins
+    /// the property operations cannot set it).
+    #[inline(always)]
+    pub fn builtins_pristine(&self) -> bool {
+        self.pristine
+    }
+
+    /// The write gate of the JS-visible property operations (D2304, D3290), before they
+    /// change `o`: true if the change must be refused (a frozen builtin). A write to
+    /// another object in the builtin prefix sets the [`cells::ROOT_PREFIX_WRITTEN`] latch
+    /// first: from then on collections walk the prefix for references into the session's
+    /// cells.
+    #[inline(always)]
+    pub(crate) fn refuse_write(&mut self, o: Obj) -> bool {
+        o.0 < self.gate_end && self.prefix_write()
+    }
+
+    /// `refuse_write`'s out-of-line part: refuses with frozen builtins, else sets the latch.
+    #[cold]
+    #[inline(never)]
+    fn prefix_write(&mut self) -> bool {
+        if self.frozen_end != 0 {
+            return true;
+        }
+        self.set_prefix_written();
+        false
+    }
+
+    /// Sets the [`cells::ROOT_PREFIX_WRITTEN`] latch (D3290): the one place it is set.
+    /// Collections walk the builtin prefix from now on, and the builtins no longer count
+    /// as pristine.
+    pub(crate) fn set_prefix_written(&mut self) {
+        let f = self.arena.get(0, Roots::FLAGS);
+        self.arena
+            .set(0, Roots::FLAGS, f | cells::ROOT_PREFIX_WRITTEN);
+        // Frozen builtins keep refusing writes.
+        self.gate_end = self.frozen_end;
+        self.pristine = false;
+    }
+
+    /// For writers that checked [`Heap::frozen`] already (a frozen builtin was refused):
+    /// sets the latch if `o` is in the prefix.
+    #[inline(always)]
+    pub(crate) fn note_write(&mut self, o: Obj) {
+        if o.0 < self.gate_end {
+            self.prefix_write();
+        }
     }
 
     /// Whether `o` is a frozen builtin: in the prefix with the mode on. The per-VM

@@ -1336,6 +1336,11 @@ fn collections_never_move_the_prefix() {
     h.seal().unwrap();
     let end = h.arena().len();
     h.arena_mut().set(0, Roots::BASE_END, end);
+    // The atom table is in this prefix (a VM's is in the tail, D2063): interning writes
+    // into it, so the prefix counts as written (D3290).
+    let f = h.arena().get(0, Roots::FLAGS);
+    h.arena_mut()
+        .set(0, Roots::FLAGS, f | crate::heap::cells::ROOT_PREFIX_WRITTEN);
     let prefix = h.bytes()[88..end as usize].to_vec();
     // Garbage below the prefix end: the old object's storage dies when it grows.
     let o = h.get_handle(ho).as_object().unwrap();

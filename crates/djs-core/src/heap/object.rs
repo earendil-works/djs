@@ -747,6 +747,7 @@ impl Heap {
         if !self.is_extensible(o) {
             return false;
         }
+        self.note_write(o);
         let mut p = proto;
         while let Some(q) = p {
             if q == o {
@@ -794,7 +795,7 @@ impl Heap {
     /// extensible.
     pub fn prevent_extensions(&mut self, o: Obj) -> bool {
         // A frozen builtin is not extensible already (D2304): nothing to write.
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return true;
         }
         if self.object_class(o) == ObjectClass::TypedArray && !self.ta_fixed_length(o) {
@@ -947,7 +948,7 @@ impl Heap {
         delete: u32,
         insert: u32,
     ) -> Result<bool, HeapError> {
-        if self.object_class(o) != ObjectClass::Array || self.frozen(o) {
+        if self.object_class(o) != ObjectClass::Array || self.refuse_write(o) {
             return Ok(false);
         }
         let f = self.obj_flags(o);
@@ -998,7 +999,7 @@ impl Heap {
     }
 
     pub fn set_element_fast(&mut self, o: Obj, i: u32, v: Value) -> Result<bool, HeapError> {
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return Ok(false);
         }
         let el = self.elements(o);
@@ -1055,7 +1056,7 @@ impl Heap {
         let f = self.obj_flags(o);
         if f & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) != 0
             || f & OBJ_EXTENSIBLE == 0
-            || self.frozen(o)
+            || self.refuse_write(o)
             || self.object_class(o) != ObjectClass::Array
         {
             return Ok(None);
@@ -1097,7 +1098,7 @@ impl Heap {
         v: Value,
     ) -> Result<bool, HeapError> {
         debug_assert_eq!(self.object_class(o), ObjectClass::Array);
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return Ok(false);
         }
         let el = self.elements(o);
@@ -1244,7 +1245,7 @@ impl Heap {
     /// nothing changed otherwise.
     #[inline]
     fn prop_set_value(&mut self, o: Obj, i: u32, v: Value) -> bool {
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return false;
         }
         let p = self.props(o);
@@ -1628,7 +1629,7 @@ impl Heap {
         // one of them.
         if f & (OBJ_DICTIONARY | OBJ_IS_PROTO | OBJ_LAZY) != 0
             || f & OBJ_EXTENSIBLE == 0
-            || self.frozen(o)
+            || self.refuse_write(o)
         {
             return false;
         }
@@ -1686,7 +1687,7 @@ impl Heap {
     #[inline(always)]
     pub fn shaped_set(&mut self, o: Obj, shape: u32, slot: u32, value: Value) -> bool {
         // A frozen builtin can share its shape with a session object (D2304).
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return false;
         }
         let Some(v) = self.values_if_shape(o, shape) else {
@@ -2104,7 +2105,7 @@ impl Heap {
             }
             return false;
         }
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return false;
         }
         match self.find_own(o, key) {
@@ -2377,7 +2378,7 @@ impl Heap {
         key: Atom,
         d: &PropertyDescriptor,
     ) -> Result<bool, HeapError> {
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             // ValidateAndApplyPropertyDescriptor against the frozen view (D2304): what it
             // accepts changes nothing, so nothing is written.
             let current = self.get_own_property(o, key);
@@ -2563,6 +2564,7 @@ impl Heap {
         if !self.array_can_pop_dense(o) {
             return None;
         }
+        self.note_write(o);
         let len = self.array_length(o);
         let el = self.elements(o);
         let v = self.value_array_get(el, len - 1);
@@ -2603,7 +2605,7 @@ impl Heap {
     /// changed.
     pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> Result<bool, HeapError> {
         // A frozen builtin's properties are non-configurable (D2304).
-        if self.frozen(o) {
+        if self.refuse_write(o) {
             return Ok(!self.has_own_property(o, key));
         }
         if self.object_class(o) == ObjectClass::TypedArray
@@ -2691,6 +2693,7 @@ impl Heap {
         p: &Property,
     ) -> Result<(), HeapError> {
         debug_assert!(self.is_private_atom(key) && self.find_own(o, key) == Loc::None);
+        self.note_write(o);
         self.prop_insert(o, key, p)
     }
 

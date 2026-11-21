@@ -199,3 +199,58 @@ fn frozen_builtins_keep_non_builtins_ordinary() {
         "#,
     );
 }
+
+#[test]
+fn prefix_written_latch() {
+    // D3290: the property operations set ROOT_PREFIX_WRITTEN when they change a builtin;
+    // until then collections skip the prefix (debug builds check that it references
+    // nothing above BASE_END at every collection, here at every safepoint).
+    let mut base = Vm::new(VmOptions::default()).unwrap();
+    base.prepare_base_image().unwrap();
+    let mut opts = VmOptions::default();
+    opts.exec.gc_stress = true;
+    let fresh = |opts: &VmOptions| Vm::from_base(base.bytes(), *opts).unwrap();
+    let mut vm = fresh(&opts);
+    assert!(vm.heap().builtins_pristine() && !vm.heap().prefix_written());
+    let untouched = "var g = { a: [1, 2] }; globalThis.h = Math.floor(1.5); \
+        [3, 1, 2].sort().map((x) => ({ x })); JSON.stringify(g) + String(h)";
+    assert_eq!(eval(&mut vm, untouched), r#"{"a":[1,2]}1"#);
+    vm.collect().unwrap();
+    assert!(
+        vm.heap().builtins_pristine(),
+        "reads and session writes keep it clear"
+    );
+    for src in [
+        "Array.prototype.x = { y: 1 }; [].x.y",
+        "Object.defineProperty(Math, 'y', { value: { z: 2 } }); Math.y.z",
+        "delete Math.PI; Math.PI",
+        "Object.setPrototypeOf(Math, { w: {} }); typeof Math.w",
+        "Array.prototype.push({}); Array.prototype.length",
+        "Array.prototype[0] = {}; Array.prototype.length",
+        "Object.preventExtensions(JSON); Object.isExtensible(JSON)",
+        "Math.max = function () { return 7 }; Math.max(1)",
+        "class B { constructor(o) { return o } } \
+         class C extends B { #p = {}; constructor(o) { super(o) } static has(o) { return #p in o } } \
+         new C(Math); C.has(Math)",
+    ] {
+        let mut vm = fresh(&opts);
+        eval(&mut vm, src);
+        assert!(vm.heap().prefix_written(), "{src}");
+        assert!(!vm.heap().builtins_pristine(), "{src}");
+        // The latch is image state.
+        let back = Vm::from_bytes(vm.image().to_vec(), VmOptions::default()).unwrap();
+        assert!(back.heap().prefix_written(), "{src}");
+    }
+    // Frozen builtins refuse the writes: never latched.
+    let mut f = opts;
+    f.frozen_builtins = true;
+    let mut vm = fresh(&f);
+    assert_eq!(
+        eval(
+            &mut vm,
+            "try { Array.prototype.x = {} } catch (e) { e.name }"
+        ),
+        "TypeError"
+    );
+    assert!(vm.heap().builtins_pristine() && !vm.heap().prefix_written());
+}

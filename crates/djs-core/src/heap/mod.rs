@@ -190,6 +190,12 @@ pub struct Heap {
     /// on, else 0. A copy kept current by `refresh_frozen`, so that the check on every
     /// property write is one compare.
     frozen_end: u32,
+    /// The write gate's boundary (D3290): `Roots::BASE_END` while a write below it must be
+    /// refused (frozen builtins) or must set the [`cells::ROOT_PREFIX_WRITTEN`] latch (not
+    /// set yet), else 0. Kept by `refresh_frozen`; one compare on every property write.
+    gate_end: u32,
+    /// [`Heap::builtins_pristine`]: a prefix and no `ROOT_PREFIX_WRITTEN` latch.
+    pristine: bool,
     /// The primary composites of Unicode normalization, derived on first use and kept
     /// for the VM's lifetime (D2338). Not part of the image.
     #[cfg(feature = "unicode-normalization")]
@@ -320,6 +326,8 @@ impl Heap {
             hard_limit,
             reserve: reserve_for(hard_limit),
             frozen_end: 0,
+            gate_end: 0,
+            pristine: false,
             #[cfg(feature = "unicode-normalization")]
             compositions: Default::default(),
             #[cfg(debug_assertions)]

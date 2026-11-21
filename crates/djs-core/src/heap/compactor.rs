@@ -106,6 +106,10 @@ struct Marker<'a> {
     /// The end of the old region: 0 for a full collection. Cells below it are live and
     /// are neither marked nor moved.
     old: u32,
+    /// The walks over the old region skip the cells after the roots cell up to here: the
+    /// builtin prefix's end while it references nothing above it (no
+    /// `ROOT_PREFIX_WRITTEN` latch, D3290), else 0.
+    prefix: u32,
     /// One bit per 8-byte word of a marked cell, from `old`.
     live: Live,
     stack: Vec<u32>,
@@ -347,9 +351,15 @@ impl Marker<'_> {
     /// The slots it finds are remembered for the update pass, which then does not walk
     /// the old region again (unless there were more than the list holds).
     fn mark_old(&mut self) {
-        let old = self.old;
+        let (old, skip) = (self.old, self.prefix_from());
         let mut c = 0;
         while c < old {
+            if c == skip {
+                c = self.prefix;
+            }
+            if c >= old {
+                break;
+            }
             let h: u64 = self.arena.read(c);
             let (kb, size) = (h as u8, (h >> 32) as u32);
             if kb == CellKind::EphemeronArray as u8 {
@@ -457,12 +467,24 @@ impl Marker<'_> {
         self.remembered.push_out(entry);
     }
 
+    /// Where the skipped part of the prefix starts: right after the roots cell (`u32::MAX`
+    /// when nothing is skipped).
+    #[inline]
+    fn prefix_from(&self) -> u32 {
+        skip_from(self.arena, self.prefix)
+    }
+
     /// The first ephemeron table to resolve at or after `from`, in address order: old
     /// ones (by a walk over the old region, only if it has any), then marked young ones.
     fn next_ephemeron(&self, mut from: u32) -> Option<u32> {
         if from < self.old {
             if self.old_ephemerons > 0 {
+                let skip = self.prefix_from();
                 while from < self.old {
+                    if from == skip {
+                        from = self.prefix.min(self.old);
+                        continue;
+                    }
                     if self.arena.get(from, Header::KIND) == CellKind::EphemeronArray as u8 {
                         return Some(from);
                     }
@@ -545,6 +567,61 @@ impl Marker<'_> {
             }
             at = self.next_ephemeron(c + self.arena.get(c, Header::SIZE));
         }
+    }
+}
+
+/// Where a walk over the old region jumps to `prefix` (the skipped part of the builtin
+/// prefix, D3290): the end of the roots cell, or `u32::MAX` when nothing is skipped.
+#[inline]
+fn skip_from(arena: &Arena, prefix: u32) -> u32 {
+    if prefix == 0 {
+        u32::MAX
+    } else {
+        arena.get(0, Header::SIZE)
+    }
+}
+
+/// Debug builds, when a collection skips the builtin prefix (D3290): checks that nothing in
+/// it references a cell at or above `end` (`Roots::BASE_END`), the invariant that lets the
+/// walks skip it. A failure names a write to a builtin that did not set the
+/// `ROOT_PREFIX_WRITTEN` latch.
+#[cfg(debug_assertions)]
+fn check_skipped_prefix(arena: &Arena, end: u32) {
+    use super::cells::{FuncTemplate, IC_OFFSET_SLOT, IC_WORDS, U32Array};
+    let mut c = arena.get(0, Header::SIZE);
+    while c < end {
+        let h: u64 = arena.read(c);
+        let (kb, size) = (h as u8, (h >> 32) as u32);
+        if !is_leaf(kb) {
+            let kind = CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
+            walk::for_each_slot(kind, c, size, |slot| {
+                let t = match slot {
+                    Slot::Value(s) => arena.read::<Value>(s).ref_offset(),
+                    Slot::Ref(s) => arena.read::<Ref>(s).get(),
+                };
+                if let Some(t) = t {
+                    assert!(
+                        t < end,
+                        "the builtin prefix references {t} from {c} ({kind:?}) without the \
+                         ROOT_PREFIX_WRITTEN latch (D3290)"
+                    );
+                }
+            });
+            if kind == CellKind::FuncTemplate
+                && let Some(ic) = arena.get::<Ref>(c, FuncTemplate::IC).get()
+                && arena.get(c, FuncTemplate::IC_COUNT) != 0
+            {
+                let n = arena.get(c, FuncTemplate::IC_COUNT) as u32;
+                for i in 0..n {
+                    let w: u32 = arena.read(U32Array::DATA.at(ic, i * IC_WORDS));
+                    assert!(
+                        w & IC_OFFSET_SLOT == 0,
+                        "a builtin's inline cache in the prefix holds an offset (D3290)"
+                    );
+                }
+            }
+        }
+        c += size;
     }
 }
 
@@ -680,6 +757,18 @@ impl Heap {
         let old_end = self.arena.get(0, super::cells::Roots::OLD_END);
         let base_end = self.arena.get(0, super::cells::Roots::BASE_END);
         debug_assert!(old <= before);
+        // The prefix's walk is skipped while nothing in it can reference the cells above
+        // it (D3290).
+        let prefix = if base_end > 0 && old >= base_end && !self.prefix_written() {
+            base_end
+        } else {
+            0
+        };
+        #[cfg(debug_assertions)]
+        if prefix > 0 {
+            check_skipped_prefix(&self.arena, prefix);
+        }
+        let skip = skip_from(&self.arena, prefix);
         let blocks = (before - old).div_ceil(BLOCK) as usize;
         let mut live: Vec<u64> = Vec::new();
         let mut table: Vec<u32> = Vec::new();
@@ -698,6 +787,7 @@ impl Heap {
         let mut m = Marker {
             arena: &mut self.arena,
             old,
+            prefix,
             live: Live {
                 base: old,
                 bits: live,
@@ -813,6 +903,10 @@ impl Heap {
             }
             let mut c = 0;
             while old_ephemerons > 0 && c < old {
+                if c == skip {
+                    c = prefix;
+                    continue;
+                }
                 let h: u64 = arena.read(c);
                 if h as u8 == CellKind::EphemeronArray as u8 {
                     update(arena, CellKind::EphemeronArray, c, (h >> 32) as u32);
@@ -822,6 +916,10 @@ impl Heap {
         } else {
             let mut c = 0;
             while c < old {
+                if c == skip {
+                    c = prefix;
+                    continue;
+                }
                 let h: u64 = arena.read(c);
                 let (kb, size) = (h as u8, (h >> 32) as u32);
                 if !is_leaf(kb) {
