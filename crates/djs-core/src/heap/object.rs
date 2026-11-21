@@ -1236,12 +1236,18 @@ impl Heap {
     /// The key of slot `i` (null for a deleted dictionary entry).
     #[inline]
     fn prop_key(&self, o: Obj, i: u32) -> Atom {
+        self.prop_key_flags(o, i).0
+    }
+
+    /// The key of slot `i` and its stored flags (`PropFlags` in the low byte).
+    #[inline]
+    fn prop_key_flags(&self, o: Obj, i: u32) -> (Atom, u32) {
         let p = self.props(o);
         if self.is_dictionary(o) {
-            self.entry_key(p, i)
+            let e = PropTable::ENTRIES.at(p, i);
+            (self.entry_key(p, i), self.arena().get(e, PropEntry::FLAGS))
         } else {
             self.shape_desc(self.arena().get(p, PropValues::SHAPE).0, i)
-                .0
         }
     }
 
@@ -2817,8 +2823,8 @@ impl Heap {
         let mut sort = false;
         {
             for i in 0..self.prop_slots(o) {
-                let key = self.prop_key(o, i);
-                if key.is_null() || enumerable && !self.prop_read(o, i).flags().enumerable() {
+                let (key, fl) = self.prop_key_flags(o, i);
+                if key.is_null() || enumerable && !PropFlags::from_bits(fl as u8).enumerable() {
                     continue;
                 }
                 if key.is_symbol() {
