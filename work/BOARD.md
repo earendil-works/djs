@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0280 | D020 budget +2 KB (owner); land parked construct path and object rest | pidle | .worktrees/pidle |
 | 0282 | @fast builtin getters (Map/Set size) | pcall | .worktrees/pcall |
 | 0283 | Builtin families: what each costs and gives (list for the owner) | pstart | .worktrees/pstart |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
@@ -23,7 +22,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
-| - | Parked: construct path (0270, D3410, work/research/0270/construct-path.patch, +424 B gz: new C() -21%, derived -48%); EACH return in run_hot (0272, D3431); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | waits for size room |
+| - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
 | - | GC nursery with a holder write barrier (D3294: heavy -13% memory; barrier-less version +5-9% CPU); test262 under gc-stress as a (nightly?) leg (0258 scratch patch) | owner (design) |
 | - | Flaky gate leg "pi tests (slim without lockdown)" (0260: failed once, passed on rerun); pi worker lifetime timing test at load ~50 (0256) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
@@ -53,6 +52,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0280 | D020 budget +2 KB (owner); construct path and object rest landed | 852e4a12 (agent pidle; D3510-D3512; new C() 2.66k->2.11k, derived 8.04k->4.34k, object rest 48.8k->13.3k; +1,017 B gz) |
 | 0281 | Regexp lastIndex inserted directly (state reuse measured, dropped: a Heap field costs ~300 B gz) | 27bb1fa3 (agent pscan; D3520, D3521; test -6%, match -2.5%; -11 B gz) |
 | 0279 | Re-recorded published numbers after the push (load < 4) | f8dae01d (agent pstart; D3500; run time 1.38x faster than QuickJS, memory 1.12x QuickJS, new VM 0.07 ms, idle = QuickJS-NG) |
 | 0276 | Absent-key and accessor caches, typeof/string ===/< in the loop | 3482d0fe (agent pcall; D3470-D3472; o.missing 3.4x->0.89x QJS, typeof s 0.62x, s==="x" 0.27x, s<t 1.04x; props +1.5%; -118 B gz) |
