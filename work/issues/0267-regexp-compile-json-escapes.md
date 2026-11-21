@@ -1,6 +1,6 @@
 # 0267: Regexp compile speed; escape-dense JSON
 
-status: open
+status: in-progress
 agent: pscan
 branch: issue/0267-regexp-compile-json-escapes
 depends-on: 0264
