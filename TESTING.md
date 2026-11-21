@@ -840,15 +840,18 @@ tool for work on a gap the comparison shows.
 ### Size budget (D020)
 
 The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) must stay within
-1.5x quickjs-wasi's size, gzip -9. The gate builds it beside its other steps (in
+1.5x quickjs-wasi's size, gzip -9, plus an allowance of 2,048 bytes the owner added to
+land speedups that had been parked for size (D3510). The gate builds it beside its other steps (in
 `target/size`) and its last step runs `scripts/size/budget.py` on it, which compares its
 gzip with `tests/scores/size.tsv`:
 
 - `quickjs_wasi_gzip`: quickjs-wasi's module (3.6.2, pi's engine), recorded so that the
   gate needs no copy of it. Re-record it when pi moves to a new version.
+- `budget_allowance_gzip`: the owner's allowance on top of 1.5x (D3510).
 - `ceiling_gzip`: a ratchet while the module is above the budget. The gate fails when the
-  module's gzip exceeds it. Once the module is within 1.5x, the budget itself is the
-  limit as well.
+  module's gzip exceeds it. Once the module is within the budget, the budget itself is the
+  limit as well. A batch that uses the allowance raises the ceiling by what it needs, with
+  its decision.
 
 `budget.py` also fails when the module contains a build-machine path (`/Users/`,
 `/home/`, `.cargo/registry`, `.rustup/`): panic locations carry source file paths, and

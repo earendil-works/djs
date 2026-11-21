@@ -13584,3 +13584,11 @@ date: 2026-11-21 · by: pstart · issue: 0279
 `scripts/status.py` speed, pi, startup, dumps, bounds and heap record `<group>/load`, the
 1-minute load average when the command started, as engines, ops and bridge already did.
 Published numbers are taken below a load of ~4; the record says whether they were.
+
+## D3510: The size budget gets 2 KB more (owner)
+date: 2026-11-21 · by: owner (recorded by pidle) · issue: 0280
+D020's budget for the shipped module becomes 1.5x quickjs-wasi's gzip plus 2,048 bytes
+(`budget_allowance_gzip` in tests/scores/size.tsv, read by scripts/size/budget.py), to
+land the speedups parked for size in 0270, 0272, 0275, 0276 and 0278. The ratchet
+ceiling stays a ratchet: each batch that uses the allowance raises it by what it needs,
+recorded with its decision. The slim module keeps its own ratchet.

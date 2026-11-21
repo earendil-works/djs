@@ -5,7 +5,8 @@
 ceiling, `slim_ceiling_gzip`: a ratchet like the default module's, with no 1.5x budget.
 
 The budget is gzip -9 of the shipped module (scripts/build-wasm.sh) within 1.5x
-quickjs-wasi's, recorded in tests/scores/size.tsv (the gate's machine needs no copy of
+quickjs-wasi's plus the owner's allowance (`budget_allowance_gzip`, D3510), recorded in
+tests/scores/size.tsv (the gate's machine needs no copy of
 quickjs-wasi). Until the module is within the budget, a ratchet holds it there: the gate
 fails when the module's gzip exceeds the recorded ceiling. `--update` lowers the ceiling to
 this module's gzip plus the slack (never raises it: raising it is a recorded decision and
@@ -54,11 +55,14 @@ def main():
     slim = "--slim" in sys.argv
     key = "slim_ceiling_gzip" if slim else "ceiling_gzip"
     qjs, ceiling = vals["quickjs_wasi_gzip"], vals[key]
-    # The slim module has only its ratchet: it is under the 1.5x budget by design.
-    budget = ceiling if slim else qjs * 3 // 2
+    allowance = vals.get("budget_allowance_gzip", 0)
+    full = qjs * 3 // 2 + allowance
+    # The slim module has only its ratchet: it is under the budget by design.
+    budget = ceiling if slim else full
     what = "slim size" if slim else "size"
     print(f"{what}: {size:,} bytes gzip ({len(data):,} raw), {size / qjs:.3f}x quickjs-wasi "
-          f"({qjs:,}); budget 1.5x = {qjs * 3 // 2:,} (D020), ratchet ceiling {ceiling:,}")
+          f"({qjs:,}); budget 1.5x + {allowance:,} = {full:,} (D020, D3510), "
+          f"ratchet ceiling {ceiling:,}")
     if "--update" in sys.argv:
         new = min(ceiling, max(size + SLACK, 0))
         if new < ceiling:

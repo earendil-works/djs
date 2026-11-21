@@ -1,6 +1,6 @@
 # 0280: D020 budget +2 KB (owner); land the parked construct path and object rest
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0280-budget-parked
 depends-on: 0270, 0278
