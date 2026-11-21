@@ -560,6 +560,9 @@ impl Exec<'_> {
                 return step;
             }
             let a0 = arg(self, 0);
+            // (Read once: 158 sites read them, each with its own bounds test and load, 5 KB
+            // of wasm.)
+            let (a1, a2, a3) = (arg(self, 1), arg(self, 2), arg(self, 3));
             let v = match id {
                 // Only the prelude calls these, while it builds the realm (D3094).
                 #[cfg(not(djs_prelude))]
@@ -581,7 +584,7 @@ impl Exec<'_> {
                 THROW => return Err(Fault::throw(a0)),
                 GET | GET_V => {
                     // Dense elements first: builtins read arrays element by element.
-                    if let (Some(o), Some(i)) = (a0.as_object(), index_key(arg(self, 1)))
+                    if let (Some(o), Some(i)) = (a0.as_object(), index_key(a1))
                         && let Some(v) = self.heap.get_element_fast(o, i)
                     {
                         self.sp = base;
@@ -589,7 +592,7 @@ impl Exec<'_> {
                         self.pc = next;
                         return Ok(None);
                     }
-                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    let key = conv::to_property_key(self.heap, a1)?;
                     match self.lookup(a0, key)? {
                         Got::Value(v) => v,
                         Got::Getter(getter) => {
@@ -608,8 +611,8 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                    let v = arg(self, 2);
+                    let key = conv::to_property_key(self.heap, a1)?;
+                    let v = a2;
                     // The result (undefined) goes below a setter's frame, if one is called.
                     self.sp = base;
                     self.push(Value::UNDEFINED);
@@ -620,7 +623,7 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    let key = conv::to_property_key(self.heap, a1)?;
                     match self.heap.has_property_or_proxy(o, key) {
                         Ok(r) => Value::bool(r),
                         Err(p) => {
@@ -640,17 +643,17 @@ impl Exec<'_> {
                         break 'bad;
                     };
                     // An Array's dense element (or the next one) takes the dense store.
-                    if let Some(i) = index_key(arg(self, 1))
+                    if let Some(i) = index_key(a1)
                         && self.heap.object_class(o) == ObjectClass::Array
-                        && self.heap.create_element_fast(o, i, arg(self, 2))?
+                        && self.heap.create_element_fast(o, i, a2)?
                     {
                         self.sp = base;
                         self.push(Value::UNDEFINED);
                         self.pc = next;
                         return Ok(None);
                     }
-                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                    if !self.heap.create_data_property(o, key, arg(self, 2))? {
+                    let key = conv::to_property_key(self.heap, a1)?;
+                    if !self.heap.create_data_property(o, key, a2)? {
                         return type_error("could not define property");
                     }
                     Value::UNDEFINED
@@ -659,7 +662,7 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    let key = conv::to_property_key(self.heap, a1)?;
                     if !self.heap.delete_own_property(o, key)? {
                         return type_error("could not delete property");
                     }
@@ -768,7 +771,7 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let proto = arg(self, 1);
+                    let proto = a1;
                     if proto.as_object().is_none() && !proto.is_null() {
                         break 'bad;
                     }
@@ -785,7 +788,7 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let frozen = arg(self, 1).as_bool() == Some(true);
+                    let frozen = a1.as_bool() == Some(true);
                     Value::bool(if id == SET_INTEGRITY_LEVEL {
                         object::set_integrity_level(self.heap, o, frozen)?
                     } else {
@@ -793,7 +796,7 @@ impl Exec<'_> {
                     })
                 }
                 WRAP_PRIMITIVE => {
-                    let proto = arg(self, 1).as_object();
+                    let proto = a1.as_object();
                     match realm::wrap_primitive(self.heap, a0, proto)? {
                         Some(o) if proto.is_some() => Value::object(o),
                         _ => break 'bad,
@@ -868,7 +871,7 @@ impl Exec<'_> {
                             Some(3) => DynamicKind::AsyncGenerator,
                             _ => break 'bad,
                         };
-                        (arg(self, 1), Some(kind), arg(self, 2))
+                        (a1, Some(kind), a2)
                     };
                     let Some(s) = src.as_string() else {
                         break 'bad;
@@ -910,7 +913,7 @@ impl Exec<'_> {
                     };
                     // Linear work: charge for it like the other string scans.
                     self.fuel -= i64::from(self.heap.str_len(s) / 8);
-                    let component = arg(self, 1).as_bool() == Some(true);
+                    let component = a1.as_bool() == Some(true);
                     Value::string(match id {
                         URI_ENCODE => uri::encode(self.heap, s, component)?,
                         URI_DECODE => uri::decode(self.heap, s, component)?,
@@ -926,7 +929,7 @@ impl Exec<'_> {
                 // An Array Iterator's slots: 0 the target (undefined once exhausted), 1 the
                 // next index (a Number), 2 the kind (0 keys, 1 values, 2 entries).
                 CREATE_ARRAY_ITERATOR => {
-                    let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
+                    let (Some(o), Some(kind)) = (a0.as_object(), a1.as_int()) else {
                         break 'bad;
                     };
                     let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
@@ -975,7 +978,7 @@ impl Exec<'_> {
                     _ => return type_error("String Iterator object expected"),
                 },
                 STR_CODE_POINT_STRING => {
-                    let (Some(s), Some(i)) = (a0.as_string(), arg(self, 1).as_number()) else {
+                    let (Some(s), Some(i)) = (a0.as_string(), a1.as_number()) else {
                         break 'bad;
                     };
                     let s = self.heap.contiguous(s)?;
@@ -991,7 +994,7 @@ impl Exec<'_> {
                 ARRAY_ITERATOR_INDEX => self.heap.object_slot(self.array_iterator(a0)?, 1),
                 ARRAY_ITERATOR_SET_INDEX => {
                     let it = self.array_iterator(a0)?;
-                    let Some(i) = arg(self, 1).as_number() else {
+                    let Some(i) = a1.as_number() else {
                         break 'bad;
                     };
                     self.heap.set_object_slot(it, 1, conv::number(i));
@@ -1004,7 +1007,7 @@ impl Exec<'_> {
                 }
                 ARRAY_ITERATOR_KIND => self.heap.object_slot(self.array_iterator(a0)?, 2),
                 CREATE_ITER_RESULT_OBJECT => {
-                    let Some(done) = arg(self, 1).as_bool() else {
+                    let Some(done) = a1.as_bool() else {
                         break 'bad;
                     };
                     let proto = realm::intrinsic_obj(self.heap, Intrinsic::ObjectProto);
@@ -1017,10 +1020,10 @@ impl Exec<'_> {
                 }
                 CREATE_ARRAY_FROM_PAIR => {
                     let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                    let pair = [a0, arg(self, 1)];
+                    let pair = [a0, a1];
                     Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
                 }
-                COMPARE_STRINGS => match (a0.as_string(), arg(self, 1).as_string()) {
+                COMPARE_STRINGS => match (a0.as_string(), a1.as_string()) {
                     (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
                     _ => break 'bad,
                 },
@@ -1039,66 +1042,55 @@ impl Exec<'_> {
                     }
                 }
                 ARRAY_FILL_DENSE => {
-                    let (Some(o), Some(k), Some(fin)) = (
-                        a0.as_object(),
-                        arg(self, 2).as_number(),
-                        arg(self, 3).as_number(),
-                    ) else {
+                    let (Some(o), Some(k), Some(fin)) =
+                        (a0.as_object(), a2.as_number(), a3.as_number())
+                    else {
                         break 'bad;
                     };
-                    conv::number(decline_oom(
-                        self.array_fill_dense(o, arg(self, 1), k, fin),
-                        k,
-                    )?)
+                    conv::number(decline_oom(self.array_fill_dense(o, a1, k, fin), k)?)
                 }
                 ARRAY_PUSH_DENSE => match a0.as_object() {
-                    Some(o) => {
-                        conv::number(decline_oom(self.array_push_dense(o, arg(self, 1)), -1.0)?)
-                    }
+                    Some(o) => conv::number(decline_oom(self.array_push_dense(o, a1), -1.0)?),
                     None => break 'bad,
                 },
                 ARRAY_SEARCH_DENSE => {
                     let (Some(o), Some(from), Some(len), Some(mode)) = (
                         a0.as_object(),
-                        arg(self, 2).as_number(),
-                        arg(self, 3).as_number(),
+                        a2.as_number(),
+                        a3.as_number(),
                         arg(self, 4).as_int(),
                     ) else {
                         break 'bad;
                     };
-                    conv::number(self.array_search_dense(o, arg(self, 1), from, len, mode))
+                    conv::number(self.array_search_dense(o, a1, from, len, mode))
                 }
                 ARRAY_SLICE_DENSE => {
                     let (Some(o), Some(k), Some(fin), Some(a)) = (
                         a0.as_object(),
-                        arg(self, 1).as_number(),
-                        arg(self, 2).as_number(),
-                        arg(self, 3).as_object(),
+                        a1.as_number(),
+                        a2.as_number(),
+                        a3.as_object(),
                     ) else {
                         break 'bad;
                     };
                     Value::bool(decline_oom(self.array_slice_dense(o, k, fin, a), false)?)
                 }
                 ARRAY_JOIN_DENSE => {
-                    let (Some(o), Some(len), Some(sep)) = (
-                        a0.as_object(),
-                        arg(self, 1).as_number(),
-                        arg(self, 2).as_string(),
-                    ) else {
+                    let (Some(o), Some(len), Some(sep)) =
+                        (a0.as_object(), a1.as_number(), a2.as_string())
+                    else {
                         break 'bad;
                     };
                     decline_oom(self.array_join_dense(o, len, sep), Value::UNDEFINED)?
                 }
-                TYPED_ARRAY_SET_FROM_DENSE if FULL => {
-                    match (a0.as_object(), arg(self, 1).as_object()) {
-                        (Some(o), Some(values)) => {
-                            Value::bool(self.typed_array_set_from_dense(o, values))
-                        }
-                        _ => break 'bad,
+                TYPED_ARRAY_SET_FROM_DENSE if FULL => match (a0.as_object(), a1.as_object()) {
+                    (Some(o), Some(values)) => {
+                        Value::bool(self.typed_array_set_from_dense(o, values))
                     }
-                }
+                    _ => break 'bad,
+                },
                 ENUMERABLE_OWN_DATA_PROPERTIES => {
-                    let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
+                    let (Some(o), Some(kind)) = (a0.as_object(), a1.as_int()) else {
                         break 'bad;
                     };
                     decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
@@ -1110,19 +1102,19 @@ impl Exec<'_> {
                     Value::bool(a0 == realm::installed_intrinsic(self.heap, ARRAY_CONSTRUCTOR))
                 }
                 IS_ORIGINAL_COLLECTION_ADDER => {
-                    let original = match arg(self, 1).as_int() {
+                    let original = match a1.as_int() {
                         Some(0) => MAP_PROTOTYPE_SET,
                         Some(1) => SET_PROTOTYPE_ADD,
                         _ => break 'bad,
                     };
                     Value::bool(a0 == realm::installed_intrinsic(self.heap, original))
                 }
-                ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
+                ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, a1)),
                 ITERATOR_FAST_DRAIN => {
-                    let n = arg(self, 3).as_number().unwrap_or(-1.0);
-                    conv::number(self.iter_fast_drain(a0, arg(self, 1), arg(self, 2), n)?)
+                    let n = a3.as_number().unwrap_or(-1.0);
+                    conv::number(self.iter_fast_drain(a0, a1, a2, n)?)
                 }
-                ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {
+                ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, a1)? {
                     super::iter::FastStep::Value(v) => v,
                     _ => break 'bad,
                 },
@@ -1135,18 +1127,14 @@ impl Exec<'_> {
                             .filter(|&n| (n as u32) as f64 == n)
                             .map(|n| n as u32)
                     };
-                    match (
-                        as_u32(arg(self, 1)),
-                        as_u32(arg(self, 2)),
-                        as_u32(arg(self, 3)),
-                    ) {
+                    match (as_u32(a1), as_u32(a2), as_u32(a3)) {
                         (Some(s), Some(d), Some(i)) => {
                             Value::bool(self.heap.array_splice_dense(o, s, d, i)?)
                         }
                         _ => Value::FALSE,
                     }
                 }
-                STR_LOCALE_COMPARE => match (a0.as_string(), arg(self, 1).as_string()) {
+                STR_LOCALE_COMPARE => match (a0.as_string(), a1.as_string()) {
                     (Some(a), Some(b)) => conv::number(string::locale_compare(self.heap, a, b)?),
                     _ => break 'bad,
                 },
@@ -1166,11 +1154,11 @@ impl Exec<'_> {
                     Some(o) => Value::object(array::sort_start(self.heap, o)?),
                     None => break 'bad,
                 },
-                SORT_STEP => match (a0.as_object(), arg(self, 1).as_number()) {
+                SORT_STEP => match (a0.as_object(), a1.as_number()) {
                     (Some(o), Some(v)) => Value::bool(array::sort_step(self.heap, o, v)?),
                     _ => break 'bad,
                 },
-                SORT_OPERAND => match (a0.as_object(), arg(self, 1).as_number()) {
+                SORT_OPERAND => match (a0.as_object(), a1.as_number()) {
                     (Some(o), Some(w)) => array::sort_operand(self.heap, o, w != 0.0),
                     _ => break 'bad,
                 },
@@ -1187,34 +1175,34 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    realm::set_error_stack(self.heap, o, arg(self, 1))?;
+                    realm::set_error_stack(self.heap, o, a1)?;
                     Value::UNDEFINED
                 }
                 CALL_SITE_SLOT => {
-                    let i = arg(self, 1).as_int().unwrap_or(-1);
+                    let i = a1.as_int().unwrap_or(-1);
                     super::stack::callsite_slot(self.heap, a0, i as u32)?
                 }
                 DEFINE_DATA_PROPERTY_OR_THROW => {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = object::key(self.heap, arg(self, 1))?;
-                    let flags = object::flags(arg(self, 3));
-                    object::define_data_or_throw(self.heap, o, key, arg(self, 2), flags)?;
+                    let key = object::key(self.heap, a1)?;
+                    let flags = object::flags(a3);
+                    object::define_data_or_throw(self.heap, o, key, a2, flags)?;
                     Value::UNDEFINED
                 }
                 DEFINE_OWN_PROPERTY_FROM_RECORD => {
-                    let (Some(o), Some(rec)) = (a0.as_object(), arg(self, 2).as_object()) else {
+                    let (Some(o), Some(rec)) = (a0.as_object(), a2.as_object()) else {
                         break 'bad;
                     };
-                    let key = object::key(self.heap, arg(self, 1))?;
+                    let key = object::key(self.heap, a1)?;
                     Value::bool(object::define_from_record(self.heap, o, key, rec)?)
                 }
                 GET_OWN_PROPERTY_DESCRIPTOR_OBJECT | HAS_OWN_PROPERTY | OWN_PROPERTY_ATTRIBUTES => {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = object::key(self.heap, arg(self, 1))?;
+                    let key = object::key(self.heap, a1)?;
                     match id {
                         HAS_OWN_PROPERTY => Value::bool(self.heap.has_own_property(o, key)),
                         OWN_PROPERTY_ATTRIBUTES => {
@@ -1227,11 +1215,11 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    object::own_keys(self.heap, o, arg(self, 1).as_int().unwrap_or(0))?
+                    object::own_keys(self.heap, o, a1.as_int().unwrap_or(0))?
                 }
                 CALL_WITH_ARRAY => {
                     // `f this args` becomes `f this a1 .. an`.
-                    let Some(args) = arg(self, 2).as_object() else {
+                    let Some(args) = a2.as_object() else {
                         break 'bad;
                     };
                     let n = self.heap.array_length(args);
@@ -1269,7 +1257,7 @@ impl Exec<'_> {
                         break 'bad;
                     }
                     let m = a0.as_object().expect("collection");
-                    let key = arg(self, 1);
+                    let key = a1;
                     match id {
                         COLLECTION_GET => {
                             self.heap.collection_get(m, key).unwrap_or(Value::UNDEFINED)
@@ -1277,7 +1265,7 @@ impl Exec<'_> {
                         COLLECTION_HAS => Value::bool(self.heap.collection_has(m, key)),
                         COLLECTION_SET => {
                             let key = collection::stored_key(self.heap, key)?;
-                            self.heap.collection_set(m, key, arg(self, 2))?;
+                            self.heap.collection_set(m, key, a2)?;
                             Value::UNDEFINED
                         }
                         COLLECTION_DELETE => Value::bool(self.heap.collection_delete(m, key)?),
@@ -1294,7 +1282,7 @@ impl Exec<'_> {
                     }
                 }
                 COLLECTION_ITERATOR_NEXT => {
-                    collection::iterator_next(self.heap, a0, arg(self, 1).as_bool() == Some(true))?
+                    collection::iterator_next(self.heap, a0, a1.as_bool() == Some(true))?
                 }
                 COLLECTION_ITERATOR_STEP | COLLECTION_ITERATOR_KEY | COLLECTION_ITERATOR_VALUE => {
                     let Some(it) = a0
@@ -1321,7 +1309,7 @@ impl Exec<'_> {
                         return type_error("not a Date object");
                     };
                     if id == DATE_SET_VALUE {
-                        let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
+                        let t = a1.as_number().unwrap_or(f64::NAN);
                         self.heap.set_object_slot(o, 0, Value::number(t));
                     }
                     conv::number(self.heap.object_slot(o, 0).as_number().unwrap_or(f64::NAN))
@@ -1329,12 +1317,9 @@ impl Exec<'_> {
                 DATE_FROM_FIELDS | DATE_SET_FIELDS => {
                     let offset = self.time_zone_offset();
                     let (list, local) = if id == DATE_FROM_FIELDS {
-                        (a0.as_object(), arg(self, 1).as_bool() == Some(true))
+                        (a0.as_object(), a1.as_bool() == Some(true))
                     } else {
-                        (
-                            arg(self, 2).as_object(),
-                            arg(self, 3).as_bool() == Some(true),
-                        )
+                        (a2.as_object(), a3.as_bool() == Some(true))
                     };
                     let Some(list) = list else {
                         break 'bad;
@@ -1354,7 +1339,7 @@ impl Exec<'_> {
                         date::from_fields_checked(&mut f, local, offset)
                     } else {
                         let t = a0.as_number().unwrap_or(f64::NAN);
-                        let first = arg(self, 1).as_int().unwrap_or(0).clamp(0, 6) as usize;
+                        let first = a1.as_int().unwrap_or(0).clamp(0, 6) as usize;
                         let n = nums.len().min(7 - first);
                         date::set_fields(t, first, &nums[..n], local, offset)
                     };
@@ -1362,8 +1347,8 @@ impl Exec<'_> {
                 }
                 DATE_GET_FIELD => {
                     let t = a0.as_number().unwrap_or(f64::NAN);
-                    let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 7) as usize;
-                    let local = arg(self, 2).as_bool() == Some(true);
+                    let field = a1.as_int().unwrap_or(0).clamp(0, 7) as usize;
+                    let local = a2.as_bool() == Some(true);
                     match date::fields(t, local, self.time_zone_offset(), false) {
                         Some(f) => conv::number(f[field]),
                         None => Value::NAN,
@@ -1371,8 +1356,8 @@ impl Exec<'_> {
                 }
                 DATE_FORMAT => {
                     let t = a0.as_number().unwrap_or(f64::NAN);
-                    let fmt = arg(self, 1).as_int().unwrap_or(1) as u8;
-                    let part = arg(self, 2).as_int().unwrap_or(3) as u8;
+                    let fmt = a1.as_int().unwrap_or(1) as u8;
+                    let part = a2.as_int().unwrap_or(3) as u8;
                     match date::format(t, fmt, part, self.time_zone_offset()) {
                         Some(s) => Value::string(self.heap.alloc_str(&s)?),
                         None if fmt == 2 => {
@@ -1403,22 +1388,22 @@ impl Exec<'_> {
                     let Some(proto) = a0.as_object() else {
                         break 'bad;
                     };
-                    let len = arg(self, 1).as_number().unwrap_or(f64::NAN);
-                    let max = arg(self, 2).as_number();
+                    let len = a1.as_number().unwrap_or(f64::NAN);
+                    let max = a2.as_number();
                     let b = typed::buffer_create(self.heap, proto, len, max)?;
                     // `max` true: an immutable buffer (D1970).
-                    if arg(self, 2) == Value::TRUE {
+                    if a2 == Value::TRUE {
                         self.heap.set_buffer_immutable(b);
                     }
                     Value::object(b)
                 }
                 BUFFER_INFO if FULL => {
                     let b = typed::as_buffer(self.heap, a0)?;
-                    typed::buffer_info(self.heap, b, arg(self, 1).as_int().unwrap_or(0))
+                    typed::buffer_info(self.heap, b, a1.as_int().unwrap_or(0))
                 }
                 BUFFER_DETACH | BUFFER_RESIZE | BUFFER_TRANSFER if FULL => {
                     let b = typed::as_buffer(self.heap, a0)?;
-                    let n = arg(self, 1).as_number().unwrap_or(0.0);
+                    let n = a1.as_number().unwrap_or(0.0);
                     match id {
                         BUFFER_DETACH => {
                             typed::buffer_detach(self.heap, b)?;
@@ -1432,17 +1417,16 @@ impl Exec<'_> {
                             self.heap,
                             b,
                             n,
-                            arg(self, 2).as_number(),
-                            arg(self, 2) == Value::TRUE,
+                            a2.as_number(),
+                            a2 == Value::TRUE,
                         )?),
                     }
                 }
                 BUFFER_COPY if FULL => {
                     let src = typed::as_buffer(self.heap, a0)?;
-                    let dst = typed::as_buffer(self.heap, arg(self, 2))?;
+                    let dst = typed::as_buffer(self.heap, a2)?;
                     let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
-                    let (from, to, count) =
-                        (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
+                    let (from, to, count) = (num(a1), num(a3), num(arg(self, 4)));
                     if from as u64 + count as u64 > self.heap.buffer_len(src) as u64
                         || to as u64 + count as u64 > self.heap.buffer_len(dst) as u64
                     {
@@ -1459,37 +1443,34 @@ impl Exec<'_> {
                     None => break 'bad,
                 },
                 DATA_VIEW_CREATE if FULL => {
-                    let (Some(proto), Some(buffer)) = (a0.as_object(), arg(self, 1).as_object())
-                    else {
+                    let (Some(proto), Some(buffer)) = (a0.as_object(), a1.as_object()) else {
                         break 'bad;
                     };
-                    let off = arg(self, 2).as_number().unwrap_or(0.0);
-                    let len = arg(self, 3).as_number().unwrap_or(-1.0);
+                    let off = a2.as_number().unwrap_or(0.0);
+                    let len = a3.as_number().unwrap_or(-1.0);
                     Value::object(typed::data_view_create(self.heap, proto, buffer, off, len)?)
                 }
                 DATA_VIEW_FIELD if FULL => {
                     let o = typed::as_data_view(self.heap, a0)?;
-                    let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 2);
+                    let field = a1.as_int().unwrap_or(0).clamp(0, 2);
                     self.heap.object_slot(o, field as u32)
                 }
                 DATA_VIEW_GET | DATA_VIEW_SET if FULL => {
                     let o = typed::as_data_view(self.heap, a0)?;
-                    let at = arg(self, 1).as_number().unwrap_or(-1.0);
-                    let Some(kind) = arg(self, 2)
-                        .as_int()
-                        .and_then(crate::heap::typed::Kind::from_i32)
+                    let at = a1.as_number().unwrap_or(-1.0);
+                    let Some(kind) = a2.as_int().and_then(crate::heap::typed::Kind::from_i32)
                     else {
                         break 'bad;
                     };
                     if id == DATA_VIEW_GET {
-                        let little = arg(self, 3) == Value::TRUE;
+                        let little = a3 == Value::TRUE;
                         let e = typed::view_get(self.heap, o, at, kind, little);
                         match e {
                             crate::heap::typed::Elem::Number(n) => Value::number(n),
                             _ => self.heap.elem_value(kind, e)?,
                         }
                     } else {
-                        let Some(e) = self.heap.element_of(kind, arg(self, 3)) else {
+                        let Some(e) = self.heap.element_of(kind, a3) else {
                             break 'bad;
                         };
                         let little = arg(self, 4) == Value::TRUE;
@@ -1522,14 +1503,12 @@ impl Exec<'_> {
                 TYPED_ARRAY_CREATE if FULL => {
                     let (Some(proto), Some(kind), Some(buffer)) = (
                         a0.as_object(),
-                        arg(self, 1)
-                            .as_int()
-                            .and_then(crate::heap::typed::Kind::from_i32),
-                        arg(self, 2).as_object(),
+                        a1.as_int().and_then(crate::heap::typed::Kind::from_i32),
+                        a2.as_object(),
                     ) else {
                         break 'bad;
                     };
-                    let off = arg(self, 3).as_number().unwrap_or(0.0);
+                    let off = a3.as_number().unwrap_or(0.0);
                     let len = arg(self, 4).as_number().unwrap_or(-1.0);
                     Value::object(typed::typed_array_create(
                         self.heap, proto, kind, buffer, off, len,
@@ -1537,11 +1516,11 @@ impl Exec<'_> {
                 }
                 TYPED_ARRAY_FIELD => {
                     let o = typed::as_typed_array(self.heap, a0)?;
-                    typed::typed_array_field(self.heap, o, arg(self, 1).as_int().unwrap_or(0))
+                    typed::typed_array_field(self.heap, o, a1.as_int().unwrap_or(0))
                 }
                 TYPED_ARRAY_GET | TYPED_ARRAY_SET if FULL => {
                     let o = typed::as_typed_array(self.heap, a0)?;
-                    let i = arg(self, 1).as_number().unwrap_or(-1.0);
+                    let i = a1.as_number().unwrap_or(-1.0);
                     let index = (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i))
                         .then_some(i as u32);
                     if id == TYPED_ARRAY_GET {
@@ -1554,7 +1533,7 @@ impl Exec<'_> {
                         // Anything else is a primitive the caller did not convert (`undefined`
                         // read past a shrunk buffer): ToBigInt's or ToNumber's TypeError.
                         let kind = self.heap.ta_kind(o);
-                        let Some(e) = self.heap.element_of(kind, arg(self, 2)) else {
+                        let Some(e) = self.heap.element_of(kind, a2) else {
                             return type_error(if kind.is_bigint() {
                                 "cannot convert to bigint"
                             } else {
@@ -1569,10 +1548,9 @@ impl Exec<'_> {
                 }
                 TYPED_ARRAY_COPY if FULL => {
                     let src = typed::as_typed_array(self.heap, a0)?;
-                    let dst = typed::as_typed_array(self.heap, arg(self, 2))?;
+                    let dst = typed::as_typed_array(self.heap, a2)?;
                     let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
-                    let (from, to, count) =
-                        (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
+                    let (from, to, count) = (num(a1), num(a3), num(arg(self, 4)));
                     let (ls, ld) = (
                         self.heap.ta_length(src).unwrap_or(0),
                         self.heap.ta_length(dst).unwrap_or(0),
@@ -1602,8 +1580,8 @@ impl Exec<'_> {
                     } else {
                         typed::to_base64(
                             bytes,
-                            arg(self, 1).as_bool() == Some(true),
-                            arg(self, 2).as_bool() == Some(true),
+                            a1.as_bool() == Some(true),
+                            a2.as_bool() == Some(true),
                         )
                     };
                     Value::string(self.heap.alloc_latin1(s.as_bytes())?)
@@ -1623,11 +1601,7 @@ impl Exec<'_> {
                             c => units.extend(c.units()),
                         }
                     }
-                    let max_arg = if id == HEX_DECODE {
-                        arg(self, 1)
-                    } else {
-                        arg(self, 3)
-                    };
+                    let max_arg = if id == HEX_DECODE { a1 } else { a3 };
                     let max = max_arg.as_number().unwrap_or(f64::INFINITY);
                     let max = if max >= usize::MAX as f64 {
                         usize::MAX
@@ -1637,18 +1611,18 @@ impl Exec<'_> {
                     let d = if id == HEX_DECODE {
                         typed::from_hex(&units, max)
                     } else {
-                        let last = arg(self, 2).as_int().unwrap_or(0) as u8;
-                        typed::from_base64(&units, arg(self, 1).as_bool() == Some(true), last, max)
+                        let last = a2.as_int().unwrap_or(0) as u8;
+                        typed::from_base64(&units, a1.as_bool() == Some(true), last, max)
                     };
                     typed::decoded_record(self.heap, d)?
                 }
                 proxy::CONSTRUCT_WITH_THIS => return self.construct_with_this(base, next),
                 CONSTRUCT_WITH_ARRAY => {
                     // `f args newTarget` becomes `f a1 .. an`.
-                    let Some(args) = arg(self, 1).as_object() else {
+                    let Some(args) = a1.as_object() else {
                         break 'bad;
                     };
-                    let new_target = arg(self, 2);
+                    let new_target = a2;
                     let n = self.heap.array_length(args);
                     self.ensure(base + 1 + n)?;
                     for i in 0..n {
@@ -1662,8 +1636,8 @@ impl Exec<'_> {
                     return self.construct_with(n, next, Some(new_target));
                 }
                 GET_WITH_RECEIVER => {
-                    let key = object::key(self.heap, arg(self, 1))?;
-                    let receiver = arg(self, 2);
+                    let key = object::key(self.heap, a1)?;
+                    let receiver = a2;
                     match self.lookup(a0, key)? {
                         Got::Value(v) => v,
                         Got::Getter(getter) => {
@@ -1682,8 +1656,8 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = object::key(self.heap, arg(self, 1))?;
-                    let (v, receiver) = (arg(self, 2), arg(self, 3));
+                    let key = object::key(self.heap, a1)?;
+                    let (v, receiver) = (a2, a3);
                     match self.ordinary_set(o, key, v, receiver)? {
                         SetStep::Done(done) => Value::bool(done),
                         SetStep::Setter(setter) => {
@@ -1731,20 +1705,19 @@ impl Exec<'_> {
                     let Some(o) = a0.as_object() else {
                         break 'bad;
                     };
-                    let key = object::key(self.heap, arg(self, 1))?;
+                    let key = object::key(self.heap, a1)?;
                     Value::bool(self.heap.delete_own_property(o, key)?)
                 }
                 BOUND_FUNCTION_CREATE => {
-                    let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object())
-                    else {
+                    let (Some(target), Some(args)) = (a0.as_object(), a2.as_object()) else {
                         break 'bad;
                     };
-                    function::bound_function_create(self.heap, target, arg(self, 1), args)?
+                    function::bound_function_create(self.heap, target, a1, args)?
                 }
                 FUNCTION_TO_STRING => Value::string(function::to_string(self.heap, a0)?),
                 NUMBER_POW => conv::number(conv::pow(
                     a0.as_number().unwrap_or(f64::NAN),
-                    arg(self, 1).as_number().unwrap_or(f64::NAN),
+                    a1.as_number().unwrap_or(f64::NAN),
                 )),
                 SYMBOL_DESCRIPTIVE_STRING => {
                     let Some(sym) = a0.as_symbol() else {
@@ -1758,18 +1731,12 @@ impl Exec<'_> {
                 }
                 #[cfg(djs_prelude)]
                 INSTALL_CONSTRUCTOR => {
-                    self.install_constructor(
-                        a0,
-                        arg(self, 1),
-                        arg(self, 2),
-                        arg(self, 3),
-                        arg(self, 4),
-                    )?;
+                    self.install_constructor(a0, a1, a2, a3, arg(self, 4))?;
                     Value::UNDEFINED
                 }
                 #[cfg(djs_prelude)]
                 INSTALL_PROTOTYPE => {
-                    self.install_prototype(a0, arg(self, 1), arg(self, 2))?;
+                    self.install_prototype(a0, a1, a2)?;
                     Value::UNDEFINED
                 }
                 #[cfg(djs_prelude)]
@@ -1779,7 +1746,7 @@ impl Exec<'_> {
                 }
                 #[cfg(djs_prelude)]
                 INSTALL_ACCESSOR => {
-                    self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
+                    self.install_accessor(a0, a1, a2, a3)?;
                     Value::UNDEFINED
                 }
                 #[cfg(djs_prelude)]
@@ -1789,26 +1756,26 @@ impl Exec<'_> {
                     };
                     let path = self.heap.str_to_string(t);
                     let holder = self.resolve_path(&path)?;
-                    let (key, _) = self.install_key(arg(self, 1))?;
-                    let d = PropertyDescriptor::data(arg(self, 2), object::flags(arg(self, 3)));
+                    let (key, _) = self.install_key(a1)?;
+                    let d = PropertyDescriptor::data(a2, object::flags(a3));
                     self.heap.define_own_property(holder, key, &d)?;
                     Value::UNDEFINED
                 }
                 #[cfg(djs_prelude)]
                 INSTALL_METHOD => {
-                    self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
+                    self.install_method(a0, a1, a2, a3)?;
                     Value::UNDEFINED
                 }
                 IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
                 PROMISE_COMBINATOR_RUN => {
-                    let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
+                    let (kind, index) = (a1.as_int(), a2.as_number());
                     let fixed = a0
                         .as_object()
                         .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
                     let (Some(fixed), Some(kind), Some(index)) = (fixed, kind, index) else {
                         break 'bad;
                     };
-                    let (it, next) = (arg(self, 3), arg(self, 4));
+                    let (it, next) = (a3, arg(self, 4));
                     conv::number(self.promise_combinator_run(fixed, kind, index, it, next)?)
                 }
                 INTRINSIC_PROMISE => realm::installed_intrinsic(self.heap, PROMISE_CONSTRUCTOR),
@@ -1826,7 +1793,7 @@ impl Exec<'_> {
                         PROMISE_STATE => Value::int(promise::state_of(self.heap, p)),
                         PROMISE_RESULT => promise::result_of(self.heap, p),
                         FULFILL_PROMISE | REJECT_PROMISE => {
-                            let v = arg(self, 1);
+                            let v = a1;
                             promise::settle(self.heap, p, id == FULFILL_PROMISE, v)?;
                             Value::UNDEFINED
                         }
@@ -1836,14 +1803,14 @@ impl Exec<'_> {
                             Value::bool(f & promise::FLAG_RESOLVED == 0)
                         }
                         PERFORM_PROMISE_THEN => {
-                            let (f, r, cap) = (arg(self, 1), arg(self, 2), arg(self, 3));
+                            let (f, r, cap) = (a1, a2, a3);
                             promise::perform_then(self.heap, p, f, r, cap)?;
                             Value::UNDEFINED
                         }
                         _ => {
                             let job =
                                 realm::installed_intrinsic(self.heap, PROMISE_RESOLVE_THENABLE_JOB);
-                            let args = [a0, arg(self, 1), arg(self, 2), Value::UNDEFINED];
+                            let args = [a0, a1, a2, Value::UNDEFINED];
                             promise::enqueue(self.heap, job, args)?;
                             Value::UNDEFINED
                         }
@@ -1857,7 +1824,7 @@ impl Exec<'_> {
                     let g = a0
                         .as_object()
                         .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
-                    let s = arg(self, 1).as_int().filter(|s| (0..=6).contains(s));
+                    let s = a1.as_int().filter(|s| (0..=6).contains(s));
                     let (Some(g), Some(s)) = (g, s) else {
                         break 'bad;
                     };
@@ -1865,7 +1832,7 @@ impl Exec<'_> {
                     Value::UNDEFINED
                 }
                 GENERATOR_RESUME => {
-                    let (value, mode) = (arg(self, 1), arg(self, 2));
+                    let (value, mode) = (a1, a2);
                     self.sp = base;
                     return self.generator_resume(a0, value, mode, next, Continuation::PushResult);
                 }
@@ -1893,7 +1860,7 @@ impl Exec<'_> {
                     };
                     match id {
                         ASYNC_GENERATOR_ENQUEUE => {
-                            suspend::enqueue_request(self.heap, g, arg(self, 1))?;
+                            suspend::enqueue_request(self.heap, g, a1)?;
                             Value::UNDEFINED
                         }
                         ASYNC_GENERATOR_FIRST_REQUEST => suspend::first_request(self.heap, g),
@@ -1909,7 +1876,7 @@ impl Exec<'_> {
                         .heap
                         .alloc_object(ObjectClass::Record, Some(proto), 2)?;
                     self.heap.set_object_slot(r, 0, a0);
-                    self.heap.set_object_slot(r, 1, arg(self, 1));
+                    self.heap.set_object_slot(r, 1, a1);
                     Value::object(r)
                 }
                 NEW_RECORD => {
@@ -1926,19 +1893,13 @@ impl Exec<'_> {
                 // (Without modules, the intrinsic falls to the unknown ones.)
                 MODULE_NAMESPACE if crate::MODULES => {
                     let op = a0.as_int().unwrap_or(-1);
-                    crate::interp::module::namespace_op(
-                        self.heap,
-                        op,
-                        arg(self, 1),
-                        arg(self, 2),
-                        arg(self, 3),
-                    )?
+                    crate::interp::module::namespace_op(self.heap, op, a1, a2, a3)?
                 }
                 RECORD_GET | RECORD_SET => {
                     let r = a0
                         .as_object()
                         .filter(|&o| is_slot_object(self.heap.object_class(o)));
-                    let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                    let i = a1.as_int().and_then(|i| u32::try_from(i).ok());
                     let (Some(r), Some(i)) = (r, i) else {
                         break 'bad;
                     };
@@ -1948,13 +1909,13 @@ impl Exec<'_> {
                     if id == RECORD_GET {
                         self.heap.object_slot(r, i)
                     } else {
-                        self.heap.set_object_slot(r, i, arg(self, 2));
+                        self.heap.set_object_slot(r, i, a2);
                         Value::UNDEFINED
                     }
                 }
                 #[cfg(djs_prelude)]
                 MARK_NATIVE => {
-                    self.mark_native(a0, arg(self, 1))?;
+                    self.mark_native(a0, a1)?;
                     Value::UNDEFINED
                 }
                 #[cfg(djs_prelude)]
@@ -1968,7 +1929,7 @@ impl Exec<'_> {
                         .as_string()
                         .map(|s| self.heap.str_to_string(s))
                         .unwrap_or_default();
-                    let f = arg(self, 1);
+                    let f = a1;
                     match intrinsic_id(&name) {
                         Some(i) if intrinsic(i).unwrap().kind == IntrinsicKind::Builtin => {
                             realm::install_intrinsic(self.heap, i, f);
@@ -1983,11 +1944,9 @@ impl Exec<'_> {
                     Value::UNDEFINED
                 }
                 DOM_EXCEPTION_CREATE => {
-                    let (Some(proto), Some(name), Some(msg)) = (
-                        a0.as_object(),
-                        arg(self, 1).as_string(),
-                        arg(self, 2).as_string(),
-                    ) else {
+                    let (Some(proto), Some(name), Some(msg)) =
+                        (a0.as_object(), a1.as_string(), a2.as_string())
+                    else {
                         break 'bad;
                     };
                     // An Error with three slots (the stack, then name and message): nothing
@@ -1998,7 +1957,7 @@ impl Exec<'_> {
                     Value::object(o)
                 }
                 DOM_EXCEPTION_FIELD => {
-                    let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                    let i = a1.as_int().and_then(|i| u32::try_from(i).ok());
                     match (a0.as_object(), i) {
                         (Some(o), Some(i))
                             if i < 2
@@ -2028,7 +1987,7 @@ impl Exec<'_> {
                 }
                 // The five are consecutive (builtins/intrinsics.d.ts).
                 TEXT_CODEC_CREATE..=UTF8_DECODE if crate::EMBED => {
-                    let args = [a0, arg(self, 1), arg(self, 2), arg(self, 3), arg(self, 4)];
+                    let args = [a0, a1, a2, a3, arg(self, 4)];
                     let k = id - TEXT_CODEC_CREATE;
                     match encoding::intrinsic(self.heap, k, args, &mut self.fuel)? {
                         Some(v) => v,
@@ -2065,11 +2024,11 @@ impl Exec<'_> {
                     });
                     conv::number(crate::builtins::math::sum_precise(values))
                 }
-                _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
+                _ if let Some(r) = self.proxy_leaf(id, a0, a1) => r?,
                 // The pure leaves (the hot loop runs them itself; here after a fault, or
                 // with the hot loop off).
                 _ if argc <= 3
-                    && let Some(v) = self.pure_leaf(id, [a0, arg(self, 1), arg(self, 2)])? =>
+                    && let Some(v) = self.pure_leaf(id, [a0, a1, a2])? =>
                 {
                     v
                 }
