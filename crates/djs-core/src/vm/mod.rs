@@ -285,6 +285,8 @@ impl Vm {
             }
         }
         state::set_state(&mut self.heap, RunState::Idle);
+        // The known builtins (D3300), now that they exist.
+        crate::interp::known::build(&mut self.heap)?;
         Ok(())
     }
 
@@ -1341,9 +1343,6 @@ impl Vm {
         image::drop_internal_names(&mut self.heap)?;
         // The base's atoms go to the prefix, a VM's own to the tail (D2431).
         self.heap.split_atom_table(image::SESSION_ATOMS)?;
-        // The known builtins (D3300), by atoms that are the base's now.
-        #[cfg(djs_prelude)]
-        crate::interp::known::build(&mut self.heap)?;
         self.collect_canonical()?;
         let tail = self.prepare_prefix()?;
         let tail_bytes: u32 = tail.iter().map(|&c| self.heap.cell_size(c)).sum();
@@ -1423,8 +1422,8 @@ impl Vm {
         let mut front = alloc::vec![
             realm,
             internal(realm::intrinsic(h, Intrinsic::RandomState)),
-            // The prelude function table with the known builtins: their first change
-            // shortens it (D3300).
+            // The prelude function table: the known builtins' first change shortens it
+            // (D3300).
             internal(realm::intrinsic(h, Intrinsic::PreludeFunctions)),
             global,
             lex.0,

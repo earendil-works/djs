@@ -9,7 +9,7 @@ function <anonymous> @1..484
   node 5 Await @371..463: Operand 377..463
   await#1 @348 (5:13) pc 84: call.callee@336 call.this@336
     path 0.3 1.0 2.2 3
-  await#2 @371 (6:11) pc 122: -
+  await#2 @371 (6:11) pc 130: -
     path 0.4 4.1 5
 function f @275..335
   arg0 x@0

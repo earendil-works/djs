@@ -8,9 +8,9 @@ function <anonymous> @1..694
   node 4 Await @369..442: Operand 375..442
   node 5 Decl(Const) @551..629: Target 557..562 Init 565..628
   node 6 Await @565..628: Operand 571..628
-  await#1 @138 (3:17) pc 49: -
+  await#1 @138 (3:17) pc 57: -
     path 0.2 1.1 2
-  await#2 @369 (6:17) pc 214: -
+  await#2 @369 (6:17) pc 227: -
     path 0.5 3.1 4
-  await#3 @565 (8:15) pc 290: -
+  await#3 @565 (8:15) pc 313: -
     path 0.7 5.1 6

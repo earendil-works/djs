@@ -36,21 +36,21 @@ function <anonymous> @1..767
     path 0.1 1.1 2.1 3.1 5
   await#3 @299 (4:67) pc 43: object.literal@247 array.element@257 array.element@278
     path 0.1 1.1 2.1 3.2 6
-  await#4 @396 (7:21) pc 98: object.literal@391
+  await#4 @396 (7:21) pc 106: object.literal@391
     path 0.4 7.1 8.0 9.1 10
-  await#5 @424 (7:49) pc 121: object.literal@391 object.key@419
+  await#5 @424 (7:49) pc 129: object.literal@391 object.key@419
     path 0.4 7.1 8.0 9.3 11
-  await#6 @451 (7:76) pc 136: object.literal@391
+  await#6 @451 (7:76) pc 144: object.literal@391
     path 0.4 7.1 8.0 9.5 12.0 13
-  await#7 @475 (7:100) pc 150: object.literal@391 array.element@451
+  await#7 @475 (7:100) pc 158: object.literal@391 array.element@451
     path 0.4 7.1 8.0 9.5 12.1 14
-  await#8 @506 (7:131) pc 177: array.literal@390
+  await#8 @506 (7:131) pc 185: array.literal@390
     path 0.4 7.1 8.1 15.0 16
-  await#9 @599 (9:33) pc 226: object.literal@580 object.literal@585 array.element@591 object.literal@594
+  await#9 @599 (9:33) pc 242: object.literal@580 object.literal@585 array.element@591 object.literal@594
     path 0.6 17.1 18.1 19.1 20.1 21.1 22
-  await#10 @625 (9:59) pc 247: object.literal@580 object.literal@585 array.element@591 object.literal@594
+  await#10 @625 (9:59) pc 263: object.literal@580 object.literal@585 array.element@591 object.literal@594
     path 0.6 17.1 18.1 19.1 20.1 21.3 23
-  await#11 @707 (11:18) pc 315: object.literal@697
+  await#11 @707 (11:18) pc 339: object.literal@697
     path 0.8 24.0 25.1 26.0 27
-  await#12 @731 (11:42) pc 329: object.literal@697 array.element@707
+  await#12 @731 (11:42) pc 353: object.literal@697 array.element@707
     path 0.8 24.0 25.1 26.1 28

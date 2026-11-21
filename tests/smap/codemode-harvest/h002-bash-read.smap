@@ -4,7 +4,7 @@ function <anonymous> @1..16497
   node 0 Body @0..16496: Params 6..22 Stmt 468..15448 Stmt 15449..15482 Stmt 15483..15831 Stmt 15832..16493 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
   node 1 Return @15832..16493: Operand 15839..16492
   node 2 Await @15839..16492: Operand 15845..16492
-  await#1 @15839 (265:8) pc 1221: -
+  await#1 @15839 (265:8) pc 1234: -
     path 0.4 1.0 2
 function <anonymous> @15847..16486
   arg0 argument 0
@@ -19,9 +19,9 @@ function <anonymous> @15847..16486
   node 7 Await @515..635: Operand 521..635
   await#1 @34 (266:16) pc 31: -
     path 0.1 1.1 2
-  await#2 @280 (269:13) pc 134: -
+  await#2 @280 (269:13) pc 144: -
     path 0.4 3.1 4
-  await#3 @515 (273:6) pc 289: call.callee@510 call.this@510
+  await#3 @515 (273:6) pc 299: call.callee@510 call.this@510
     path 0.8 5.0 6.2 7
 function <anonymous> @16162..16227
   arg0 path@0

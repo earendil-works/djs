@@ -27,17 +27,17 @@ function <anonymous> @1..1279
   node 23 Call @1231..1274: Callee 1231..1242 Open 1242..1243 Arg 1243..1273
   node 24 Call @1243..1273: Callee 1243..1257 Open 1257..1258 Arg 1258..1272
   node 25 Await @1258..1272: Operand 1264..1272
-  await#1 @962 (28:28) pc 79: call.callee@935 call.this@935 call.callee@947 call.this@947 (out: loc8)
+  await#1 @962 (28:28) pc 87: call.callee@935 call.this@935 call.callee@947 call.this@947 (out: loc8)
     path 0.5 1.0 2.2 3.2 4
-  await#2 @1007 (29:28) pc 121: call.callee@980 call.this@980 call.callee@992 call.this@992 (out: loc8)
+  await#2 @1007 (29:28) pc 137: call.callee@980 call.this@980 call.callee@992 call.this@992 (out: loc8)
     path 0.6 5.0 6.2 7.2 8
-  await#3 @1060 (30:28) pc 161: call.callee@1033 call.this@1033 call.callee@1045 call.this@1045 (out: loc8)
+  await#3 @1060 (30:28) pc 185: call.callee@1033 call.this@1033 call.callee@1045 call.this@1045 (out: loc8)
     path 0.7 9.0 10.2 11.2 12
-  await#4 @1132 (32:28) pc 211: call.callee@1105 call.this@1105 call.callee@1117 call.this@1117 (out: loc8)
+  await#4 @1132 (32:28) pc 243: call.callee@1105 call.this@1105 call.callee@1117 call.this@1117 (out: loc8)
     path 0.9 13.0 14.2 15.2 16
-  await#5 @1210 (33:61) pc 299: for-of.iterator@1150 for-of.next@1150 call.callee@1183 call.this@1183 call.callee@1195 call.this@1195
+  await#5 @1210 (33:61) pc 339: for-of.iterator@1150 for-of.next@1150 call.callee@1183 call.this@1183 call.callee@1195 call.this@1195
     path 0.10 17.2 18.0 19.2 20.2 21
-  await#6 @1258 (34:28) pc 358: call.callee@1231 call.this@1231 call.callee@1243 call.this@1243 (out: loc8)
+  await#6 @1258 (34:28) pc 406: call.callee@1231 call.this@1231 call.callee@1243 call.this@1243 (out: loc8)
     path 0.11 22.0 23.2 24.2 25
 function inner @243..383
   arg0 tag@0

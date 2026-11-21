@@ -4,7 +4,7 @@ function <anonymous> @1..8817
   node 0 Body @0..8816: Params 6..22 Stmt 468..7644 Stmt 7645..7678 Stmt 7679..8027 Stmt 8028..8813 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
   node 1 Return @8028..8813: Operand 8035..8812
   node 2 Await @8035..8812: Operand 8041..8812
-  await#1 @8035 (308:8) pc 2185: -
+  await#1 @8035 (308:8) pc 2198: -
     path 0.4 1.0 2
 function <anonymous> @8043..8806
   arg0 tools@0
@@ -16,5 +16,5 @@ function <anonymous> @8043..8806
   node 4 Block @116..328: Stmt 122..210 Stmt 215..245 Stmt 250..296 Stmt 301..324 | Const r@122#0 Const s@122#1
   node 5 Decl(Const) @122..210: Target 128..129 Init 132..209
   node 6 Await @132..209: Operand 138..209
-  await#1 @132 (313:15) pc 111: for-of.iterator@42 for-of.next@42
+  await#1 @132 (313:15) pc 116: for-of.iterator@42 for-of.next@42
     path 0.2 1.2 2.1 3.0 4.0 5.1 6

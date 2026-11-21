@@ -25,5 +25,5 @@ function <anonymous> @1..1090
     path 0.1 1.2 2.0 3.1 4.0 5.0 6.2 7
   await#2 @616 (10:24) pc 300: for-of.iterator@466 for-of.next@466 for-of.iterator@494 for-of.next@494 completion.kind@527 completion.value@527 call.callee@607 call.this@607 (out: loc1)
     path 0.3 8.1 9.2 10.0 11.2 12.0 13.1 14.0 15.0 16.2 17
-  await#3 @930 (19:1) pc 587: - (out: loc1 loc9 loc14)
+  await#3 @930 (19:1) pc 597: - (out: loc1 loc9 loc14)
     path 0.10 18.0 19
