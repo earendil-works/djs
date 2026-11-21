@@ -3984,8 +3984,8 @@ impl<'h> Exec<'h> {
             let Some(o) = target else {
                 return (key, false);
             };
-            let s = key.as_string().expect("string key");
-            if let Some(atom) = self.heap.existing_key_atom(s)
+            if let Some(s) = key.as_string()
+                && let Some(atom) = self.heap.existing_key_atom(s)
                 && self.heap.has_property(o, atom)
             {
                 return (key, false);
