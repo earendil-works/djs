@@ -44,6 +44,10 @@ const KINDS: [FuncKind; 13] = [
 
 /// Compiles lazy template `t` and returns its compiled template.
 pub fn compile_lazy(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
+    // The function's text, only while the tables are missing (D3350).
+    if heap.unicode_props().is_none() && super::needs_props(heap, &LazyFn::read(heap, t).span) {
+        return Err(CompileError::need_stack());
+    }
     super::elastic(
         heap,
         |heap| compile_lazy_once(heap, t),

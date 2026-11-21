@@ -212,6 +212,11 @@ pub struct Heap {
     pub(crate) stack_deep: bool,
     pub(crate) stack_need: bool,
     pub(crate) stack_elastic: bool,
+    /// The Unicode property tables (D3350): built in, or what the host handed over
+    /// (`Vm::set_unicode_props`). `props_need`: a compile or instruction stopped for them.
+    #[cfg(feature = "regexp-unicode-props")]
+    pub(crate) props: Option<&'static [u8]>,
+    pub(crate) props_need: bool,
     /// While a compile is recorded for the compile cache (D3040): every interning, in
     /// order (`compile_cache::Intern`).
     #[cfg(feature = "compile-cache")]
@@ -225,6 +230,14 @@ pub struct Heap {
 }
 
 impl Heap {
+    /// The Unicode property tables, if built in or handed over (D3350).
+    pub(crate) fn unicode_props(&self) -> Option<&'static [u8]> {
+        #[cfg(feature = "regexp-unicode-props")]
+        return self.props;
+        #[cfg(not(feature = "regexp-unicode-props"))]
+        None
+    }
+
     /// A fresh heap with the default memory cap.
     pub fn new() -> Result<Heap, HeapError> {
         Heap::with_limit(DEFAULT_LIMIT)
@@ -333,6 +346,9 @@ impl Heap {
             stack_deep: false,
             stack_need: false,
             stack_elastic: false,
+            #[cfg(feature = "regexp-unicode-props")]
+            props: crate::unicode::builtin_props(),
+            props_need: false,
             #[cfg(feature = "compile-cache")]
             intern_log: None,
             #[cfg(test)]

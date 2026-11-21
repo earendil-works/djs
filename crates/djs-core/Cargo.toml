@@ -54,6 +54,10 @@ unicode = ["regexp-unicode-props", "unicode-normalization"]
 # `\p{..}` / `\P{..}` in regular expressions: about 21 KB of Unicode property tables
 # (D1500). Without it they are a SyntaxError (D1112).
 regexp-unicode-props = ["djs-prelude/regexp-unicode-props"]
+# The property tables of `regexp-unicode-props` not built in (D3350): the shipped wasm
+# module carries them outside its linear memory and its host hands them over at the first
+# `\p` (`Vm::set_unicode_props`). Changes no result or image.
+cold-unicode = ["regexp-unicode-props"]
 # String.prototype.normalize for every string, and localeCompare normalizing to NFC like
 # qjs: about 38 KB (20 KB gzipped) of wasm (D1760). Without it normalize throws for strings that would
 # need them, and localeCompare compares code points.

@@ -296,7 +296,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 6;
+const ABI_VERSION = 7;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
@@ -788,7 +788,7 @@ export class Sandbox {
     }
     let x: Exports;
     try {
-      x = elasticStack(djsExports(module) as unknown as Exports);
+      x = elasticStack(djsExports(module) as unknown as Exports, module);
     } catch (e) {
       throw new SandboxError("misuse", `djs-wasm: ${(e as Error).message}`);
     }

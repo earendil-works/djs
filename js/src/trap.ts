@@ -38,12 +38,19 @@ export function trapText(x: TrapExports, e: Error): string {
 const NEED_STACK = 6;
 /** `vm_compile*`'s result for such a compile (`u32::MAX` as an i32). */
 const COMPILE_NEED_STACK = -1;
+/** `vm_run`'s status for an instruction that needs the Unicode property tables (D3350). */
+const NEED_TABLES = 7;
+/** `vm_compile*`'s result for a compile that needs them (`u32::MAX - 1` as an i32). */
+const COMPILE_NEED_TABLES = -2;
 /** The larger stack: the parser's deepest accepted nesting needs at most ~115 KiB (D2540). */
 const BIG_STACK = 128 * 1024;
 
 /** The exports `elasticStack` wraps and uses. */
 export interface StackExports {
+  memory: WebAssembly.Memory;
   __stack_pointer?: WebAssembly.Global;
+  djs_props_ptr?(len: number): number;
+  djs_props_set?(): number;
   djs_elastic_stack?(on: number): void;
   djs_stack?(len: number): number;
   vm_run(vm: number, fuel: number): number;
@@ -59,12 +66,16 @@ export interface StackExports {
  * `vm_compile*`, or at run time: `eval`, `Function`, `new RegExp`, a lazy function's first
  * call) stops before it has any effect; the wrappers then move the stack pointer to a larger
  * block for one more call and back. What compiles and its errors are the same as with a large
- * stack. Modules without the exports are returned as they are. Call it again after the
- * instance's memory was reset (a pooled instance). Replaces the functions in `x` (an object
- * of `djsExports`, which is the caller's own): copying its ~70 properties into a new object
- * cost a sandbox more than the rest of its JavaScript setup.
+ * stack. The shipped module also leaves its Unicode property tables out of its memory
+ * (D3350): a compile or instruction that needs them (a regular expression with `\p{..}`)
+ * stops the same way, and the wrappers hand the instance the module's `djs_props` section
+ * (`module`'s, required for such a module) and call again. Modules without the exports are
+ * returned as they are. Call it again after the instance's memory was reset (a pooled
+ * instance). Replaces the functions in `x` (an object of `djsExports`, which is the caller's
+ * own): copying its ~70 properties into a new object cost a sandbox more than the rest of its
+ * JavaScript setup.
  */
-export function elasticStack<X extends StackExports>(x: X): X {
+export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.Module): X {
   const { __stack_pointer: sp, djs_stack: stack, vm_fuel_used: fuelUsed } = x;
   if (!sp || !stack || !fuelUsed || !x.djs_elastic_stack) return x;
   x.djs_elastic_stack(1);
@@ -81,38 +92,73 @@ export function elasticStack<X extends StackExports>(x: X): X {
     stack(0);
     return r;
   };
+  const tables = () => {
+    const bytes = module && propsSection(module);
+    const at = bytes && x.djs_props_ptr ? x.djs_props_ptr(bytes.length) : 0;
+    if (!bytes || at === 0) throw new Error("djs-wasm: the program needs the module's Unicode property tables (its djs_props section), which this host cannot hand over");
+    new Uint8Array(x.memory.buffer, at, bytes.length).set(bytes);
+    if (x.djs_props_set?.() !== 1) throw new Error("djs-wasm refused the djs_props section");
+    tableLoads++;
+  };
   const y = x;
   const run = x.vm_run;
-  // The fuel of the last run's parts that stopped for the stack, which `vm_fuel_used` adds.
+  // The fuel of the last run's parts that stopped for the stack or the tables, which
+  // `vm_fuel_used` adds.
   let carry = 0;
   let carryVm = 0;
   y.vm_run = (vm, fuel) => {
     carry = 0;
     carryVm = vm;
-    const st = run(vm, fuel);
-    if (st !== NEED_STACK) return st;
-    // Fuel 0: the run goes on with what this one had left.
-    return big(() => {
-      let s: number;
-      do {
+    let s = run(vm, fuel);
+    // Fuel 0: the run goes on with what the stopped part had left.
+    for (;;) {
+      if (s === NEED_TABLES) {
         carry += fuelUsed(vm);
+        tables();
         s = run(vm, 0);
-      } while (s === NEED_STACK);
-      return s;
-    });
+      } else if (s === NEED_STACK) {
+        s = big(() => {
+          let t: number;
+          do {
+            carry += fuelUsed(vm);
+            t = run(vm, 0);
+          } while (t === NEED_STACK);
+          return t;
+        });
+      } else {
+        return s;
+      }
+    }
   };
   y.vm_fuel_used = (vm) => fuelUsed(vm) + (vm === carryVm ? carry : 0);
   for (const name of ["vm_compile", "vm_compile_file", "vm_compile_cached"] as const) {
     const f = x[name] as ((...a: number[]) => number) | undefined;
     if (!f) continue;
     (y as Record<string, unknown>)[name] = (...a: number[]) => {
-      const h = f(...a);
+      let h = f(...a);
+      if (h === COMPILE_NEED_TABLES) {
+        tables();
+        h = f(...a);
+      }
       return h === COMPILE_NEED_STACK ? big(() => f(...a)) : h;
     };
   }
   wrapped.add(y);
   return y;
 }
+
+/** The module's property tables, once per module. */
+const propsSections = new WeakMap<WebAssembly.Module, Uint8Array | undefined>();
+function propsSection(module: WebAssembly.Module): Uint8Array | undefined {
+  if (!propsSections.has(module)) {
+    const [section] = WebAssembly.Module.customSections(module, "djs_props");
+    propsSections.set(module, section && new Uint8Array(section));
+  }
+  return propsSections.get(module);
+}
+
+/** How often an instance was handed the property tables in this process (for tests). */
+export let tableLoads = 0;
 
 const wrapped = new WeakSet<object>();
 

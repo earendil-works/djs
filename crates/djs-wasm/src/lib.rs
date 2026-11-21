@@ -41,7 +41,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 6;
+pub const ABI_VERSION: u32 = 7;
 
 /// `vm_run` results.
 pub mod status {
@@ -57,11 +57,20 @@ pub mod status {
     /// to go on with the fuel this run had left (the fuel this one used is not counted
     /// in the next one's `vm_fuel_used`).
     pub const NEED_STACK: u32 = 6;
+    /// The next instruction compiles a regular expression with a property escape, and
+    /// the module has no property tables (D3350, `cold-unicode`; with `djs_elastic_stack`):
+    /// hand over the module's `djs_props` section (`djs_props_ptr`, `djs_props_set`) and
+    /// `vm_run` again with fuel 0, as for NEED_STACK.
+    pub const NEED_TABLES: u32 = 7;
 }
 
 /// What `vm_compile` returns for a compile that needs a larger stack (D3280): compile
 /// again on one.
 pub const COMPILE_NEED_STACK: u32 = u32::MAX;
+
+/// What `vm_compile` returns for a compile that needs the property tables (D3350): hand
+/// them over and compile again.
+pub const COMPILE_NEED_TABLES: u32 = u32::MAX - 1;
 
 /// One VM and what the last `vm_run` reported.
 struct Slot {
@@ -126,6 +135,53 @@ instance_locals! {
     static BIG_STACK: core::cell::Cell<(*mut u8, usize)> = core::cell::Cell::new((core::ptr::null_mut(), 0));
     /// `djs_elastic_stack`.
     static ELASTIC: core::cell::Cell<bool> = core::cell::Cell::new(false);
+    /// The property tables the host handed over (D3350), kept for the instance's life,
+    /// and the copy it is writing (`djs_props_ptr`).
+    #[cfg(feature = "cold-unicode")]
+    static PROPS: core::cell::Cell<Option<&'static [u8]>> = core::cell::Cell::new(None);
+    #[cfg(feature = "cold-unicode")]
+    static PROPS_PENDING: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+}
+
+// The property tables as the module's custom section `djs_props` (D3350), outside its
+// linear memory: the host hands them to an instance whose program needs them.
+#[cfg(all(feature = "cold-unicode", target_arch = "wasm32"))]
+include!(concat!(env!("OUT_DIR"), "/props_section.rs"));
+
+/// Room for the property tables, the module's section `djs_props` (D3350): the host
+/// writes the section's `len` bytes there and calls `djs_props_set`. 0 if the instance
+/// has them or `len` is not their length.
+#[cfg(feature = "cold-unicode")]
+pub extern "C" fn djs_props_ptr(len: usize) -> usize {
+    if PROPS.with(|p| p.get().is_some()) || len != djs_core::unicode::PROPS_LEN {
+        return 0;
+    }
+    PROPS_PENDING.with(|p| {
+        let mut buf = alloc::vec![0; len];
+        let at = buf.as_mut_ptr() as usize;
+        *p.borrow_mut() = Some(buf);
+        at
+    })
+}
+
+/// Takes the bytes written at `djs_props_ptr` as the instance's property tables, for
+/// every VM it has and makes, if they are the tables (`unicode::props_valid`): 1, else 0.
+#[cfg(feature = "cold-unicode")]
+pub extern "C" fn djs_props_set() -> u32 {
+    let Some(buf) = PROPS_PENDING.with(|p| p.borrow_mut().take()) else {
+        return 0;
+    };
+    if !djs_core::unicode::props_valid(&buf) {
+        return 0;
+    }
+    let props: &'static [u8] = alloc::boxed::Box::leak(buf.into_boxed_slice());
+    PROPS.with(|p| p.set(Some(props)));
+    with(|s| {
+        for slot in s.vms.iter_mut().flatten() {
+            slot.vm.set_unicode_props(props);
+        }
+    });
+    1
 }
 
 /// Records the message of a panic for `djs_panic_ptr` (best effort: never panics).
@@ -333,6 +389,14 @@ impl State {
     }
 
     fn add_vm(&mut self, vm: Vm) -> u32 {
+        #[cfg(feature = "cold-unicode")]
+        let vm = {
+            let mut vm = vm;
+            if let Some(p) = PROPS.with(|p| p.get()) {
+                vm.set_unicode_props(p);
+            }
+            vm
+        };
         let slot = Slot {
             vm,
             result: 0,
@@ -950,6 +1014,10 @@ fn compile_with(
         .map(|f| (f, None::<Vec<u8>>))
         .map_err(|e| e.text());
         match result {
+            Err(msg) if slot.vm.needs_tables() => {
+                s.set_out(msg.as_bytes());
+                COMPILE_NEED_TABLES
+            }
             Err(msg) if slot.vm.needs_stack() => {
                 s.set_out(msg.as_bytes());
                 COMPILE_NEED_STACK
@@ -1434,6 +1502,9 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
         let slot = s.slot(vm);
         let (st, used) = elastic(&mut slot.vm, |vm| vm.run_metered(fuel as u64));
         slot.fuel_used = used;
+        if st == Status::OutOfFuel && slot.vm.needs_tables() {
+            return status::NEED_TABLES;
+        }
         if st == Status::OutOfFuel && slot.vm.needs_stack() {
             return status::NEED_STACK;
         }
@@ -1870,4 +1941,6 @@ ops! {
     72 djs_stack(a);
     #[cfg(feature = "alloc-stats")] 73 djs_alloc_stats(a);
     74 djs_has(a);
+    #[cfg(feature = "cold-unicode")] 75 djs_props_ptr(a);
+    #[cfg(feature = "cold-unicode")] 76 djs_props_set();
 }

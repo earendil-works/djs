@@ -54,15 +54,20 @@ pub(crate) fn as_regexp(heap: &Heap, v: Value) -> Option<Obj> {
 
 /// Compiles `pattern` with `flags` (both as written in the source or given to the
 /// constructor), with QuickJS's SyntaxError messages; `deep` as for
-/// `regexp::compile_within`.
+/// `regexp::compile_within`, with the heap's property tables (D3350).
 pub(crate) fn compile(
+    heap: &Heap,
     pattern: &[u16],
     flags: &[u16],
     deep: bool,
 ) -> Result<Program, regexp::SyntaxError> {
     let f = Flags::parse(flags)?;
-    regexp::compile_within(pattern, f, deep)
+    regexp::compile_within(pattern, f, deep, heap.unicode_props())
 }
+
+/// The message of a property escape compiled without the property tables, where the host
+/// cannot hand them over (D3350).
+pub(crate) const NO_PROPS: &str = "unicode property tables not loaded (the host hands them over)";
 
 /// A U32Array cell holding `prog`'s words.
 pub(crate) fn program_cell(heap: &mut Heap, prog: &Program) -> Result<u32, HeapError> {
@@ -102,18 +107,25 @@ pub(crate) fn create(
                 // after the host moved the stack (this instruction runs again then; the
                 // flattened strings are the ropes' memoized copies, so it allocates
                 // nothing twice).
-                let mut r = compile(&p, &f, heap.stack_deep);
+                let mut r = compile(heap, &p, &f, heap.stack_deep);
                 heap.stack_deep = false;
                 if r.as_ref().is_err_and(|e| e.need_stack()) {
                     heap.stack_deep = true;
                     if heap.stack_elastic {
                         return Err(Fault::need_stack());
                     }
-                    r = compile(&p, &f, true);
+                    r = compile(heap, &p, &f, true);
                     heap.stack_deep = false;
+                }
+                // The property tables (D3350): the host hands them over and this
+                // instruction runs again, as for the stack; the compile had no effect.
+                if r.as_ref().is_err_and(|e| e.need_tables()) && heap.stack_elastic {
+                    heap.props_need = true;
+                    return Err(Fault::need_stack());
                 }
                 let prog = match r {
                     Ok(prog) => prog,
+                    Err(e) if e.need_tables() => return syntax_error(NO_PROPS),
                     Err(e) => return syntax_error(e.message()),
                 };
                 let c = program_cell(heap, &prog)?;

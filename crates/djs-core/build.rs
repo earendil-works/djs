@@ -63,7 +63,8 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// holds no lazy template (the prelude is privileged), and lazy compilation is a VM option.
 /// Nor `compile-cache` (D3040): an import makes what the compile makes. Nor `prelude`
 /// (D3094): it only decides whether a wasm build can run the prelude source. Nor
-/// `intrinsic-names` (D3340): names in messages and listings. `embed` counts (D3175): its
+/// `intrinsic-names` (D3340): names in messages and listings. Nor `cold-unicode` (D3350):
+/// where the property tables come from. `embed` counts (D3175): its
 /// base has builtins the others leave out.
 fn features() -> Vec<String> {
     enabled_features()
@@ -79,6 +80,7 @@ fn features() -> Vec<String> {
                 && f != "compile-cache"
                 && f != "prelude"
                 && f != "intrinsic-names"
+                && f != "cold-unicode"
         })
         .collect()
 }

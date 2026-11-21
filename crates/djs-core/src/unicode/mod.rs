@@ -22,6 +22,28 @@ pub mod normalize;
 
 pub mod case;
 
+#[cfg(feature = "regexp-unicode-props")]
+pub use props::{PROPS_HASH, PROPS_LEN};
+
+/// The property tables (`props.bin`) this build has built in: all but the shipped wasm
+/// module, whose host hands them over at the first `\p` (`cold-unicode`, D3350).
+#[cfg(feature = "regexp-unicode-props")]
+pub fn builtin_props() -> Option<&'static [u8]> {
+    #[cfg(not(feature = "cold-unicode"))]
+    return Some(&props::PROPS);
+    #[cfg(feature = "cold-unicode")]
+    None
+}
+
+/// Whether `bytes` are this build's property tables: their length and FNV-1a hash.
+#[cfg(feature = "regexp-unicode-props")]
+pub fn props_valid(bytes: &[u8]) -> bool {
+    let h = bytes.iter().fold(0x811C_9DC5u32, |h, &b| {
+        (h ^ b as u32).wrapping_mul(0x0100_0193)
+    });
+    bytes.len() == PROPS_LEN && h == PROPS_HASH
+}
+
 pub use tables::UNICODE_VERSION;
 
 /// Looks up `c` in a packed, sorted range table (see `tables.rs`).

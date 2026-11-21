@@ -18,7 +18,7 @@ export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 6;
+const ABI_VERSION = 7;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 
@@ -550,8 +550,8 @@ function instantiate(module: WebAssembly.Module): Exports {
   const pool = pools.get(module);
   const pooled = pool?.free.pop();
   // The elastic stack (D3280): its switch is in memory, which `renew` resets.
-  if (pool && pooled) return elasticStack(renew(pool.fresh, pooled));
-  const x = elasticStack(djsExports(module) as unknown as Exports);
+  if (pool && pooled) return elasticStack(renew(pool.fresh, pooled), module);
+  const x = elasticStack(djsExports(module) as unknown as Exports, module);
   // (Its memory before any call: what a pooled instance is made as again.)
   if (!pool) pools.set(module, { fresh: new Uint8Array(x.memory.buffer).slice(), free: [] });
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {

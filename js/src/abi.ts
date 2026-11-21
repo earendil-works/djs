@@ -22,7 +22,7 @@ export const OPS = [
   "vm_host_call", "vm_host_call_info", "vm_new_host_calls", "vm_take_unhandled_rejections",
   "vm_promise_state", "vm_resolve_host_call", "vm_resolve_host_call_at", "vm_open_call",
   "vm_restore_math_random", "vm_set_next_call_id", "djs_elastic_stack", "djs_stack",
-  "djs_alloc_stats", "djs_has",
+  "djs_alloc_stats", "djs_has", "djs_props_ptr", "djs_props_set",
 ] as const;
 
 /** An operation's name. */

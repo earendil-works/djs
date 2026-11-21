@@ -1486,9 +1486,15 @@ impl Parser<'_, '_> {
         let pattern = utf16(&text[1..close.max(1)]);
         let flags = utf16(&text[close + 1..]);
         let deep = self.max_depth == super::parser::MAX_DEPTH;
-        let program = match crate::builtins::regexp::compile(&pattern, &flags, deep) {
+        let program = match crate::builtins::regexp::compile(self.heap, &pattern, &flags, deep) {
             Ok(program) => program,
             Err(e) if e.need_stack() => return Err(self.need_stack()),
+            // Only where the host cannot hand the tables over: elsewhere the compile
+            // stopped before it began (`compiler::needs_props`, D3350).
+            Err(e) if e.need_tables() => {
+                let msg = crate::builtins::regexp::NO_PROPS;
+                return syntax(tok.start, alloc::string::String::from(msg));
+            }
             Err(e) => return syntax(tok.start, alloc::string::String::from(e.message())),
         };
         // The program is compiled once per literal and shared by the RegExp objects of

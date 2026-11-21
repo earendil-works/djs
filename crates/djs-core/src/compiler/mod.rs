@@ -367,7 +367,40 @@ fn parse<T>(
     opts: &CompileOptions<'_>,
     f: impl Fn(parser::Parser<'_, '_>) -> PResult<T>,
 ) -> PResult<T> {
+    if needs_props(heap, src) {
+        return Err(PErr::need_stack());
+    }
     elastic(heap, |heap| attempt(heap, src, opts, &f), PErr::need_stack)
+}
+
+/// Whether a compile of `src` stops before it begins for the Unicode property tables
+/// (D3350): the build has none, the host hands them over (with the elastic stack), and
+/// `src` may hold a property escape (`\p{` or `\P{`, which a regular expression literal
+/// can only spell so). Then [`Heap::props_need`] is set, the compile fails like one that
+/// needs the larger stack and runs again with the tables: no attempt without them has an
+/// effect, so heaps and fuel are those of a build with the tables. A source that only
+/// mentions the text loads the tables for nothing, which changes no result.
+pub(crate) fn needs_props(heap: &mut Heap, src: &[u8]) -> bool {
+    #[cfg(feature = "regexp-unicode-props")]
+    if heap.props.is_none() && heap.stack_elastic && has_property_escape(src) {
+        heap.props_need = true;
+        return true;
+    }
+    let _ = (heap, src);
+    false
+}
+
+/// Whether `src` has `\p{` or `\P{`.
+#[cfg(feature = "regexp-unicode-props")]
+fn has_property_escape(src: &[u8]) -> bool {
+    let mut at = 0;
+    while let Some(i) = crate::swar::find_byte(&src[at..], b'\\') {
+        at += i + 1;
+        if matches!(src.get(at..at + 2), Some([b'p' | b'P', b'{'])) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Runs `f` on a parser of `src`. With the dumper, a scan for patterns stops at the
@@ -451,6 +484,9 @@ pub fn compile_module(
             Err((e, false)) => Err(e),
         }
     };
+    if needs_props(heap, src) {
+        return Err(error_at(src, PErr::need_stack()));
+    }
     elastic(heap, both, PErr::need_stack).map_err(|e| error_at(src, e))
 }
 

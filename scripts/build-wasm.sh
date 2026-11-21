@@ -15,7 +15,7 @@
 # dump modules keep the checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-features=(--features unsafe-heap)
+features=(--features unsafe-heap,cold-unicode)
 target=target
 copy=
 case "${1:-}" in

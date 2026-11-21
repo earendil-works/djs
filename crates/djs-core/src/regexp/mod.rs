@@ -102,22 +102,41 @@ impl Flags {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SyntaxError {
     /// Empty: not a SyntaxError; the pattern nests deeper than the small stack's limit,
-    /// and compiles with the full one on a larger stack (D3280).
+    /// and compiles with the full one on a larger stack (D3280), or (`tables`) it has a
+    /// property escape and the property tables are missing (D3350).
     message: String,
+    tables: bool,
 }
 
 impl SyntaxError {
     fn new(message: String) -> SyntaxError {
-        SyntaxError { message }
+        SyntaxError {
+            message,
+            tables: false,
+        }
     }
 
     fn stack_request() -> SyntaxError {
         SyntaxError::new(String::new())
     }
 
+    #[cfg(feature = "regexp-unicode-props")]
+    fn tables_request() -> SyntaxError {
+        SyntaxError {
+            message: String::new(),
+            tables: true,
+        }
+    }
+
     /// Whether the pattern needs the full nesting limit (`compile_within`).
     pub fn need_stack(&self) -> bool {
-        self.message.is_empty()
+        self.message.is_empty() && !self.tables
+    }
+
+    /// Whether the pattern needs the property tables the build left out
+    /// (`compile_within`'s `props`).
+    pub fn need_tables(&self) -> bool {
+        self.tables
     }
 
     fn flags() -> SyntaxError {
@@ -169,13 +188,27 @@ impl Program {
 
 /// Compiles `pattern` (UTF-16 code units, as in the JS string) with `flags`.
 pub fn compile(pattern: &[u16], flags: Flags) -> Result<Program, SyntaxError> {
-    compile_within(pattern, flags, true)
+    compile_within(pattern, flags, true, builtin_props())
+}
+
+/// The property tables built in, if any (`crate::unicode::builtin_props`).
+pub fn builtin_props() -> Option<&'static [u8]> {
+    #[cfg(feature = "regexp-unicode-props")]
+    return crate::unicode::builtin_props();
+    #[cfg(not(feature = "regexp-unicode-props"))]
+    None
 }
 
 /// [`compile`] on the small stack (`deep` false) or a large one (D3280): with `deep`
 /// false, a pattern that nests deeper than `parser::SMALL_DEPTH` fails with a
-/// [`SyntaxError::need_stack`] error instead.
-pub fn compile_within(pattern: &[u16], flags: Flags, deep: bool) -> Result<Program, SyntaxError> {
-    let parsed = parser::parse(pattern, flags, deep)?;
+/// [`SyntaxError::need_stack`] error instead. `props`: the property tables (D3350); a
+/// property escape without them fails with a [`SyntaxError::need_tables`] error.
+pub fn compile_within(
+    pattern: &[u16],
+    flags: Flags,
+    deep: bool,
+    props: Option<&[u8]>,
+) -> Result<Program, SyntaxError> {
+    let parsed = parser::parse(pattern, flags, deep, props)?;
     Ok(compiler::compile(&parsed, flags))
 }

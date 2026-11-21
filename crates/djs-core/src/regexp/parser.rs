@@ -195,9 +195,17 @@ struct Parser<'a> {
     /// The pattern went past `max_depth` on the small stack: whatever came of the parse,
     /// it needs the larger one.
     need_stack: bool,
+    /// The property tables, if this build or the host has them (D3350).
+    #[cfg_attr(not(feature = "regexp-unicode-props"), allow(dead_code))]
+    props: Option<&'a [u8]>,
 }
 
-pub(crate) fn parse(src: &[u16], flags: Flags, deep: bool) -> Result<Parsed, SyntaxError> {
+pub(crate) fn parse(
+    src: &[u16],
+    flags: Flags,
+    deep: bool,
+    props: Option<&[u8]>,
+) -> Result<Parsed, SyntaxError> {
     let mut p = Parser {
         src,
         pos: 0,
@@ -215,6 +223,7 @@ pub(crate) fn parse(src: &[u16], flags: Flags, deep: bool) -> Result<Parsed, Syn
         depth: 0,
         max_depth: if deep { MAX_DEPTH } else { SMALL_DEPTH },
         need_stack: false,
+        props,
     };
     let node = p.disjunction(false);
     if p.need_stack {
@@ -1154,7 +1163,11 @@ impl Parser<'_> {
         negate: bool,
     ) -> Result<ClassSet, SyntaxError> {
         use crate::unicode::property;
-        let p = property::lookup(name, value.unwrap_or(""), self.sets && !negate)
+        // The host hands the tables over and the compile runs again (D3350).
+        let Some(props) = self.props else {
+            return Err(SyntaxError::tables_request());
+        };
+        let p = property::lookup(props, name, value.unwrap_or(""), self.sets && !negate)
             .map_err(|e| SyntaxError::new(String::from(e.message())))?;
         let mut set = ClassSet {
             chars: CharSet::from_sorted(p.ranges),

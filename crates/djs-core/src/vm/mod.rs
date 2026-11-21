@@ -965,6 +965,29 @@ impl Vm {
         self.heap.stack_deep
     }
 
+    /// Whether a compile or run stopped for the Unicode property tables (D3350): a build
+    /// without them built in (`cold-unicode`, the shipped wasm module) whose host hands
+    /// them over ([`Vm::set_elastic_stack`]) stops a compile whose source may have a
+    /// property escape, and an instruction whose regular expression has one, before any
+    /// effect, as for the stack. The host passes them to [`Vm::set_unicode_props`] and
+    /// calls again.
+    pub fn needs_tables(&self) -> bool {
+        self.heap.props_need
+    }
+
+    /// Hands over the property tables (D3350; `unicode::props_valid` checks a copy).
+    #[cfg(feature = "regexp-unicode-props")]
+    pub fn set_unicode_props(&mut self, props: &'static [u8]) {
+        self.heap.props = Some(props);
+        self.heap.props_need = false;
+    }
+
+    /// Drops the property tables (tests: a build without them built in).
+    #[cfg(all(test, feature = "regexp-unicode-props"))]
+    pub(crate) fn drop_unicode_props(&mut self) {
+        self.heap.props = None;
+    }
+
     /// Runs with `fuel` (instruction cost units).
     pub fn run(&mut self, fuel: u64) -> Status {
         let st = Exec::new(&mut self.heap, self.opts.exec).run(fuel);
@@ -1522,6 +1545,8 @@ mod frozen_tests;
 mod lazy_tests;
 #[cfg(all(test, feature = "embed"))]
 mod module_tests;
+#[cfg(all(test, feature = "lazy", feature = "regexp-unicode-props"))]
+mod props_tests;
 #[cfg(test)]
 mod slim_tests;
 #[cfg(test)]
