@@ -2600,7 +2600,6 @@ impl Heap {
         let mut stop = new_len;
         let mut ok = true;
         if self.obj_flags(o) & OBJ_INDEXED_PROPS != 0 {
-            self.charge_elements(self.prop_slots(o) as usize);
             let mut doomed = Vec::new();
             for i in 0..self.prop_slots(o) {
                 let key = self.prop_key(o, i);
@@ -2829,10 +2828,7 @@ impl Heap {
         let mut strings = Vec::new();
         let mut symbols = Vec::new();
         let el = self.elements(o);
-        // (The slots visited: the dense store's and the property table's.)
-        self.charge_elements(self.prop_slots(o) as usize);
         if el != 0 {
-            self.charge_elements(self.value_array_len(el) as usize);
             for i in 0..self.value_array_len(el) {
                 if !self.value_array_get(el, i).is_hole() {
                     indexes.push_out((i, Atom::int(i).expect("dense index fits an int atom")));
@@ -2881,6 +2877,7 @@ impl Heap {
         }
         out.extend(strings);
         out.extend(symbols);
+        self.charge_elements(out.len());
         out
     }
 }

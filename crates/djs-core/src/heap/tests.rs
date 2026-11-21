@@ -105,7 +105,7 @@ fn string_equality_and_hash_across_representations() {
 
     assert!(h.str_eq(flat, rope));
     assert!(h.str_eq(rope, rope2));
-    assert_eq!(h.str_cmp(flat, rope2), Ordering::Equal);
+    assert_eq!(h.str_cmp(flat, rope2).unwrap(), Ordering::Equal);
     let hf = h.str_hash(flat);
     assert_eq!(h.str_hash_uncached(rope), hf);
     assert_eq!(h.str_hash(rope2), hf);
@@ -139,15 +139,15 @@ fn string_ordering() {
     ];
     for (x, y, o) in pairs {
         let (a, b) = (s(&mut h, x), s(&mut h, y));
-        assert_eq!(h.str_cmp(a, b), o, "{x:?} vs {y:?}");
-        assert_eq!(h.str_cmp(b, a), o.reverse(), "{y:?} vs {x:?}");
+        assert_eq!(h.str_cmp(a, b).unwrap(), o, "{x:?} vs {y:?}");
+        assert_eq!(h.str_cmp(b, a).unwrap(), o.reverse(), "{y:?} vs {x:?}");
     }
     // Ropes compare by content.
     let (r, t) = appended(&mut h, 100);
     let f = s(&mut h, &t);
-    assert_eq!(h.str_cmp(r, f), Ordering::Equal);
+    assert_eq!(h.str_cmp(r, f).unwrap(), Ordering::Equal);
     let g = s(&mut h, &(t.clone() + "!"));
-    assert_eq!(h.str_cmp(r, g), Ordering::Less);
+    assert_eq!(h.str_cmp(r, g).unwrap(), Ordering::Less);
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn deep_ropes_do_not_recurse() {
     assert_eq!(h.str_hash(left), h.str_hash(right));
     let flat = h.flatten(left).unwrap();
     assert!(h.str_eq_str(flat, &expect));
-    assert_eq!(h.str_cmp(left, right), Ordering::Equal);
+    assert_eq!(h.str_cmp(left, right).unwrap(), Ordering::Equal);
     h.verify().unwrap();
 }
 

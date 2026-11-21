@@ -583,7 +583,10 @@ impl Exec<'_> {
             return false;
         };
         use core::cmp::Ordering::{Greater, Less};
-        let ord = self.heap.str_cmp(x, y);
+        // (A failed flattening: `step` compares again and throws.)
+        let Ok(ord) = self.heap.str_cmp(x, y) else {
+            return false;
+        };
         let r = match op {
             fast::LT => ord == Less,
             fast::LE => ord != Greater,
@@ -726,9 +729,16 @@ impl Exec<'_> {
         if argc > 3 {
             return None;
         }
+        let w = self.heap.work_mark();
+        // (Declined: `call_intrinsic` does the work again and pays for it.)
         match self.pure_leaf(id, a) {
-            Ok(v) => v,
+            Ok(Some(v)) => Some(v),
+            Ok(None) => {
+                self.heap.work_reset(w);
+                None
+            }
             Err(f) => {
+                self.heap.work_reset(w);
                 if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) {
                     self.host_out_of_memory();
                 }
@@ -1408,8 +1418,14 @@ impl Exec<'_> {
                                 {
                                     #[cfg(debug_assertions)]
                                     {
-                                        let want =
-                                            heap_call_op!(conv::strict_equals(self.heap, a, c));
+                                        // (Charging nothing: release builds do
+                                        // not compare twice.)
+                                        let want = heap_call_op!({
+                                            let w = self.heap.work_mark();
+                                            let r = conv::strict_equals(self.heap, a, c);
+                                            self.heap.work_reset(w);
+                                            r
+                                        });
                                         assert!(want == eq, "the slice's string compare differs");
                                     }
                                     eq
@@ -1477,8 +1493,12 @@ impl Exec<'_> {
                                 Some(r) => {
                                     #[cfg(debug_assertions)]
                                     {
-                                        let want =
-                                            heap_call_op!(self.field_slow(ip - code, o, false));
+                                        let want = heap_call_op!({
+                                            let w = self.heap.work_mark();
+                                            let r = self.field_slow(ip - code, o, false);
+                                            self.heap.work_reset(w);
+                                            r
+                                        });
                                         assert!(
                                             want == Some(Hit::Value(r)),
                                             "the slice's hit differs"
@@ -1542,7 +1562,12 @@ impl Exec<'_> {
                                 Some(r) => {
                                     #[cfg(debug_assertions)]
                                     {
-                                        let want = heap_call_op!(self.elem_slow(false, o, key, r));
+                                        let want = heap_call_op!({
+                                            let w = self.heap.work_mark();
+                                            let r = self.elem_slow(false, o, key, r);
+                                            self.heap.work_reset(w);
+                                            r
+                                        });
                                         assert!(want == Some(r), "the slice's element differs");
                                     }
                                     r

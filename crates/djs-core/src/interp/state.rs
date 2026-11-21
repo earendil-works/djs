@@ -99,17 +99,25 @@ pub(crate) fn set_outcome(heap: &mut Heap, s: RunState, v: Value) {
 }
 
 /// The fuel overshoot carried to the next run (D1740); negative for a credit (D1712).
-pub(crate) fn fuel_debt(heap: &Heap) -> i64 {
-    heap.arena()
+/// The fuel a run owes the next (D1740): whole units, and the sixteenths of a unit of
+/// work its leaves charged past them (0289), stored as `units + sixteenths / 16`.
+pub(crate) fn fuel_debt(heap: &Heap) -> (i64, u32) {
+    let d = heap
+        .arena()
         .get::<Value>(interp(heap), Interp::FUEL_DEBT)
         .as_number()
-        .map_or(0, |n| n as i64)
+        .unwrap_or(0.0);
+    let whole = djs_libm::floor(d);
+    (whole as i64, ((d - whole) * 16.0) as u32)
 }
 
-pub(crate) fn set_fuel_debt(heap: &mut Heap, debt: i64) {
+pub(crate) fn set_fuel_debt(heap: &mut Heap, debt: i64, sixteenths: u32) {
     let i = interp(heap);
-    heap.arena_mut()
-        .set(i, Interp::FUEL_DEBT, Value::number(debt as f64));
+    // Within 2^48 units, where a Number holds the sixteenths exactly (a credit of the
+    // rest of an unlimited slice is still unlimited for any run).
+    const MAX: i64 = 1 << 48;
+    let d = debt.clamp(-MAX, MAX) as f64 + f64::from(sixteenths) / 16.0;
+    heap.arena_mut().set(i, Interp::FUEL_DEBT, Value::number(d));
 }
 
 /// The exception a `ThrowPending` VM throws at the parked call.

@@ -34,7 +34,7 @@ fn a_slice_reads_like_a_copy() {
     assert_eq!(h.str_len(s), 300);
     assert_eq!(h.str_to_string(s), &t[100..400]);
     assert!(h.str_eq(s, copy) && h.str_eq(copy, s));
-    assert_eq!(h.str_cmp(s, copy), core::cmp::Ordering::Equal);
+    assert_eq!(h.str_cmp(s, copy).unwrap(), core::cmp::Ordering::Equal);
     assert_eq!(h.str_hash(s), h.str_hash(copy));
     assert_eq!(h.char_code_at(s, 0), Some(t.as_bytes()[100] as u16));
     assert_eq!(h.char_code_at(s, 299), Some(t.as_bytes()[399] as u16));

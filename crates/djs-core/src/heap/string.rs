@@ -1437,9 +1437,6 @@ impl Heap {
     /// Map/Set and string equality use. Cached in strings above the builtin prefix; the
     /// prefix, which no VM writes, caches the base hash instead ([`Heap::str_hash_base`]).
     pub fn str_hash(&mut self, s: Str) -> u32 {
-        // Charged whether cached or not, so the charge depends on the call alone; the
-        // string's equality with what the hash finds costs about as much (`work.rs`).
-        self.charge_units(self.str_len(s) as usize);
         let s = self.resolve_str(s);
         if s.0 < self.base_end() {
             return self.keyed_content_hash(s);
@@ -1481,6 +1478,12 @@ impl Heap {
 
     #[inline(never)]
     fn content_hash_with(&self, s: Str, key: u64) -> u32 {
+        // Charged when computed (a cache hit is free), past the first few units, which
+        // every path hashes as often as it likes (`work.rs`).
+        let n = self.str_len(s);
+        if n > super::work::FREE_COMPARE {
+            self.charge_units(n as usize);
+        }
         let mut h = KeyedHasher::new(key);
         match self.str_view(s) {
             Some(v) => h.write_view(v),
@@ -1565,18 +1568,6 @@ impl Heap {
 
     /// Code unit equality.
     pub fn str_eq(&self, a: Str, b: Str) -> bool {
-        self.str_eq_in(a, b, false)
-    }
-
-    /// Code unit equality for the language's equality operators and searches: charges
-    /// the units it compared (`work.rs`). Interning and hash lookups use the uncharged
-    /// [`Heap::str_eq`].
-    pub(crate) fn str_eq_charged(&self, a: Str, b: Str) -> bool {
-        self.str_eq_in(a, b, true)
-    }
-
-    #[inline(always)]
-    fn str_eq_in(&self, a: Str, b: Str, charge: bool) -> bool {
         if a == b {
             return true;
         }
@@ -1598,9 +1589,6 @@ impl Heap {
         if ha != 0 && hb != 0 && ha != hb && (a.0 >= base) == (b.0 >= base) {
             return false;
         }
-        if charge {
-            return self.str_eq_charged_slow(a, b);
-        }
         match (self.str_view(a), self.str_view(b)) {
             // Same width (checked above), so equal content means equal bytes.
             (Some(x), Some(y)) => x.bytes() == y.bytes(),
@@ -1609,24 +1597,6 @@ impl Heap {
             (Some(x), None) => self.view_eq_chunks(x, b),
             (None, Some(y)) => self.view_eq_chunks(y, a),
             (None, None) => self.str_units(a).eq(self.str_units(b)),
-        }
-    }
-
-    /// The comparison of [`Heap::str_eq_charged`] of two strings of the same length and
-    /// width.
-    #[inline(never)]
-    fn str_eq_charged_slow(&self, a: Str, b: Str) -> bool {
-        match (self.str_view(a), self.str_view(b)) {
-            (Some(x), Some(y)) => {
-                let (x, y) = (x.bytes(), y.bytes());
-                let i = super::work::equal_blocks(x, y);
-                self.charge_units(i >> u32::from(self.str_is_two_byte(a)));
-                x[i..] == y[i..]
-            }
-            _ => {
-                self.charge_units(self.str_len(a) as usize);
-                self.str_eq(a, b)
-            }
         }
     }
 
@@ -1646,22 +1616,21 @@ impl Heap {
         })
     }
 
-    /// Code unit order (what `<` on strings means in JS), charging the units compared.
-    pub fn str_cmp(&self, a: Str, b: Str) -> Ordering {
+    /// Code unit order (what `<` on strings means in JS), charging the units compared
+    /// (`work.rs`). A rope is flattened first (an append rope is read in place).
+    pub fn str_cmp(&mut self, a: Str, b: Str) -> Result<Ordering, HeapError> {
         if a == b {
-            return Ordering::Equal;
+            return Ok(Ordering::Equal);
         }
-        match (self.str_view(a), self.str_view(b)) {
-            (Some(x), Some(y)) => self.view_cmp(x, y),
-            _ => {
-                self.charge_units(self.str_len(a).min(self.str_len(b)) as usize);
-                self.str_units(a).cmp(self.str_units(b))
-            }
-        }
+        self.str_view_flat(a)?;
+        self.str_view_flat(b)?;
+        let (x, y) = (self.str_view(a), self.str_view(b));
+        Ok(self.view_cmp(x.expect("flat"), y.expect("flat")))
     }
 
     /// Code unit order of two flat strings, charging the units compared: bytes for two
     /// one-byte ones (most), units otherwise.
+    #[inline(never)]
     pub(crate) fn view_cmp(&self, a: StrView, b: StrView) -> Ordering {
         match (a, b) {
             (StrView::Latin1(x), StrView::Latin1(y)) => {

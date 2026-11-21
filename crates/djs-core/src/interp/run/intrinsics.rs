@@ -1024,7 +1024,7 @@ impl Exec<'_> {
                     Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
                 }
                 COMPARE_STRINGS => match (a0.as_string(), a1.as_string()) {
-                    (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
+                    (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)?),
                     _ => break 'bad,
                 },
                 STRING_CODE_POINTS => match a0.as_string() {

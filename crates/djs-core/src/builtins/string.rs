@@ -10,12 +10,12 @@ use crate::interp::{Intrinsic, realm};
 use crate::value::{Obj, Str, Value};
 
 /// IsLessThan for two strings, as -1, 0 or 1 (code unit order).
-pub(crate) fn compare(heap: &Heap, a: Str, b: Str) -> f64 {
-    match heap.str_cmp(a, b) {
+pub(crate) fn compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fault> {
+    Ok(match heap.str_cmp(a, b)? {
         core::cmp::Ordering::Less => -1.0,
         core::cmp::Ordering::Equal => 0.0,
         core::cmp::Ordering::Greater => 1.0,
-    }
+    })
 }
 
 /// The code points of `s` as an array of one- or two-unit strings (lone surrogates on
@@ -41,9 +41,9 @@ pub(crate) fn code_points(heap: &mut Heap, s: Str) -> Result<Obj, Fault> {
     Ok(heap.new_array_from_values(Some(proto), &values)?)
 }
 
-/// The code units of `s` (flattening a rope once), charged as a scan of them.
+/// The code units of `s` (flattening a rope once). (Not charged here: the same code as
+/// `uri::units`, which the linker folds into one function.)
 fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, Fault> {
-    heap.charge_units(heap.str_len(s) as usize);
     Ok(heap.str_view_flat(s)?.units().collect())
 }
 
@@ -203,10 +203,10 @@ pub(crate) fn index_of(
         return Ok(-1.0);
     }
     // (The units compared, for fuel: a position costs one more than its matching prefix.)
-    let compared = core::cell::Cell::new(0usize);
-    let matches = |i: usize| {
+    let mut compared = 0;
+    let mut matches = |i: usize| {
         let k = (0..m).take_while(|&j| hay.get(i + j) == needle[j]).count();
-        compared.set(compared.get() + k + 1);
+        compared += k + 1;
         k == m
     };
     let r = if last {
@@ -225,7 +225,7 @@ pub(crate) fn index_of(
             .find(|&i| matches(i))
             .map_or(-1.0, |i| i as f64)
     };
-    heap.charge_units(compared.get());
+    heap.charge_units(compared);
     Ok(r)
 }
 
@@ -282,6 +282,7 @@ pub(crate) fn to_case(heap: &mut Heap, s: Str, upper: bool) -> Result<Str, Fault
         return Ok(r);
     }
     let u = units(heap, s)?;
+    heap.charge_units(u.len());
     let cps = code_points_of(&u);
     let mut out = crate::buf::vec_with_capacity(u.len());
     for (k, &(_, c)) in cps.iter().enumerate() {
@@ -363,6 +364,7 @@ pub(crate) fn trim(heap: &mut Heap, s: Str, where_: i32) -> Result<Str, Fault> {
 /// IsStringWellFormedUnicode, or (with `fix`) toWellFormed's result.
 pub(crate) fn well_formed(heap: &mut Heap, s: Str, fix: bool) -> Result<Value, Fault> {
     let u = units(heap, s)?;
+    heap.charge_units(u.len());
     let mut out = Vec::new();
     let mut ok = true;
     for (_, c) in code_points_of(&u) {
@@ -597,6 +599,7 @@ pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fau
         });
     }
     let (ua, ub) = (units(heap, a)?, units(heap, b)?);
+    heap.charge_units(ua.len() + ub.len());
     #[cfg(feature = "unicode-normalization")]
     let (ua, ub) = {
         use crate::unicode::normalize::{self as norm, Form};

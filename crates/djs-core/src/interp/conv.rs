@@ -281,7 +281,13 @@ pub(crate) fn strict_equals(heap: &Heap, a: Value, b: Value) -> bool {
         return x == y;
     }
     if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
-        return heap.str_eq_charged(x, y);
+        // Two strings are charged for the shorter one's units, what the comparison reads
+        // at most, past the first few, which the tier-0 loop compares itself (`work.rs`).
+        let n = heap.str_len(x).min(heap.str_len(y));
+        if x != y && n > crate::heap::work::FREE_COMPARE {
+            heap.charge_units(n as usize);
+        }
+        return heap.str_eq(x, y);
     }
     if a.as_bigint().is_some() && b.as_bigint().is_some() {
         return heap.bigint_eq(a, b);
@@ -336,7 +342,7 @@ pub(crate) fn less_than(heap: &mut Heap, a: Value, b: Value) -> Result<Option<bo
         return Ok(Some(x < y));
     }
     if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
-        return Ok(Some(heap.str_cmp(x, y) == Ordering::Less));
+        return Ok(Some(heap.str_cmp(x, y)? == Ordering::Less));
     }
     if a.kind() == Kind::Object || b.kind() == Kind::Object {
         return to_primitive_unsupported();

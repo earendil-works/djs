@@ -87,8 +87,20 @@ impl Exec<'_> {
 
     /// [`Exec::fast_leaf_call`] of the `@fast` builtin template `t`, called at `base`
     /// with `argc` arguments by the call instruction before `next`.
+    /// A fast path that declines charges nothing for what it did (0289, `heap/work.rs`):
+    /// the general path does the work again and pays for it.
     #[inline(always)]
     fn fast_builtin_call(&mut self, t: u32, base: u32, argc: u32, next: u32) -> bool {
+        let w = self.heap.work_mark();
+        let done = self.fast_builtin_call_in(t, base, argc, next);
+        if !done {
+            self.heap.work_reset(w);
+        }
+        done
+    }
+
+    #[inline(always)]
+    fn fast_builtin_call_in(&mut self, t: u32, base: u32, argc: u32, next: u32) -> bool {
         // (`call0`..`call3` cost as much as `call`: the table's check.)
         let info = &OPS[Op::Call as usize];
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
@@ -214,6 +226,16 @@ impl Exec<'_> {
         argc: u32,
         next: u32,
     ) -> Result<bool, Fault> {
+        // (Declined: charges nothing, as `fast_builtin_call`.)
+        let w = self.heap.work_mark();
+        let r = self.try_fast_new_in(t, base, argc, next);
+        if !matches!(r, Ok(true)) {
+            self.heap.work_reset(w);
+        }
+        r
+    }
+
+    fn try_fast_new_in(&mut self, t: u32, base: u32, argc: u32, next: u32) -> Result<bool, Fault> {
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
         let Some(new) = FAST.get(idx).and_then(|f| f.new) else {
             return Ok(false);
@@ -475,10 +497,33 @@ impl Exec<'_> {
             return None;
         }
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
-        FAST.get(idx)?.call(self.heap, this, &[]).ok().flatten()
+        let w = self.heap.work_mark();
+        let r = FAST.get(idx)?.call(self.heap, this, &[]).ok().flatten();
+        if r.is_none() {
+            // (Declined: charges nothing, as `fast_builtin_call`.)
+            self.heap.work_reset(w);
+        }
+        r
     }
 
     pub(super) fn try_fast_call(
+        &mut self,
+        t: u32,
+        base: u32,
+        argc: u32,
+        cont: Continuation,
+        ret_pc: u32,
+    ) -> Result<bool, Fault> {
+        // (Declined: charges nothing, as `fast_builtin_call`.)
+        let w = self.heap.work_mark();
+        let r = self.try_fast_call_in(t, base, argc, cont, ret_pc);
+        if !matches!(r, Ok(true)) {
+            self.heap.work_reset(w);
+        }
+        r
+    }
+
+    fn try_fast_call_in(
         &mut self,
         t: u32,
         base: u32,

@@ -1098,8 +1098,10 @@ impl<'h> Exec<'h> {
     /// Runs with `fuel`.
     pub fn run(&mut self, fuel: u64) -> Status {
         let st = self.run_loop(fuel);
-        // What the last leaf did (0289), before the overshoot is counted.
+        // What the last leaf did (0289), before the overshoot is counted; the fraction of
+        // a unit left carries on with it, so that fuel does not depend on the slicing.
         self.fuel -= self.heap.take_work();
+        let part = self.heap.take_fraction();
         // D1740: a run that stops mid-call (out of fuel, or parked on a host call) carries
         // its overshoot to the next one (having paid the debt it started with). Once the
         // VM is quiescent (done, threw, idle) nothing is owed: the next run starts a fresh
@@ -1110,16 +1112,18 @@ impl<'h> Exec<'h> {
             // again, so the remainder is a credit for the next run (D1712).
             Status::OutOfFuel => {
                 if self.fuel_start.is_some() {
-                    state::set_fuel_debt(self.heap, -self.fuel);
+                    state::set_fuel_debt(self.heap, -self.fuel, part);
                 }
             }
             // Parked on a host call: fuel left over is the host's to forgo.
             Status::HostCall { .. } => {
                 if self.fuel_start.is_some() {
-                    state::set_fuel_debt(self.heap, (-self.fuel).max(0));
+                    // (The fraction of a unit is owed either way: dropped with the
+                    // leftover, the total would depend on where a slice ended.)
+                    state::set_fuel_debt(self.heap, (-self.fuel).max(0), part);
                 }
             }
-            _ => state::set_fuel_debt(self.heap, 0),
+            _ => state::set_fuel_debt(self.heap, 0, 0),
         }
         if self.host_oom {
             self.flush();
@@ -1130,8 +1134,10 @@ impl<'h> Exec<'h> {
 
     fn run_loop(&mut self, fuel: u64) -> Status {
         self.fuel = fuel.min(i64::MAX as u64) as i64;
-        // The host's work since the last run is not the run's (0289).
-        self.heap.take_work();
+        // The host's work since the last run is not the run's (0289): the counter starts
+        // from the fraction the last run carried over.
+        let (debt, part) = state::fuel_debt(self.heap);
+        self.heap.work_reset(part);
         match state::state(self.heap) {
             RunState::Running | RunState::ThrowPending => self.load_frame(),
             RunState::Idle | RunState::Done | RunState::Threw => {
@@ -1159,10 +1165,12 @@ impl<'h> Exec<'h> {
         // natural safepoint, so where it runs does not depend on where a slice ended.
         // Pay the overshoot of the previous run first (D1740): with a debt larger than
         // the fuel, the run stops at once and the rest of the debt carries on.
-        self.fuel = self.fuel.saturating_sub(state::fuel_debt(self.heap));
+        self.fuel = self.fuel.saturating_sub(debt);
         self.fuel_start = Some(self.fuel);
+        // The work of starting a job or a throw (0289). Every way back to the check below
+        // takes it too: `run_hot`'s exits and `step_once`.
+        self.fuel -= self.heap.take_work();
         loop {
-            self.fuel -= self.heap.take_work();
             if self.fuel <= 0 {
                 self.flush();
                 if self.host_oom {
@@ -1189,6 +1197,7 @@ impl<'h> Exec<'h> {
                     && fast::is_call(self.byte(self.pc))
                     && self.fast_leaf_call(self.byte(self.pc)))
             {
+                self.fuel -= self.heap.take_work();
                 continue;
             }
             if let Some(st) = self.step_once() {
@@ -1235,6 +1244,7 @@ impl<'h> Exec<'h> {
         let pc0 = self.pc;
         let sp0 = self.sp;
         let fuel0 = self.fuel;
+        let work0 = self.heap.work_mark();
         let retry = self.retry_operands();
         let r = self.step();
         // The work of the instruction's leaves (0289).
@@ -1254,10 +1264,14 @@ impl<'h> Exec<'h> {
                     // (D1712). The host moves the stack and runs again, and the
                     // instruction runs again with the full nesting limits armed.
                     (self.pc, self.sp, self.fuel) = (pc0, sp0, fuel0);
+                    self.heap.work_reset(work0);
                     self.flush();
                     return Some(Status::OutOfFuel);
                 }
-                self.throw_fault(f, pc0)
+                let st = self.throw_fault(f, pc0);
+                // (And the error's: its message and stack.)
+                self.fuel -= self.heap.take_work();
+                st
             }
         }
     }

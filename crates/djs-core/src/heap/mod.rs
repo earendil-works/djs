@@ -221,14 +221,16 @@ pub struct Heap {
     #[cfg(feature = "unicode-normalization")]
     pub(crate) norm: Option<&'static [u8]>,
     pub(crate) tables_need: u8,
-    /// Fuel owed for the work of leaf primitives, which the interpreter takes into its
-    /// fuel (`work.rs`, 0289). Zero between runs: not part of the image. A `Cell`, so
-    /// that the primitives that only read the heap (comparisons, searches) charge too.
-    work: core::cell::Cell<u64>,
     /// While a compile is recorded for the compile cache (D3040): every interning, in
     /// order (`compile_cache::Intern`).
     #[cfg(feature = "compile-cache")]
     pub(crate) intern_log: Option<alloc::vec::Vec<crate::vm::compile_cache::Intern>>,
+    /// Fuel owed for the work of leaf primitives, which the interpreter takes into its
+    /// fuel (`work.rs`, 0289): a little-endian u32, saturating. Zero between runs: not
+    /// part of the image. A `Cell`, so that the primitives that only read the heap
+    /// (comparisons, searches) charge too; bytes, and the last field, so that it goes
+    /// after the others and moves none of them (the code addresses every field).
+    work: core::cell::Cell<[u8; 4]>,
     /// Test hook: make the next collection fail to reserve its to-space.
     #[cfg(test)]
     pub(crate) fail_next_gc_reserve: bool,
@@ -369,7 +371,7 @@ impl Heap {
             #[cfg(feature = "unicode-normalization")]
             norm: crate::unicode::builtin_norm(),
             tables_need: 0,
-            work: core::cell::Cell::new(0),
+            work: core::cell::Cell::new([0; 4]),
             #[cfg(feature = "compile-cache")]
             intern_log: None,
             #[cfg(test)]
@@ -489,14 +491,14 @@ impl Heap {
     /// and out-of-memory points would depend on the slice size. Returns what `end`
     /// restores.
     /// It charges no fuel either (`work.rs`).
-    pub(crate) fn begin_unbudgeted(&mut self) -> (u32, bool, u64) {
+    pub(crate) fn begin_unbudgeted(&mut self) -> (u32, bool, u32) {
         let saved = (self.arena.limit(), self.gc_pending, self.work_mark());
         self.arena.set_limit(arena::MAX_ARENA);
         saved
     }
 
     /// Ends [`Heap::begin_unbudgeted`].
-    pub(crate) fn end_unbudgeted(&mut self, (limit, pending, work): (u32, bool, u64)) {
+    pub(crate) fn end_unbudgeted(&mut self, (limit, pending, work): (u32, bool, u32)) {
         self.arena.set_limit(limit);
         self.gc_pending = pending;
         self.work_reset(work);

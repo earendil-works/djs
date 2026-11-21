@@ -878,7 +878,7 @@ impl Vm {
             self.heap.arena_mut().set(i, f, 0);
         }
         // A new call starts without the previous one's overshoot (D1740).
-        state::set_fuel_debt(&mut self.heap, 0);
+        state::set_fuel_debt(&mut self.heap, 0, 0);
         let argc = u32::try_from(args.len()).map_err(|_| HeapError::OutOfMemory)?;
         state::set_state(&mut self.heap, RunState::Running);
         let mut ex = Exec::new(&mut self.heap, self.opts.exec);
@@ -943,7 +943,7 @@ impl Vm {
         run::promise::clear_inbox(&mut self.heap);
         run::promise::clear_rejections(&mut self.heap);
         state::set_pending_throw(&mut self.heap, Value::UNDEFINED);
-        state::set_fuel_debt(&mut self.heap, 0);
+        state::set_fuel_debt(&mut self.heap, 0, 0);
         state::set_outcome(&mut self.heap, RunState::Idle, Value::UNDEFINED);
         self.heap.stack_deep = false;
     }
