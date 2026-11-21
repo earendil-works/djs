@@ -27,6 +27,7 @@ const I_PRIMITIVE_VALUE: u16 = iid("PrimitiveValue");
 const I_SERIALIZE_J_S_O_N_ARRAY: u16 = iid("SerializeJSONArray");
 const I_SERIALIZE_J_S_O_N_OBJECT: u16 = iid("SerializeJSONObject");
 const I_SERIALIZE_J_S_O_N_PROPERTY: u16 = iid("SerializeJSONProperty");
+const I_SORT_COMPARE_CALL: u16 = iid("SortCompareCall");
 const I_SORT_LIST: u16 = iid("SortList");
 const I_SORT_PRIMITIVES: u16 = iid("SortPrimitives");
 const I_SORT_START: u16 = iid("SortStart");
@@ -157,8 +158,8 @@ fn native_SortList(ex: &mut Exec<'_>) -> Step {
                 if { let a0 = ex.n_slot(3); a0.as_object().is_some() } { st = 9; continue; } else { st = 10; continue; }
             }
             7 => {
-                // resume point: Call
-                match { let a0 = ex.n_arg(1); let a1 = Value::UNDEFINED; let a2 = { let a0 = ex.n_slot(0); let a1 = Value::int(0); ex.n_sort_operand(a0, a1)? }; let a3 = { let a0 = ex.n_slot(0); let a1 = Value::int(1); ex.n_sort_operand(a0, a1)? }; ex.n_call(I_CALL, &[a0, a1, a2, a3], 16) }? { Flow::Inline => { st = 16; continue } Flow::Leave(s) => return Ok(s) }
+                // resume point: SortCompareCall
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_arg(1); ex.n_call(I_SORT_COMPARE_CALL, &[a0, a1], 16) }? { Flow::Inline => { st = 16; continue } Flow::Leave(s) => return Ok(s) }
             }
             8 => {
                 // inlined: ToString

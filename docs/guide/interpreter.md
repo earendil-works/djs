@@ -124,8 +124,10 @@ A **native frame** is the same frame record with a bit set in its flags, the sta
 number where a bytecode frame keeps its `pc`, and the builtin's locals in the frame's
 slots. When `sort` calls its comparator, it does not call it from Rust: it writes the
 callee's frame on top of its own, saves the state to resume at, and returns to the loop.
-The loop runs the comparator like any other closure, and its return re-enters the native
-frame at the saved state. A native builtin in the middle of its loop is therefore as
+The loop runs the comparator like any other closure. Its return completes the comparison
+and enters the same frame again with the next pair (as `%EachDense` does for `map`), and
+only the last comparison, or a result that is not a Number, re-enters the native frame at
+the saved state. A native builtin in the middle of its loop is therefore as
 suspendable as bytecode. [Builtins](builtins.md#rust-native-state-machines) shows the
 generated code.
 

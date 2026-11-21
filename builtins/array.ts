@@ -974,7 +974,7 @@ function SortList(list: Obj, comparefn: Value): void {
       const xs: Str = ToString(SortOperand(st, 0));
       r = CompareStrings(xs, ToString(SortOperand(st, 1)));
     } else {
-      r = Call(comparefn, undefined, SortOperand(st, 0), SortOperand(st, 1));
+      r = SortCompareCall(st, comparefn);
       if (!IsNumber(r)) {
         r = ToNumber(r);
       }

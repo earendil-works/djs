@@ -288,7 +288,7 @@ ArrayPrototypeFlatMap: reentrant (Array.prototype.flatMap)
 SortList: reentrant (%SortList, @native)
   builtins/array.ts:974:23  ToString (builtin)
   builtins/array.ts:975:30  ToString (builtin)
-  builtins/array.ts:977:11  Call (intrinsic)
+  builtins/array.ts:977:11  SortCompareCall (intrinsic)
   builtins/array.ts:979:13  ToNumber (builtin)
 
 CollectPresent: reentrant (%CollectPresent)

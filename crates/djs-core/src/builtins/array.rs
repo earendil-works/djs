@@ -68,7 +68,7 @@ mod sort_state {
     pub const LO: u32 = 1;
     pub const I: u32 = 2;
     pub const J: u32 = 3;
-    /// [`FLIPPED`] | [`PENDING`].
+    /// [`FLIPPED`] | [`PENDING`], or [`DONE`].
     pub const FLAGS: u32 = 4;
     pub const LIST: u32 = 5;
     /// The pending comparison's left and right values (`src[I]`, `src[J]`).
@@ -78,6 +78,8 @@ mod sort_state {
     pub const FLIPPED: i32 = 1;
     /// A comparison of `src[I]` and `src[J]` waits for its result.
     pub const PENDING: i32 = 2;
+    /// The list is sorted (and written back).
+    pub const DONE: i32 = 4;
 }
 
 /// `%SortStart(list)`: the state of a merge sort of the dense array `list` by
@@ -117,6 +119,9 @@ pub(crate) fn sort_step(heap: &mut Heap, st: Obj, v: f64) -> Result<bool, Fault>
     let (mut w, mut lo) = (int(heap, WIDTH) as u32, int(heap, LO) as u32);
     let (mut i, mut j, flags) = (int(heap, I) as u32, int(heap, J) as u32, int(heap, FLAGS));
     let (mut src, mut dst) = (HEAD, HEAD + m);
+    if flags & DONE != 0 {
+        return Ok(false);
+    }
     if flags & FLIPPED != 0 {
         core::mem::swap(&mut src, &mut dst);
     }
@@ -178,6 +183,8 @@ pub(crate) fn sort_step(heap: &mut Heap, st: Obj, v: f64) -> Result<bool, Fault>
         hi = lo.saturating_add(w.saturating_mul(2)).min(m);
         (i, j) = (lo, mid);
     }
+    // Sorted: no comparison pending ([`sort_pending`]), and later steps are false.
+    heap.value_array_set(el, FLAGS, Value::int(DONE));
     if let Some(list) = heap.value_array_get(el, LIST).as_object() {
         for t in 0..m {
             let x = heap.value_array_get(el, src + t);
@@ -185,6 +192,13 @@ pub(crate) fn sort_step(heap: &mut Heap, st: Obj, v: f64) -> Result<bool, Fault>
         }
     }
     Ok(false)
+}
+
+/// Whether a comparison waits for its result: SortStep returned true last.
+pub(crate) fn sort_pending(heap: &Heap, st: Obj) -> bool {
+    heap.value_array_get(heap.dense_store(st), sort_state::FLAGS)
+        .as_int()
+        .is_some_and(|f| f & sort_state::PENDING != 0)
 }
 
 /// `%SortOperand(st, which)`: the left (0) or right (1) value of the pending comparison.

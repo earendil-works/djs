@@ -192,6 +192,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("SortPrimitives", L, 1, false),
     i("SortStart", L, 1, false),
     i("SortStep", L, 2, false),
+    i("SortCompareCall", R, 2, false),
     i("SortOperand", L, 2, false),
     i("ArraySpliceDense", L, 4, false),
     i("ArrayCanPopDense", L, 1, false),

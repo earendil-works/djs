@@ -101,7 +101,7 @@ The subset is small on purpose:
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
 function, whose result completes the operation, such as `Get` calling a getter).
-<!--n intrinsics/leaf-->296<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
+<!--n intrinsics/leaf-->296<!--/n--> are leaves and <!--n intrinsics/reentrant-->30<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -206,14 +206,16 @@ A builtin tagged `@native` is compiled to a Rust state machine in
 There are eight: `Array.prototype.push`, `sort` and its comparison loop, and the five
 functions of `JSON.stringify`'s serializer. (The merging between two comparisons is a
 leaf: it keeps its position in an internal array on the heap, so the state machine only
-calls the comparator and hands its result back.) bgen splits the function into basic blocks,
+asks for the next comparison's result and hands it back. A comparator that is a plain
+closure runs its comparisons the way `%EachDense` runs callbacks, described below: one
+frame, entered again per comparison while the results are Numbers.) bgen splits the function into basic blocks,
 and each block becomes one arm of a `match` on the state. A resume point ends a block.
 Here is the loop of `Array.prototype.push` for several items, excerpted from the
 generated file. The source is the plain loop
 `for (let i = 0; i < argCount; i++) { Set(o, len, Get(items, i)); len++; }`:
 
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypePush(" "7 => {" 18 -->
-[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L94-L111), lines 94–111:
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L95-L112), lines 95–112:
 
 ```rust
 7 => {
@@ -263,7 +265,10 @@ Two rules keep this safe:
 The callback loops of `forEach`, `map`, `filter`, `some`, `every`, `find`, `findIndex`
 and `reduce`, and `Array.from(arrayLike, f)`, are bytecode builtins, not native ones. Their dense part is one intrinsic, `%EachDense`: it enters the callback's frame
 once and, on each return, completes the step (store, test, accumulate) and enters the
-same frame again for the next element. No builtin frame runs per element, which is
+same frame again for the next element. `sort`'s comparisons use the same loop: each
+Number result goes straight to the merge step, and the frame is entered again with the
+next pair; a result of another type goes back to the builtin, whose `ToNumber` may run
+user code. No builtin frame runs per element, which is
 faster than a native state machine that calls the callback each time, and the builtin's
 own spec loop takes over at the first hole, proxy or other kind of object. `reduce`
 keeps its accumulator in the loop's own state and learns whether `initialValue` was

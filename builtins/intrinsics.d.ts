@@ -480,6 +480,15 @@ declare function SortStart(list: Obj): Obj;
  * it), false once the list is sorted (written back into it). @leaf
  */
 declare function SortStep(st: Obj, v: Value): boolean;
+/**
+ * Calls `comparefn(left, right)` (SortOperand) with `this` undefined for the pending
+ * comparison of `st` and returns its result, for SortStep. Where comparefn is a plain
+ * closure, its results that are Numbers go to SortStep in place and the next comparison
+ * runs in the same frame (EachDense's mode 9, 0262): the result returned is then the
+ * first that is not a Number, or a Number once the list is sorted (SortStep is false
+ * from then on). @reentrant
+ */
+declare function SortCompareCall(st: Obj, comparefn: Value): Value;
 /** The left (0) or right (1) value of the pending comparison of SortStep. @leaf */
 declare function SortOperand(st: Obj, which: f64): Value;
 /**
@@ -542,7 +551,8 @@ declare function ArraySliceDense(o: Obj, k: f64, fin: f64, a: Obj): boolean;
  * - 8 Array.from of an array-like: calls `f(o[k], k)` and does
  *   CreateDataPropertyOrThrow(a, k, result); `o` is any ordinary object (or array or
  *   function) whose element k, along its prototype chain, is a data property or absent
- *   (undefined), so Get observes nothing (D2306).
+ *   (undefined), so Get observes nothing (D2306);
+ * - 9 sort with a comparator, for SortCompareCall only (its result is not a k).
  * One frame for `f`, entered again per element. Returns the k the builtin's own loop goes
  * on from (`len`: done; `k` itself when `f` is not a plain closure or `a` is not as
  * required), or -1 - k when the result at k decided. @reentrant

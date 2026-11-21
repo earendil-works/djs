@@ -719,6 +719,7 @@ const I = {
     }
   },
   SortOperand: (st, which) => st.src[which ? st.j : st.i],
+  SortCompareCall: (st, f) => f(st.src[st.i], st.src[st.j]),
   SortPrimitives: (list) => {
     check(Array.isArray(list), "SortPrimitives");
     if (list.some((v) => isObject(v) || typeof v === "symbol")) return false;

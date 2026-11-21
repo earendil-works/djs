@@ -12414,3 +12414,20 @@ pool compares against the heap string it already holds, and `alloc_units`/`atom_
 call `alloc_utf16`, which narrows Latin-1 units itself. Same strings and constants.
 Compile −2..−5%; −59 B gz. Also measured and dropped: the dumper's early stop of pattern
 scans in every build (no change on the codemode bodies, +390 B gz).
+## D3330: A comparator sort runs its comparisons in one reused frame (EachDense's sort mode)
+date: 2026-11-21 · by: pidle · issue: 0262
+SortList's comparator branch is one reentrant intrinsic, `%SortCompareCall(st, f)`: for a
+plain closure (what `%EachDense` takes) it lays out EachDense's state with mode 9 (SORT)
+and enters `f(left, right)` with continuation `Each`; on each return a Number result
+goes to `sort_step` in place and the same frame is entered again with the next pair (the
+"element" is the pending comparison's left value; K counts comparisons). The builtin's
+native frame is re-entered only when the list is sorted (a Number result; SortStep is
+false from then on: a DONE flag in the state) or a result is not a Number (returned as
+is, for the builtin's ToNumber, which may run user code). Anything else (bound, native,
+generator, class constructors, ...) gets the plain `Call` from the same intrinsic.
+Per comparison this drops the native re-entry (`step_once` → `native_step` → the state
+machine → `n_call_closure`'s frame write) that D3125 left: sort with a comparator
+14.5k → 8.9k wasm instructions per element of a 600-element sort (QuickJS 2026 5.7k:
+2.56x → 1.57x). Semantics: the same comparisons in the same order with the same
+arguments and `this`; a throw unwinds the callback's frame into the builtin as before;
+the state stays on the heap and the stack, so suspension and images see ordinary frames.

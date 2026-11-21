@@ -152,333 +152,334 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 139 | `SortPrimitives` | leaf | 1 | Sorts the dense array `list` in place by SortCompare without a comparefn (undefined last, then ToString order; stable) if every element is a primitive other than a symbol. Returns false, leaving it unchanged, otherwise. |
 | 140 | `SortStart` | leaf | 1 | The state of a stable bottom-up merge sort of the dense array `list` (made by SortList, never seen by user code) by SortCompare: its undefined elements move to the end of the list (they sort last and are never compared), the others into the state. |
 | 141 | `SortStep` | leaf | 2 | Places the pending comparison's element by its result v, a Number (the right one if v > 0), then merges on to the next comparison: true if there is one (SortOperand reads it), false once the list is sorted (written back into it). |
-| 142 | `SortOperand` | leaf | 2 | The left (0) or right (1) value of the pending comparison of SortStep. |
-| 143 | `ArraySpliceDense` | leaf | 4 | Splice's element moves in one step on a plain dense Array (no holes, default attributes, extensible, writable length, no index properties on the prototype chain): o[start .. start + deleteCount) becomes itemCount undefined slots and `length` follows. False, with nothing changed, for any other object. |
-| 144 | `ArrayCanPopDense` | leaf | 1 | Whether `ArrayPopDense(o)` applies: an Array with only dense elements, a writable length, its last element present and no index properties on its prototype chain, where pop's Get, DeletePropertyOrThrow and Set observe nothing else. |
-| 145 | `ArrayPopDense` | leaf | 1 | Array.prototype.pop of an array `ArrayCanPopDense` accepts. |
-| 146 | `ArrayFillDense` | leaf | 4 | fill's Sets on an Array while each is a plain store (an existing dense element, or an append or hole fill of an extensible Array without index properties on its prototype chain), from k up to fin: the index the general loop continues from. |
-| 147 | `ArrayPushDense` | leaf | 2 | push(v)'s Set and length update in one step when the Set is a plain append to the Array `o` (extensible, writable length, no holes at its end, no index properties on its prototype chain). The new length, or -1 with nothing changed. |
-| 148 | `ArraySearchDense` | leaf | 5 | The search loops of indexOf (mode 0: `from` up to len, strict equality), lastIndexOf (1: `from` down to 0) and includes (2: up to len, SameValueZero) over an Array whose elements in the range are all present in dense storage, where HasProperty and Get observe nothing: the index found or -1. -2, for the general loop, for anything else (a hole, a shorter array, another object). |
-| 149 | `ArraySliceDense` | leaf | 4 | slice's copy loop: `a[0 .. fin - k) = o[k .. fin)` when every element of `o` in the range is present in dense storage and `a` is an extensible Array without index properties (a fresh ArraySpeciesCreate result), so HasProperty, Get and CreateDataPropertyOrThrow observe nothing. False, with nothing changed, otherwise. |
-| 150 | `EachDense` | reentrant | 7 | The dense part of the loops of the callback builtins. From `k`, while `o` is an Array whose element k is present in its dense store (so HasProperty and Get observe nothing), calls `f(o[k], k, o)` with `thisArg` and completes the step by `mode`: - 0 forEach; - 1 map: CreateDataPropertyOrThrow(a, k, result); - 2 filter: for a truthy result, CreateDataPropertyOrThrow(a, to, o[k]), with `to` the length of `a`, a fresh Array (the receiver's species is plain); - 3 some, 4 every: a truthy (some) or falsy (every) result decides; - 5 find: a truthy result decides, and o[k] goes to element 0 of the Array `a`; - 6 findIndex: a truthy result decides; - 7 reduce: calls `f(acc, o[k], k, o)` with `this` undefined; the accumulator starts as `thisArg`, and each result goes to element 0 of the Array `a` (so `a` holds the accumulator once the returned k is past the starting one); - 8 Array.from of an array-like: calls `f(o[k], k)` and does CreateDataPropertyOrThrow(a, k, result); `o` is any ordinary object (or array or function) whose element k, along its prototype chain, is a data property or absent (undefined), so Get observes nothing. One frame for `f`, entered again per element. Returns the k the builtin's own loop goes on from (`len`: done; `k` itself when `f` is not a plain closure or `a` is not as required), or -1 - k when the result at k decided. |
-| 151 | `ArrayJoinDense` | leaf | 3 | join over o[0 .. len) when every element is present in dense storage and a primitive other than a symbol (ToString runs no user code): the string, or undefined for the general loop. |
-| 152 | `EnumerableOwnDataProperties` | leaf | 2 | EnumerableOwnProperties ( o, kind ) for kind 1 (values) and 2 (entries) in one step when no enumerable string-keyed own property is an accessor and `o` is not exotic (no Proxy): the array, or undefined for the general loop. |
-| 153 | `TypedArraySetFromDense` | leaf | 2 | Writes values[0 .. length) into the typed array `o` (at least that long) when `values` is an Array whose elements are all present in dense storage and primitives of `o`'s content type (ToNumber / ToBigInt run no user code). False, with nothing written, otherwise. |
-| 154 | `StrLocaleCompare` | leaf | 2 | localeCompare without Intl (as qjs): the difference of the first differing code points, else -1, 0 or 1 by length. |
-| 155 | `StrCharCodeAt` | leaf | 2 | The code unit at i as a Number, NaN out of range. |
-| 156 | `StrCodePointAt` | leaf | 2 | The code point at i (a surrogate pair combined), undefined out of range. |
-| 157 | `StrSubstring` | leaf | 3 | s[start .. end) in code units; the indexes are integers, clamped by the caller. |
-| 158 | `StrIndexOf` | leaf | 3 | The first index ≥ from where search occurs, or -1. |
-| 159 | `StrLastIndexOf` | leaf | 3 | The last index ≤ from where search occurs, or -1. |
-| 160 | `StrToCase` | leaf | 2 | Full Unicode upper- or lowercase (SpecialCasing, Final_Sigma; no locales). |
-| 161 | `StrTrim` | leaf | 2 | Trims WhiteSpace and LineTerminators: where 0 both ends, 1 start, 2 end. |
-| 162 | `StrIsWellFormed` | leaf | 1 | IsStringWellFormedUnicode. |
-| 163 | `StrToWellFormed` | leaf | 1 | Lone surrogates replaced by U+FFFD. |
-| 164 | `StrRepeat` | leaf | 2 | s repeated n times (an integer ≥ 0; RangeError past the string length limit). |
-| 165 | `StrPad` | leaf | 4 | s padded to its length + fillLen with the non-empty filler cycled, before s or after it (generated builtins only). |
-| 166 | `StrFromCodeUnits` | leaf | 1 | A string of the code units ToUint16(n) of the Numbers in a dense array. |
-| 167 | `StrFromCodePoints` | leaf | 1 | A string of the (valid) code points in a dense array. |
-| 168 | `StrNormalize` | leaf | 2 | String.prototype.normalize for form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD: the normalized string; undefined only when djs is built without the `unicode-normalization` feature and the string would need its tables. |
-| 169 | `NewSymbol` | leaf | 1 | A new symbol; the description is a string or undefined. |
-| 170 | `SymbolDescription` | leaf | 1 | [[Description]] of a symbol: a string or undefined. |
-| 171 | `SymbolFor` | leaf | 1 | Symbol.for's GlobalSymbolRegistry lookup or insertion. |
-| 172 | `SymbolKeyFor` | leaf | 1 | Symbol.keyFor's registry lookup: the key, or undefined. |
-| 173 | `NumberToString` | leaf | 2 | Number::toString ( x, radix ) for an integral radix (RangeError outside 2..36), Number.prototype.toString. |
-| 174 | `NumberToFixed` | leaf | 2 | Number.prototype.toFixed after ToIntegerOrInfinity(fractionDigits). |
-| 175 | `NumberToExponential` | leaf | 2 | Number.prototype.toExponential; digits is undefined or an integral Number. |
-| 176 | `NumberToPrecision` | leaf | 2 | Number.prototype.toPrecision; precision is undefined or an integral Number. |
-| 177 | `StringParseFloat` | leaf | 1 | The global parseFloat after ToString. |
-| 178 | `StringParseInt` | leaf | 2 | The global parseInt after ToString; radix is ToInt32(radix). |
-| 179 | `UriEncode` | leaf | 2 | Encode ( string, extraUnescaped ), 19.2.6.5, after ToString: encodeURI keeps the reserved characters (`component` false), encodeURIComponent escapes them. URIError for a lone surrogate. |
-| 180 | `UriDecode` | leaf | 2 | Decode ( string, preserveEscapeSet ), 19.2.6.6, after ToString: decodeURI keeps the escapes of reserved characters (`component` false). URIError for a malformed escape or UTF-8 sequence. |
-| 181 | `StrEscape` | leaf | 1 | escape ( string ), B.2.1.1, after ToString. |
-| 182 | `StrUnescape` | leaf | 1 | unescape ( string ), B.2.1.2, after ToString. |
-| 183 | `CompileEval` | leaf | 1 | PerformEval's parse (19.2.1.1) for indirect eval: the source as a Script closure, to be called with `this` = the global object. SyntaxError for invalid source. Charges fuel per source byte. |
-| 184 | `CompileFunction` | leaf | 3 | CreateDynamicFunction's parse (20.2.1.1.1): `kind` 0 function, 1 generator, 2 async, 3 async generator; `params` joined with ","; a Script closure whose call returns the new function. SyntaxError for invalid source. Charges fuel per source byte. |
-| 185 | `GlobalObject` | leaf | 0 | The realm's global object. |
-| 186 | `EnqueueMicrotask` | leaf | 1 | Queues the job MicrotaskJob(callback) (queueMicrotask). |
-| 187 | `NumberToInt32` | leaf | 1 | ToInt32 of a number. |
-| 188 | `NumberToUint32` | leaf | 1 | ToUint32 of a number, as an f64. |
-| 189 | `F64Abs` | leaf | 1 |  |
-| 190 | `F64Acos` | leaf | 1 |  |
-| 191 | `F64Acosh` | leaf | 1 |  |
-| 192 | `F64Asin` | leaf | 1 |  |
-| 193 | `F64Asinh` | leaf | 1 |  |
-| 194 | `F64Atan` | leaf | 1 |  |
-| 195 | `F64Atanh` | leaf | 1 |  |
-| 196 | `F64Atan2` | leaf | 2 |  |
-| 197 | `F64Cbrt` | leaf | 1 |  |
-| 198 | `F64Hypot` | leaf | 2 |  |
-| 199 | `F64Ceil` | leaf | 1 |  |
-| 200 | `F64Clz32` | leaf | 1 | Math.clz32 of a number (ToUint32 inside). |
-| 201 | `F64Cos` | leaf | 1 |  |
-| 202 | `F64Cosh` | leaf | 1 |  |
-| 203 | `F64Exp` | leaf | 1 |  |
-| 204 | `F64Expm1` | leaf | 1 |  |
-| 205 | `F64Floor` | leaf | 1 |  |
-| 206 | `F64Fround` | leaf | 1 | Rounds to the nearest f32. |
-| 207 | `F64F16round` | leaf | 1 | Rounds to the nearest binary16 value (Math.f16round). |
-| 208 | `F64SumPrecise` | leaf | 1 | The exactly rounded sum of the Numbers of the dense Array list (Math.sumPrecise). |
-| 209 | `F64Imul` | leaf | 2 | Math.imul of two numbers (ToUint32 inside). |
-| 210 | `F64Log` | leaf | 1 |  |
-| 211 | `F64Log1p` | leaf | 1 |  |
-| 212 | `F64Log10` | leaf | 1 |  |
-| 213 | `F64Log2` | leaf | 1 |  |
-| 214 | `F64Round` | leaf | 1 | Math.round: half up, -0 kept. |
-| 215 | `F64Sign` | leaf | 1 |  |
-| 216 | `F64Sin` | leaf | 1 |  |
-| 217 | `F64Sinh` | leaf | 1 |  |
-| 218 | `F64Sqrt` | leaf | 1 |  |
-| 219 | `F64Tan` | leaf | 1 |  |
-| 220 | `F64Tanh` | leaf | 1 |  |
-| 221 | `F64Trunc` | leaf | 1 |  |
-| 222 | `MathRandom` | leaf | 0 | The next number in [0, 1) of the realm's generator (xorshift128+, seeded by the host). |
-| 223 | `CreateArrayIterator` | leaf | 2 | A new Array Iterator over o (kind 0: keys, 1: values, 2: entries), 23.1.5.1. |
-| 224 | `ArrayIteratorTarget` | leaf | 1 | The object an Array Iterator iterates, or undefined once it is exhausted. TypeError "Array Iterator object expected" if it is not an Array Iterator. |
-| 225 | `ArrayIteratorIndex` | leaf | 1 | The next index of an Array Iterator. |
-| 226 | `ArrayIteratorSetIndex` | leaf | 2 |  |
-| 227 | `ArrayIteratorFinish` | leaf | 1 | Marks an Array Iterator exhausted (its target becomes undefined). |
-| 228 | `ArrayIteratorKind` | leaf | 1 | The kind of an Array Iterator (0: keys, 1: values, 2: entries). |
-| 229 | `CreateStringIterator` | leaf | 1 | A String Iterator over s (CreateStringIterator, 22.1.5.1): an Array Iterator object of kind 3 with %StringIteratorPrototype%; ArrayIteratorIndex/SetIndex/Finish apply. |
-| 230 | `StringIteratorTarget` | leaf | 1 | The string a String Iterator iterates, or undefined once it is exhausted. TypeError "String Iterator object expected" otherwise. |
-| 231 | `StrCodePointString` | leaf | 2 | The code point at index i of s as a string (one or two code units). |
-| 232 | `HasOriginalIteration` | leaf | 1 | Whether v is an Array or a string whose iteration is the original Symbol.iterator method and `next` (data properties only): iterating it then equals reading it directly. |
-| 233 | `IteratorFastReady` | leaf | 2 | Whether the next step of `iterator` with `next` gives a value without running user code: `next` is the original one of an Array or String Iterator and the value is at hand. Then `IteratorFastValue` returns it; otherwise call `next`. |
-| 234 | `IteratorFastValue` | leaf | 2 | The next value of an iterator `IteratorFastReady` accepts (it advances). |
-| 235 | `IteratorFastDrain` | leaf | 4 | The values `IteratorFastValue` would give one by one for a keys or values Array Iterator, stored with CreateDataPropertyOrThrow into the Array `arr` at n, n + 1, ... in one step, while they are plain dense stores: the next n. Stops before a value only `next` can read (a hole), at the end (the next step finishes the iterator) and where a store is not plain; gives n back unchanged for anything else. |
-| 236 | `CreateIterResultObject` | leaf | 2 | CreateIterResultObject ( value, done ), 7.4.14. |
-| 237 | `CreateArrayFromPair` | leaf | 2 | A new Array [a, b]. |
-| 238 | `PromiseCreate` | leaf | 1 | A new pending Promise with prototype proto. |
-| 239 | `IsPromise` | leaf | 1 | Whether v is a Promise object (has [[PromiseState]]). |
-| 240 | `IntrinsicPromise` | leaf | 0 | The realm's %Promise% constructor. |
-| 241 | `PromiseState` | leaf | 1 | [[PromiseState]]: 0 pending, 1 fulfilled, 2 rejected. |
-| 242 | `PromiseResult` | leaf | 1 | [[PromiseResult]]. |
-| 243 | `FulfillPromise` | leaf | 2 | FulfillPromise ( promise, value ), 27.2.1.4: reactions become jobs. No-op unless pending. |
-| 244 | `RejectPromise` | leaf | 2 | RejectPromise ( promise, reason ), 27.2.1.7, with the rejection tracker. No-op unless pending. |
-| 245 | `PromiseClaimResolve` | leaf | 1 | Sets the [[AlreadyResolved]] of p's own resolving functions (and internal capability); false if it was already set. |
-| 246 | `PerformPromiseThen` | leaf | 4 | PerformPromiseThen ( promise, onFulfilled, onRejected, resultCapability ), 27.2.5.4.1, without the result: handlers that are not callable count as empty. |
-| 247 | `PromiseCombinatorRun` | leaf | 5 | The elements of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race 3) that an Array values iterator gives without user code (as `IteratorFastValue` would), one after another while their steps run no user code either: `fixed` is the Record [C, promiseResolve, capability, values, remaining, resolveFn, rejectFn], C %Promise% with the original `resolve`, and the element a Promise of %Promise% or a value that fulfills one without a `then` call, whose `then`, `constructor` and %Promise%[@@species] are the original ones. Each is done as the loop body would (values slot, element Record, functions, `then`); returns the next index. |
-| 248 | `EnqueuePromiseResolveThenableJob` | leaf | 3 | Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. |
-| 249 | `NewRecord` | leaf | 1 | A new internal Record with n slots, all undefined. |
-| 250 | `RecordGet` | leaf | 2 | Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper). |
-| 251 | `RecordSet` | leaf | 3 |  |
-| 252 | `NewBuiltinClosure` | leaf | 3 | A function (name "", `length`) that calls the builtin `kind` (the table in interp/run/intrinsics.rs: 0 PromiseResolveFunction, 1 PromiseRejectFunction, 2 GetCapabilitiesExecutor, 3 PromiseAllResolveElement, 4 PromiseAllSettledResolveElement, 5 PromiseAllSettledRejectElement, 6 PromiseAnyRejectElement, 7 PromiseThenFinally, 8 PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11 AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13 AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15 ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected, 18 AsyncDisposeFulfilled, 19 AsyncDisposeRejected, 20 DecoratorAddInitializer, 21 DecoratorAccessGet, 22 DecoratorAccessSet, 23 DecoratorAccessHas, 24 DecoratorParamCall) with `this` = data and its own arguments. |
-| 253 | `GeneratorState` | leaf | 1 | The state of a generator object (not an async state), or -1 for anything else. |
-| 254 | `GeneratorSetState` | leaf | 2 |  |
-| 255 | `GeneratorResume` | reentrant | 3 | Resumes a suspended generator or async function (state 0 or 1) in a frame of its own: mode 0 continues with value (a generator at a yield gets `value false`, an async function the value), 1 throws value at the suspension point, 2 (generators at a yield) returns value from there (`value true`). The result is what the activation hands back when it next suspends or completes. |
-| 256 | `IsAsyncFunctionState` | leaf | 1 | Whether v is the state of an async function call. |
-| 257 | `AsyncFunctionPromise` | leaf | 1 | The result promise of an async function call. |
-| 258 | `AsyncGeneratorState` | leaf | 1 | The state of an async generator, or -1 for anything else. |
-| 259 | `AsyncGeneratorEnqueue` | leaf | 2 | Appends a request to the generator's queue. |
-| 260 | `AsyncGeneratorFirstRequest` | leaf | 1 | The oldest request, or undefined. |
-| 261 | `AsyncGeneratorDequeue` | leaf | 1 | Removes and returns the oldest request (undefined if none). |
-| 262 | `CreateAsyncFromSyncIterator` | leaf | 2 | CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: a Record [iterator, next] with %AsyncFromSyncIteratorPrototype%. |
-| 263 | `CreateIteratorHelper` | leaf | 3 | A new IteratorHelper object of `kind` (0: Iterator.from's wrapper, with %WrapForValidIteratorPrototype%; else a helper, with %IteratorHelperPrototype%): slot 0 kind, 1 state 0, 2 iterator, 3 next, the others undefined. |
-| 264 | `ThisIteratorHelper` | leaf | 2 | v if it is an iterator helper (wrap false) or Iterator.from's wrapper (wrap true), else TypeError "Iterator Helper object expected" / "Iterator Wrap object expected". |
-| 265 | `WeakRefCreate` | leaf | 2 | A new WeakRef with prototype proto and target (AddToKeptObjects ( target ) too). |
-| 266 | `WeakRefDeref` | leaf | 1 | WeakRefDeref of v (AddToKeptObjects of a live target): the target, or undefined once it died. TypeError "WeakRef object expected" for anything else. |
-| 267 | `FinalizationRegistryCreate` | leaf | 2 | A new FinalizationRegistry with prototype proto and cleanupCallback. |
-| 268 | `ThisFinalizationRegistry` | leaf | 1 | v if it is a FinalizationRegistry, else TypeError "FinalizationRegistry object expected". |
-| 269 | `FinalizationRegistryRegister` | leaf | 4 | Appends a cell (token undefined for none). |
-| 270 | `FinalizationRegistryUnregister` | leaf | 2 | Removes the cells registered with token; whether there were any. |
-| 271 | `FinalizationRegistryNextDead` | leaf | 1 | The index of the first cell whose target died, or -1. |
-| 272 | `FinalizationRegistryTake` | leaf | 2 | The held value of dead cell i, removing the cell. |
-| 273 | `FinalizationRegistrySetQueued` | leaf | 2 | Marks whether a cleanup job for r is queued. |
-| 274 | `DisposableStackCreate` | leaf | 2 | A new DisposableStack (isAsync false) or AsyncDisposableStack with prototype proto: slot 0 isAsync, 1 state 0 (pending), 2 a new empty Array of resources. |
-| 275 | `ThisDisposableStack` | leaf | 2 | v if it is a DisposableStack (isAsync false) or an AsyncDisposableStack, else TypeError "DisposableStack object expected" / "AsyncDisposableStack object expected". |
-| 276 | `TextCodecCreate` | leaf | 2 | A new TextEncoder (flags 0) or TextDecoder (flags 1 \| fatal 2 \| ignoreBOM 4). |
-| 277 | `TextCodecFlags` | leaf | 2 | The flags of v, a TextDecoder (decoder) or a TextEncoder; else TypeError. |
-| 278 | `IsBufferSource` | leaf | 1 | Whether v is an ArrayBuffer, a typed array or a DataView. |
-| 279 | `Utf8Encode` | leaf | 4 | buffer undefined: a new Uint8Array of the UTF-8 of s (lone surrogates as U+FFFD). Else encodeInto into bytes offset..offset + length of the ArrayBuffer buffer: { read, written }. |
-| 280 | `Utf8Decode` | leaf | 5 | The decoder's output for bytes offset..offset + length (length -1: to the end) of the ArrayBuffer buffer (none if undefined, detached or out of range), keeping an incomplete sequence for the next call if stream; undefined for a fatal error. |
-| 281 | `JsonParse` | leaf | 2 | JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. With withSource, an Array [value, record] where record is the JSON Parse Record tree for the reviver's source text access: [value, source, elements, entries]. |
-| 282 | `JsonRawJSON` | leaf | 1 | JSON.rawJSON's work after ToString: a frozen, null-prototype RawJSON object with the own property rawJSON = text; SyntaxError "invalid rawJSON string" unless text is a JSON primitive without leading or trailing whitespace. |
-| 283 | `IsRawJSON` | leaf | 1 | Whether v has [[IsRawJSON]] (a JSON.rawJSON object). |
-| 284 | `JsonStringifyFast` | leaf | 2 | JSON.stringify(v, undefined, space) with gap already computed, for plain data: the string, undefined for an undefined result, or null when the value needs the full algorithm (accessors, toJSON, wrappers, exotic objects; nothing observable happened). TypeError "circular reference" and RangeError "Maximum call stack size exceeded" are final. |
-| 285 | `JsonStringifyFastAt` | leaf | 4 | JsonStringifyFast for an object the full algorithm reached, after its toJSON and replacer (its own toJSON is not looked at again), nested in the objects of the algorithm's `stack` (a cycle back to one throws; they set the indentation), with an array replacer's PropertyList or undefined: the string, or null when it is not plain data. |
-| 286 | `JsonQuote` | leaf | 1 | QuoteJSONString ( value ), 25.5.2.3. |
-| 287 | `CreateDataProperty` | reentrant | 3 | CreateDataProperty ( O, P, V ): false if refused. |
-| 288 | `IsBigInt` | leaf | 1 |  |
-| 289 | `ToBigIntPrimitive` | leaf | 1 | ToBigInt of a primitive: TypeError for undefined, null, numbers and symbols; SyntaxError for a bad string. |
-| 290 | `NumberToBigInt` | leaf | 1 | NumberToBigInt ( number ), 21.2.1.1.1: RangeError unless integral. |
-| 291 | `BigIntToString` | leaf | 2 | The digits of a BigInt in radix 2..36. |
-| 292 | `BigIntAsIntN` | leaf | 2 | BigInt.asIntN on an index and a BigInt. |
-| 293 | `BigIntAsUintN` | leaf | 2 | BigInt.asUintN on an index and a BigInt. |
-| 294 | `BigIntToNumber` | leaf | 1 | The Number value of a BigInt (rounded to nearest). |
-| 295 | `IsRegExpObject` | leaf | 1 | Whether v is a RegExp object (has [[RegExpMatcher]]). |
-| 296 | `RegExpCreate` | leaf | 3 | RegExpAlloc + RegExpInitialize after the ToStrings: a new RegExp with prototype proto (%RegExp.prototype% for undefined) and lastIndex 0. qjs's SyntaxError for a bad pattern or flags. Regex literals compile to this. The pattern may be a RegExp object instead of its source: with the same flags the new one shares its program. |
-| 297 | `RegExpSource` | leaf | 1 | [[OriginalSource]] of a RegExp object. |
-| 298 | `RegExpFlags` | leaf | 1 | [[OriginalFlags]] of a RegExp object, in canonical order. |
-| 299 | `RegExpHasFlag` | leaf | 2 | Whether a RegExp object has the flag letter `flag`. |
-| 300 | `RegExpEscapedSource` | leaf | 1 | EscapeRegExpPattern of [[OriginalSource]] (`(?:)` when empty). |
-| 301 | `RegExpExecRaw` | leaf | 4 | RegExpBuiltinExec ( R, S ) once lastIndex is Get(R, "lastIndex") as a Number (ToLength is applied here): the match array or null, and lastIndex updated for g and y. Pass undefined as state: when the fuel runs out mid-match the interpreter suspends here and keeps the matcher's state in that argument. InternalError "out of memory in regexp execution" if the backtracking stack overflows. |
-| 302 | `RegExpTestRaw` | leaf | 4 | RegExpExecRaw without the match array: whether it matched (lastIndex is updated the same way). Suspendable like RegExpExecRaw. |
-| 303 | `RegExpExecOwn` | leaf | 4 | RegExpExec ( R, S ) when its lookups read only data: R is a RegExp without an own `exec`, whose prototype is %RegExp.prototype% with the original `exec`, and whose own lastIndex is a Number. Then the match array or null (with `test`, true or false), lastIndex updated; else undefined, with nothing done. Suspendable like RegExpExecRaw (pass undefined as state). |
-| 304 | `IsOriginalRegExpExec` | leaf | 1 | Whether v is the original RegExp.prototype.exec (the installed builtin). |
-| 305 | `CreateRegExpStringIterator` | leaf | 4 | A RegExp String Iterator (CreateRegExpStringIterator, 22.2.9.1). |
-| 306 | `RegExpStringIteratorSlot` | leaf | 2 | Slot i of a RegExp String Iterator: 0 the regexp, 1 the string, 2 global, 3 unicode, 4 done. TypeError "RegExp String Iterator object expected" for anything else. |
-| 307 | `RegExpStringIteratorFinish` | leaf | 1 | Marks a RegExp String Iterator done. |
-| 308 | `RegExpEscapeString` | leaf | 1 | RegExp.escape of a string (EncodeForRegExpEscape, qjs's lowercase hex). |
-| 309 | `IsPristineRegExp` | leaf | 1 | Whether v is a RegExp whose protocol lookups (exec, flags and the flag getters, constructor, Symbol.species, Symbol.match, lastIndex) are all original data, so that skipping them is unobservable. |
-| 310 | `RegExpSplitRaw` | leaf | 4 | RegExp.prototype[Symbol.split] of a pristine RegExp on a non-empty string with 0 < lim: the result array. Suspendable like RegExpExecRaw (pass undefined as state). |
-| 311 | `RegExpReplaceRaw` | leaf | 4 | RegExp.prototype[Symbol.replace] of a pristine global RegExp with a string replacement template: the result, and lastIndex 0. Suspendable like RegExpExecRaw. |
-| 312 | `IsDenseArray` | leaf | 1 | Whether v is an Array whose elements 0 .. length-1 are all present in its dense store (no holes): reading them with Get then runs no user code. |
-| 313 | `AllNumbers` | leaf | 1 | Whether every element of a dense array (no holes) is a Number. |
-| 314 | `AllCodePoints` | leaf | 1 | Whether every element of a dense array is an integral Number in [0, 0x10FFFF]. |
-| 315 | `InstallMethod` | leaf | 4 | Defines f as a method of the object at the dotted path `target` (from the global object): writable, configurable, not enumerable, with `name` = key and `length`. The key is a string or a symbol (`[Symbol.iterator]` paths). |
-| 316 | `InstallConstructor` | leaf | 5 | `@constructor`: defines f as the global constructor `key` (writable, configurable, not enumerable) and sets its `name` and `length`; with a parent (a dotted path), f's [[Prototype]] is the parent constructor. Its statics follow, then InstallPrototype. |
-| 317 | `InstallPrototype` | leaf | 3 | The `prototype` of the constructor `key`, installed after its statics (qjs's order): the realm's intrinsic prototype for that name if there is one, else a new object inheriting from the parent's prototype (or Object.prototype). Sets `f.prototype`. |
-| 318 | `InstallPrototypeConstructor` | leaf | 1 | `prototype.constructor` of the constructor `key`, installed among the prototype's methods where qjs's order puts it. |
-| 319 | `InstallAccessor` | leaf | 4 | `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). |
-| 320 | `InstallValue` | leaf | 4 | `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). |
-| 321 | `InstallIntrinsic` | leaf | 2 | Registers f so that privileged code can call it as %name(...). |
-| 322 | `MarkNative` | leaf | 2 | Makes the builtin f native builtin `index` of the generated table: with native builtins on, its calls run the Rust state machine. |
-| 323 | `MarkFast` | leaf | 1 | Gives the builtin f its leaf fast path (`@fast`): with native builtins on, a call first tries the Rust function of the same name in builtins/fast.rs. |
-| 324 | `NsOp` | leaf | 4 | Internal method op (builtins/module.ts ModuleOp) of the module namespace whose proxy target is target, on key: 0 [[Get]] (a symbol key: the target's; ReferenceError in a binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or undefined, 2 [[DefineOwnProperty]] with descriptor object desc (its own fields), 3 [[OwnPropertyKeys]] as a new array. For import(): 4 the VM's async host function for imports or undefined, 5 the linked module record of key target (an Error if none), 6 the namespace of module record target, 7 the reaction that finishes an import. |
-| 325 | `ArraySpeciesCreate` | builtin (JS) | 2 |  |
-| 326 | `ArrayConstructor` | builtin (JS) | 0 + rest |  |
-| 327 | `ArraySpecies` | builtin (JS) | 0 |  |
-| 328 | `FindViaPredicate` | builtin (JS) | 6 |  |
-| 329 | `EveryOrSome` | builtin (JS) | 4 |  |
-| 330 | `SortList` | builtin (JS) | 2 |  |
-| 331 | `CollectPresent` | builtin (JS) | 3 |  |
-| 332 | `ArraySetLength` | builtin (JS) | 3 |  |
-| 333 | `AsyncGeneratorStep` | builtin (JS) | 3 |  |
-| 334 | `AsyncGeneratorAwaitReturnFulfilled` | builtin (JS) | 1 |  |
-| 335 | `AsyncGeneratorAwaitReturnRejected` | builtin (JS) | 1 |  |
-| 336 | `GetAsyncIterator` | builtin (JS) | 1 |  |
-| 337 | `AsyncIteratorReturnMethod` | builtin (JS) | 1 |  |
-| 338 | `AsyncIteratorCloseThrow` | builtin (JS) | 1 |  |
-| 339 | `AsyncFromSyncIteratorUnwrap` | builtin (JS) | 1 |  |
-| 340 | `AsyncFromSyncIteratorCloseThrow` | builtin (JS) | 1 |  |
-| 341 | `ToBigInt` | builtin (JS) | 1 |  |
-| 342 | `GetSite` | builtin (JS) | 2 |  |
-| 343 | `ToPrimitive` | builtin (JS) | 2 |  |
-| 344 | `ToNumber` | builtin (JS) | 1 |  |
-| 345 | `ToString` | builtin (JS) | 1 |  |
-| 346 | `LengthOfArrayLike` | builtin (JS) | 1 |  |
-| 347 | `ToPropertyKey` | builtin (JS) | 1 |  |
-| 348 | `GetPrototypeFromConstructorSlow` | builtin (JS) | 2 |  |
-| 349 | `ToNumeric` | builtin (JS) | 1 |  |
-| 350 | `DatePrototypeValueOf` | builtin (JS) | 0 |  |
-| 351 | `DatePrototypeToISOString` | builtin (JS) | 0 |  |
-| 352 | `DatePrototypeToJSON` | builtin (JS) | 1 |  |
-| 353 | `DatePrototypeToPrimitive` | builtin (JS) | 1 |  |
-| 354 | `DecoratorStart` | builtin (JS) | 2 |  |
-| 355 | `ApplyDecorators` | builtin (JS) | 6 |  |
-| 356 | `DecoratorRunInits` | builtin (JS) | 3 |  |
-| 357 | `DecoratorRunExtras` | builtin (JS) | 3 |  |
-| 358 | `DecoratorAddInitializer` | builtin (JS) | 1 |  |
-| 359 | `DecoratorAccessGet` | builtin (JS) | 1 |  |
-| 360 | `DecoratorAccessSet` | builtin (JS) | 2 |  |
-| 361 | `DecoratorAccessHas` | builtin (JS) | 1 |  |
-| 362 | `ApplyLegacyDecorators` | builtin (JS) | 4 |  |
-| 363 | `DecoratorParam` | builtin (JS) | 2 |  |
-| 364 | `DecoratorParamCall` | builtin (JS) | 2 |  |
-| 365 | `DecoratorMetadata` | builtin (JS) | 2 |  |
-| 366 | `AsyncDisposeFulfilled` | builtin (JS) | 1 |  |
-| 367 | `AsyncDisposeRejected` | builtin (JS) | 1 |  |
-| 368 | `UsingCreate` | builtin (JS) | 0 |  |
-| 369 | `UsingAdd` | builtin (JS) | 2 |  |
-| 370 | `AwaitUsingAdd` | builtin (JS) | 2 |  |
-| 371 | `UsingDisposeError` | builtin (JS) | 2 |  |
-| 372 | `UsingDispose` | builtin (JS) | 1 |  |
-| 373 | `UsingDisposeStep` | builtin (JS) | 1 |  |
-| 374 | `UsingAwaitValue` | builtin (JS) | 1 |  |
-| 375 | `CallPrepareStackTrace` | builtin (JS) | 4 |  |
-| 376 | `ThrowWithStack` | builtin (JS) | 1 |  |
-| 377 | `MicrotaskJob` | builtin (JS) | 1 |  |
-| 378 | `FromAsyncFulfilled` | builtin (JS) | 1 |  |
-| 379 | `FromAsyncRejected` | builtin (JS) | 1 |  |
-| 380 | `InstanceofOperator` | builtin (JS) | 2 |  |
-| 381 | `ClassHeritage` | builtin (JS) | 1 |  |
-| 382 | `ThrowTypeError` | builtin (JS) | 1 |  |
-| 383 | `FunctionPrototypeBehavior` | builtin (JS) | 0 |  |
-| 384 | `AsyncAwait` | builtin (JS) | 2 |  |
-| 385 | `AsyncFunctionReturn` | builtin (JS) | 2 |  |
-| 386 | `GeneratorFunctionConstructor` | builtin (JS) | 0 + rest |  |
-| 387 | `AsyncGeneratorFunctionConstructor` | builtin (JS) | 0 + rest |  |
-| 388 | `AsyncFunctionConstructor` | builtin (JS) | 0 + rest |  |
-| 389 | `DynamicImport` | builtin (JS) | 2 |  |
-| 390 | `GetIterator` | builtin (JS) | 1 |  |
-| 391 | `IteratorClose` | builtin (JS) | 1 |  |
-| 392 | `IteratorCloseThrow` | builtin (JS) | 1 |  |
-| 393 | `IteratorRest` | builtin (JS) | 2 |  |
-| 394 | `ArrayPrototypeValues` | builtin (JS) | 0 |  |
-| 395 | `ArrayIteratorPrototypeNext` | builtin (JS) | 0 |  |
-| 396 | `StringPrototypeIterator` | builtin (JS) | 0 |  |
-| 397 | `StringIteratorPrototypeNext` | builtin (JS) | 0 |  |
-| 398 | `SerializeJSONProperty` | builtin (JS) | 7 |  |
-| 399 | `JSONStackIncludes` | builtin (JS) | 2 |  |
-| 400 | `JSONJoin` | builtin (JS) | 7 |  |
-| 401 | `SerializeJSONObject` | builtin (JS) | 6 |  |
-| 402 | `SerializeJSONArray` | builtin (JS) | 6 |  |
-| 403 | `AddEntriesFromIterable` | builtin (JS) | 3 |  |
-| 404 | `MapPrototypeSet` | builtin (JS) | 2 |  |
-| 405 | `MapIteratorPrototypeNext` | builtin (JS) | 0 |  |
-| 406 | `ModuleOp` | builtin (JS) | 3 |  |
-| 407 | `ResolvePromise` | builtin (JS) | 2 |  |
-| 408 | `PromiseResolveFunction` | builtin (JS) | 1 |  |
-| 409 | `PromiseRejectFunction` | builtin (JS) | 1 |  |
-| 410 | `GetCapabilitiesExecutor` | builtin (JS) | 2 |  |
-| 411 | `PromiseReactionJob` | builtin (JS) | 4 |  |
-| 412 | `PromiseResolveThenableJob` | builtin (JS) | 3 |  |
-| 413 | `PromiseConstructor` | builtin (JS) | 1 |  |
-| 414 | `PromiseSpecies` | builtin (JS) | 0 |  |
-| 415 | `PromiseStaticResolve` | builtin (JS) | 1 |  |
-| 416 | `PromiseAllResolveElement` | builtin (JS) | 1 |  |
-| 417 | `PromiseAllSettledResolveElement` | builtin (JS) | 1 |  |
-| 418 | `PromiseAllSettledRejectElement` | builtin (JS) | 1 |  |
-| 419 | `PromiseAnyRejectElement` | builtin (JS) | 1 |  |
-| 420 | `PromisePrototypeThen` | builtin (JS) | 2 |  |
-| 421 | `PromiseThenFinally` | builtin (JS) | 1 |  |
-| 422 | `PromiseCatchFinally` | builtin (JS) | 1 |  |
-| 423 | `PromiseValueThunk` | builtin (JS) | 0 |  |
-| 424 | `PromiseThrower` | builtin (JS) | 0 |  |
-| 425 | `HostCallSettle` | builtin (JS) | 3 |  |
-| 426 | `ProxyRevokeFunction` | builtin (JS) | 0 |  |
-| 427 | `ProxyGetPrototypeOf` | builtin (JS) | 1 |  |
-| 428 | `ProxySetPrototypeOf` | builtin (JS) | 2 |  |
-| 429 | `ProxyIsExtensible` | builtin (JS) | 1 |  |
-| 430 | `ProxyPreventExtensions` | builtin (JS) | 1 |  |
-| 431 | `ProxyGetOwnPropertyDescriptorObject` | builtin (JS) | 2 |  |
-| 432 | `ProxyHasOwnProperty` | builtin (JS) | 2 |  |
-| 433 | `ProxyOwnPropertyAttributes` | builtin (JS) | 2 |  |
-| 434 | `ProxyDefineOwnPropertyFromRecord` | builtin (JS) | 3 |  |
-| 435 | `ProxyDefineDataPropertyOrThrow` | builtin (JS) | 4 |  |
-| 436 | `ProxyCreateDataProperty` | builtin (JS) | 3 |  |
-| 437 | `ProxyCreateDataPropertyOrThrow` | builtin (JS) | 3 |  |
-| 438 | `ProxyHas` | builtin (JS) | 2 |  |
-| 439 | `ProxyGet` | builtin (JS) | 3 |  |
-| 440 | `ProxySet` | builtin (JS) | 4 |  |
-| 441 | `ProxySetOrThrow` | builtin (JS) | 4 |  |
-| 442 | `ProxySetOnReceiver` | builtin (JS) | 3 |  |
-| 443 | `ProxyDeleteProperty` | builtin (JS) | 2 |  |
-| 444 | `ProxyDeletePropertyOrThrow` | builtin (JS) | 2 |  |
-| 445 | `ProxyOwnPropertyKeys` | builtin (JS) | 2 |  |
-| 446 | `ProxyCall` | builtin (JS) | 3 |  |
-| 447 | `ProxyConstruct` | builtin (JS) | 3 |  |
-| 448 | `OrdinaryConstructSlow` | builtin (JS) | 3 |  |
-| 449 | `ProxySetIntegrityLevel` | builtin (JS) | 2 |  |
-| 450 | `ProxyTestIntegrityLevel` | builtin (JS) | 2 |  |
-| 451 | `ForInStep` | builtin (JS) | 1 |  |
-| 452 | `RegExpSpecies` | builtin (JS) | 0 |  |
-| 453 | `RegExpPrototypeHasIndices` | builtin (JS) | 0 |  |
-| 454 | `RegExpPrototypeGlobal` | builtin (JS) | 0 |  |
-| 455 | `RegExpPrototypeIgnoreCase` | builtin (JS) | 0 |  |
-| 456 | `RegExpPrototypeMultiline` | builtin (JS) | 0 |  |
-| 457 | `RegExpPrototypeDotAll` | builtin (JS) | 0 |  |
-| 458 | `RegExpPrototypeUnicode` | builtin (JS) | 0 |  |
-| 459 | `RegExpPrototypeUnicodeSets` | builtin (JS) | 0 |  |
-| 460 | `RegExpPrototypeSticky` | builtin (JS) | 0 |  |
-| 461 | `RegExpPrototypeFlags` | builtin (JS) | 0 |  |
-| 462 | `RegExpPrototypeExec` | builtin (JS) | 1 |  |
-| 463 | `RegExpPrototypeMatch` | builtin (JS) | 1 |  |
-| 464 | `SetPrototypeAdd` | builtin (JS) | 1 |  |
-| 465 | `SetIteratorPrototypeNext` | builtin (JS) | 0 |  |
-| 466 | `ArraySpread` | builtin (JS) | 2 |  |
-| 467 | `CopyDataProperties` | builtin (JS) | 2 |  |
-| 468 | `CopyDataPropertiesExcluding` | builtin (JS) | 2 |  |
-| 469 | `TypedArraySetElementSlow` | builtin (JS) | 3 |  |
-| 470 | `FinalizationRegistryCleanupJob` | builtin (JS) | 1 |  |
+| 142 | `SortCompareCall` | reentrant | 2 | Calls `comparefn(left, right)` (SortOperand) with `this` undefined for the pending comparison of `st` and returns its result, for SortStep. Where comparefn is a plain closure, its results that are Numbers go to SortStep in place and the next comparison runs in the same frame (EachDense's mode 9): the result returned is then the first that is not a Number, or a Number once the list is sorted (SortStep is false from then on). |
+| 143 | `SortOperand` | leaf | 2 | The left (0) or right (1) value of the pending comparison of SortStep. |
+| 144 | `ArraySpliceDense` | leaf | 4 | Splice's element moves in one step on a plain dense Array (no holes, default attributes, extensible, writable length, no index properties on the prototype chain): o[start .. start + deleteCount) becomes itemCount undefined slots and `length` follows. False, with nothing changed, for any other object. |
+| 145 | `ArrayCanPopDense` | leaf | 1 | Whether `ArrayPopDense(o)` applies: an Array with only dense elements, a writable length, its last element present and no index properties on its prototype chain, where pop's Get, DeletePropertyOrThrow and Set observe nothing else. |
+| 146 | `ArrayPopDense` | leaf | 1 | Array.prototype.pop of an array `ArrayCanPopDense` accepts. |
+| 147 | `ArrayFillDense` | leaf | 4 | fill's Sets on an Array while each is a plain store (an existing dense element, or an append or hole fill of an extensible Array without index properties on its prototype chain), from k up to fin: the index the general loop continues from. |
+| 148 | `ArrayPushDense` | leaf | 2 | push(v)'s Set and length update in one step when the Set is a plain append to the Array `o` (extensible, writable length, no holes at its end, no index properties on its prototype chain). The new length, or -1 with nothing changed. |
+| 149 | `ArraySearchDense` | leaf | 5 | The search loops of indexOf (mode 0: `from` up to len, strict equality), lastIndexOf (1: `from` down to 0) and includes (2: up to len, SameValueZero) over an Array whose elements in the range are all present in dense storage, where HasProperty and Get observe nothing: the index found or -1. -2, for the general loop, for anything else (a hole, a shorter array, another object). |
+| 150 | `ArraySliceDense` | leaf | 4 | slice's copy loop: `a[0 .. fin - k) = o[k .. fin)` when every element of `o` in the range is present in dense storage and `a` is an extensible Array without index properties (a fresh ArraySpeciesCreate result), so HasProperty, Get and CreateDataPropertyOrThrow observe nothing. False, with nothing changed, otherwise. |
+| 151 | `EachDense` | reentrant | 7 | The dense part of the loops of the callback builtins. From `k`, while `o` is an Array whose element k is present in its dense store (so HasProperty and Get observe nothing), calls `f(o[k], k, o)` with `thisArg` and completes the step by `mode`: - 0 forEach; - 1 map: CreateDataPropertyOrThrow(a, k, result); - 2 filter: for a truthy result, CreateDataPropertyOrThrow(a, to, o[k]), with `to` the length of `a`, a fresh Array (the receiver's species is plain); - 3 some, 4 every: a truthy (some) or falsy (every) result decides; - 5 find: a truthy result decides, and o[k] goes to element 0 of the Array `a`; - 6 findIndex: a truthy result decides; - 7 reduce: calls `f(acc, o[k], k, o)` with `this` undefined; the accumulator starts as `thisArg`, and each result goes to element 0 of the Array `a` (so `a` holds the accumulator once the returned k is past the starting one); - 8 Array.from of an array-like: calls `f(o[k], k)` and does CreateDataPropertyOrThrow(a, k, result); `o` is any ordinary object (or array or function) whose element k, along its prototype chain, is a data property or absent (undefined), so Get observes nothing; - 9 sort with a comparator, for SortCompareCall only (its result is not a k). One frame for `f`, entered again per element. Returns the k the builtin's own loop goes on from (`len`: done; `k` itself when `f` is not a plain closure or `a` is not as required), or -1 - k when the result at k decided. |
+| 152 | `ArrayJoinDense` | leaf | 3 | join over o[0 .. len) when every element is present in dense storage and a primitive other than a symbol (ToString runs no user code): the string, or undefined for the general loop. |
+| 153 | `EnumerableOwnDataProperties` | leaf | 2 | EnumerableOwnProperties ( o, kind ) for kind 1 (values) and 2 (entries) in one step when no enumerable string-keyed own property is an accessor and `o` is not exotic (no Proxy): the array, or undefined for the general loop. |
+| 154 | `TypedArraySetFromDense` | leaf | 2 | Writes values[0 .. length) into the typed array `o` (at least that long) when `values` is an Array whose elements are all present in dense storage and primitives of `o`'s content type (ToNumber / ToBigInt run no user code). False, with nothing written, otherwise. |
+| 155 | `StrLocaleCompare` | leaf | 2 | localeCompare without Intl (as qjs): the difference of the first differing code points, else -1, 0 or 1 by length. |
+| 156 | `StrCharCodeAt` | leaf | 2 | The code unit at i as a Number, NaN out of range. |
+| 157 | `StrCodePointAt` | leaf | 2 | The code point at i (a surrogate pair combined), undefined out of range. |
+| 158 | `StrSubstring` | leaf | 3 | s[start .. end) in code units; the indexes are integers, clamped by the caller. |
+| 159 | `StrIndexOf` | leaf | 3 | The first index ≥ from where search occurs, or -1. |
+| 160 | `StrLastIndexOf` | leaf | 3 | The last index ≤ from where search occurs, or -1. |
+| 161 | `StrToCase` | leaf | 2 | Full Unicode upper- or lowercase (SpecialCasing, Final_Sigma; no locales). |
+| 162 | `StrTrim` | leaf | 2 | Trims WhiteSpace and LineTerminators: where 0 both ends, 1 start, 2 end. |
+| 163 | `StrIsWellFormed` | leaf | 1 | IsStringWellFormedUnicode. |
+| 164 | `StrToWellFormed` | leaf | 1 | Lone surrogates replaced by U+FFFD. |
+| 165 | `StrRepeat` | leaf | 2 | s repeated n times (an integer ≥ 0; RangeError past the string length limit). |
+| 166 | `StrPad` | leaf | 4 | s padded to its length + fillLen with the non-empty filler cycled (undefined: spaces), before s or after it (generated builtins only). |
+| 167 | `StrFromCodeUnits` | leaf | 1 | A string of the code units ToUint16(n) of the Numbers in a dense array. |
+| 168 | `StrFromCodePoints` | leaf | 1 | A string of the (valid) code points in a dense array. |
+| 169 | `StrNormalize` | leaf | 2 | String.prototype.normalize for form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD: the normalized string; undefined only when djs is built without the `unicode-normalization` feature and the string would need its tables. |
+| 170 | `NewSymbol` | leaf | 1 | A new symbol; the description is a string or undefined. |
+| 171 | `SymbolDescription` | leaf | 1 | [[Description]] of a symbol: a string or undefined. |
+| 172 | `SymbolFor` | leaf | 1 | Symbol.for's GlobalSymbolRegistry lookup or insertion. |
+| 173 | `SymbolKeyFor` | leaf | 1 | Symbol.keyFor's registry lookup: the key, or undefined. |
+| 174 | `NumberToString` | leaf | 2 | Number::toString ( x, radix ) for an integral radix (RangeError outside 2..36), Number.prototype.toString. |
+| 175 | `NumberToFixed` | leaf | 2 | Number.prototype.toFixed after ToIntegerOrInfinity(fractionDigits). |
+| 176 | `NumberToExponential` | leaf | 2 | Number.prototype.toExponential; digits is undefined or an integral Number. |
+| 177 | `NumberToPrecision` | leaf | 2 | Number.prototype.toPrecision; precision is undefined or an integral Number. |
+| 178 | `StringParseFloat` | leaf | 1 | The global parseFloat after ToString. |
+| 179 | `StringParseInt` | leaf | 2 | The global parseInt after ToString; radix is ToInt32(radix). |
+| 180 | `UriEncode` | leaf | 2 | Encode ( string, extraUnescaped ), 19.2.6.5, after ToString: encodeURI keeps the reserved characters (`component` false), encodeURIComponent escapes them. URIError for a lone surrogate. |
+| 181 | `UriDecode` | leaf | 2 | Decode ( string, preserveEscapeSet ), 19.2.6.6, after ToString: decodeURI keeps the escapes of reserved characters (`component` false). URIError for a malformed escape or UTF-8 sequence. |
+| 182 | `StrEscape` | leaf | 1 | escape ( string ), B.2.1.1, after ToString. |
+| 183 | `StrUnescape` | leaf | 1 | unescape ( string ), B.2.1.2, after ToString. |
+| 184 | `CompileEval` | leaf | 1 | PerformEval's parse (19.2.1.1) for indirect eval: the source as a Script closure, to be called with `this` = the global object. SyntaxError for invalid source. Charges fuel per source byte. |
+| 185 | `CompileFunction` | leaf | 3 | CreateDynamicFunction's parse (20.2.1.1.1): `kind` 0 function, 1 generator, 2 async, 3 async generator; `params` joined with ","; a Script closure whose call returns the new function. SyntaxError for invalid source. Charges fuel per source byte. |
+| 186 | `GlobalObject` | leaf | 0 | The realm's global object. |
+| 187 | `EnqueueMicrotask` | leaf | 1 | Queues the job MicrotaskJob(callback) (queueMicrotask). |
+| 188 | `NumberToInt32` | leaf | 1 | ToInt32 of a number. |
+| 189 | `NumberToUint32` | leaf | 1 | ToUint32 of a number, as an f64. |
+| 190 | `F64Abs` | leaf | 1 |  |
+| 191 | `F64Acos` | leaf | 1 |  |
+| 192 | `F64Acosh` | leaf | 1 |  |
+| 193 | `F64Asin` | leaf | 1 |  |
+| 194 | `F64Asinh` | leaf | 1 |  |
+| 195 | `F64Atan` | leaf | 1 |  |
+| 196 | `F64Atanh` | leaf | 1 |  |
+| 197 | `F64Atan2` | leaf | 2 |  |
+| 198 | `F64Cbrt` | leaf | 1 |  |
+| 199 | `F64Hypot` | leaf | 2 |  |
+| 200 | `F64Ceil` | leaf | 1 |  |
+| 201 | `F64Clz32` | leaf | 1 | Math.clz32 of a number (ToUint32 inside). |
+| 202 | `F64Cos` | leaf | 1 |  |
+| 203 | `F64Cosh` | leaf | 1 |  |
+| 204 | `F64Exp` | leaf | 1 |  |
+| 205 | `F64Expm1` | leaf | 1 |  |
+| 206 | `F64Floor` | leaf | 1 |  |
+| 207 | `F64Fround` | leaf | 1 | Rounds to the nearest f32. |
+| 208 | `F64F16round` | leaf | 1 | Rounds to the nearest binary16 value (Math.f16round). |
+| 209 | `F64SumPrecise` | leaf | 1 | The exactly rounded sum of the Numbers of the dense Array list (Math.sumPrecise). |
+| 210 | `F64Imul` | leaf | 2 | Math.imul of two numbers (ToUint32 inside). |
+| 211 | `F64Log` | leaf | 1 |  |
+| 212 | `F64Log1p` | leaf | 1 |  |
+| 213 | `F64Log10` | leaf | 1 |  |
+| 214 | `F64Log2` | leaf | 1 |  |
+| 215 | `F64Round` | leaf | 1 | Math.round: half up, -0 kept. |
+| 216 | `F64Sign` | leaf | 1 |  |
+| 217 | `F64Sin` | leaf | 1 |  |
+| 218 | `F64Sinh` | leaf | 1 |  |
+| 219 | `F64Sqrt` | leaf | 1 |  |
+| 220 | `F64Tan` | leaf | 1 |  |
+| 221 | `F64Tanh` | leaf | 1 |  |
+| 222 | `F64Trunc` | leaf | 1 |  |
+| 223 | `MathRandom` | leaf | 0 | The next number in [0, 1) of the realm's generator (xorshift128+, seeded by the host). |
+| 224 | `CreateArrayIterator` | leaf | 2 | A new Array Iterator over o (kind 0: keys, 1: values, 2: entries), 23.1.5.1. |
+| 225 | `ArrayIteratorTarget` | leaf | 1 | The object an Array Iterator iterates, or undefined once it is exhausted. TypeError "Array Iterator object expected" if it is not an Array Iterator. |
+| 226 | `ArrayIteratorIndex` | leaf | 1 | The next index of an Array Iterator. |
+| 227 | `ArrayIteratorSetIndex` | leaf | 2 |  |
+| 228 | `ArrayIteratorFinish` | leaf | 1 | Marks an Array Iterator exhausted (its target becomes undefined). |
+| 229 | `ArrayIteratorKind` | leaf | 1 | The kind of an Array Iterator (0: keys, 1: values, 2: entries). |
+| 230 | `CreateStringIterator` | leaf | 1 | A String Iterator over s (CreateStringIterator, 22.1.5.1): an Array Iterator object of kind 3 with %StringIteratorPrototype%; ArrayIteratorIndex/SetIndex/Finish apply. |
+| 231 | `StringIteratorTarget` | leaf | 1 | The string a String Iterator iterates, or undefined once it is exhausted. TypeError "String Iterator object expected" otherwise. |
+| 232 | `StrCodePointString` | leaf | 2 | The code point at index i of s as a string (one or two code units). |
+| 233 | `HasOriginalIteration` | leaf | 1 | Whether v is an Array or a string whose iteration is the original Symbol.iterator method and `next` (data properties only): iterating it then equals reading it directly. |
+| 234 | `IteratorFastReady` | leaf | 2 | Whether the next step of `iterator` with `next` gives a value without running user code: `next` is the original one of an Array or String Iterator and the value is at hand. Then `IteratorFastValue` returns it; otherwise call `next`. |
+| 235 | `IteratorFastValue` | leaf | 2 | The next value of an iterator `IteratorFastReady` accepts (it advances). |
+| 236 | `IteratorFastDrain` | leaf | 4 | The values `IteratorFastValue` would give one by one for a keys or values Array Iterator, stored with CreateDataPropertyOrThrow into the Array `arr` at n, n + 1, ... in one step, while they are plain dense stores: the next n. Stops before a value only `next` can read (a hole), at the end (the next step finishes the iterator) and where a store is not plain; gives n back unchanged for anything else. |
+| 237 | `CreateIterResultObject` | leaf | 2 | CreateIterResultObject ( value, done ), 7.4.14. |
+| 238 | `CreateArrayFromPair` | leaf | 2 | A new Array [a, b]. |
+| 239 | `PromiseCreate` | leaf | 1 | A new pending Promise with prototype proto. |
+| 240 | `IsPromise` | leaf | 1 | Whether v is a Promise object (has [[PromiseState]]). |
+| 241 | `IntrinsicPromise` | leaf | 0 | The realm's %Promise% constructor. |
+| 242 | `PromiseState` | leaf | 1 | [[PromiseState]]: 0 pending, 1 fulfilled, 2 rejected. |
+| 243 | `PromiseResult` | leaf | 1 | [[PromiseResult]]. |
+| 244 | `FulfillPromise` | leaf | 2 | FulfillPromise ( promise, value ), 27.2.1.4: reactions become jobs. No-op unless pending. |
+| 245 | `RejectPromise` | leaf | 2 | RejectPromise ( promise, reason ), 27.2.1.7, with the rejection tracker. No-op unless pending. |
+| 246 | `PromiseClaimResolve` | leaf | 1 | Sets the [[AlreadyResolved]] of p's own resolving functions (and internal capability); false if it was already set. |
+| 247 | `PerformPromiseThen` | leaf | 4 | PerformPromiseThen ( promise, onFulfilled, onRejected, resultCapability ), 27.2.5.4.1, without the result: handlers that are not callable count as empty. |
+| 248 | `PromiseCombinatorRun` | leaf | 5 | The elements of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race 3) that an Array values iterator gives without user code (as `IteratorFastValue` would), one after another while their steps run no user code either: `fixed` is the Record [C, promiseResolve, capability, values, remaining, resolveFn, rejectFn], C %Promise% with the original `resolve`, and the element a Promise of %Promise% or a value that fulfills one without a `then` call, whose `then`, `constructor` and %Promise%[@@species] are the original ones. Each is done as the loop body would (values slot, element Record, functions, `then`); returns the next index. |
+| 249 | `EnqueuePromiseResolveThenableJob` | leaf | 3 | Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. |
+| 250 | `NewRecord` | leaf | 1 | A new internal Record with n slots, all undefined. |
+| 251 | `RecordGet` | leaf | 2 | Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper). |
+| 252 | `RecordSet` | leaf | 3 |  |
+| 253 | `NewBuiltinClosure` | leaf | 3 | A function (name "", `length`) that calls the builtin `kind` (the table in interp/run/intrinsics.rs: 0 PromiseResolveFunction, 1 PromiseRejectFunction, 2 GetCapabilitiesExecutor, 3 PromiseAllResolveElement, 4 PromiseAllSettledResolveElement, 5 PromiseAllSettledRejectElement, 6 PromiseAnyRejectElement, 7 PromiseThenFinally, 8 PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11 AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13 AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15 ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected, 18 AsyncDisposeFulfilled, 19 AsyncDisposeRejected, 20 DecoratorAddInitializer, 21 DecoratorAccessGet, 22 DecoratorAccessSet, 23 DecoratorAccessHas, 24 DecoratorParamCall) with `this` = data and its own arguments. |
+| 254 | `GeneratorState` | leaf | 1 | The state of a generator object (not an async state), or -1 for anything else. |
+| 255 | `GeneratorSetState` | leaf | 2 |  |
+| 256 | `GeneratorResume` | reentrant | 3 | Resumes a suspended generator or async function (state 0 or 1) in a frame of its own: mode 0 continues with value (a generator at a yield gets `value false`, an async function the value), 1 throws value at the suspension point, 2 (generators at a yield) returns value from there (`value true`). The result is what the activation hands back when it next suspends or completes. |
+| 257 | `IsAsyncFunctionState` | leaf | 1 | Whether v is the state of an async function call. |
+| 258 | `AsyncFunctionPromise` | leaf | 1 | The result promise of an async function call. |
+| 259 | `AsyncGeneratorState` | leaf | 1 | The state of an async generator, or -1 for anything else. |
+| 260 | `AsyncGeneratorEnqueue` | leaf | 2 | Appends a request to the generator's queue. |
+| 261 | `AsyncGeneratorFirstRequest` | leaf | 1 | The oldest request, or undefined. |
+| 262 | `AsyncGeneratorDequeue` | leaf | 1 | Removes and returns the oldest request (undefined if none). |
+| 263 | `CreateAsyncFromSyncIterator` | leaf | 2 | CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: a Record [iterator, next] with %AsyncFromSyncIteratorPrototype%. |
+| 264 | `CreateIteratorHelper` | leaf | 3 | A new IteratorHelper object of `kind` (0: Iterator.from's wrapper, with %WrapForValidIteratorPrototype%; else a helper, with %IteratorHelperPrototype%): slot 0 kind, 1 state 0, 2 iterator, 3 next, the others undefined. |
+| 265 | `ThisIteratorHelper` | leaf | 2 | v if it is an iterator helper (wrap false) or Iterator.from's wrapper (wrap true), else TypeError "Iterator Helper object expected" / "Iterator Wrap object expected". |
+| 266 | `WeakRefCreate` | leaf | 2 | A new WeakRef with prototype proto and target (AddToKeptObjects ( target ) too). |
+| 267 | `WeakRefDeref` | leaf | 1 | WeakRefDeref of v (AddToKeptObjects of a live target): the target, or undefined once it died. TypeError "WeakRef object expected" for anything else. |
+| 268 | `FinalizationRegistryCreate` | leaf | 2 | A new FinalizationRegistry with prototype proto and cleanupCallback. |
+| 269 | `ThisFinalizationRegistry` | leaf | 1 | v if it is a FinalizationRegistry, else TypeError "FinalizationRegistry object expected". |
+| 270 | `FinalizationRegistryRegister` | leaf | 4 | Appends a cell (token undefined for none). |
+| 271 | `FinalizationRegistryUnregister` | leaf | 2 | Removes the cells registered with token; whether there were any. |
+| 272 | `FinalizationRegistryNextDead` | leaf | 1 | The index of the first cell whose target died, or -1. |
+| 273 | `FinalizationRegistryTake` | leaf | 2 | The held value of dead cell i, removing the cell. |
+| 274 | `FinalizationRegistrySetQueued` | leaf | 2 | Marks whether a cleanup job for r is queued. |
+| 275 | `DisposableStackCreate` | leaf | 2 | A new DisposableStack (isAsync false) or AsyncDisposableStack with prototype proto: slot 0 isAsync, 1 state 0 (pending), 2 a new empty Array of resources. |
+| 276 | `ThisDisposableStack` | leaf | 2 | v if it is a DisposableStack (isAsync false) or an AsyncDisposableStack, else TypeError "DisposableStack object expected" / "AsyncDisposableStack object expected". |
+| 277 | `TextCodecCreate` | leaf | 2 | A new TextEncoder (flags 0) or TextDecoder (flags 1 \| fatal 2 \| ignoreBOM 4). |
+| 278 | `TextCodecFlags` | leaf | 2 | The flags of v, a TextDecoder (decoder) or a TextEncoder; else TypeError. |
+| 279 | `IsBufferSource` | leaf | 1 | Whether v is an ArrayBuffer, a typed array or a DataView. |
+| 280 | `Utf8Encode` | leaf | 4 | buffer undefined: a new Uint8Array of the UTF-8 of s (lone surrogates as U+FFFD). Else encodeInto into bytes offset..offset + length of the ArrayBuffer buffer: { read, written }. |
+| 281 | `Utf8Decode` | leaf | 5 | The decoder's output for bytes offset..offset + length (length -1: to the end) of the ArrayBuffer buffer (none if undefined, detached or out of range), keeping an incomplete sequence for the next call if stream; undefined for a fatal error. |
+| 282 | `JsonParse` | leaf | 2 | JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. With withSource, an Array [value, record] where record is the JSON Parse Record tree for the reviver's source text access: [value, source, elements, entries]. |
+| 283 | `JsonRawJSON` | leaf | 1 | JSON.rawJSON's work after ToString: a frozen, null-prototype RawJSON object with the own property rawJSON = text; SyntaxError "invalid rawJSON string" unless text is a JSON primitive without leading or trailing whitespace. |
+| 284 | `IsRawJSON` | leaf | 1 | Whether v has [[IsRawJSON]] (a JSON.rawJSON object). |
+| 285 | `JsonStringifyFast` | leaf | 2 | JSON.stringify(v, undefined, space) with gap already computed, for plain data: the string, undefined for an undefined result, or null when the value needs the full algorithm (accessors, toJSON, wrappers, exotic objects; nothing observable happened). TypeError "circular reference" and RangeError "Maximum call stack size exceeded" are final. |
+| 286 | `JsonStringifyFastAt` | leaf | 4 | JsonStringifyFast for an object the full algorithm reached, after its toJSON and replacer (its own toJSON is not looked at again), nested in the objects of the algorithm's `stack` (a cycle back to one throws; they set the indentation), with an array replacer's PropertyList or undefined: the string, or null when it is not plain data. |
+| 287 | `JsonQuote` | leaf | 1 | QuoteJSONString ( value ), 25.5.2.3. |
+| 288 | `CreateDataProperty` | reentrant | 3 | CreateDataProperty ( O, P, V ): false if refused. |
+| 289 | `IsBigInt` | leaf | 1 |  |
+| 290 | `ToBigIntPrimitive` | leaf | 1 | ToBigInt of a primitive: TypeError for undefined, null, numbers and symbols; SyntaxError for a bad string. |
+| 291 | `NumberToBigInt` | leaf | 1 | NumberToBigInt ( number ), 21.2.1.1.1: RangeError unless integral. |
+| 292 | `BigIntToString` | leaf | 2 | The digits of a BigInt in radix 2..36. |
+| 293 | `BigIntAsIntN` | leaf | 2 | BigInt.asIntN on an index and a BigInt. |
+| 294 | `BigIntAsUintN` | leaf | 2 | BigInt.asUintN on an index and a BigInt. |
+| 295 | `BigIntToNumber` | leaf | 1 | The Number value of a BigInt (rounded to nearest). |
+| 296 | `IsRegExpObject` | leaf | 1 | Whether v is a RegExp object (has [[RegExpMatcher]]). |
+| 297 | `RegExpCreate` | leaf | 3 | RegExpAlloc + RegExpInitialize after the ToStrings: a new RegExp with prototype proto (%RegExp.prototype% for undefined) and lastIndex 0. qjs's SyntaxError for a bad pattern or flags. Regex literals compile to this. The pattern may be a RegExp object instead of its source: with the same flags the new one shares its program. |
+| 298 | `RegExpSource` | leaf | 1 | [[OriginalSource]] of a RegExp object. |
+| 299 | `RegExpFlags` | leaf | 1 | [[OriginalFlags]] of a RegExp object, in canonical order. |
+| 300 | `RegExpHasFlag` | leaf | 2 | Whether a RegExp object has the flag letter `flag`. |
+| 301 | `RegExpEscapedSource` | leaf | 1 | EscapeRegExpPattern of [[OriginalSource]] (`(?:)` when empty). |
+| 302 | `RegExpExecRaw` | leaf | 4 | RegExpBuiltinExec ( R, S ) once lastIndex is Get(R, "lastIndex") as a Number (ToLength is applied here): the match array or null, and lastIndex updated for g and y. Pass undefined as state: when the fuel runs out mid-match the interpreter suspends here and keeps the matcher's state in that argument. InternalError "out of memory in regexp execution" if the backtracking stack overflows. |
+| 303 | `RegExpTestRaw` | leaf | 4 | RegExpExecRaw without the match array: whether it matched (lastIndex is updated the same way). Suspendable like RegExpExecRaw. |
+| 304 | `RegExpExecOwn` | leaf | 4 | RegExpExec ( R, S ) when its lookups read only data: R is a RegExp without an own `exec`, whose prototype is %RegExp.prototype% with the original `exec`, and whose own lastIndex is a Number. Then the match array or null (with `test`, true or false), lastIndex updated; else undefined, with nothing done. Suspendable like RegExpExecRaw (pass undefined as state). |
+| 305 | `IsOriginalRegExpExec` | leaf | 1 | Whether v is the original RegExp.prototype.exec (the installed builtin). |
+| 306 | `CreateRegExpStringIterator` | leaf | 4 | A RegExp String Iterator (CreateRegExpStringIterator, 22.2.9.1). |
+| 307 | `RegExpStringIteratorSlot` | leaf | 2 | Slot i of a RegExp String Iterator: 0 the regexp, 1 the string, 2 global, 3 unicode, 4 done. TypeError "RegExp String Iterator object expected" for anything else. |
+| 308 | `RegExpStringIteratorFinish` | leaf | 1 | Marks a RegExp String Iterator done. |
+| 309 | `RegExpEscapeString` | leaf | 1 | RegExp.escape of a string (EncodeForRegExpEscape, qjs's lowercase hex). |
+| 310 | `IsPristineRegExp` | leaf | 1 | Whether v is a RegExp whose protocol lookups (exec, flags and the flag getters, constructor, Symbol.species, Symbol.match, lastIndex) are all original data, so that skipping them is unobservable. |
+| 311 | `RegExpSplitRaw` | leaf | 4 | RegExp.prototype[Symbol.split] of a pristine RegExp on a non-empty string with 0 < lim: the result array. Suspendable like RegExpExecRaw (pass undefined as state). |
+| 312 | `RegExpReplaceRaw` | leaf | 4 | RegExp.prototype[Symbol.replace] of a pristine global RegExp with a string replacement template: the result, and lastIndex 0. Suspendable like RegExpExecRaw. |
+| 313 | `IsDenseArray` | leaf | 1 | Whether v is an Array whose elements 0 .. length-1 are all present in its dense store (no holes): reading them with Get then runs no user code. |
+| 314 | `AllNumbers` | leaf | 1 | Whether every element of a dense array (no holes) is a Number. |
+| 315 | `AllCodePoints` | leaf | 1 | Whether every element of a dense array is an integral Number in [0, 0x10FFFF]. |
+| 316 | `InstallMethod` | leaf | 4 | Defines f as a method of the object at the dotted path `target` (from the global object): writable, configurable, not enumerable, with `name` = key and `length`. The key is a string or a symbol (`[Symbol.iterator]` paths). |
+| 317 | `InstallConstructor` | leaf | 5 | `@constructor`: defines f as the global constructor `key` (writable, configurable, not enumerable) and sets its `name` and `length`; with a parent (a dotted path), f's [[Prototype]] is the parent constructor. Its statics follow, then InstallPrototype. |
+| 318 | `InstallPrototype` | leaf | 3 | The `prototype` of the constructor `key`, installed after its statics (qjs's order): the realm's intrinsic prototype for that name if there is one, else a new object inheriting from the parent's prototype (or Object.prototype). Sets `f.prototype`. |
+| 319 | `InstallPrototypeConstructor` | leaf | 1 | `prototype.constructor` of the constructor `key`, installed among the prototype's methods where qjs's order puts it. |
+| 320 | `InstallAccessor` | leaf | 4 | `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). |
+| 321 | `InstallValue` | leaf | 4 | `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). |
+| 322 | `InstallIntrinsic` | leaf | 2 | Registers f so that privileged code can call it as %name(...). |
+| 323 | `MarkNative` | leaf | 2 | Makes the builtin f native builtin `index` of the generated table: with native builtins on, its calls run the Rust state machine. |
+| 324 | `MarkFast` | leaf | 1 | Gives the builtin f its leaf fast path (`@fast`): with native builtins on, a call first tries the Rust function of the same name in builtins/fast.rs. |
+| 325 | `NsOp` | leaf | 4 | Internal method op (builtins/module.ts ModuleOp) of the module namespace whose proxy target is target, on key: 0 [[Get]] (a symbol key: the target's; ReferenceError in a binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or undefined, 2 [[DefineOwnProperty]] with descriptor object desc (its own fields), 3 [[OwnPropertyKeys]] as a new array. For import(): 4 the VM's async host function for imports or undefined, 5 the linked module record of key target (an Error if none), 6 the namespace of module record target, 7 the reaction that finishes an import. |
+| 326 | `ArraySpeciesCreate` | builtin (JS) | 2 |  |
+| 327 | `ArrayConstructor` | builtin (JS) | 0 + rest |  |
+| 328 | `ArraySpecies` | builtin (JS) | 0 |  |
+| 329 | `FindViaPredicate` | builtin (JS) | 6 |  |
+| 330 | `EveryOrSome` | builtin (JS) | 4 |  |
+| 331 | `SortList` | builtin (JS) | 2 |  |
+| 332 | `CollectPresent` | builtin (JS) | 3 |  |
+| 333 | `ArraySetLength` | builtin (JS) | 3 |  |
+| 334 | `AsyncGeneratorStep` | builtin (JS) | 3 |  |
+| 335 | `AsyncGeneratorAwaitReturnFulfilled` | builtin (JS) | 1 |  |
+| 336 | `AsyncGeneratorAwaitReturnRejected` | builtin (JS) | 1 |  |
+| 337 | `GetAsyncIterator` | builtin (JS) | 1 |  |
+| 338 | `AsyncIteratorReturnMethod` | builtin (JS) | 1 |  |
+| 339 | `AsyncIteratorCloseThrow` | builtin (JS) | 1 |  |
+| 340 | `AsyncFromSyncIteratorUnwrap` | builtin (JS) | 1 |  |
+| 341 | `AsyncFromSyncIteratorCloseThrow` | builtin (JS) | 1 |  |
+| 342 | `ToBigInt` | builtin (JS) | 1 |  |
+| 343 | `GetSite` | builtin (JS) | 2 |  |
+| 344 | `ToPrimitive` | builtin (JS) | 2 |  |
+| 345 | `ToNumber` | builtin (JS) | 1 |  |
+| 346 | `ToString` | builtin (JS) | 1 |  |
+| 347 | `LengthOfArrayLike` | builtin (JS) | 1 |  |
+| 348 | `ToPropertyKey` | builtin (JS) | 1 |  |
+| 349 | `GetPrototypeFromConstructorSlow` | builtin (JS) | 2 |  |
+| 350 | `ToNumeric` | builtin (JS) | 1 |  |
+| 351 | `DatePrototypeValueOf` | builtin (JS) | 0 |  |
+| 352 | `DatePrototypeToISOString` | builtin (JS) | 0 |  |
+| 353 | `DatePrototypeToJSON` | builtin (JS) | 1 |  |
+| 354 | `DatePrototypeToPrimitive` | builtin (JS) | 1 |  |
+| 355 | `DecoratorStart` | builtin (JS) | 2 |  |
+| 356 | `ApplyDecorators` | builtin (JS) | 6 |  |
+| 357 | `DecoratorRunInits` | builtin (JS) | 3 |  |
+| 358 | `DecoratorRunExtras` | builtin (JS) | 3 |  |
+| 359 | `DecoratorAddInitializer` | builtin (JS) | 1 |  |
+| 360 | `DecoratorAccessGet` | builtin (JS) | 1 |  |
+| 361 | `DecoratorAccessSet` | builtin (JS) | 2 |  |
+| 362 | `DecoratorAccessHas` | builtin (JS) | 1 |  |
+| 363 | `ApplyLegacyDecorators` | builtin (JS) | 4 |  |
+| 364 | `DecoratorParam` | builtin (JS) | 2 |  |
+| 365 | `DecoratorParamCall` | builtin (JS) | 2 |  |
+| 366 | `DecoratorMetadata` | builtin (JS) | 2 |  |
+| 367 | `AsyncDisposeFulfilled` | builtin (JS) | 1 |  |
+| 368 | `AsyncDisposeRejected` | builtin (JS) | 1 |  |
+| 369 | `UsingCreate` | builtin (JS) | 0 |  |
+| 370 | `UsingAdd` | builtin (JS) | 2 |  |
+| 371 | `AwaitUsingAdd` | builtin (JS) | 2 |  |
+| 372 | `UsingDisposeError` | builtin (JS) | 2 |  |
+| 373 | `UsingDispose` | builtin (JS) | 1 |  |
+| 374 | `UsingDisposeStep` | builtin (JS) | 1 |  |
+| 375 | `UsingAwaitValue` | builtin (JS) | 1 |  |
+| 376 | `CallPrepareStackTrace` | builtin (JS) | 4 |  |
+| 377 | `ThrowWithStack` | builtin (JS) | 1 |  |
+| 378 | `MicrotaskJob` | builtin (JS) | 1 |  |
+| 379 | `FromAsyncFulfilled` | builtin (JS) | 1 |  |
+| 380 | `FromAsyncRejected` | builtin (JS) | 1 |  |
+| 381 | `InstanceofOperator` | builtin (JS) | 2 |  |
+| 382 | `ClassHeritage` | builtin (JS) | 1 |  |
+| 383 | `ThrowTypeError` | builtin (JS) | 1 |  |
+| 384 | `FunctionPrototypeBehavior` | builtin (JS) | 0 |  |
+| 385 | `AsyncAwait` | builtin (JS) | 2 |  |
+| 386 | `AsyncFunctionReturn` | builtin (JS) | 2 |  |
+| 387 | `GeneratorFunctionConstructor` | builtin (JS) | 0 + rest |  |
+| 388 | `AsyncGeneratorFunctionConstructor` | builtin (JS) | 0 + rest |  |
+| 389 | `AsyncFunctionConstructor` | builtin (JS) | 0 + rest |  |
+| 390 | `DynamicImport` | builtin (JS) | 2 |  |
+| 391 | `GetIterator` | builtin (JS) | 1 |  |
+| 392 | `IteratorClose` | builtin (JS) | 1 |  |
+| 393 | `IteratorCloseThrow` | builtin (JS) | 1 |  |
+| 394 | `IteratorRest` | builtin (JS) | 2 |  |
+| 395 | `ArrayPrototypeValues` | builtin (JS) | 0 |  |
+| 396 | `ArrayIteratorPrototypeNext` | builtin (JS) | 0 |  |
+| 397 | `StringPrototypeIterator` | builtin (JS) | 0 |  |
+| 398 | `StringIteratorPrototypeNext` | builtin (JS) | 0 |  |
+| 399 | `SerializeJSONProperty` | builtin (JS) | 7 |  |
+| 400 | `JSONStackIncludes` | builtin (JS) | 2 |  |
+| 401 | `JSONJoin` | builtin (JS) | 7 |  |
+| 402 | `SerializeJSONObject` | builtin (JS) | 6 |  |
+| 403 | `SerializeJSONArray` | builtin (JS) | 6 |  |
+| 404 | `AddEntriesFromIterable` | builtin (JS) | 3 |  |
+| 405 | `MapPrototypeSet` | builtin (JS) | 2 |  |
+| 406 | `MapIteratorPrototypeNext` | builtin (JS) | 0 |  |
+| 407 | `ModuleOp` | builtin (JS) | 3 |  |
+| 408 | `ResolvePromise` | builtin (JS) | 2 |  |
+| 409 | `PromiseResolveFunction` | builtin (JS) | 1 |  |
+| 410 | `PromiseRejectFunction` | builtin (JS) | 1 |  |
+| 411 | `GetCapabilitiesExecutor` | builtin (JS) | 2 |  |
+| 412 | `PromiseReactionJob` | builtin (JS) | 4 |  |
+| 413 | `PromiseResolveThenableJob` | builtin (JS) | 3 |  |
+| 414 | `PromiseConstructor` | builtin (JS) | 1 |  |
+| 415 | `PromiseSpecies` | builtin (JS) | 0 |  |
+| 416 | `PromiseStaticResolve` | builtin (JS) | 1 |  |
+| 417 | `PromiseAllResolveElement` | builtin (JS) | 1 |  |
+| 418 | `PromiseAllSettledResolveElement` | builtin (JS) | 1 |  |
+| 419 | `PromiseAllSettledRejectElement` | builtin (JS) | 1 |  |
+| 420 | `PromiseAnyRejectElement` | builtin (JS) | 1 |  |
+| 421 | `PromisePrototypeThen` | builtin (JS) | 2 |  |
+| 422 | `PromiseThenFinally` | builtin (JS) | 1 |  |
+| 423 | `PromiseCatchFinally` | builtin (JS) | 1 |  |
+| 424 | `PromiseValueThunk` | builtin (JS) | 0 |  |
+| 425 | `PromiseThrower` | builtin (JS) | 0 |  |
+| 426 | `HostCallSettle` | builtin (JS) | 3 |  |
+| 427 | `ProxyRevokeFunction` | builtin (JS) | 0 |  |
+| 428 | `ProxyGetPrototypeOf` | builtin (JS) | 1 |  |
+| 429 | `ProxySetPrototypeOf` | builtin (JS) | 2 |  |
+| 430 | `ProxyIsExtensible` | builtin (JS) | 1 |  |
+| 431 | `ProxyPreventExtensions` | builtin (JS) | 1 |  |
+| 432 | `ProxyGetOwnPropertyDescriptorObject` | builtin (JS) | 2 |  |
+| 433 | `ProxyHasOwnProperty` | builtin (JS) | 2 |  |
+| 434 | `ProxyOwnPropertyAttributes` | builtin (JS) | 2 |  |
+| 435 | `ProxyDefineOwnPropertyFromRecord` | builtin (JS) | 3 |  |
+| 436 | `ProxyDefineDataPropertyOrThrow` | builtin (JS) | 4 |  |
+| 437 | `ProxyCreateDataProperty` | builtin (JS) | 3 |  |
+| 438 | `ProxyCreateDataPropertyOrThrow` | builtin (JS) | 3 |  |
+| 439 | `ProxyHas` | builtin (JS) | 2 |  |
+| 440 | `ProxyGet` | builtin (JS) | 3 |  |
+| 441 | `ProxySet` | builtin (JS) | 4 |  |
+| 442 | `ProxySetOrThrow` | builtin (JS) | 4 |  |
+| 443 | `ProxySetOnReceiver` | builtin (JS) | 3 |  |
+| 444 | `ProxyDeleteProperty` | builtin (JS) | 2 |  |
+| 445 | `ProxyDeletePropertyOrThrow` | builtin (JS) | 2 |  |
+| 446 | `ProxyOwnPropertyKeys` | builtin (JS) | 2 |  |
+| 447 | `ProxyCall` | builtin (JS) | 3 |  |
+| 448 | `ProxyConstruct` | builtin (JS) | 3 |  |
+| 449 | `OrdinaryConstructSlow` | builtin (JS) | 3 |  |
+| 450 | `ProxySetIntegrityLevel` | builtin (JS) | 2 |  |
+| 451 | `ProxyTestIntegrityLevel` | builtin (JS) | 2 |  |
+| 452 | `ForInStep` | builtin (JS) | 1 |  |
+| 453 | `RegExpSpecies` | builtin (JS) | 0 |  |
+| 454 | `RegExpPrototypeHasIndices` | builtin (JS) | 0 |  |
+| 455 | `RegExpPrototypeGlobal` | builtin (JS) | 0 |  |
+| 456 | `RegExpPrototypeIgnoreCase` | builtin (JS) | 0 |  |
+| 457 | `RegExpPrototypeMultiline` | builtin (JS) | 0 |  |
+| 458 | `RegExpPrototypeDotAll` | builtin (JS) | 0 |  |
+| 459 | `RegExpPrototypeUnicode` | builtin (JS) | 0 |  |
+| 460 | `RegExpPrototypeUnicodeSets` | builtin (JS) | 0 |  |
+| 461 | `RegExpPrototypeSticky` | builtin (JS) | 0 |  |
+| 462 | `RegExpPrototypeFlags` | builtin (JS) | 0 |  |
+| 463 | `RegExpPrototypeExec` | builtin (JS) | 1 |  |
+| 464 | `RegExpPrototypeMatch` | builtin (JS) | 1 |  |
+| 465 | `SetPrototypeAdd` | builtin (JS) | 1 |  |
+| 466 | `SetIteratorPrototypeNext` | builtin (JS) | 0 |  |
+| 467 | `ArraySpread` | builtin (JS) | 2 |  |
+| 468 | `CopyDataProperties` | builtin (JS) | 2 |  |
+| 469 | `CopyDataPropertiesExcluding` | builtin (JS) | 2 |  |
+| 470 | `TypedArraySetElementSlow` | builtin (JS) | 3 |  |
+| 471 | `FinalizationRegistryCleanupJob` | builtin (JS) | 1 |  |
 <!-- /gen -->

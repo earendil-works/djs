@@ -1,7 +1,9 @@
 //! `%EachDense` (0137): the dense part of the loops of forEach, map, filter, some, every,
 //! find, findIndex and reduce. The callback gets one frame (continuation `Each`) that is
 //! entered again for every element, instead of a return into the builtin and a new call
-//! per element.
+//! per element. `%SortCompareCall` runs a comparator sort's comparisons the same way
+//! (mode SORT, 0262): the "element" is the pending comparison's left value, and a Number
+//! result goes to SortStep in place.
 //!
 //! The loop's state is the intrinsic's own arguments, which stay on the stack right below
 //! the callback's frame: `[mode, o, k, len, f, thisArg, a, kValue]` (kValue added here:
@@ -11,6 +13,7 @@
 //! ordinary stack values.
 
 use super::*;
+use crate::builtins::array;
 use crate::builtins::dense::index;
 
 const EACH_DENSE: u16 = super::intrinsics::id("EachDense");
@@ -37,6 +40,8 @@ const FIND_INDEX: i32 = 6;
 const REDUCE: i32 = 7;
 /// Array.from's mapping loop over an array-like (D2306).
 const FROM: i32 = 8;
+/// The comparisons of a sort with a comparator: O is the sort's state, K counts them.
+const SORT: i32 = 9;
 
 impl Exec<'_> {
     /// `%EachDense(mode, o, k, len, f, thisArg, a)` from `call_intrinsic`: the arguments
@@ -51,10 +56,49 @@ impl Exec<'_> {
             self.sp = base + STATE;
             return self.each_enter(base, k, x, next);
         }
+        if let (Some(SORT), Some(st)) = (
+            self.get(base + MODE).as_int(),
+            self.get(base + O).as_object(),
+        ) {
+            // SortCompareCall of anything else: `f(left, right)`.
+            let args = [
+                self.get(base + F),
+                Value::UNDEFINED,
+                array::sort_operand(self.heap, st, false),
+                array::sort_operand(self.heap, st, true),
+            ];
+            self.write_stack(base, &args);
+            self.sp = base + 4;
+            return self.call(base, 2, Continuation::PushResult, next);
+        }
         self.sp = base;
         self.push(k);
         self.pc = next;
         Ok(None)
+    }
+
+    /// `%SortCompareCall(st, f)` from `call_intrinsic` (arguments at `base`, the caller
+    /// resumes at `next`): EachDense's sort mode where `f` is a plain closure, else the
+    /// call `f(left, right)` (`each_dense`'s decline).
+    pub(super) fn sort_compare_call(&mut self, base: u32, next: u32) -> Step {
+        let (st, f) = (self.get(base), self.get(base + 1));
+        self.ensure(base + STATE)?;
+        let state = [
+            Value::int(SORT),
+            st,
+            Value::int(0),
+            Value::number(9007199254740991.0),
+            f,
+            Value::UNDEFINED,
+        ];
+        self.write_stack(base, &state);
+        self.each_dense(base, next)
+    }
+
+    /// Writes `vs` to the stack slots from `base` (which `ensure` covers).
+    fn write_stack(&mut self, base: u32, vs: &[Value]) {
+        let vals = crate::heap::cells::ValueArray::VALUES.at(self.stack, base);
+        super::hot::write_values(self.heap.arena_mut().hot_bytes(), vals, vs);
     }
 
     /// The tier-0 loop's exit at a `call_intrinsic` (D2307): `%EachDense` runs here, as
@@ -125,6 +169,7 @@ impl Exec<'_> {
             MAP | FIND => a.is_some(),
             FILTER => a.is_some() && crate::builtins::fast::plain_species(self.heap, o),
             REDUCE => a.is_some(),
+            SORT => true,
             _ => false,
         }
     }
@@ -137,6 +182,11 @@ impl Exec<'_> {
             return None;
         }
         let o = self.get(base + O).as_object()?;
+        if self.get(base + MODE).as_int() == Some(SORT) {
+            // The left value of the pending comparison (the right one is `each_args`'s).
+            return array::sort_pending(self.heap, o)
+                .then(|| array::sort_operand(self.heap, o, false));
+        }
         // The array modes' element first: the per-element path.
         if let Some(v) = self.heap.get_element_fast(o, k) {
             return Some(v);
@@ -190,6 +240,10 @@ impl Exec<'_> {
             ([self.get(base + THIS), x, kv, o], 4)
         } else if mode == Some(FROM) {
             ([x, kv, Value::UNDEFINED, Value::UNDEFINED], 2)
+        } else if mode == Some(SORT) {
+            let st = o.as_object().expect("each: sort state");
+            let y = array::sort_operand(self.heap, st, true);
+            ([x, y, Value::UNDEFINED, Value::UNDEFINED], 2)
         } else {
             ([x, kv, o, Value::UNDEFINED], 3)
         }
@@ -228,15 +282,15 @@ impl Exec<'_> {
                 Err(f) => self.each_throw(f),
             };
         }
-        self.each_finish(base, f64::from(next));
+        self.each_finish(base, conv::number(f64::from(next)));
         None
     }
 
     /// The builtin (current frame) gets `r`: the k its loop goes on from, or -1 - k when
     /// the callback's result at k decided the search.
-    fn each_finish(&mut self, base: u32, r: f64) {
+    fn each_finish(&mut self, base: u32, r: Value) {
         self.sp = base;
-        self.push(conv::number(r));
+        self.push(r);
         // A return is a safepoint (as in `do_return`).
         self.safepoint();
     }
@@ -262,7 +316,13 @@ impl Exec<'_> {
                 return match r {
                     Err(f) => self.each_throw(f),
                     _ => {
-                        self.each_finish(base, -1.0 - f64::from(k));
+                        // (Sort: the result itself, for the builtin's ToNumber.)
+                        let r = if mode == SORT {
+                            v
+                        } else {
+                            conv::number(-1.0 - f64::from(k))
+                        };
+                        self.each_finish(base, r);
                         None
                     }
                 };
@@ -283,7 +343,7 @@ impl Exec<'_> {
         // NEW_TARGET undefined, undefined locals (the callee, `this` and the rest of the
         // header are never written).
         let (bp, hp, lp) = (self.bp, self.hp, self.lp);
-        let (args, argc) = if mode == REDUCE || mode == FROM {
+        let (args, argc) = if mode == REDUCE || mode == FROM || mode == SORT {
             self.each_args(base, kv)
         } else {
             ([x, kv, self.get(base + O), Value::UNDEFINED], 3)
@@ -324,8 +384,17 @@ impl Exec<'_> {
     /// collects and is tried once more (D1900).
     fn each_complete(&mut self, base: u32, v: Value) -> Result<bool, Fault> {
         let mode = self.get(base + MODE).as_int().unwrap_or(FOR_EACH);
-        let truthy = !matches!(mode, MAP | REDUCE | FROM) && conv::to_boolean(self.heap, v);
+        let truthy = !matches!(mode, MAP | REDUCE | FROM | SORT) && conv::to_boolean(self.heap, v);
         let (stop, store) = match mode {
+            SORT => match v.as_number() {
+                Some(n) => {
+                    let st = self.get(base + O).as_object().expect("each: sort state");
+                    array::sort_step(self.heap, st, n)?;
+                    (false, false)
+                }
+                // ToNumber may run user code: the builtin does it.
+                None => (true, false),
+            },
             MAP | REDUCE | FROM => {
                 self.set(base + KVALUE, v);
                 if mode == REDUCE {
