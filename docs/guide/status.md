@@ -19,7 +19,7 @@ records; [the last section](#every-recorded-measurement) lists them all.
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 17 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **652 of 663** cases match qjs; 6 known
+  messages, TypeScript, dquickts' own tests): **653 of 664** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 <!-- /gen -->
 
@@ -68,13 +68,13 @@ f8cb1e7924, 2026-11-21.
 <!-- gen:status inventory -->
 | | count |
 | --- | ---: |
-| opcodes ([reference](ref-opcodes.md)) | 214 |
+| opcodes ([reference](ref-opcodes.md)) | 216 |
 | cell kinds ([reference](ref-cells.md)) | 26 |
 | intrinsics ([reference](ref-intrinsics.md)) | 473 |
 | builtins in `builtins/*.ts` | 458 |
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 45 |
-| difftest corpus cases | 663 |
+| difftest corpus cases | 664 |
 | base snapshot, bytes | 190,920 |
 <!-- /gen -->
 

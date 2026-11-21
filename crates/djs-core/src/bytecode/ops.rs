@@ -679,13 +679,6 @@ ops! {
     SuperCall super_call(argc: Argc) pop 2 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `f args newTarget -> r`: `super(...args)` with an argument array (spread).
     SuperCallSpread super_call_spread() pop 3 push 1 cost Call flags THROWS | CALLS | ALLOC;
-    /// `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments
-    /// that run no code: constructs the active function's [[Prototype]] with the
-    /// frame's new.target (0270).
-    SuperCallFrame super_call_frame(argc: Argc) pop 0 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
-    /// `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with
-    /// the frame's own arguments (no array).
-    SuperCallForward super_call_forward() pop 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3).
     CallIntrinsic call_intrinsic(id: Intrinsic, argc: Argc) pop 0 + imm 1 push 1 cost Call flags THROWS | CALLS | ALLOC;
     // ---- Generators and async functions (D1375; docs/compiler.md 7.7) ------------------
@@ -829,6 +822,15 @@ ops! {
     /// The whole code of a lazy template (D2990): compiles the function at its first
     /// call and continues in the compiled template, in the same frame.
     Lazy lazy() pop 0 push 0 cost Alloc flags THROWS | ALLOC | TERM;
+    // (Appended: opcodes in the middle of the table move the tier-0 loop's dispatch,
+    // D3410.)
+    /// `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments
+    /// that run no code: constructs the active function's [[Prototype]] with the
+    /// frame's new.target (0270).
+    SuperCallFrame super_call_frame(argc: Argc) pop 0 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with
+    /// the frame's own arguments (no array).
+    SuperCallForward super_call_forward() pop 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
 }
 
 impl Op {

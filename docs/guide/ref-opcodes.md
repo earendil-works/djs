@@ -91,7 +91,7 @@ with them.
 | `to_propkey` | 79 | – | 1 | 1 → 1 | Basic | `key -> key'`: ToPrimitive(key, string) now, for a computed key whose definition comes after other code (`{ [k]: v }`: ToPropertyKey before `v`). Primitives stay. |
 | `get_elem_method` | 80 | – | 1 | 2 → 2 | Access | `obj key -> f obj` |
 | `put_elem` | 81 | – | 1 | 3 → 0 | Access | `obj key v ->` |
-| `define_field` | 82 | Atom, Cache | 7 | 2 → 1 | Access | `obj v -> obj`: CreateDataProperty (literals). |
+| `define_field` | 82 | Atom, Cache | 7 | 2 → 1 | Access | `obj v -> obj`: CreateDataProperty (literals), or CreateDataPropertyOrThrow of a class field with a plain name (any object: a proxy's trap runs). |
 | `define_elem` | 83 | – | 1 | 3 → 1 | Access | `obj key v -> obj`: computed keys. |
 | `define_getter` | 84 | Atom | 5 | 2 → 1 | Access | `obj f -> obj` |
 | `define_setter` | 85 | Atom | 5 | 2 → 1 | Access | `obj f -> obj` |
@@ -181,7 +181,7 @@ with them.
 | `iterator_close` | 169 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
 | `for_in_start` | 170 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
 | `for_in_next` | 171 | – | 1 | 1 → 3 | Access | `it -> it key done` |
-| `check_ctor` | 172 | – | 1 | 0 → 0 | Basic | TypeError if a class constructor is called without `new`. |
+| `ctor_result` | 172 | – | 1 | 1 → 1 | Basic | `v -> r`: `return v` in a base class constructor: `v` if it is an object, else the frame's `this` (the constructor's code returns its own result). |
 | `check_this` | 173 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized (`undefined`, before `super()`). |
 | `check_this_uninit` | 174 | – | 1 | 1 → 0 | Basic | `v ->`: before `super()` binds `this`: ReferenceError if it is bound already. |
 | `check_ctor_return` | 175 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's return value: TypeError unless an object or `undefined`. |
@@ -223,4 +223,6 @@ with them.
 | `jump_if_false8` | 211 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
 | `jump_if_true8` | 212 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
 | `lazy` | 213 | – | 1 | 0 → 0 | Alloc | The whole code of a lazy template: compiles the function at its first call and continues in the compiled template, in the same frame. |
+| `super_call_frame` | 214 | Argc | 3 | imm0 → 1 | Call | `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments that run no code: constructs the active function's [[Prototype]] with the frame's new.target. |
+| `super_call_forward` | 215 | – | 1 | 0 → 1 | Call | `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with the frame's own arguments (no array). |
 <!-- /gen -->

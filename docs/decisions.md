@@ -13612,3 +13612,18 @@ object that was just allocated. `Heap::add_fresh_data` inserts it (the shape tra
 only), for an object without properties that is not a builtin. Per iteration (slope.py,
 wasm): `/TODO|FIXME/.test(LINE)` −6%, `LINE.match(/^([^:]+):(\d+):/)` −2.5%; −11 B gz.
 Memory unchanged (the same shape and values block).
+
+## D3511: The construct path lands (D3410)
+date: 2026-11-21 · by: pidle · issue: 0280
+D3410's parked patch, on main 46af2771 with the owner's allowance (D3510). The two new
+opcodes (`super_call_frame`, `super_call_forward`) are appended after `lazy`, and
+`ctor_result` takes `check_ctor`'s place, so the tier-0 loop's dispatch is unchanged:
+scripts/perf/hotcode.sh gives the same summary as main's (dispatch 14 instructions, the
+same table of 213 entries, every opcode's path the same; only `check_ctor`'s row is now
+`ctor_result`'s). `CLASS_CTOR` is bit 13 (the tier-0 loop reads template flags as a u16).
+Wasm instructions per op with `--wasm-sync-tier-up`, main → branch (QuickJS 2026):
+`new C()` 2.66k → 2.11k (2.26k), `new C(i)` 3.36k → 2.77k (3.04k), with a class field
+6.83k → 4.28k (5.20k), derived default 8.04k → 4.34k (3.73k), derived `super(a)` 7.45k →
+4.73k (4.89k), three levels 10.34k → 5.82k (6.13k), `new Promise(() => {})` 6.80k →
+6.62k (6.58k), `new F(i)` 2.79k → 2.64k (2.88k). Shipped 429,648 → 430,037 B gz ceiling
+(module 429,419 → 430,037, +618 over main's module), slim ceiling 363,609 → 363,953.
