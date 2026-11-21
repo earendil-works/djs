@@ -1,6 +1,6 @@
 # 0256: Per-VM and per-byte costs: base injection, hash keys, zeroing
 
-status: in-progress
+status: done
 agent: pstart
 branch: issue/0256-per-vm-costs
 depends-on: -
@@ -28,10 +28,10 @@ Then look for anything else that runs per VM or per byte in the profiles of the 
 bodies (sequential, inspect, media) and is not the script's own work.
 
 ## Acceptance criteria
-- [ ] new-VM time and the run times of sequential/inspect/media/fanout measured main vs branch (wasm, run.ts)
-- [ ] the three items landed or measured and dropped with numbers
-- [ ] images, determinism and the image verifier unchanged in meaning (bytes above len still read as zero)
-- [ ] size reported; gate green; decisions recorded
+- [x] new-VM time and the run times of sequential/inspect/media/fanout measured main vs branch (wasm, run.ts)
+- [x] the three items landed or measured and dropped with numbers
+- [x] images, determinism and the image verifier unchanged in meaning (bytes above len still read as zero)
+- [x] size reported; gate green; decisions recorded
 
 ## Notes
 - Overlap: 0257 (pidle) changes djs-wasm's linking, stack and dlmalloc's first segment in
@@ -97,7 +97,48 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   touch), Sandbox JS ~30 µs.
 - Batch 2 (1d8fc522): entropy pool in sandbox.ts (getRandomValues 1-4 µs per call, ~1% of
   sequential in the profile; D3273); `base_len` a build-time constant. Size 428,737 B gz.
+  Merged (main 9199a7ce; one gate retry: pi's worker-lifetime timing test, 1028 ms > 1000
+  at load 53).
+- Instantiation anatomy (work/scratch/0256/strip.py rewrites the module; inst4.ts, load
+  25-40, so absolute µs inflated): all exports but one removed −47..−53 µs, data segments
+  emptied −45..−80 µs, both −80..−100 µs of ~180-235 µs. Exports and the 97 KB data
+  segment are each about a quarter of `new WebAssembly.Instance`.
+- memory.grow calls per run (counter build): sequential 4 (7 pages), inspect 3, media 5,
+  fanout 7, json 9, text 10; ~2 µs each.
+- Final A/B (work/scratch/0256/final-ab.txt): main a0d85b06 vs branch, same JS, 1000
+  interleaved fresh sandboxes per row, load 24: new sandbox 0.194 → 0.141 ms (−27.6%),
+  sequential −8.6%, inspect −8.9%, media −7.5%, fanout −2.3%, loop −2.3%, text −1.1%, json
+  −1.8%, heavy +0.7% (noise). run.ts (25 reps ×4 alternations, load ~20, dumps skipped):
+  startup 0.259 → 0.205 ms; run-only times and memory after the run unchanged (the noise
+  at that load is ±10%).
 
 ## Follow-ups
+- Exports cost every instance ~0.3-0.8 µs each in V8 (65 now, ≈ a quarter of
+  instantiation): fewer exports (rarely used ones folded into a dispatcher, or a separate
+  module for tooling) is an ABI decision.
+- The data segment (97 KB) is another quarter of instantiation (copy and first touch): the
+  idle-memory work (0257, idea 11: Unicode tables out of linear memory) also buys startup.
+- First touch of a fresh wasm page costs ~6.6 µs per 64 KiB (D3272): fewer pages touched
+  per run is a speed lever too (arena start capacity, zero-ahead distance, dlmalloc segment).
+- js/pi/vm.ts has its own per-VM `getRandomValues` entropy(); the same pool as D3273.
+- `Heap::intern` of a rope compares candidates through `str_units` iterators
+  (`str_eq` → FlatMap<Chunks, Units>): 0.8% of sequential; flatten (or compare chunks)
+  first.
+- Sandbox JS setup is ~30 µs of a new sandbox: 4 console host functions and 5 defines
+  (~1 µs each, mostly first touch of the arena tail), `stageText` per name; one batched
+  call would do.
 
 ## Result
+Landed (main 78d993b5, 9199a7ce):
+- D3271: `djs_base_inject_ptr` hands out the buffer without zeroing it; `djs_base_inject`
+  sets its length and checks identity by length + an FNV-1a sample (roots + one word per
+  504 B) against a build-time `BASE_SAMPLE`, not a hash of all 184 KB.
+- D3270: `set_hash_key` walks from `BASE_END`; `prepare_base_image` asserts no Map/Set in
+  the prefix.
+- D3273: the JS Sandbox seeds from a 256-word entropy pool; `base_len` is a constant.
+- D3272: zeroing over fresh pages measured and dropped (page faults, not memset, are the
+  cost; patch in work/scratch/0256/item3-v2.patch).
+Numbers: new sandbox −27.6% (0.194 → 0.141 ms), sequential/inspect/media −7.5..−8.9%,
+fanout/loop/json −2%; memory unchanged; images and the base unchanged. Size 428,800 →
+428,737 B gz (−63). Guide: host.md (the inject check). Known gaps: see Follow-ups (the
+rest of a new sandbox is V8's instantiation, ~70% of it).
