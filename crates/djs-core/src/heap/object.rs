@@ -1089,6 +1089,16 @@ impl Heap {
         Ok(Some(len + 1))
     }
 
+    /// Whether CreateDataProperty of any element of the Array `o` succeeds: it is not a
+    /// builtin behind the gate, it is extensible, has no index properties outside the
+    /// dense store and a writable `length` (0270).
+    pub(crate) fn defines_elements(&self, o: Obj) -> bool {
+        let f = self.obj_flags(o);
+        !self.gated(o)
+            && f & OBJ_EXTENSIBLE != 0
+            && f & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) == 0
+    }
+
     /// CreateDataProperty(o, i, v) on an Array as a dense store: an existing dense element
     /// (default attributes) is overwritten, a hole filled or the next element appended
     /// when `o` is extensible, has no index properties outside the dense store and, past

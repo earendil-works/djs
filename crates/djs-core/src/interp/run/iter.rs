@@ -213,39 +213,26 @@ impl Exec<'_> {
     }
 
     /// `iter_fast_drain` of Map or Set Iterator `o` with its original `next`: its keys,
-    /// values or entry arrays from its position on, stored as plain dense stores into
-    /// `arr` at `j`, `j + 1`, ...; the iterator moves past what was stored after the
-    /// stores (an allocation failure leaves it where it was). Returns the next `j`.
+    /// values or entry arrays from its position on, each defined as element `j`, `j + 1`,
+    /// ... of the Array `arr` (CreateDataProperty, as the loops that call this do with
+    /// each value `next` gives; no user code runs in between, so the batch is
+    /// unobservable). Only for an `arr` where those definitions cannot fail: the iterator
+    /// moves before each store, and a failed one would lose its value. Returns the next
+    /// `j`.
     fn collection_drain(&mut self, o: Obj, arr: Obj, n0: u32) -> Result<f64, Fault> {
-        let kind = self.heap.object_slot(o, 2).as_int().unwrap_or(0);
-        let set = self.heap.object_slot(o, 3).as_int() == Some(1);
-        let mut last = None;
-        let mut cur = self.heap.collection_iterator_cursor(o);
+        if !self.heap.defines_elements(arr) {
+            return Ok(f64::from(n0));
+        }
         let mut j = n0;
         while j < u32::MAX - 1
-            && let Some((entries, n)) = cur
-            && let Some(e) = self.heap.collection_entry_from(entries, n)
+            && let Some(v) = collection::iterator_step_value(self.heap, o)?
         {
-            let (k, v) = (e.2, e.3);
-            let v = match kind {
-                0 => k,
-                1 => v,
-                // A Set's entries are [value, value].
-                _ => {
-                    let pair = if set { [k, k] } else { [k, v] };
-                    let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                    Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
-                }
-            };
+            // (Past a hole, not a dense store: an ordinary definition.)
             if !self.heap.create_element_fast(arr, j, v)? {
-                break;
+                let key = self.heap.atom_from_index(j)?;
+                self.heap.create_data_property(arr, key, v)?;
             }
-            cur = Some((e.0, e.1));
-            last = Some(e);
             j += 1;
-        }
-        if let Some(e) = last {
-            self.heap.collection_iterator_set(o, e);
         }
         self.fuel -= i64::from((j - n0) / 4);
         Ok(f64::from(j))
