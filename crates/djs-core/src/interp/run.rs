@@ -1182,6 +1182,50 @@ impl<'h> Exec<'h> {
         }
     }
 
+    /// The instructions that build one value and run no user code: `push_atom`, `object`,
+    /// `typeof`, and `to_string` and `concat` of operands that are no
+    /// objects (`step` has converted those). The stack changes only after the last
+    /// allocation, so a failure leaves the instruction as it was: `step` runs it for the
+    /// general path, and the tier-0 loop's exit runs it without `step` around it
+    /// (`decline_build`, D3394).
+    #[inline(never)]
+    pub(super) fn build_op(&mut self, op: Op) -> Result<(), Fault> {
+        match op {
+            Op::PushAtom => {
+                let s = self.heap.atom_to_value(self.imm_atom())?;
+                self.push(s);
+            }
+            Op::Object => {
+                let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+                let o = self.heap.new_object(Some(proto))?;
+                self.push(Value::object(o));
+            }
+            Op::Typeof => {
+                let s = self
+                    .heap
+                    .atom_string(conv::typeof_atom(self.heap, self.top(0)))?;
+                self.set(self.sp - 1, Value::string(s));
+            }
+            Op::ToString => {
+                let s = conv::to_string(self.heap, self.top(0))?;
+                self.set(self.sp - 1, Value::string(s));
+            }
+            _ => {
+                debug_assert_eq!(op, Op::Concat);
+                let n = self.imm_u16(1);
+                let mut acc = self.heap.atom_string(crate::heap::atoms::EMPTY)?;
+                for i in 0..n {
+                    let v = self.get(self.sp - n + i);
+                    let s = conv::to_string(self.heap, v)?;
+                    acc = self.heap.concat(acc, s)?;
+                }
+                self.sp -= n;
+                self.push(Value::string(acc));
+            }
+        }
+        Ok(())
+    }
+
     /// One instruction through `step`, with the out-of-memory retry (D1700) and the
     /// throw of a fault: `Some` when the run stops.
     #[inline(never)]
@@ -2038,14 +2082,8 @@ impl<'h> Exec<'h> {
                 let v = self.constant(self.imm_u32(1));
                 self.push(v);
             }
-            Op::PushAtom => {
-                let s = self.heap.atom_to_value(self.imm_atom())?;
-                self.push(s);
-            }
-            Op::Object => {
-                let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
-                let o = self.heap.new_object(Some(proto))?;
-                self.push(Value::object(o));
+            Op::PushAtom | Op::Object | Op::Typeof | Op::ToString | Op::Concat => {
+                self.build_op(op)?
             }
             Op::ArrayFrom => {
                 let n = self.imm_u16(1);
@@ -2844,11 +2882,6 @@ impl<'h> Exec<'h> {
                 let b = conv::to_boolean(self.heap, a);
                 self.push(Value::bool(!b));
             }
-            Op::Typeof => {
-                let a = self.pop();
-                let s = self.heap.atom_string(conv::typeof_atom(self.heap, a))?;
-                self.push(Value::string(s));
-            }
             Op::Inc | Op::Dec => {
                 let a = self.pop();
                 let d = if op == Op::Inc { 1 } else { -1 };
@@ -2857,11 +2890,6 @@ impl<'h> Exec<'h> {
                     None => conv::number(conv::to_number(self.heap, a)? + d as f64),
                 };
                 self.push(v);
-            }
-            Op::ToString => {
-                let a = self.pop();
-                let s = conv::to_string(self.heap, a)?;
-                self.push(Value::string(s));
             }
             Op::Add => {
                 let (a, b) = (self.top(1), self.top(0));
@@ -2936,18 +2964,6 @@ impl<'h> Exec<'h> {
                 let a = self.pop();
                 self.push(Value::bool(a.is_undefined()));
             }
-            Op::Concat => {
-                let n = self.imm_u16(1);
-                let mut acc = self.heap.atom_string(crate::heap::atoms::EMPTY)?;
-                for i in 0..n {
-                    let v = self.get(self.sp - n + i);
-                    let s = conv::to_string(self.heap, v)?;
-                    acc = self.heap.concat(acc, s)?;
-                }
-                self.sp -= n;
-                self.push(Value::string(acc));
-            }
-
             // ---- control flow ----
             Op::Jump => {
                 self.pc = self.jump_target(next);
