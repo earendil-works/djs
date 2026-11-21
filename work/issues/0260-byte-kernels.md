@@ -88,5 +88,44 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   updated.
 
 ## Follow-ups
+- Branch 0260-rest (held for the size budget, rebased on 5a3891f6): two-byte JSON scan
+  (+156 B gz) and escaped writer (+189): fanout −8%; regexp first sets of one or two
+  bytes and multiline `^` through `swar::find_either` (+349): heavy −5%, text −4%.
+- The `+simd128` target feature alone shrinks the shipped module by ~764 B gz at equal
+  speed (autovectorization; scratch build): an owner question against D016.
+- includes/indexOf on short lines are ~80% call overhead (run_hot, decline_fast,
+  str_view, shape lookups): 0259's area, not the kernel.
+- Escape-dense JSON still pays ~12 ns per escape (two passes, a mispredicted run end in
+  each); a scan that records escape positions for the writer could halve it.
 
 ## Result
+Landed (main 84ed9975, 5a3891f6; D3310, D3311): `crates/djs-core/src/swar.rs` (lane
+tests, `find_byte`), find_latin1/find_byte overlapping last word, one-byte JSON strings
+scanned a word at a time from the first byte, the escape table, the one-pass escaped
+writer, size offsets in json. Shipped module 429,353 → 428,963 B gz on balance (+139 for
+the kernels, −205 offsets, other merges in between).
+
+Numbers (wasm in node 26; instructions per run are (I(R)−I(0))/R; wall is interleaved
+min-of-15; load 10-50, so wall ±3-5%):
+| workload | instr | wall |
+| --- | ---: | ---: |
+| media | −15% | −17% |
+| heavy | −2.6% | −3% |
+| fanout | −4% | −4% |
+| json | −1.4% | ~0 |
+| text, loop, inspect, sequential | ~0 | ~0 |
+Kernels (µs per iteration, wall): JSON.parse of an 80 KB plain text 9.9 vs 52 (0.19x),
+escaped text (3,266 escapes) 0.87x, find_latin1 self time in an includes loop −30%.
+Held on 0260-rest (see Follow-ups): fanout −8%, heavy −5%, text −4% more for +694 B.
+
+simd128 (scratch, patches in work/scratch/0260/simd-hand*.patch; same code as main
+otherwise):
+- `-Ctarget-feature=+simd128` alone: −764 B gz (428,404 vs 429,168), workloads within
+  ±3% (heavy 1.02, fanout 0.98, media 0.96, json 1.00, text 0.99 min-time ratios).
+- Hand-written v128 kernels on top (16-byte JSON scan, fused escaped copy, find_byte,
+  find_latin1 with 16 candidates): plain JSON scan 0.60x of SWAR, a 1-escape 80 KB string
+  0.84x, but escape-dense text 1.08-1.25x slower (`i8x16.bitmask` costs more than a word
+  test when the run ends in the first 16 bytes; a SWAR first word then SIMD halves that
+  loss) and the workloads 0.99-1.04x. SWAR already scans long runs at ~10 GB/s; the
+  workloads' costs are per escape and per call, which SIMD does not reduce. Not worth
+  dropping SIMD-less runtimes for; only the flag's size effect is.
