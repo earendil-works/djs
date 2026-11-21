@@ -376,22 +376,20 @@ fn scan_rest<const E: u8>(
                 if p >= n {
                     return fail(Msg::EndOfInput, quote);
                 }
-                let e = peek::<E>(b, p);
+                let e = unescape_of(peek::<E>(b, p));
                 p += 1;
-                match e {
-                    0x62 | 0x66 | 0x6E | 0x72 | 0x74 | 0x5C | 0x2F | 0x22 => {}
-                    0x75 => {
-                        let mut u = 0;
-                        for _ in 0..4 {
-                            let Some(h) = hex(peek::<E>(b, p)) else {
-                                return fail(Msg::BadUnicode, p);
-                            };
-                            u = (u << 4) | h;
-                            p += 1;
-                        }
-                        two_byte |= u > 0xFF;
+                if e == 0 {
+                    let mut u = 0;
+                    for _ in 0..4 {
+                        let Some(h) = hex(peek::<E>(b, p)) else {
+                            return fail(Msg::BadUnicode, p);
+                        };
+                        u = (u << 4) | h;
+                        p += 1;
                     }
-                    _ => return fail(Msg::BadEscape, p - 1),
+                    two_byte |= u > 0xFF;
+                } else if e == BAD_ESCAPE {
+                    return fail(Msg::BadEscape, p - 1);
                 }
                 len += 1;
             }
@@ -446,24 +444,8 @@ fn decode_units<const E: u8>(b: &[u8], s: &StrTok, mut f: impl FnMut(u16)) {
     while i < s.end {
         let c = peek::<E>(b, i);
         if c == 0x5C {
-            let e = peek::<E>(b, i + 1);
-            i += 2;
-            let u = match e {
-                0x62 => 0x08,
-                0x66 => 0x0C,
-                0x6E => 0x0A,
-                0x72 => 0x0D,
-                0x74 => 0x09,
-                0x75 => {
-                    let mut u = 0;
-                    for k in 0..4 {
-                        u = (u << 4) | hex(peek::<E>(b, i + k)).unwrap_or(0);
-                    }
-                    i += 4;
-                    u
-                }
-                other => other,
-            };
+            let (u, len) = unescape::<E>(b, i);
+            i += len;
             f(u as u16);
         } else if E == UTF8 && c >= 0x80 {
             let (cp, l) = utf8_char(b, i).unwrap_or((0xFFFD, 1));
@@ -482,6 +464,43 @@ fn decode_units<const E: u8>(b: &[u8], s: &StrTok, mut f: impl FnMut(u16)) {
     }
 }
 
+/// What the character after a backslash stands for, by that character (below 0x80): the
+/// unit itself, 0 for `u` (four hex digits follow), [`BAD_ESCAPE`] for no escape. A table,
+/// not a `match`: in a long text the escapes alternate (`\n`, `\"`), and the jump table
+/// of a `match` mispredicted at each (0260).
+static UNESCAPE: [u8; 128] = {
+    let mut t = [BAD_ESCAPE; 128];
+    let pairs = *b"b\x08f\x0cn\nr\rt\t\"\"\\\\//u\0";
+    let mut i = 0;
+    while i < pairs.len() {
+        t[pairs[i] as usize] = pairs[i + 1];
+        i += 2;
+    }
+    t
+};
+const BAD_ESCAPE: u8 = 0xFF;
+
+/// [`UNESCAPE`] of a unit.
+#[inline(always)]
+fn unescape_of(e: u32) -> u8 {
+    UNESCAPE.get(e as usize).copied().unwrap_or(BAD_ESCAPE)
+}
+
+/// The unit an escape at `i` (a validated `\\`) stands for, and the escape's length.
+#[inline(always)]
+fn unescape<const E: u8>(b: &[u8], i: usize) -> (u32, usize) {
+    match unescape_of(peek::<E>(b, i + 1)) {
+        0 => {
+            let mut u = 0;
+            for k in 2..6 {
+                u = (u << 4) | hex(peek::<E>(b, i + k)).unwrap_or(0);
+            }
+            (u, 6)
+        }
+        x => (x as u32, 2),
+    }
+}
+
 /// `write_string` of an escaped one-byte string from one-byte input: the runs between
 /// escapes are copied whole (0116: a long text has an escaped newline every line or so).
 /// Out of line, so that `write_string` stays small for the common unescaped strings.
@@ -496,21 +515,7 @@ fn write_escaped_latin1(b: &[u8], s: &StrTok, dst: &mut [u8]) -> usize {
         i += run;
         if i < s.end {
             // An escape (validated by the scan), decoded in place.
-            let (u, len) = match b[i + 1] {
-                b'b' => (0x08, 2),
-                b'f' => (0x0C, 2),
-                b'n' => (0x0A, 2),
-                b'r' => (0x0D, 2),
-                b't' => (0x09, 2),
-                b'u' => {
-                    let mut u = 0;
-                    for &h in &b[i + 2..i + 6] {
-                        u = (u << 4) | hex(h as u32).unwrap_or(0);
-                    }
-                    (u, 6)
-                }
-                other => (other as u32, 2),
-            };
+            let (u, len) = unescape::<LATIN1>(b, i);
             dst[k] = u as u8;
             k += 1;
             i += len;
