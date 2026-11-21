@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { encode } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { Sandbox, defaultWasmPath } from "../src/sandbox.ts";
-import { provideCodedBase } from "../src/base.ts";
+import { provideBase, rememberBase } from "../src/base.ts";
 import { djsExports } from "../src/abi.ts";
 
 interface X {
@@ -60,7 +60,14 @@ const path = defaultWasmPath();
 const bytes = readFileSync(typeof path === "string" ? path : fileURLToPath(path));
 const { module, instance } = await WebAssembly.instantiate(bytes, {});
 const x = djsExports(module, instance) as unknown as X;
-provideCodedBase(module, x as never);
+// An instance's base goes to its first VM as the arena (D2060, D3360): each VM here gets
+// the decoded base injected first, as a host's fresh instance does.
+rememberBase(module, x as never);
+const vmNew = x.vm_new;
+x.vm_new = (limit: number) => {
+  provideBase(module, x as never);
+  return vmNew(limit);
+};
 const textEncoder = new TextEncoder();
 const CAP = 16 << 20;
 const staging = x.djs_staging(CAP);
@@ -113,10 +120,10 @@ const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(
     rows.push(`wasm/instantiate shipped\t${ns(() => new WebAssembly.Instance(m, {})).toFixed(0)}\tns/op`);
   }
   // Batches of 100: one copy of the base is close to the timer's resolution.
-  const vmNew = ns(() => {
+  const vmNewNs = ns(() => {
     for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0));
   }) / 100;
-  rows.push(`wasm/vm_new\t${vmNew.toFixed(0)}\tns/op`);
+  rows.push(`wasm/vm_new\t${vmNewNs.toFixed(0)}\tns/op`);
   if (x.vm_new_compiled !== undefined) {
     const compiled = x.vm_new_compiled;
     rows.push(`wasm/vm_new compiling the prelude\t${ns(() => x.vm_free(compiled(0))).toFixed(0)}\tns/op`);

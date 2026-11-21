@@ -368,9 +368,9 @@ BENCH = {
     "wire/decode-vs-json-string": ("wasm/parse_json 1mib-string", "wasm/decode 1mib-string"),
     "wire/read-vs-json-objects": ("wasm/json_stringify 10k-objects", "wasm/readValue 10k-objects"),
     "wire/read-vs-json-text": ("wasm/json_stringify 1mib-text-unicode", "wasm/readValue 1mib-text-unicode"),
-    "native/foreach-x": ("engine/djs-bytecode/foreach", "engine/djs/foreach"),
-    "native/arrays-x": ("engine/djs-bytecode/arrays", "engine/djs/arrays"),
 }
+# (`native/foreach-x` and `native/arrays-x`, generated Rust against the same builtin as
+# bytecode, stay as recorded at 35ed5ab789: the bench lost its bytecode twin in 0251.)
 
 
 def bench():
