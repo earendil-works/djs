@@ -102,7 +102,7 @@ const OPS: Record<string, string> = {
   "Set string keys x200": "let n = 0; for (let i = 0; i < 200; i++) { const s = new Set(); for (const r of R) s.add(r.u); n += s.size; } return n;",
   "Map group rows x20": "let n = 0; for (let i = 0; i < 20; i++) { const m = new Map(); for (const r of ROWS) { const k = r.service + ' ' + r.route; const g = m.get(k) ?? { n: 0 }; g.n++; m.set(k, g); } n += m.size; } return n;",
   "object spread x20": "let n = 0; for (let i = 0; i < 20; i++) for (const r of ROWS) { const o = { ...r, x: 1 }; n += o.status; } return n;",
-  "Object.entries/fromEntries x200": "let n = 0; for (let i = 0; i < 200; i++) n += Object.keys(Object.fromEntries(Object.entries(ROWS[i]))).length; return n;",
+  "Object.entries/fromEntries x2": "let n = 0; for (let i = 0; i < 2; i++) for (const r of ROWS) n += Object.keys(Object.fromEntries(Object.entries(r))).length; return n;",
   // calls and async
   "closure calls 300k": "const f = (x) => x + 1; let n = 0; for (let i = 0; i < 300000; i++) n = f(n); return n;",
   "optional arg calls 100k": "function f(a, b) { return b === undefined ? a : b; } let n = 0; for (let i = 0; i < 100000; i++) n += f(i); return n;",

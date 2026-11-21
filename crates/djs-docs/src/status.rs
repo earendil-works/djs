@@ -651,7 +651,7 @@ const OPS_LISTED: [(&str, &str); 30] = [
     ("set-string-keys-x200", "`Set.add` with string keys"),
     ("object-spread-x20", "object spread"),
     (
-        "object-entries-fromentries-x200",
+        "object-entries-fromentries-x2",
         "`Object.entries` and `fromEntries`",
     ),
     ("await-value-50k", "`await` of a value"),

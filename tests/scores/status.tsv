@@ -535,8 +535,6 @@ engines/ops/new-regexp-5k/djs	1.65	b18e14df7f	2026-11-21
 engines/ops/new-regexp-5k/quickjs	2.034	b18e14df7f	2026-11-21
 engines/ops/number-isinteger-100k/djs	1.933	b18e14df7f	2026-11-21
 engines/ops/number-isinteger-100k/quickjs	2.486	b18e14df7f	2026-11-21
-engines/ops/object-entries-fromentries-x200/djs	0	b18e14df7f	2026-11-21
-engines/ops/object-entries-fromentries-x200/quickjs	0.215	b18e14df7f	2026-11-21
 engines/ops/object-spread-x20/djs	1.178	b18e14df7f	2026-11-21
 engines/ops/object-spread-x20/quickjs	4.639	b18e14df7f	2026-11-21
 engines/ops/optional-arg-calls-100k/djs	1.651	b18e14df7f	2026-11-21
