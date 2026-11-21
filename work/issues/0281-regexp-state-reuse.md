@@ -1,6 +1,6 @@
 # 0281: Land the regexp matcher's state reuse (parked in 0275)
 
-status: open
+status: in-progress
 agent: pscan
 branch: issue/0281-regexp-state-reuse
 depends-on: 0280 (budget change)
