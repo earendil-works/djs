@@ -13030,3 +13030,28 @@ with an index for that (`grow_table`: cap 134, 512 buckets, 4.2 KB) and left the
 entries and its dense index (D2450) is sized for its capacity: +256 B of image, idle arena
 189,656 → 185,680 B. No row is worse; loop 704 → 640 KiB. The codemode-memory leg (D3367)
 gets an idle row (a VM that ran nothing).
+## D3404: Rounding the arena's growth step down waits for the smaller base
+date: 2026-11-21 · by: pgc (from pstart's 0271 finding) · issue: 0269
+Below the GC target `Arena::reserve` grows by `cap / 8` rounded up to whole pages; past
+eight pages of arena every step is two pages (9 × 1.125 = 10.1 → 11). Rounding the eighth
+down (at least one page, work/scratch/0271/floor-round.patch) measured, KiB after a run on
+main: heavy 3968 → 3904, fanout 1472 → 1536 (its last step before the second collection
+lands one page past what it needs), the other rows and the native-track cases
+(mem-perturb) unchanged, instructions within noise; with 0271's 58 KB smaller base: text
+896 → 832 and fanout back to 1472. On main alone the gate's codemode-memory leg refuses
+fanout's +64, so the change lands with (or after) 0271's base, not before.
+
+## D3405: Base-atom keys stay on the base hash
+date: 2026-11-21 · by: pgc · issue: 0269
+`o[k]` with a VM string `k` that names a base-image atom (`name`, `value`, `type`, …;
+43% of the static key uses in the codemode corpus) costs ~1,550 instructions with the
+D3402 wiring, against ~1,140 for the VM's own atoms (QuickJS ~1,000): it misses the VM's
+index, then hashes the name with the base key. Two fixes were built and dropped:
+- Aliases of base atoms in the VM's index: lookups 1,140, but intern would have to add
+  them too (plain and suspended runs must leave the same heap), and that breaks two
+  invariants the tests pin: touching builtins in any order leaves the same image, and
+  a compile-cache import leaves the heap a compile would. Patch:
+  work/scratch/0269/base-alias.patch.
+- FNV-1a instead of SipHash as the base hash (the base index is fixed content, so it
+  needs no key): 1,550 → 1,370, +293 B gz, COMPAT_VERSION bump. Not worth the bytes now.
+  Patch: work/scratch/0269/base-fnv.patch.

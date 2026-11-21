@@ -81,6 +81,13 @@ String bucket: heavy 19% of djs samples (find_latin1 6%: pscan's kernel), fanout
   overhead (several intrinsic calls per builtin), pcall's area.
 - Workloads within noise; module +180 B gz (helpers unlinked until wired).
 
+### Batch 3 (D3404 deferred, D3405)
+- D3404 (pstart's 0271 finding, the growth rule): the arena's eighth rounded down to pages.
+  heavy −64 KiB, fanout +64 on main (the codemode-memory leg refuses it); with 0271's
+  smaller base text −64, fanout back. Not landed: goes in with 0271's base.
+- D3405 (negative): base-atom keys (43% of static key uses in the corpus): index aliases
+  break the image/compile-cache invariants; an FNV base hash gives −180 instr for +293 B.
+
 ## Follow-ups
 
 ## Result
