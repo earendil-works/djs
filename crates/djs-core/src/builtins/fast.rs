@@ -795,13 +795,92 @@ fn array_call(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
     array_new(heap, args)
 }
 
-/// `new Map()`, `new Map(undefined)`, `new Map(null)`: no entries to add.
+/// `new Map()`, `new Map(undefined)`, `new Map(null)`: no entries to add; `new
+/// Map(array)` of entry arrays, `new Set(array)` (`filled_collection`).
 fn map_new(heap: &mut Heap, args: &[Value]) -> Fast {
+    if let Some(m) = filled_collection(heap, arg(args, 0), ObjectClass::Map)? {
+        return Ok(Some(m));
+    }
     empty_collection(heap, args, ObjectClass::Map, Intrinsic::MapProto)
 }
 
 fn set_new(heap: &mut Heap, args: &[Value]) -> Fast {
+    if let Some(s) = filled_collection(heap, arg(args, 0), ObjectClass::Set)? {
+        return Ok(Some(s));
+    }
     empty_collection(heap, args, ObjectClass::Set, Intrinsic::SetProto)
+}
+
+/// Whether iterating the Array `a` runs its original @@iterator and `next` (data
+/// properties): then reading its elements is the same as iterating it.
+pub(crate) fn array_iteration_original(heap: &Heap, a: Obj) -> bool {
+    use crate::bytecode::intrinsics::const_id;
+    const VALUES: u16 = const_id("ArrayPrototypeValues");
+    const NEXT: u16 = const_id("ArrayIteratorPrototypeNext");
+    let data = |o: Obj, key| match heap.find_property(o, key) {
+        Some((_, Property::Data { value, .. })) => Some(value),
+        _ => None,
+    };
+    let installed = |id| Some(realm::installed_intrinsic(heap, id));
+    let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayIteratorProto);
+    data(a, atoms::SYM_ITERATOR) == installed(VALUES) && data(proto, atoms::NEXT) == installed(NEXT)
+}
+
+/// `new Set(array)` or `new Map(array)` (0270) where the constructor's loop runs no user
+/// code: the Array's iteration and the prototype's `add` / `set` are the originals, and
+/// every element is present (a Map's an Array with its elements 0 and 1 present), so the
+/// loop only adds. `None` for anything else (the constructor then runs, from scratch).
+fn filled_collection(
+    heap: &mut Heap,
+    v: Value,
+    class: ObjectClass,
+) -> Result<Option<Value>, Fault> {
+    use crate::bytecode::intrinsics::const_id;
+    const ADD: u16 = const_id("SetPrototypeAdd");
+    const SET: u16 = const_id("MapPrototypeSet");
+    let Some(a) = v
+        .as_object()
+        .filter(|&a| heap.object_class(a) == ObjectClass::Array)
+    else {
+        return Ok(None);
+    };
+    let set = class == ObjectClass::Set;
+    let (proto, adder, original) = if set {
+        (Intrinsic::SetProto, atoms::ADD, ADD)
+    } else {
+        (Intrinsic::MapProto, atoms::SET, SET)
+    };
+    let proto = realm::intrinsic_obj(heap, proto);
+    let add = match heap.find_property(proto, adder) {
+        Some((_, Property::Data { value, .. })) => value,
+        _ => return Ok(None),
+    };
+    if add != realm::installed_intrinsic(heap, original) || !array_iteration_original(heap, a) {
+        return Ok(None);
+    }
+    let c = heap.collection_new(class, proto)?;
+    for i in 0..heap.array_length(a) {
+        let Some(x) = heap.get_element_fast(a, i) else {
+            return Ok(None);
+        };
+        let (k, v) = if set {
+            (x, Value::TRUE)
+        } else {
+            let Some(e) = x
+                .as_object()
+                .filter(|&e| heap.object_class(e) == ObjectClass::Array)
+            else {
+                return Ok(None);
+            };
+            match (heap.get_element_fast(e, 0), heap.get_element_fast(e, 1)) {
+                (Some(k), Some(v)) => (k, v),
+                _ => return Ok(None),
+            }
+        };
+        let k = collection::stored_key(heap, k)?;
+        heap.collection_set(c, k, v)?;
+    }
+    Ok(Some(Value::object(c)))
 }
 
 fn empty_collection(heap: &mut Heap, args: &[Value], class: ObjectClass, proto: Intrinsic) -> Fast {

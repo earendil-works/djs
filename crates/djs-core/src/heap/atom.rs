@@ -237,6 +237,8 @@ well_known! {
         // Read from the Error constructor by every new error's stack (0266).
         STACK_TRACE_LIMIT = "stackTraceLimit",
         PREPARE_STACK_TRACE = "prepareStackTrace",
+        // `new Set(array)` reads Set.prototype.add (0270).
+        ADD = "add",
     }
     symbols {
         SYM_ITERATOR = "Symbol.iterator",

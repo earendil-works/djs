@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 3544490619,
+  "layoutHash": 2528253161,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },

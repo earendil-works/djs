@@ -4093,9 +4093,7 @@ impl<'h> Exec<'h> {
         }
         match v.as_object() {
             Some(a) if self.heap.object_class(a) == ObjectClass::Array => {
-                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
-                data(a, SYM_ITERATOR) == Some(installed(intrinsics::ARRAY_PROTOTYPE_VALUES))
-                    && data(proto, NEXT) == Some(installed(intrinsics::ARRAY_ITERATOR_NEXT))
+                crate::builtins::fast::array_iteration_original(self.heap, a)
             }
             _ => false,
         }
