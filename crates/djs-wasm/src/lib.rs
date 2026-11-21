@@ -25,7 +25,6 @@
 
 extern crate alloc;
 
-use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -963,10 +962,8 @@ fn compile_with(
             Some(n) => {
                 let at = name_len + params_len + src_len;
                 let blob = (n > 0).then(|| staged(staging, at, n));
-                elastic(&mut slot.vm, |vm| {
-                    vm.compile_cached(src, &opts, blob)
-                })
-                .map_err(|e| e.text())
+                elastic(&mut slot.vm, |vm| vm.compile_cached(src, &opts, blob))
+                    .map_err(|e| e.text())
             }
             None => elastic(&mut slot.vm, |vm| vm.compile(src, &opts))
                 .map(|f| (f, None))
@@ -1008,7 +1005,7 @@ fn compile_with(
 pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u32 {
     use djs_core::bytecode::template::disasm_template;
     with(|s| {
-        let params_text = staged_str(&s.staging, 0, params_len).to_owned();
+        let params_text = String::from(staged_str(&s.staging, 0, params_len));
         let src = staged(&s.staging, params_len, src_len).to_vec();
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
         // (`..`: the dump build's fields.)
@@ -1083,8 +1080,8 @@ pub extern "C" fn vm_new_object(vm: u32) -> u32 {
 pub extern "C" fn vm_dump_runtime(vm: u32, len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let text = staged_str(staging, 0, len).to_owned();
-        match slot.vm.dump_runtime_from(&text) {
+        let text = staged_str(staging, 0, len);
+        match slot.vm.dump_runtime_from(text) {
             Ok(o) => slot.handle(o),
             Err(_) => 0,
         }
@@ -1096,8 +1093,8 @@ pub extern "C" fn vm_dump_runtime(vm: u32, len: usize) -> u32 {
 pub extern "C" fn vm_new_host_function(vm: u32, fn_id: u32, name_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let name = staged_str(staging, 0, name_len).to_owned();
-        match slot.vm.new_host_function(fn_id, &name) {
+        let name = staged_str(staging, 0, name_len);
+        match slot.vm.new_host_function(fn_id, name) {
             Ok(f) => slot.handle(f),
             Err(_) => 0,
         }
@@ -1110,8 +1107,8 @@ pub extern "C" fn vm_new_host_function(vm: u32, fn_id: u32, name_len: usize) -> 
 pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let name = staged_str(staging, 0, name_len).to_owned();
-        match slot.vm.new_async_host_function(fn_id, &name) {
+        let name = staged_str(staging, 0, name_len);
+        match slot.vm.new_async_host_function(fn_id, name) {
             Ok(f) => slot.handle(f),
             Err(_) => 0,
         }
@@ -1125,12 +1122,12 @@ pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usiz
 pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let name = staged_str(staging, 0, name_len).to_owned();
+        let name = staged_str(staging, 0, name_len);
         let Some(o) = slot.value(obj).as_object() else {
             return -1;
         };
         let v = slot.value(value);
-        if slot.vm.define(o, &name, v).is_ok() {
+        if slot.vm.define(o, name, v).is_ok() {
             0
         } else {
             -1
@@ -1160,7 +1157,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     // (No base needed: the dump has the base's names from the module, 0215.)
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let text = staged_str(staging, 0, len).to_owned();
+        let text = staged_str(staging, 0, len);
         // Six lines, then the states' text, which may hold newlines of its own.
         let mut lines = text.splitn(7, '\n');
         let mut line = || lines.next().unwrap_or("");
@@ -1352,7 +1349,7 @@ pub extern "C" fn vm_string_reserve(vm: u32, len: u32) -> u32 {
 pub extern "C" fn vm_new_error(vm: u32, kind: u32, msg_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let msg = staged_str(staging, 0, msg_len).to_owned();
+        let msg = staged_str(staging, 0, msg_len);
         let kind = match kind {
             1 => ErrorKind::TypeError,
             2 => ErrorKind::RangeError,
@@ -1361,7 +1358,7 @@ pub extern "C" fn vm_new_error(vm: u32, kind: u32, msg_len: usize) -> u32 {
             5 => ErrorKind::InternalError,
             _ => ErrorKind::Error,
         };
-        match slot.vm.new_error(kind, &msg) {
+        match slot.vm.new_error(kind, msg) {
             Ok(e) => slot.handle(e),
             Err(_) => 0,
         }
