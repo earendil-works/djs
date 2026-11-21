@@ -1,6 +1,6 @@
 # 0272: Per-element cost of callback array builtins
 
-status: in-progress
+status: done
 agent: pscan
 branch: issue/0272-callback-builtins
 depends-on: 0268 (batch 1)
@@ -55,6 +55,14 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Batch 1 merged (15b63594, D3430).
+- The callback's return inside run_hot (D3431): three variants measured, none landed (each_again
+  +456 B; in-arm each_return +113 B but the arithmetic arms +1-2 instructions after 0268's
+  batch 2, tight +1.85%; skipping load_frame in the outer loop: every arm one move longer).
+  Patches: work/scratch/0272/inloop-v1.patch, inloop-v2.patch, each-again-shared.patch,
+  outer-skip-load.patch.
+- New corpus case tests/corpus/builtins/array-callback-reuse.js (deep calls in the callback,
+  throws, mutation, holes, a frozen species result, stops).
 - Measured (main 8197d88e, slope.py N/2N on 100-element arrays, machine instructions per
   element, work/scratch/0272/s/*.js; quickjs-wasi by the same method, qslope.py): djs
   forEach 799, map 868, filter 979, reduce 896, some 721, find 733, every 721, for-of 736,
@@ -69,5 +77,19 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   -12.6%; heavy -2.3%. A frame rewrite through the stack's raw bytes was +3-4% (dropped).
 
 ## Follow-ups
+- flatMap runs FlattenIntoArray as generic bytecode: 9,420 machine instructions per element
+  vs QuickJS 2,570 (3.7x). An EachDense mode (a dense Array result appended in place, else
+  the builtin's loop) would bring it near map's ~800; rare in codemode (1 corpus file).
+- The callback's return without leaving run_hot (D3431) is worth ~30 instructions per
+  element; revisit if run_hot's register allocation is reworked.
 
 ## Result
+Landed (D3430, main 15b63594): EachDense's per-element step reads its state once, takes the
+dense element first, skips to_boolean for booleans, writes k as an int, and reduce keeps the
+accumulator in its state slot (the box written once at the end). Machine instructions per
+element (slope.py, 100-element arrays, wasm, main 8197d88e → 15b63594): forEach 799 → 750,
+map 868 → 816, filter 979 → 887, reduce 896 → 703, some/find/every ~722 → 630 (quickjs-wasi
+920, 996, 951, 769, ~705: djs now 0.77-0.93x); heavy −2.3% workload instructions, text/json
+within noise; +~130 B gz. Exact semantics: test262 Array/TypedArray, the corpus (plain,
+--suspend-every 97 --gc-stress, --plain-dumps), a new corpus case. Not landed: the callback's
+return inside run_hot (D3431, measured).

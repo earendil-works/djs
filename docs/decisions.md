@@ -13180,3 +13180,22 @@ string-key helpers becoming live code (`existing_key_atom`, `proxy_on_chain`,
 of the ceilings for this (up to 250 B on the shipped module): 429,648 → 429,790 and slim
 363,349 → 363,630. The shipped module stays 197 B under D020's 1.5x; part (c) of 0268 is
 to give bytes back.
+
+## D3431: The callback's return inside the tier-0 loop: measured, not landed
+date: 2026-11-21 · by: pscan · issue: 0272
+Reusing an EachDense callback's frame without leaving `run_hot` was tried three ways
+(patches in work/scratch/0272/ of the primary checkout):
+- `each_again` in the RETURN arm (the step a second time, no exit): per element map −13.6%,
+  filter −9.4%, forEach −3.9% (100-element arrays, slope.py), +456 B gz. A `continue` back
+  to the loop head spilled the whole loop (tight +45%); as an else branch the shared path
+  stayed within one instruction on most arms.
+- The arm calling `each_return` itself and going on at pc 0 (+113 B gz): −4..−5.5% per
+  element for every mode, but after 0268's batch 2 (D3392) the arithmetic arms' paths grew
+  by one or two instructions (a loop invariant spilled: Add 34 → 36, Lt/Sub +1, Return and
+  Call +1), tight +1.85%, call/prop/local/method +0.5..0.6%.
+- Skipping `load_frame` after `each_return` in the outer loop: every arm one move longer and
+  a back edge of three moves.
+The saving per element is ~30 machine instructions (the exit, the outer loop and
+`load_frame`), less than the profile suggested; any new way back into the loop moves V8's
+register allocation of the whole function. Not worth it until the loop's allocation can
+absorb a second entry.
