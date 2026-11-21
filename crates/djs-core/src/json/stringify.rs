@@ -252,16 +252,18 @@ impl Out {
 
     /// The escape for an ASCII unit that QuoteJSONString escapes.
     fn escape_ascii(&mut self, c: u8) {
-        match c {
-            b'"' => self.latin1(b"\\\""),
-            b'\\' => self.latin1(b"\\\\"),
-            0x08 => self.latin1(b"\\b"),
-            0x09 => self.latin1(b"\\t"),
-            0x0A => self.latin1(b"\\n"),
-            0x0C => self.latin1(b"\\f"),
-            0x0D => self.latin1(b"\\r"),
-            _ => self.escape_u(c as u16),
-        }
+        // The letter of a short escape, one `latin1` for all (0260: an arm each was
+        // eight inlined copies of it).
+        let e = match c {
+            b'"' | b'\\' => c,
+            0x08 => b'b',
+            0x09 => b't',
+            0x0A => b'n',
+            0x0C => b'f',
+            0x0D => b'r',
+            _ => return self.escape_u(c as u16),
+        };
+        self.latin1(&[b'\\', e]);
     }
 
     /// QuoteJSONString.
