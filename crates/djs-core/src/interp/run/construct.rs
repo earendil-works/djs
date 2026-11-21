@@ -91,21 +91,35 @@ impl Exec<'_> {
             }
             fast::RETURN | fast::RETURN_UNDEF => self.return_constructed(op),
             // (Not the construct path: a for-of step the tier-0 loop leaves, a string's
-            // code point or a typed array's element, 0287. Only where the step produces
-            // a value; its allocation fails before the iterator moves.)
+            // code point, a typed array's element or the last step, 0288. Its allocation
+            // fails before the iterator moves.)
             ITER_NEXT_LOC => {
+                use super::iter::{FastStep, Plan};
                 let at = self.lp + self.imm_u16(1);
                 let (it, f) = (self.get(at), self.get(at + 1));
                 let plan = self.iter_plan(it, f);
-                if !matches!(plan, super::iter::Plan::Str(..) | super::iter::Plan::Elem(..)) {
-                    return false;
-                }
-                let Ok(super::iter::FastStep::Value(v)) = self.iter_take(plan) else {
-                    return false;
-                };
                 let next = self.pc + OPS[op as usize].size as u32;
+                let v = match plan {
+                    // The loop's last step: the one result object, made before the
+                    // iterator finishes (an allocation that fails changes nothing).
+                    Plan::Done(_) => {
+                        let Ok(r) = self.done_result() else {
+                            return false;
+                        };
+                        let _ = self.iter_take(plan);
+                        self.pc = next;
+                        r
+                    }
+                    Plan::Str(..) | Plan::Elem(..) => {
+                        let Ok(FastStep::Value(v)) = self.iter_take(plan) else {
+                            return false;
+                        };
+                        self.pc = (next as i64 + self.imm_i32(3) as i64) as u32;
+                        v
+                    }
+                    Plan::Slow => return false,
+                };
                 self.fuel -= OPS[op as usize].cost.fuel() as i64;
-                self.pc = (next as i64 + self.imm_i32(3) as i64) as u32;
                 self.push(v);
                 if self.pc < next {
                     self.safepoint();

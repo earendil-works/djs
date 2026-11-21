@@ -21,12 +21,13 @@
 # raised by 0280, D3512: object rest in Rust (D3491), +399 B, slim +466 B;
 # raised by 0282, D3530: fast entries for builtin getters, typed arrays' named keys in the caches, +515 B, slim +478 B;
 # raised by 0287, D3560: the one-unit string cache, +81 B over the ceiling (+187 B over main's module before 0285/0286), slim +80 B;
-# raised by 0286, D3551: @fast builtin calls inside the loop, a primitive's builtin method from the cache slot, +403 B, slim +387 B).
+# raised by 0286, D3551: @fast builtin calls inside the loop, a primitive's builtin method from the cache slot, +403 B, slim +387 B;
+# raised by 0288, D3570: for-of over strings out of the general path, +301 B, slim +291 B).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 # budget_allowance_gzip: added to 1.5x by the owner (D3510, 2026-11-21) to land the speedups
 # parked for size; the ceiling below still rises only by recorded batches.
 quickjs_wasi_gzip	286655
 budget_allowance_gzip	2048
-ceiling_gzip	431435
+ceiling_gzip	431736
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	365364
+slim_ceiling_gzip	365655

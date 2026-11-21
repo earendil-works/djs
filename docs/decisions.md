@@ -13875,3 +13875,20 @@ Size: shipped 431,032 → 431,435 B gz (+403), slim 364,977 → 365,364 (+387): 
 +551 B of wasm (the two arms, and 326 of it LLVM's code for the exits after `field_slow`
 lost three arguments), `ic_proto_fill` +209, the fast call's code +171 net. Ceilings
 raised to those; 595 B of the owner's allowance (D3510) remain.
+
+## D3570: for-of over strings without a trip through `step`
+date: 2026-11-21 · by: pidle · issue: 0288
+0287's parked patch (D3560's note), on main 7323532f. The tier-0 loop declines
+`iter_next_loc` for String Iterators (it takes only Arrays' values); the declined-instruction
+path (interp/run/construct.rs, out of `run_hot`) now finishes the step: one `iter_plan`
+and `iter_take` (out of line, shared with `iter_fast_next`) where `step` planned three
+times, an ASCII unit from the one-unit cache (D3560) without `code_point_at`. The loop's
+last step (an Array's or a string's) is finished there too, its result object made before
+the iterator is finished, so an allocation that fails changes nothing: without that,
+for-of over arrays paid an extra plan for the declined last step (+2.9%). `run_hot` is
+unchanged (hotcode.sh: the same summary but the addresses).
+Wasm instructions per iteration of `for (const c of s)` over 10 code units (slope.py,
+`--qjs2`), main → branch (QuickJS 2026): ASCII 22.3k → 17.9k (13.2k), Latin-1 23.0k →
+19.3k (13.1k), with a € and an astral character 23.8k → 20.1k (13.1k); for-of over an
+Array 11.6k → 11.5k (13.6k); `[...s]` unchanged. Shipped 431,435 → 431,736 B gz (+301),
+slim 365,364 → 365,655, from the owner's allowance (D3510).
