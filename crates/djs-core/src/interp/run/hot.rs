@@ -191,6 +191,7 @@ const _: () = assert!(
         && same_step(Op::IncLoc, Op::DecLoc)
         && same_step(Op::StrictEq, Op::StrictNe)
         && same_step(Op::GetField, Op::GetMethod)
+        && same_step(Op::JumpIfTrue, Op::JumpIfFalse)
         && same_step(Op::PutField, Op::DefineField)
         && fuel_of(Op::Call) == fuel_of(Op::Call0)
         && fuel_of(Op::CallIntrinsic) == fuel_of(Op::CallIntrinsic8)
@@ -452,6 +453,8 @@ impl Exec<'_> {
     /// builds compare the slice's hits with it.
     #[inline(never)]
     fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Value> {
+        // (`hot_length` answered these in a release build.)
+        #[cfg(debug_assertions)]
         if key == atoms::LENGTH && op == fast::GET_FIELD {
             // `a.length` of an Array (its slot 0) and of a string primitive (0086).
             match (o.as_object(), o.as_string()) {
@@ -466,10 +469,9 @@ impl Exec<'_> {
     }
 
     /// `fast_elem` on explicit operands, out of line: `o[key]`, or `o[key] = v`
-    /// (`Some(undefined)`). The loop reads dense elements itself (`hot_elem`) and asks
-    /// here for the rest: every store (the heap's to make: `set_element_fast` also
-    /// appends and fills holes where unobservable, D1783), a typed array's element, and a
-    /// string key (`counts[word]`, D3402), which the heap's string-key helpers answer
+    /// (`Some(undefined)`). The loop reads dense elements itself (`hot_elem`) and stores
+    /// with an index key through `Heap::set_element_fast`; it asks here for the rest: a
+    /// typed array's element, and a string key (`counts[word]`, D3402), which the heap's string-key helpers answer
     /// without running code or allocating: a read gives the data property on `o`'s
     /// chain, or undefined when nothing on it has the key; a store only replaces the
     /// value of an own writable data property. `None` (an accessor, a proxy, an
@@ -487,9 +489,9 @@ impl Exec<'_> {
             }
             return self.heap.string_key_get(obj, s);
         };
+        // (The loop makes the stores with an index key itself.)
         if put {
-            return matches!(self.heap.set_element_fast(obj, i, v), Ok(true))
-                .then_some(Value::UNDEFINED);
+            return None;
         }
         self.heap.get_element_fast(obj, i)
     }
@@ -1234,11 +1236,9 @@ impl Exec<'_> {
                                 break Exit::Decline(op);
                             };
                             sp -= 1;
-                            if op == fast::JUMP_IF_TRUE {
-                                jump!(Op::JumpIfTrue, c)
-                            } else {
-                                jump!(Op::JumpIfFalse, !c)
-                            }
+                            // (One copy of the jump for both; the short forms, which
+                            // loops use, keep theirs.)
+                            jump!(Op::JumpIfTrue, c == (op == fast::JUMP_IF_TRUE))
                         }
                         fast::GET_FIELD | fast::GET_METHOD => {
                             let key = Atom::from_id(imm32!());
@@ -1536,6 +1536,8 @@ impl Exec<'_> {
                                 break Exit::Decline(op);
                             };
                             sp -= 1;
+                            // (Two copies of the jump: one for both costs a loop an
+                            // instruction or two per iteration.)
                             if op == fast::JUMP_IF_TRUE8 {
                                 jump8!(Op::JumpIfTrue8, c)
                             } else {
