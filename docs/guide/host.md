@@ -37,12 +37,32 @@ formatting code, to stay small: its standard library is built so that a panic is
 `unreachable` trap, and the `Sandbox` reports such a trap as an engine panic. A debug or
 native build of the engine reproduces the real message. Every sandbox gets its own instance, so one trap cannot affect another.
 
-One trap is not a bug. The parser's nesting limits keep its recursion within the
-module's 128 KiB stack, but should some path still exhaust it, the stack pointer wraps
-below 0 and the instance traps with "memory access out of bounds". The module exports
-its stack pointer so that a host can tell: the `Sandbox` then reports "stack overflow:
-the engine's wasm stack is exhausted" instead of a bare out-of-bounds access, and never
-calls into that instance again.
+The stack is small and can grow for one call. The shipped module links a 64 KiB shadow
+stack at the bottom of memory, enough for any compile short of deep nesting; the
+parser's full nesting limits need about 128 KiB ([limits](limits.md#nesting-in-source)).
+A host that turns the elastic stack on (`djs_elastic_stack(1)`) gets a compile that
+would nest deeper back before it has any effect: `vm_compile` returns `-1` (`u32::MAX`),
+`vm_run` the status NEED_STACK. The host then takes a block with `djs_stack(len)`, which
+returns its end, sets the exported `__stack_pointer` there, makes the same call again
+(`vm_run` with fuel 0, which goes on with the fuel the stopped run had left), sets the
+pointer back and frees the block with `djs_stack(0)`. The compile that stopped has the
+full limits then; whether a compile stopped or not, the heap and the fuel come out the
+same. Without the switch, such a compile runs again at once on the small stack, where
+deep nesting traps. The `Sandbox` does all of this in one wrapper around
+the module's exports ([`js/src/trap.ts`](../../js/src/trap.ts)).
+
+One trap is not a bug. Should some path still exhaust the module's own stack, the stack
+pointer wraps below 0 and the instance traps with "memory access out of bounds". The
+module exports its stack pointer so that a host can tell: the `Sandbox` then reports
+"stack overflow: the engine's wasm stack is exhausted" instead of a bare out-of-bounds
+access, and never calls into that instance again. On the larger block an overflow does
+not wrap; the nesting limits, which leave about a tenth of it to spare, are what keeps
+it there.
+
+> **Trade-off.** A small stack that a host moves for deep compiles, over a stack large
+> enough for any of them. Every instance saves 64 KiB, about a sixth of an idle one; the
+> cost is a protocol for hosts (one wrapper) and a compile run twice for code that nests
+> deeper than scripts do.
 
 > **Trade-off.** An import-free ABI of integer functions over a richer binding such as
 > the component model or wasm-bindgen. The module runs anywhere with nothing to wire up,
@@ -80,7 +100,7 @@ The shipped module has <!--n wasm/exports-->63<!--/n--> exported functions. By a
 
 | area | exports |
 | --- | --- |
-| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic` |
+| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack` ([above](#a-module-that-needs-nothing)) |
 | the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
 | VMs | `vm_new`, `vm_new_reserved`, `vm_new_with` (flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; images: `vm_arena_ptr`, `vm_arena_len`, `vm_from_bytes`, `vm_replace_image`, `vm_collect`, `vm_seal` |
 | code | `vm_compile` (a Script, or a codemode body with parameter names; option bits for TypeScript and decorators), `vm_compile_file` (the same, with the file name stack traces show) |
@@ -122,6 +142,7 @@ runs again:
 | 3 HOST_CALL | serves the sync call the VM is parked on, resolves it, runs again |
 | 4 IDLE | waits for one of the open async calls, resolves it, runs again |
 | 5 HOST_OUT_OF_MEMORY | the host could not back the heap below its cap: the call is abandoned, the VM stays usable |
+| 6 NEED_STACK | with the elastic stack on: moves the stack to a larger block and runs again with fuel 0 ([above](#a-module-that-needs-nothing)) |
 
 The fuel slice is how the host keeps control ([fuel](limits.md#fuel)). A slice of a
 million fuel is a few milliseconds of work; a long leaf operation can overshoot its slice,

@@ -196,8 +196,11 @@ nested parentheses).
   whose levels take several times the stack of a plain one cost more units (D1941): a
   class body 7 more (`CLASS_WEIGHT`, about 60 nested classes), a C-style `for` and a
   destructuring pattern level 1 more.
-- djs-wasm's shadow stack is 128 KiB (D1941, D2540, `crates/djs-wasm/build.rs`). The
-  deepest accepted nesting of every construct needs at most about 115 KiB of it (wasm
+- The shipped djs-wasm module's shadow stack is 64 KiB (D3280): a compile nests to
+  `SMALL_DEPTH` (200 units; the regexp parser to 32 levels) and one that goes deeper runs
+  again with the full limits on a 128 KiB block the host moves the stack to (the elastic
+  stack, `compiler::elastic`). Debug builds and the dump module link 128 KiB (D1941, D2540,
+  `crates/djs-wasm/build.rs`). In 128 KiB the deepest accepted nesting of every construct needs at most about 115 KiB of it (wasm
   frames, measured per level), so at least a tenth is spare. `js/test/nesting.test.ts` checks it in the
   gate's wasm build: for each construct, the deepest nesting that compiles runs in wasm
   and one more level is the SyntaxError, never a trap. A native test does the same on a

@@ -127,11 +127,22 @@ RangeError: Maximum call stack size exceeded
 
 ## Nesting in source
 
-The compiler does recurse on the native stack, which in wasm is a fixed 128 KiB. To keep
-any input within it, the parser limits how deeply code nests (brackets, blocks,
-expressions, patterns), weighting each construct by the stack it takes. Deeper code is a
-`SyntaxError: stack overflow` with its position, before anything runs. Code that people
-or models write is far from the limit; it exists for generated or hostile input.
+The compiler does recurse on the native stack. To keep any input within it, the parser
+limits how deeply code nests (brackets, blocks, expressions, patterns), weighting each
+construct by the stack it takes, and the regular expression parser limits how deeply
+groups and classes nest. Deeper code is a `SyntaxError: stack overflow` with its
+position, before anything runs. Code that people or models write is far from the limit;
+it exists for generated or hostile input.
+
+The shipped wasm module's stack is only 64 KiB, part of every instance's memory, while
+the deepest nesting the limits accept needs about twice that. So a compile first nests
+only as far as the small stack allows, a few times more than real scripts do. One that
+goes deeper (in the script, or at run time in `eval`, `Function`, `new RegExp` or a
+function compiled at its first call) stops before it has any effect, and the `Sandbox`
+runs it again on a 128 KiB block it takes for that call. What compiles, the errors, the
+heap and the fuel are the same as with a large stack all along; only the memory of an
+instance that compiled such code grows by the block's pages, which later growth of the
+heap reuses.
 
 ## When the engine itself fails
 
@@ -143,7 +154,7 @@ message. The shipped modules do not bounds-check heap accesses themselves (wasm 
 them to the instance), so a bug can also leave that VM's state wrong instead of
 trapping; native and debug builds check every access and panic. The sandbox is unusable
 afterwards and should be discarded; every sandbox has its own instance, so no other is
-affected. Should anything still exhaust the engine's 128 KiB wasm stack, the sandbox
+affected. Should anything still exhaust the engine's own wasm stack, the sandbox
 reports `stack overflow: the engine's wasm stack is exhausted` rather than a bare memory
 access fault.
 
@@ -157,3 +168,5 @@ access fault.
   the nesting limit.
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `fuelSlice`, `maxFuel`,
   `memoryLimit`, and how traps are reported.
+- [`js/src/trap.ts`](../../js/src/trap.ts): the trap's text, and the move to the
+  larger stack.

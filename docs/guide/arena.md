@@ -99,7 +99,7 @@ Allocating a cell rounds the size up to 8, checks it against the cap, moves the 
 the used region (`len`) and writes the header:
 
 <!-- gen:excerpt crates/djs-core/src/heap/mod.rs "impl Heap" "pub fn alloc_cell(" 10 -->
-[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L549-L558), lines 549–558:
+[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L560-L569), lines 560–569:
 
 ```rust
 pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {
@@ -154,7 +154,8 @@ of wasm memory: wasm linear memory never shrinks, so the peak is what a run cost
   them, as runs of whole pages. When the pages after the arena are free or memory ends
   there, a growth adds pages instead of copying the arena into a new block, which would
   hold the old and the new copy at once. The allocator works to keep the arena at the
-  end of memory: the general-purpose allocator's first pages come before it, and
+  end of memory: the general-purpose allocator's first memory comes before it (the rest
+  of the static data's last page and one page more), and
   mid-sized blocks that the general allocator cannot hold get page runs of their own,
   which go back when freed instead of staying behind the arena for good. A large value
   the host hands in (a tool result) is staged in a block that starts some pages after the

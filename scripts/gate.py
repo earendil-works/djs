@@ -305,6 +305,10 @@ def jobs():
         # --- The host-side JS package (0018), on the dev modules.
         J("js tests", f"DJS_WASM=$PWD/{wasm} DJS_WASM_NODUMP=$PWD/{nodump} node --test js/test/*.test.ts",
           cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
+        # 0257: the nesting limits on the shipped module's 64 KiB stack (D3280): compiles
+        # up to the small stack's limits fit it, deeper ones move to the larger stack.
+        J("js nesting (shipped module)", f"DJS_WASM=$PWD/{size_mod} node --test js/test/nesting.test.ts",
+          cls="nodocs", needs=["build:size"]),
         # 0229: the codemode workload set of the benchmarks page runs on djs and gives node's
         # results, with a dump and a load at every idle point (D3113); 0238: every payload of
         # the bridge benchmark reads back as it went in (D3165): about 4 s.
