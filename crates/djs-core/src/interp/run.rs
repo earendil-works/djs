@@ -322,6 +322,9 @@ pub(crate) struct Exec<'h> {
     /// Template flags that make the tier-0 loop's call decline: SLOPPY_THIS, NATIVE and
     /// FAST.
     slow_call_flags: u32,
+    /// The getter `field_slow` found through a cache slot, for `decline_getter` right
+    /// after it in the same instruction (D3470). Never read later, never a root.
+    pub(super) hot_getter: Value,
     /// The generated (`@rust`) builtin whose error is being thrown: its native frame is
     /// the innermost of the error's stack (D3260).
     pub(super) native_callee: Option<Obj>,
@@ -379,6 +382,7 @@ impl<'h> Exec<'h> {
             // Builtins with generated Rust have no bytecode body (D3261): their calls
             // always take the native frame or the fast entry.
             slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,
+            hot_getter: Value::UNDEFINED,
             native_callee: None,
             own_shadow: None,
             host_oom: false,

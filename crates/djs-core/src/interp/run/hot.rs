@@ -487,10 +487,10 @@ impl Exec<'_> {
 
     /// Every `get_field`/`get_method` cache hit (0083), out of line: the loop asks it
     /// for those that `hot_length` and `ic::hot_get` leave (a dictionary-mode receiver, a
-    /// receiver whose shape is not the remembered one, the rarer primitives), and debug
-    /// builds compare the slice's hits with it.
+    /// receiver whose shape is not the remembered one, the rarer primitives, an absent
+    /// key, an accessor: D3470), and debug builds compare the slice's hits with it. An
+    /// accessor's getter is left in `hot_getter` for `decline_getter`.
     #[inline(never)]
-    #[cfg_attr(not(debug_assertions), allow(unused_variables))]
     fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Hit> {
         // (`hot_length` answered these in a release build.)
         #[cfg(debug_assertions)]
@@ -507,7 +507,15 @@ impl Exec<'_> {
                 _ => {}
             }
         }
-        self.ic_get(o, key, ic)
+        let hit = self.ic_get(o, key, ic);
+        if let Some(Hit::Getter(getter)) = hit {
+            // (`get_method` of an accessor is `step`'s.)
+            if op != fast::GET_FIELD {
+                return None;
+            }
+            self.hot_getter = getter;
+        }
+        hit
     }
 
     /// `fast_elem` on explicit operands, out of line: `o[key]`, or `o[key] = v`
@@ -597,11 +605,8 @@ impl Exec<'_> {
     /// throws).
     #[inline(never)]
     fn decline_getter(&mut self) -> bool {
-        // (The slot again, through the heap: the loop's arm keeps nothing for its exit.)
-        let (key, ic, o) = (self.imm_atom(), self.imm_u16(5), self.top(0));
-        let Some(Hit::Getter(getter)) = self.field_slow(fast::GET_FIELD, key, ic, o) else {
-            return false;
-        };
+        // (`field_slow` found it for this instruction just now.)
+        let (getter, o) = (self.hot_getter, self.top(0));
         // A closure (bytecode, `@fast` or native): `call` then pushes a frame or runs
         // the builtin, and never stops the run.
         if !getter
@@ -617,7 +622,7 @@ impl Exec<'_> {
             let start = o
                 .as_object()
                 .or_else(|| crate::interp::realm::primitive_proto(self.heap, o));
-            let found = start.map(|s| self.heap.lookup_property(s, key));
+            let found = start.map(|s| self.heap.lookup_property(s, self.imm_atom()));
             assert!(
                 matches!(found, Some(Lookup::Found(_, Property::Accessor { getter: g, .. })) if g == getter),
                 "the slot's getter differs from the lookup's"
@@ -1434,20 +1439,12 @@ impl Exec<'_> {
                             // The frequent hits are read from the slice (D3393); the
                             // others, and the misses, out of line.
                             let hit = if key == atoms::LENGTH && op == fast::GET_FIELD {
-                                hot_length(b, o).ok_or(false)
+                                hot_length(b, o)
                             } else {
                                 super::ic::hot_get(b, self.template, ic, o, key)
                             };
                             let r = match hit {
-                                // An accessor: `decline_fast` calls the getter.
-                                Err(true) => {
-                                    // (`get_method` of an accessor is `step`'s.)
-                                    if op == fast::GET_FIELD {
-                                        break Exit::Decline(GETTER);
-                                    }
-                                    break Exit::Decline(fast::GET_METHOD);
-                                }
-                                Ok(r) => {
+                                Some(r) => {
                                     #[cfg(debug_assertions)]
                                     {
                                         let want = heap_call_op!(self.field_slow(op, key, ic, o));
@@ -1458,13 +1455,13 @@ impl Exec<'_> {
                                     }
                                     r
                                 }
-                                Err(false) => {
-                                    let hit = heap_call_op!(self.field_slow(op, key, ic, o));
-                                    let Some(Hit::Value(r)) = hit else {
-                                        break Exit::Decline(op);
-                                    };
-                                    r
-                                }
+                                None => match heap_call_op!(self.field_slow(op, key, ic, o)) {
+                                    Some(Hit::Value(r)) => r,
+                                    // An accessor (D3470): `decline_fast` calls the
+                                    // getter, which `field_slow` left in `hot_getter`.
+                                    Some(Hit::Getter(_)) => break Exit::Decline(GETTER),
+                                    None => break Exit::Decline(op),
+                                },
                             };
                             st(b, slot!(sp - 1), r);
                             if op == fast::GET_METHOD {
