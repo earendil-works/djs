@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0276 | Call path and cache follow-ups (typeof, FAST flag, collection for-of, absent props, add cache) | pcall | .worktrees/pcall |
+| 0279 | Re-record the benchmarks page and published numbers | pstart | .worktrees/pstart |
 
 ## Open (ready)
 
@@ -51,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0276 | Absent-key and accessor caches, typeof/string ===/< in the loop | 3482d0fe (agent pcall; D3470-D3472; o.missing 3.4x->0.89x QJS, typeof s 0.62x, s==="x" 0.27x, s<t 1.04x; props +1.5%; -118 B gz) |
 | 0278 | for-in enumerable keys only, no re-intern (object rest parked) | 27c8a9a4 (agent pidle; D3490, D3491; for-in 5 keys 20.5k->13.2k, array 60.5k->29.9k; -50 B gz) |
 | 0275 | Regexp match/replace shortcuts, pristine check from the latch, small JSON.parse | 005f87b4 (agent pscan; D3460-D3463; match 37.7k->18.6k instr, replace /g -33%, JSON.parse small -4..-9%; text -3.8%, heavy -1.8%; +113 B gz) |
 | 0277 | localeCompare in place, short concat/templates | e6ffd8f4 (agent pgc; D3480-D3482; localeCompare 7,250->1,990 instr (QJS 3,730), sort with it 2.3x faster; -8 B gz) |
