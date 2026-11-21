@@ -1,6 +1,6 @@
 # 0262: Object and collection operations: Map/Set string keys, spread, entries, comparator sort
 
-status: in-progress
+status: done
 agent: pidle
 branch: issue/0262-object-collection-ops
 depends-on: -
@@ -59,7 +59,80 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Measuring: work/scratch/0262/opsins.py counts wasm instructions per op ((setup + loop at
+  2R reps) − (at R reps), node --no-liftoff, /usr/bin/time -l), for djs builds against
+  quickjs-wasi and the QuickJS 2026 / QuickJS-NG builds of js/bench/engines (qb-run.ts).
+  Without --no-liftoff and with short loops the numbers carried V8's tier-up (10x off).
+  Workloads: wl.py (fresh VMs, (41 runs − 1 run)/40, ±2% noise). Profiles: prof.sh (node
+  --cpu-prof on a keep-names build).
+- Where the instructions went (main): padStart/padEnd interned the literal " " on every
+  call (the generated leaf's `l_str`) and built the result in a Vec; Map/Set hashed a new
+  key three times and read each slot through `object_slot`'s count check; comparator
+  sort re-entered the native SortList frame per comparison (step_once → native_step →
+  state machine → n_call_closure's frame write); Object.fromEntries ran the TS loop
+  (~13k instructions per entry: iterator steps, Gets with string keys, ToPropertyKey,
+  CreateDataPropertyOrThrow, try); object spread did three property lookups per key plus
+  a shape transition per key.
+- Landed (bytes are gzip of the shipped module, measured one by one):
+  - padStart/padEnd: StrPad takes undefined for spaces; a one-unit one-byte fill is written
+    into the result cell (`alloc_latin1_pieces` + fill). `zero_to` (heap/arena.rs, outside
+    touches, one attribute) went out of line: dropping pad's Vec::resize let LLVM inline
+    resize at the arena's three sites (+0.7 KB raw). −95 B.
+  - Map/Set: one hash per set, the same key value matches before the content comparison,
+    direct slot reads (table layout unchanged, so nothing for pgc). −12 B.
+  - Comparator sort: `%SortCompareCall` + EachDense's sort mode (D3330). +367 B.
+  - Object.fromEntries: `%ObjectFromEntriesDense` (D3331, room approved). +374 B.
+  - Object spread: `Heap::spread_clone` shares the source's shape (D3332). +174 B.
+  Total 425,457 → 426,260 B (+803, main 6a83498c); slim 858,849 → 860,907 raw (under
+  its ceiling).
+- Tried and dropped: pad writing through `contiguous_data` (+135 B, same speed); four
+  shapes of the fromEntries leaf (Vecs of keys/values +480, dense_range per entry
+  +362 but 22.6k instructions, kept: two passes over an out-of-line `entry_pair`);
+  sort through `EachDense(9, ...)` called from the native (+601 B raw in the generated
+  state machine: a 7-argument resume point), so the 2-argument `%SortCompareCall`.
+- Instructions per op, main → branch [QuickJS 2026, QuickJS-NG] (r5-ops.txt): padStart
+  4868 → 3728 [2412, 3058]; padEnd 3788 → 2368 [2175, 3231]; sort comparator per element
+  14560 → 8867 [5708, 6282]; Map.set string keys (fresh maps) 2707 → 2489 [1771, 1894],
+  with the concat 4693 → 4496 [2430]; Set.add 2863 → 2775 [1890]; Map.set update 2088 →
+  1931 [1528]; Map.get 2293 → 2239 [1497]; object spread 16009 → 3961 [12255, 13589];
+  Object.fromEntries (8 keys) 105180 → 15056 [14819, 16864]; entries+fromEntries+keys
+  132733 → 43072 [45152].
+- ops.ts (wall, load 11.6, 15 reps, indicative), djs/best main → branch: padStart 2.44 →
+  1.35, sort comparator 2.07 → 1.49, Map string keys 1.82 → 1.70, Set 1.63 → 1.33, Map
+  group rows 1.67 → 1.12, object spread 1.68 → 0.18, entries/fromEntries (0.26 → 0.22 ms;
+  0.53 of QuickJS).
+- Workloads (wl.py instructions per run, main → branch): json 42.5 → 41.8M (−1.8%),
+  text 33.5 → 32.9M (−1.7%), inspect 6.31 → 6.33M, sequential 5.89 → 5.97M (both noise).
+- Tests: corpus builtins/sort-comparator-frames.js (mixed result types, other callables,
+  nested sorts, throws, mutation), builtins/from-entries.js (every decline: Maps,
+  generators, getters, Proxies, holes, modified iterators, non-string keys),
+  language/object-spread-clone.js (symbols among strings, frozen/sealed/read-only/
+  non-enumerable/getter/index/dictionary/null-proto sources, later parts), pad cases in
+  builtins/fast-entries-string.js (slices, ropes, append ropes, one-unit fillers); all
+  with --suspend-every 97 --gc-stress. test262 Array sort/toSorted/forEach/map/reduce/
+  filter/from, TypedArray sort, Object fromEntries/entries/assign, language/expressions/
+  object, String padStart/padEnd, Map/Set/WeakMap/WeakSet: no new failures.
+- Guide: builtins.md (native sort and EachDense), interpreter.md (the comparator's
+  frame), heap.md (spread shares shapes). benchmarks.md's prose still holds; its table
+  is regenerated from records.
 
 ## Follow-ups
+- Map/Set: what is left of the string-key gap (1.4-1.5x) is mostly the call (run_hot's
+  decline, try_fast_call, the method cache) and the `r.s + r.u` concat (1.5x): 0259's.
+- Map/Set with number or object keys pay the keyed SipHash round per key (D2433): integer
+  keys 1.9x QuickJS. A cheaper keyed mix for numbers needs a decision on flooding.
+- Object.fromEntries of a Map, a generator or non-string keys still runs the TS loop
+  (~13k instructions per entry); a per-entry leaf would serve them at a small cost.
+- Object spread that is not the literal's first part, or several spreads, takes the
+  per-key path (three lookups and a transition per key).
 
 ## Result
+Landed D3330-D3332 and two smaller changes. padStart/padEnd no longer intern " " per call
+and write one-unit fills in place; Map/Set hash a key once per set; a comparator sort runs
+its comparisons in one reused frame (`%SortCompareCall`, EachDense's sort mode); an Array
+of entry arrays with string keys goes through Object.fromEntries in one leaf; `{...src, ..}`
+of a plain source shares its shape. Instructions per op vs QuickJS 2026 main → branch:
+padStart 2.02x → 1.55x, padEnd 1.74x → 1.09x, sort comparator 2.55x → 1.55x, Map.set
+string keys 1.53x → 1.41x, Set.add 1.51x → 1.47x, object spread 1.31x → 0.32x,
+Object.fromEntries 7.10x → 1.02x. +803 B gzip (fromEntries' room approved). Known gaps:
+Follow-ups.
