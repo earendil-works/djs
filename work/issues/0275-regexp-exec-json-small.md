@@ -94,8 +94,8 @@ Landed (D3460, D3462, D3463; D3461 measured, not landed). Wasm instructions per 
 - `/TODO|FIXME/.test(LINE)`: unchanged (~10k; 11.5k / 14.0k).
 Workloads (wasm instructions per run, ins.py, main → branch): heavy −1.8%, text −3.8%, json
 −1.6%, loop and inspect unchanged.
-Size: +113 B gz on the default module (fits main's ceiling after 0270: 429,634 of 429,648);
-slim +38 B, its ceiling raised to 363,647 (approved).
+Size: +113 B gz on the default module; after the rebase onto 0270 and 0277 both modules fit
+their ceilings unchanged (429,585 of 429,648; slim 363,555 of 363,609).
 Tests: test262 built-ins/RegExp, String, JSON, Array, Object, Reflect, Proxy and
 language/expressions/object, language/literals all pass; difftest builtins, codemode,
 codemode-harvest, language plain, --suspend-every 97 --gc-stress and --plain-dumps; new corpus
