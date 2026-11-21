@@ -2452,6 +2452,8 @@ impl Heap {
         ) && key.as_int().is_none()
             && self.find_own(o, key) == Loc::None
             && self.is_extensible(o)
+            // A builtin goes the general way, which sets the prefix latch (D3290).
+            && !self.gated(o)
         {
             self.prop_insert(o, key, &Property::data(value, PropFlags::ALL))?;
             return Ok(true);
