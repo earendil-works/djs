@@ -67,6 +67,26 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Arithmetic on 6a83498c: .rodata 90,995 + .data 1,248 + .bss 12 from 65,536, end
+  157,808; two pages need ≤ 131,072. The props family is 24,349 B of statics plus 4,114 B
+  of name strings: out, the data ends at 129,388 (two pages, idle 384 KiB), no OPS
+  packing needed.
+- But props alone made fanout 1,664 → 2,944 KiB and text 1,088 → 1,408 (12 perturbed
+  runs each): dlmalloc's first segment (seed = the data page's rest + PRIME 1 page) fell
+  from ~103 KB to ~66 KB. A test build without normalization (seed 24 KB): −64 KiB on
+  every row. So normalization moved too (its readers are two leaf intrinsics that run
+  after the builtin's conversions, so they can stop before any effect).
+- pstart's D3362 floor (dlmalloc ≥ 100 KiB in front of the arena) then primes two pages
+  for this layout: per row (KiB, main 09f9b41f → branch, 8 perturbed runs, all equal)
+  sequential 576/576, fanout 1536/1536, media 832/832, inspect 512/512, loop 768/768,
+  text 1088/1088, json 1280/1280, heavy 3840 → 3776; idle 448/448. Size +313 B gz.
+- Tests: vm::props_tests (value, fuel, heap equal with and without the hand-over; every
+  compile path, both families, slices of 7), js/test/nesting.test.ts on the shipped
+  module (results and one load per family per instance), the gate's no-dump debug module
+  builds with cold-unicode so the js tests run the hand-over too. test262 String/RegExp,
+  pi tests, npm package pass.
+- Guide: host.md (the hand-over, status 7, operations, the build table). limits.md has
+  nothing on the tables; arena.md's allocator paragraph is pstart's (D3362).
 
 ## Follow-ups
 

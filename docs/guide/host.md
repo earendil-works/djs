@@ -64,6 +64,25 @@ it there.
 > cost is a protocol for hosts (one wrapper) and a compile run twice for code that nests
 > deeper than scripts do.
 
+Rarely used tables come the same way. The Unicode property tables of `\p{…}` in regular
+expressions (25 KB) and the normalization tables (23 KB) are not in the shipped module's
+memory but in two custom sections, `djs_props` and `djs_norm`: as static data they would
+cost every instance a page, for code that few scripts reach. With the elastic stack on,
+what needs a family stops before it has any effect: a compile whose source may hold a
+property escape (`\p{` or `\P{`), `new RegExp` of a pattern with one, `normalize` of a
+string past Latin-1 (for NFC: from U+0300 on) and `localeCompare` of one with a combining
+mark. `vm_compile` then returns `-2` (`u32::MAX - 1`), `vm_run` the status NEED_TABLES;
+`vm_tables_need(vm)` names the families as bits (1 the property tables, 2 the
+normalization tables). For each, the host writes the section's bytes at
+`djs_tables_ptr(family, len)` and calls `djs_tables_set()`, which checks their length and
+hash; then it makes the same call again, `vm_run` with fuel 0 as for the stack. The
+instance keeps the tables for its later VMs, and the results, heaps and fuel are those of
+a build with the tables in memory. A host that does not turn the elastic stack on gets a
+`SyntaxError` for a property escape, and `normalize` and `localeCompare` behave as in a
+build without the tables (a `TypeError` for a string that would need them; code point
+order). The same wrapper in [`js/src/trap.ts`](../../js/src/trap.ts) hands the sections
+over for the `Sandbox`.
+
 > **Trade-off.** An import-free ABI of integer functions over a richer binding such as
 > the component model or wasm-bindgen. The module runs anywhere with nothing to wire up,
 > and the boundary is small enough to check in a table. The cost: the host does the
@@ -111,7 +130,7 @@ The shipped module has <!--n wasm/ops-->66<!--/n--> operations. By area:
 
 | area | operations |
 | --- | --- |
-| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack` ([above](#a-module-that-needs-nothing)) |
+| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack`; the Unicode tables: `djs_tables_ptr`, `djs_tables_set`, `vm_tables_need` ([above](#a-module-that-needs-nothing)) |
 | the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
 | VMs | `vm_new`, `vm_new_reserved`, `vm_new_with` (flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; images: `vm_arena_ptr`, `vm_arena_len`, `vm_from_bytes`, `vm_replace_image`, `vm_collect`, `vm_seal` |
 | code | `vm_compile` (a Script, or a codemode body with parameter names; option bits for TypeScript and decorators), `vm_compile_file` (the same, with the file name stack traces show) |
@@ -154,6 +173,7 @@ runs again:
 | 4 IDLE | waits for one of the open async calls, resolves it, runs again |
 | 5 HOST_OUT_OF_MEMORY | the host could not back the heap below its cap: the call is abandoned, the VM stays usable |
 | 6 NEED_STACK | with the elastic stack on: moves the stack to a larger block and runs again with fuel 0 ([above](#a-module-that-needs-nothing)) |
+| 7 NEED_TABLES | with the elastic stack on: hands over the Unicode tables `vm_tables_need` names and runs again with fuel 0 ([above](#a-module-that-needs-nothing)) |
 
 The fuel slice is how the host keeps control ([fuel](limits.md#fuel)). A slice of a
 million fuel is a few milliseconds of work; a long leaf operation can overshoot its slice,
@@ -319,7 +339,7 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode` | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->414 KB<!--/n--> with gzip |
+| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->414 KB<!--/n--> with gzip |
 | slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.8 MB<!--/n-->, <!--n slim/gzip kb-->349 KB<!--/n--> with gzip |
 | dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.8 MB<!--/n-->, <!--n dump/gzip kb-->754 KB<!--/n--> with gzip |
 | docs module | the dump module's and `docs` | this site's live examples: the dump module plus `djs_disasm`, the bytecode listing an edited example shows |

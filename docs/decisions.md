@@ -12548,3 +12548,38 @@ one page. A layout with less static data (the Unicode tables out of the data seg
 then primes two pages until dlmalloc needs less: a smaller idle memory is only real when
 the runs never need the room. `dlmalloc_has_the_floor_in_front_of_the_arena` checks small
 blocks up to the floor stay in front of the arena for seeds of 0 to 60 KB.
+
+## D3350: The Unicode tables leave the shipped module's memory; the host hands them over
+date: 2026-11-21 · by: pscan · issue: 0264
+- The regexp property tables (`\p{…}`: props.bin, 25,641 B) and the normalization tables
+  (norm.bin, 22,782 B) are blobs that scripts/gen-unicode.py writes next to the Rust that
+  describes them (offsets, length, FNV-1a hash); property.rs and normalize.rs read them
+  as slices. Native, test, slim, dump and docs builds include them (`include_bytes!`).
+  The shipped module (djs-core's and djs-wasm's `cold-unicode`, scripts/build-wasm.sh)
+  carries them as custom sections `djs_props` and `djs_norm` instead, like `djs_base`.
+- What needs a family stops before any effect, the NEED_STACK way (D3280), only with the
+  elastic stack on: a compile whose source may hold a property escape (a scan for `\p{`
+  and `\P{` before the parse: a regular expression literal can only spell it so, and the
+  scan makes the stop precede every effect of the compile; a source that merely mentions
+  the text loads the tables for nothing), `RegExpCreate` whose pattern has one (the
+  regexp parser reports it), and the leaves `StrNormalize` and `StrLocaleCompare` (the
+  builtin's conversions ran in earlier instructions) for a string that needs the tables
+  (NFC and localeCompare: a unit from U+0300 on; the other forms: from U+00A0 on).
+  `Heap::tables_need` holds the families; djs-wasm returns status 7 NEED_TABLES or
+  `u32::MAX - 1` from `vm_compile*`; `vm_tables_need(vm)` names the families (bits 1, 2);
+  the host writes a section at `djs_tables_ptr(family, len)` and calls `djs_tables_set`
+  (length and hash checked; the instance keeps the bytes, leaked, for its later VMs) and
+  calls again (`vm_run` with fuel 0). js/src/trap.ts's `elasticStack(x, module)` does it
+  for the Sandbox and js/pi/engine.ts. ABI 7.
+- Hosts without the elastic stack get a `SyntaxError` ("unicode property tables not
+  loaded") for a property escape and the behavior of a build without the tables for
+  `normalize` (TypeError for a string that needs them) and `localeCompare` (code point
+  order): a clear error rather than statics nobody uses.
+- Same results, heaps and fuel either way (vm::props_tests, every compile path and both
+  families, whole and in slices of 7 fuel).
+- Static data 92.2 → 41.1 KB (end 157,780 → 106,616 B: two initial pages). With D3362's
+  floor (dlmalloc's first segment at least 100 KiB in front of the arena) the module
+  primes two pages, so idle stays 448 KiB and every row stays as it was except heavy
+  (3,840 → 3,776 KiB); the page comes back when dlmalloc needs less room or the seed
+  reaches 36 KB (static data under ~30 KB, or a smaller stack). Size 426,545 → 426,858 B gz
+  (+313).
