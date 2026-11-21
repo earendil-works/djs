@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0282 | @fast builtin getters (Map/Set size) | pcall | .worktrees/pcall |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 
 ## Open (ready)
@@ -51,6 +50,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0282 | Fast builtin getters (Map/Set size, typed-array length/byteLength/byteOffset) in the loop; typed arrays in named-key caches | fe9ac03c (agent pcall; D3530, D3531, COMPAT 10; m.size 4.7x->0.89x QJS; loop/step string-key interning equivalence fixed; +515 B gz) |
 | 0283 | Builtin families list for the owner (work/research/0283/families.md) | 9e981724 (agent pstart; packages A/B/C; B = idle 320 KiB, ~-35 KB gz, pi-safe with an Int8Array stub) |
 | 0280 | D020 budget +2 KB (owner); construct path and object rest landed | 852e4a12 (agent pidle; D3510-D3512; new C() 2.66k->2.11k, derived 8.04k->4.34k, object rest 48.8k->13.3k; +1,017 B gz) |
 | 0281 | Regexp lastIndex inserted directly (state reuse measured, dropped: a Heap field costs ~300 B gz) | 27bb1fa3 (agent pscan; D3520, D3521; test -6%, match -2.5%; -11 B gz) |
