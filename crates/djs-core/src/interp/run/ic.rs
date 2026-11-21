@@ -18,9 +18,9 @@
 //!   property. Only keys that are not array indexes are cached: for those, an own
 //!   property is always a named property, whatever the object's class.
 //! - own property, shape-mode receiver (0083): word 0 = offset slot, kind 0, slot + 1;
-//!   word 1 = the receiver's shape; word 2 = 1 if writable, [`OWN_ACCESSOR`] if the slot
-//!   holds an accessor (D3470: a read then yields its getter). A hit is a shape compare:
-//!   the shape fixes the key and its attributes.
+//!   word 1 = the receiver's shape; word 2 = 1 if writable. A hit is a shape compare: the
+//!   shape fixes the key and its attributes. With kind `KIND_OWN_ACCESSOR` the slot holds
+//!   an accessor (D3470): a read yields its getter.
 //! - prototype property reads (D1621): word 0 = offset slot, kind = depth of the holder,
 //!   entry index + 1 in the holder; word 1 = the offset of the receiver's prototype (an
 //!   object's, or the realm's prototype of a primitive); word 2 = `Roots::PROTO_EPOCH`;
@@ -30,11 +30,12 @@
 //!   `key`: an equal shape word proves that, otherwise the hit looks it up. The holder's
 //!   entry may be an accessor (D3470): the hit then yields the getter to call
 //!   ([`Hit::Getter`]).
-//! - absent reads (D3470): a prototype-read slot with depth 1 and index 0 ("no entry"):
-//!   no object from the receiver's prototype (word 1) to the end of the chain has the
-//!   key, and none is a proxy or a typed array. Every object of the chain is marked
-//!   `OBJ_IS_PROTO`, so a key added to one of them bumps the epoch. The hit is
-//!   `undefined` without a walk.
+//! - absent reads (D3470): a prototype-read slot of kind `KIND_ABSENT` (as a depth, more
+//!   than any chain a slot is filled for) without an index: no object from the receiver's
+//!   prototype (word 1) to the end of the chain has the key, and none is a proxy or a
+//!   typed array. Every object of the chain is marked `OBJ_IS_PROTO`, so a key added to
+//!   one of them bumps the epoch. The hit walks to the end of the chain, which is what
+//!   the depth says, and is `undefined` there.
 //! - additions (0083): word 0 = offset slot, kind `KIND_ADD`, `ADD_SET` for a
 //!   `put_field` site ([[Set]]) or 0 for `define_field` (CreateDataProperty); word 1 =
 //!   the receiver's shape word before, word 2 = the shape after. A [[Set]] addition also
@@ -57,12 +58,12 @@ const INDEX_MASK: u32 = (1 << KIND_SHIFT) - 1;
 const KIND_MASK: u32 = 63;
 /// The kind of an addition slot; prototype depths stay below it.
 const KIND_ADD: u32 = 63;
-const MAX_DEPTH: u32 = KIND_ADD - 1;
+/// The kind of an own accessor's slot and of an absent read (D3470).
+const KIND_OWN_ACCESSOR: u32 = 62;
+const KIND_ABSENT: u32 = 61;
+const MAX_DEPTH: u32 = KIND_ABSENT - 1;
 /// Addition slot word 0: a `put_field` site.
 const ADD_SET: u32 = 1;
-
-/// Own-property slot word 2: the property is an accessor (never writable).
-const OWN_ACCESSOR: u32 = 2;
 
 /// Global slot word 0: the entry is in the global lexical record.
 const IN_LEX: u32 = 1 << 31;
@@ -156,16 +157,16 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
         };
     }
     match kind(w0) {
-        0 => {
+        0 => heap
+            .shaped_get(o.as_object()?, w1, (w0 & INDEX_MASK) - 1)
+            .map(Hit::Value),
+        KIND_ADD => None,
+        KIND_OWN_ACCESSOR => {
             let obj = o.as_object()?;
             let i = (w0 & INDEX_MASK) - 1;
-            let v = heap.shaped_get(obj, w1, i)?;
-            if w2 & OWN_ACCESSOR == 0 {
-                return Some(Hit::Value(v));
-            }
+            heap.shaped_get(obj, w1, i)?;
             accessor_at(heap, obj, i, key)
         }
-        KIND_ADD => None,
         depth => {
             if w2 != heap.proto_epoch() {
                 return None;
@@ -174,13 +175,16 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
             if proto.offset() != w1 {
                 return None;
             }
-            if w0 & INDEX_MASK == 0 {
-                // An absent read: nothing on the chain has the key.
-                return Some(Hit::Value(Value::UNDEFINED));
-            }
             let mut h = proto;
             for _ in 1..depth {
-                h = heap.get_prototype_of(h)?;
+                let Some(p) = heap.get_prototype_of(h) else {
+                    // The end of the chain: where an absent read's depth leads.
+                    return (depth == KIND_ABSENT).then_some(Hit::Value(Value::UNDEFINED));
+                };
+                h = p;
+            }
+            if depth == KIND_ABSENT {
+                return None;
             }
             let i = (w0 & INDEX_MASK) - 1;
             match heap.data_at(h, i, key) {
@@ -223,7 +227,7 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     if w0 & IC_OFFSET_SLOT == 0 {
         return None;
     }
-    // (An absent read's index field is 0: it returns before `index` is used.)
+    // (An absent read has no index: 0 here, which no object has as a slot.)
     let index = (w0 & INDEX_MASK).wrapping_sub(1);
     let depth = kind(w0);
     // The object whose slot `index` holds the property: the receiver (an accessor of its
@@ -235,15 +239,24 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
         if dictionary(obj) || v == 0 || r32(v + PropValues::SHAPE.offset) != r32(at + 4) {
             return None;
         }
-        if r32(at + 8) & OWN_ACCESSOR == 0 {
-            return Some(Hit::Value(super::hot::ld(
-                b,
-                PropValues::VALUES.at(v, index),
-            )));
+        return Some(Hit::Value(super::hot::ld(
+            b,
+            PropValues::VALUES.at(v, index),
+        )));
+    } else if depth >= KIND_OWN_ACCESSOR {
+        // The receiver's own accessor (an addition slot is no read).
+        let obj = o.as_object()?.offset();
+        let v = r32(obj + Object::PROPS.offset);
+        if depth != KIND_OWN_ACCESSOR
+            || dictionary(obj)
+            || v == 0
+            || r32(v + PropValues::SHAPE.offset) != r32(at + 4)
+        {
+            return None;
         }
         obj
     } else {
-        if depth == KIND_ADD || r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
+        if r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
             return None;
         }
         // `proto_start`, without its own-property lookup: the receiver's shape word must be
@@ -294,15 +307,12 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
         if proto == 0 || proto != r32(at + 4) {
             return None;
         }
-        if w0 & INDEX_MASK == 0 {
-            // An absent read: nothing on the chain has the key.
-            return Some(Hit::Value(Value::UNDEFINED));
-        }
         let mut h = proto;
         for _ in 1..depth {
             h = r32(h + Object::PROTO.offset);
             if h == 0 {
-                return None;
+                // The end of the chain: where an absent read's depth leads.
+                return (depth == KIND_ABSENT).then_some(Hit::Value(Value::UNDEFINED));
             }
         }
         h
@@ -631,7 +641,7 @@ impl Exec<'_> {
         if shape == 0 || !self.chain_lacks_marked(Some(proto), key) {
             return;
         }
-        let w0 = IC_OFFSET_SLOT | 1 << KIND_SHIFT;
+        let w0 = IC_OFFSET_SLOT | KIND_ABSENT << KIND_SHIFT;
         let epoch = self.heap.proto_epoch();
         self.ic_write(ic, [w0, proto.offset(), epoch, shape, 0]);
     }
@@ -651,8 +661,8 @@ impl Exec<'_> {
         if let Some(slot) = self.entry_index(obj, key)
             && slot < INDEX_MASK
         {
-            let w0 = IC_OFFSET_SLOT | (slot + 1);
-            self.ic_write(ic, [w0, shape, OWN_ACCESSOR, 0, 0]);
+            let w0 = IC_OFFSET_SLOT | KIND_OWN_ACCESSOR << KIND_SHIFT | (slot + 1);
+            self.ic_write(ic, [w0, shape, 0, 0, 0]);
         }
     }
 

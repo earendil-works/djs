@@ -549,6 +549,7 @@ impl Exec<'_> {
     /// A declined `<`, `<=`, `>` or `>=` of two strings (`decline_fast`, D3472): the
     /// code unit order, as `Exec::compare` asks `conv::less_than`. False, with nothing
     /// changed, for other operands.
+    #[inline(never)]
     fn decline_compare(&mut self, op: u8) -> bool {
         let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
         let (Some(x), Some(y)) = (a.as_string(), c.as_string()) else {
@@ -575,6 +576,7 @@ impl Exec<'_> {
     /// `decline_fast`. False, with nothing changed, when an operand is an object
     /// (ToPrimitive runs user code) or when it fails (a symbol, the heap cap): `step`
     /// runs it then, throws or retries.
+    #[inline(never)]
     fn decline_concat(&mut self, op: u8) -> bool {
         let concat = op == CONCAT;
         let n = if concat { self.imm_u16(1) } else { 1 };
@@ -594,6 +596,7 @@ impl Exec<'_> {
     /// (`call_accessor`), without `step`'s lookup. False, with nothing changed, for
     /// anything else and when the call fails (`step` runs the instruction then and
     /// throws).
+    #[inline(never)]
     fn decline_getter(&mut self) -> bool {
         // (The slot again, through the heap: the loop's arm keeps nothing for its exit.)
         let (key, ic, o) = (self.imm_atom(), self.imm_u16(5), self.top(0));
@@ -638,6 +641,7 @@ impl Exec<'_> {
 
     /// A declined `in` with a string key and an object (`decline_fast`): the heap's
     /// answer where no proxy is on the chain (D3402), else false with nothing changed.
+    #[inline(never)]
     fn decline_in(&mut self) -> bool {
         let (k, o) = (self.get(self.sp - 2), self.get(self.sp - 1));
         let (Some(s), Some(obj)) = (k.as_string(), o.as_object()) else {
@@ -740,6 +744,14 @@ impl Exec<'_> {
         if op != fast::ADD {
             return super::construct::takes(op) && self.decline_construct(op);
         }
+        self.decline_add()
+    }
+
+    /// `decline_fast`'s `+` of a string and a primitive. (Out of line, as its other
+    /// cases: with them inside, a `@fast` call, which runs in `decline_fast` itself,
+    /// took 8 machine instructions more.)
+    #[inline(never)]
+    fn decline_add(&mut self) -> bool {
         use crate::value::Kind;
         let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
         if a.as_string().is_none() && c.as_string().is_none() {
