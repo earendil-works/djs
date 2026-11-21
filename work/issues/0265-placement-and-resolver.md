@@ -79,6 +79,10 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   all workloads): its regressions were first instances (and the variant that kept the
   zone forever). Measured again on top: compile −2..−5%, sequential run −3.6%, inspect
   −1.8%, +~220 B gz.
+- Landed as D3361 (supersedes D3342) with a native allocator test; memory verified with
+  memfirst.ts (first instances, 6 perturbed runs × 8 workloads), mem.ts (warm instances)
+  and mem-perturb (8 workloads × 6): unchanged. Size: 425,611 (main) → 425,640 (D3360) →
+  425,900 (D3361) B gz.
 
 ## Follow-ups
 
