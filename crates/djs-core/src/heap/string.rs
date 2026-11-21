@@ -820,6 +820,18 @@ impl Heap {
         })
     }
 
+    /// The view of `s` if it is a slice (split lines, `slice` results), from one kind read
+    /// (D3401): before the rope cases' reads.
+    #[inline(always)]
+    fn slice_fast(&self, s: Str) -> Option<StrView<'_>> {
+        let a = self.arena();
+        if a.get(s.0, Header::KIND) != CellKind::Slice as u8 {
+            return None;
+        }
+        let (parent, start) = self.slice_parts(s.0);
+        Some(self.range_view(parent, start, a.get(s.0, Slice::LEN)))
+    }
+
     /// The view of a flat string cell. `s` must be a `Str8` or `Str16`.
     fn flat_view(&self, s: Str) -> StrView<'_> {
         self.prefix_view(s.0, self.str_len(s))
@@ -829,6 +841,9 @@ impl Heap {
     /// append rope or a slice), else `None`.
     pub fn str_view(&self, s: Str) -> Option<StrView<'_>> {
         if let Some(v) = self.flat_fast(s) {
+            return Some(v);
+        }
+        if let Some(v) = self.slice_fast(s) {
             return Some(v);
         }
         let s = self.resolve_str(s);
@@ -851,6 +866,9 @@ impl Heap {
         // (Two lookups: the borrow checker does not let the first one's view escape.)
         if self.flat_fast(s).is_some() {
             return Ok(self.flat_fast(s).expect("flat"));
+        }
+        if self.slice_fast(s).is_some() {
+            return Ok(self.slice_fast(s).expect("slice"));
         }
         let s = self.resolve_str(s);
         if let Some(buf) = self.append_rope_buffer(s) {
