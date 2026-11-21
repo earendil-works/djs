@@ -722,8 +722,20 @@ leg", and entries unused for 14 days are pruned on every run. `scripts/gate.sh
 ### Full runs (D2664)
 
 `scripts/gate.sh --full` reads no cache and also runs the **full-only** legs, checks too
-slow for every merge: pi's tests in the next mode with a dump and a resume at every idle
-point (`scripts/pi-dump-every-idle.sh`, its own LTO build). It must run on main at least
+slow for every merge:
+- pi's tests in the next mode with a dump and a resume at every idle point
+  (`scripts/pi-dump-every-idle.sh`, its own LTO build);
+- **test262 under GC stress** (D3440): the active group, eager and with lazy functions,
+  collecting at every safepoint (`djs-test262 run --gc-stress`) in the debug build, where
+  the heap checks its invariants at each collection (the builtin prefix's, D3290). The
+  regular legs collect too rarely to meet them: this run found an unlatched write to a
+  builtin within minutes that every other leg missed. The tests that take seconds to
+  minutes under stress are left out (`tests/test262/gc-stress-skip.txt`, `--exclude-from`);
+  the rest take 2-3 min per mode with all cores. `--deadline 600` stops starting tests
+  after 10 min on a loaded machine and still prints the summary (`deadline: N tests not
+  run`), and the per-test `--timeout 60` is a hang guard well above the slowest remaining
+  test (~14 s). Failures go against the regular ratchet: under stress a test must do what
+  it does without. To run it alone: `scripts/gate.sh --full --only "test262 gc stress"`. It must run on main at least
 daily (the coordinator) and before a release, in a worktree of its own: merge-to-main
 fast-forwards main in the primary checkout, which would move the tree under the run, so
 `scripts/gate.sh --full` started there runs in `.worktrees/full` (created on first use,

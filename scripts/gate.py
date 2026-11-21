@@ -405,8 +405,21 @@ def jobs():
           " --out target/pi-codemode-next --expected tests/pi/expected-failures.txt",
           cls="nodocs", ext=("base", "pi"), needs=["build:size"], summary=r"^pi tests:"),
 
-        # --- Full runs only (D2664): pi's tests in the next mode with a dump and a resume at
-        # every idle point, on the release dump module (its own LTO build, 0176).
+        # --- Full runs only (D2664). 0273 (D3440): test262's active group under GC stress (a
+        # collection at every safepoint) in the debug build, where the heap's checks run at
+        # each collection (the prefix latch's, D3290): the regular legs collect too rarely
+        # to meet them. Without the tests that take seconds to minutes under stress
+        # (tests/test262/gc-stress-skip.txt); ~3-6 min on 6 jobs, and a deadline keeps a
+        # loaded machine within 20 min, still printing the summary.
+        J("test262 gc stress", f"./scripts/fetch-test262.sh > /dev/null && for m in '' --lazy; do"
+          f" echo \"mode: ${{m:-eager}}\"; {G}/bin/djs-test262 run --engine djs $m"
+          " --group active --quiet --gc-stress --timeout 60 --deadline 600 --slowest 5"
+          " --exclude-from tests/test262/gc-stress-skip.txt"
+          " --expected tests/test262/expected-failures.txt || exit 1; done",
+          cls="rust", needs=["build:test262"], full_only=True,
+          summary=r"^mode:|^ratchet:|^\| active|^deadline:|^slowest:|^ +[0-9.]+s "),
+        # Pi's tests in the next mode with a dump and a resume at every idle point, on the
+        # release dump module (its own LTO build, 0176).
         J("pi tests (next mode with a dump at every idle point)", "scripts/pi-dump-every-idle.sh",
           cls="nodocs", ext=("base", "pi"), group="target/dump-wasm", full_only=True,
           summary=r"^pi tests:"),

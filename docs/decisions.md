@@ -13216,3 +13216,21 @@ size ratchet by checking a two-byte range's width on its high bytes (not a units
 iterator) and by `str_array_index` reading its first unit with `char_code_at` again
 (D3401's view read; `existing_key_atom` handles flat keys first since D3402): net
 −29 B.
+
+## D3440: test262 under GC stress is a full-only gate leg
+date: 2026-11-21 · by: pgc · issue: 0273
+0258's verifier (D3290) checks the builtin prefix at every collection, but the regular
+test262 and difftest legs collect too rarely to meet most builtin-reshaping tests: test262
+with a collection at every safepoint found an unlatched write within minutes. So:
+- `djs-test262 run` gets `--gc-stress` (`ExecOptions::gc_stress`; the slice between
+  wall-clock checks shrinks 100x under it, so `--timeout` holds), `--exclude` /
+  `--exclude-from FILE`, `--shard K/N` and `--deadline SECS` (tests not started by then
+  count as not run: out of the tables and the ratchet, with a `deadline:` line).
+- The full-only leg `test262 gc stress` runs the active group eager and lazy, in the
+  gate's debug build, against the regular ratchet, without
+  tests/test262/gc-stress-skip.txt: the generated RegExp property-escape tests (minutes
+  each: every safepoint collects a heap of large strings) and the 59 tests that took
+  8 s or more (most of them 20 s+). Measured on main e0c804e4: 38,836 tests, 103 s per mode
+  with all cores at load ~45, slowest remaining 14 s, no new failures (the 40 expected
+  ones). Wall-clock timeouts were the only failures before the skip list (31 at 20 s),
+  which is why the leg keeps a 60 s hang guard and a 10 min deadline per mode instead.

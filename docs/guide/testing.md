@@ -306,7 +306,8 @@ Three things keep it fast without checking less:
   only the JavaScript legs, and a change to the engine reruns every Rust leg.
 - **Slow checks apart.** `scripts/gate.sh --full` ignores the cache and adds checks too
   slow for every merge, such as the agent host's tests with a dump and a resume at every
-  idle point. It runs daily and before releases.
+  idle point, and test262 with a collection at every safepoint in a debug build, where
+  the heap checks its invariants at each collection. It runs daily and before releases.
 
 > **Trade-off.** One gate on every merge over checks after the fact. `main` is always
 > green, and a regression is caught in the change that caused it. The cost: merges queue
