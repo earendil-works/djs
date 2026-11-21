@@ -16,7 +16,8 @@ also runs the full-only legs (D2664).
 The input classes (D2663), from widest to narrowest:
   all     every tracked file
   nodocs  all minus docs/, work/, .github/ and the top-level *.md files
-  rust    nodocs minus js/ (but js/src/layout.generated.ts, which a djs-core test reads)
+  rust    nodocs minus js/ (but js/src/layout.generated.ts, which a djs-core test reads, and
+          the other RUST_KEEP files)
           and examples/
 scripts/ is in every class, so a change to the gate reruns every leg. The `paths` leg
 (always run) fails when Rust code starts naming a path outside the rust class, so the
@@ -56,8 +57,9 @@ PRIMARY = _common_root()
 CACHE = Path(os.environ.get("DJS_GATE_CACHE", PRIMARY / "work/scratch/gate-cache"))
 DOCS = re.compile(r"^(docs/|work/|\.github/|[^/]+\.md$)")
 JS_ONLY = re.compile(r"^(js/|examples/)")
-# Generated from Rust and checked by a Rust test: in the rust class.
-RUST_KEEP = {"js/src/layout.generated.ts", "js/src/dump-runtime.js"}
+# Generated from Rust and checked by a Rust test, or (abi.ts: the operation numbers, D3320)
+# compared with Rust by one: in the rust class.
+RUST_KEEP = {"js/src/layout.generated.ts", "js/src/dump-runtime.js", "js/src/abi.ts"}
 
 
 def in_class(cls, path):
