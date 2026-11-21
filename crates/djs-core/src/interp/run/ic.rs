@@ -27,8 +27,8 @@
 //!   from that prototype to the holder are marked `OBJ_IS_PROTO`, so a key added to one
 //!   of them or a prototype change bumps the epoch. The receiver must not have an own
 //!   `key`: an equal shape word proves that, otherwise the hit looks it up. The holder's
-//!   entry may be an accessor (D3470): the tier-0 loop's hit then yields the getter to
-//!   call ([`Hit::Getter`]); [`cached_get`] treats it as a miss.
+//!   entry may be an accessor (D3470): the hit then yields the getter to call
+//!   ([`Hit::Getter`]).
 //! - absent reads (D3470): a prototype-read slot with depth 1 and index 0 ("no entry"):
 //!   no object from the receiver's prototype (word 1) to the end of the chain has the
 //!   key, and none is a proxy or a typed array. Every object of the chain is marked
@@ -139,7 +139,7 @@ fn head(heap: &Heap, at: u32) -> [u32; 3] {
 /// A get site's cache hit: the value of `o[key]` if the slot at `at` (0: none) still
 /// applies, else `None`.
 #[inline(always)]
-pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Value> {
+pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hit> {
     if at == 0 {
         return None;
     }
@@ -148,11 +148,13 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Va
         // Empty, or a verified index into a dictionary.
         return match (w0, o.as_object()) {
             (0, _) | (_, None) => None,
-            (_, Some(obj)) => heap.data_at(obj, w0 - 1, key),
+            (_, Some(obj)) => heap.data_at(obj, w0 - 1, key).map(Hit::Value),
         };
     }
     match kind(w0) {
-        0 => heap.shaped_get(o.as_object()?, w1, (w0 & INDEX_MASK) - 1),
+        0 => heap
+            .shaped_get(o.as_object()?, w1, (w0 & INDEX_MASK) - 1)
+            .map(Hit::Value),
         KIND_ADD => None,
         depth => {
             if w2 != heap.proto_epoch() {
@@ -164,13 +166,19 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Va
             }
             if w0 & INDEX_MASK == 0 {
                 // An absent read: nothing on the chain has the key.
-                return Some(Value::UNDEFINED);
+                return Some(Hit::Value(Value::UNDEFINED));
             }
             let mut h = proto;
             for _ in 1..depth {
                 h = heap.get_prototype_of(h)?;
             }
-            heap.data_at(h, (w0 & INDEX_MASK) - 1, key)
+            let i = (w0 & INDEX_MASK) - 1;
+            match heap.data_at(h, i, key) {
+                Some(v) => Some(Hit::Value(v)),
+                // An accessor's getter (D3470), read as the loop reads it.
+                None => hot_data_at(heap.arena().bytes(), h.offset(), i, key)
+                    .filter(|hit| matches!(hit, Hit::Getter(_))),
+            }
         }
     }
 }
@@ -504,7 +512,7 @@ impl Exec<'_> {
 
     /// A cached read: `o[key]` if slot `ic` applies.
     #[inline(always)]
-    pub(super) fn ic_get(&self, o: Value, key: Atom, ic: u32) -> Option<Value> {
+    pub(super) fn ic_get(&self, o: Value, key: Atom, ic: u32) -> Option<Hit> {
         cached_get(self.heap, slot_at(self.heap, self.template, ic), o, key)
     }
 
@@ -589,13 +597,8 @@ impl Exec<'_> {
         let Some(proto) = self.heap.get_prototype_of(obj) else {
             return;
         };
-        if shape == 0 || !self.chain_lacks(Some(proto), key) {
+        if shape == 0 || !self.chain_lacks_marked(Some(proto), key) {
             return;
-        }
-        let mut p = Some(proto);
-        while let Some(q) = p {
-            self.heap.mark_proto(q);
-            p = self.heap.get_prototype_of(q);
         }
         let w0 = IC_OFFSET_SLOT | 1 << KIND_SHIFT;
         let epoch = self.heap.proto_epoch();
@@ -640,6 +643,21 @@ impl Exec<'_> {
         true
     }
 
+    /// [`Self::chain_lacks`], and if so every object of the chain marked `OBJ_IS_PROTO`:
+    /// a key added to one of them then bumps the epoch (what an addition slot and an
+    /// absent-read slot rely on).
+    fn chain_lacks_marked(&mut self, proto: Option<Obj>, key: Atom) -> bool {
+        if !self.chain_lacks(proto, key) {
+            return false;
+        }
+        let mut p = proto;
+        while let Some(q) = p {
+            self.heap.mark_proto(q);
+            p = self.heap.get_prototype_of(q);
+        }
+        true
+    }
+
     /// Whether `obj[key] = v` ([[Set]] with `obj` as the receiver) is just
     /// CreateDataProperty: `obj` is extensible and has no own `key`, nothing on its
     /// prototype chain has `key` or could intercept it, and `key` is not one an exotic
@@ -675,13 +693,8 @@ impl Exec<'_> {
             return;
         }
         let proto = self.heap.get_prototype_of(obj);
-        if !self.chain_lacks(proto, key) {
+        if !self.chain_lacks_marked(proto, key) {
             return;
-        }
-        let mut p = proto;
-        while let Some(q) = p {
-            self.heap.mark_proto(q);
-            p = self.heap.get_prototype_of(q);
         }
         let w0 = IC_OFFSET_SLOT | KIND_ADD << KIND_SHIFT | ADD_SET;
         let epoch = self.heap.proto_epoch();
@@ -745,7 +758,7 @@ impl Exec<'_> {
                 return true;
             }
         }
-        let Some(v) = self.ic_get(o, key, ic) else {
+        let Some(Hit::Value(v)) = self.ic_get(o, key, ic) else {
             return false;
         };
         if op == fast::GET_FIELD {

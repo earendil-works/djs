@@ -59,6 +59,10 @@ const GET_GLOBAL: u8 = Op::GetGlobal as u8;
 const GET_GLOBAL_TYPEOF: u8 = Op::GetGlobalTypeof as u8;
 const PUT_GLOBAL: u8 = Op::PutGlobal as u8;
 const IN: u8 = Op::In as u8;
+/// Not an opcode: what the `get_field` arm declines with when its cache slot points at an
+/// accessor (`decline_getter`). A miss declines with the opcode and goes to `step`.
+const GETTER: u8 = 255;
+const _: () = assert!(crate::bytecode::OP_COUNT < GETTER as usize);
 const TO_STRING: u8 = Op::ToString as u8;
 const CONCAT: u8 = Op::Concat as u8;
 
@@ -456,16 +460,19 @@ impl Exec<'_> {
     /// builds compare the slice's hits with it.
     #[inline(never)]
     #[cfg_attr(not(debug_assertions), allow(unused_variables))]
-    fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Value> {
+    fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Hit> {
         // (`hot_length` answered these in a release build.)
         #[cfg(debug_assertions)]
         if key == atoms::LENGTH && op == fast::GET_FIELD {
             // `a.length` of an Array (its slot 0) and of a string primitive (0086).
             match (o.as_object(), o.as_string()) {
                 (Some(a), _) if self.heap.object_class(a) == ObjectClass::Array => {
-                    return Some(self.heap.object_slot(a, 0));
+                    return Some(Hit::Value(self.heap.object_slot(a, 0)));
                 }
-                (_, Some(s)) => return i32::try_from(self.heap.str_len(s)).ok().map(Value::int),
+                (_, Some(s)) => {
+                    let n = i32::try_from(self.heap.str_len(s)).ok()?;
+                    return Some(Hit::Value(Value::int(n)));
+                }
                 _ => {}
             }
         }
@@ -524,9 +531,9 @@ impl Exec<'_> {
     /// anything else and when the call fails (`step` runs the instruction then and
     /// throws).
     fn decline_getter(&mut self) -> bool {
+        // (The slot again, through the heap: the loop's arm keeps nothing for its exit.)
         let (key, ic, o) = (self.imm_atom(), self.imm_u16(5), self.top(0));
-        let b = self.heap.arena_mut().hot_bytes();
-        let Some(Hit::Getter(getter)) = super::ic::hot_get(b, self.template, ic, o, key) else {
+        let Some(Hit::Getter(getter)) = self.field_slow(fast::GET_FIELD, key, ic, o) else {
             return false;
         };
         // A closure (bytecode, `@fast` or native): `call` then pushes a frame or runs
@@ -654,7 +661,7 @@ impl Exec<'_> {
         if fast::is_call(op) {
             return self.pc < self.code_len && self.fast_leaf_call(op);
         }
-        if op == fast::GET_FIELD {
+        if op == GETTER {
             return self.decline_getter();
         }
         if op == IN {
@@ -1340,18 +1347,21 @@ impl Exec<'_> {
                             };
                             let r = match hit {
                                 // An accessor: `decline_fast` calls the getter.
-                                Some(Hit::Getter(_)) => break Exit::Decline(op),
+                                Some(Hit::Getter(_)) => break Exit::Decline(GETTER),
                                 Some(Hit::Value(r)) => {
                                     #[cfg(debug_assertions)]
                                     {
                                         let want = heap_call_op!(self.field_slow(op, key, ic, o));
-                                        assert!(want == Some(r), "the slice's hit differs");
+                                        assert!(
+                                            want == Some(Hit::Value(r)),
+                                            "the slice's hit differs"
+                                        );
                                     }
                                     r
                                 }
                                 None => {
                                     let hit = heap_call_op!(self.field_slow(op, key, ic, o));
-                                    let Some(r) = hit else {
+                                    let Some(Hit::Value(r)) = hit else {
                                         break Exit::Decline(op);
                                     };
                                     r
