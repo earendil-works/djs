@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0277 | Short concatenations, templates, string compare, localeCompare, startsWith/endsWith | pgc | .worktrees/pgc |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0278 | for-in and destructuring, size-neutral | pidle | .worktrees/pidle |
 | 0276 | Call path and cache follow-ups (typeof, FAST flag, collection for-of, absent props, add cache) | pcall | .worktrees/pcall |
@@ -54,6 +53,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0277 | localeCompare in place, short concat/templates | e6ffd8f4 (agent pgc; D3480-D3482; localeCompare 7,250->1,990 instr (QJS 3,730), sort with it 2.3x faster; -8 B gz) |
 | 0270 | Sweep of everyday ops; Map/Set drain, new Set/Map, Date.parse (construct path parked) | 93aadaf7 (agent pidle; D3410-D3412; [...new Set(arr)] 192k->39k, new Map(pairs) 126k->21k, Date.parse 8.3k->4.4k; +817 B gz, slim ceiling +260) |
 | 0273 | test262 under GC stress as a full-only gate leg | 8e129b63 (agent pgc; D3440; 38,836 tests x2 modes, no findings) |
 | 0269 | String costs: rope copies, replace/replaceAll, slices, string keys, substr; join regression fixed | 601b4918 (agent pgc; D3400-D3406; replace 3.4x->1.2x, o[k] 2.9x->0.93x QJS (with 0268); pi output case 7,488->5,120 KiB) |
