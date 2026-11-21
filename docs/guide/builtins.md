@@ -171,12 +171,12 @@ keeps it. Here is `String.prototype.substr` as the prelude has it, with the help
 `RelativeIndex` called:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substr" "function StringPrototypeSubstr(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9717-L9724), lines 9717–9724:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9714-L9721), lines 9714–9721:
 
 ```js
 function StringPrototypeSubstr(start, length) {}
 
-// builtins/string.ts:308 String.prototype.concat
+// builtins/string.ts:309 String.prototype.concat
 function StringPrototypeConcat(...args) {
   let r = ThisToString(this);
   const n = LengthOfArrayLike(args);
