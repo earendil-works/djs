@@ -589,7 +589,7 @@ impl Exec<'_> {
         true
     }
 
-    /// A declined `get_field` whose cache slot points at an accessor on the prototype
+    /// A declined `get_field` whose cache slot points at an accessor, own or on the prototype
     /// chain (`ic::Hit::Getter`, D3470): calls the getter as `step` would
     /// (`call_accessor`), without `step`'s lookup. False, with nothing changed, for
     /// anything else and when the call fails (`step` runs the instruction then and
@@ -1436,7 +1436,13 @@ impl Exec<'_> {
                             };
                             let r = match hit {
                                 // An accessor: `decline_fast` calls the getter.
-                                Some(Hit::Getter(_)) => break Exit::Decline(GETTER),
+                                Some(Hit::Getter(_)) => {
+                                    // (`get_method` of an accessor is `step`'s.)
+                                    if op == fast::GET_FIELD {
+                                        break Exit::Decline(GETTER);
+                                    }
+                                    break Exit::Decline(fast::GET_METHOD);
+                                }
                                 Some(Hit::Value(r)) => {
                                     #[cfg(debug_assertions)]
                                     {

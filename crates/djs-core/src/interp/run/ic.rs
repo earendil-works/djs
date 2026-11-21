@@ -18,8 +18,9 @@
 //!   property. Only keys that are not array indexes are cached: for those, an own
 //!   property is always a named property, whatever the object's class.
 //! - own property, shape-mode receiver (0083): word 0 = offset slot, kind 0, slot + 1;
-//!   word 1 = the receiver's shape; word 2 = 1 if writable. A hit is a shape compare: the
-//!   shape fixes the key and its attributes.
+//!   word 1 = the receiver's shape; word 2 = 1 if writable, [`OWN_ACCESSOR`] if the slot
+//!   holds an accessor (D3470: a read then yields its getter). A hit is a shape compare:
+//!   the shape fixes the key and its attributes.
 //! - prototype property reads (D1621): word 0 = offset slot, kind = depth of the holder,
 //!   entry index + 1 in the holder; word 1 = the offset of the receiver's prototype (an
 //!   object's, or the realm's prototype of a primitive); word 2 = `Roots::PROTO_EPOCH`;
@@ -59,6 +60,9 @@ const KIND_ADD: u32 = 63;
 const MAX_DEPTH: u32 = KIND_ADD - 1;
 /// Addition slot word 0: a `put_field` site.
 const ADD_SET: u32 = 1;
+
+/// Own-property slot word 2: the property is an accessor (never writable).
+const OWN_ACCESSOR: u32 = 2;
 
 /// Global slot word 0: the entry is in the global lexical record.
 const IN_LEX: u32 = 1 << 31;
@@ -152,9 +156,15 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
         };
     }
     match kind(w0) {
-        0 => heap
-            .shaped_get(o.as_object()?, w1, (w0 & INDEX_MASK) - 1)
-            .map(Hit::Value),
+        0 => {
+            let obj = o.as_object()?;
+            let i = (w0 & INDEX_MASK) - 1;
+            let v = heap.shaped_get(obj, w1, i)?;
+            if w2 & OWN_ACCESSOR == 0 {
+                return Some(Hit::Value(v));
+            }
+            accessor_at(heap, obj, i, key)
+        }
         KIND_ADD => None,
         depth => {
             if w2 != heap.proto_epoch() {
@@ -175,9 +185,7 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
             let i = (w0 & INDEX_MASK) - 1;
             match heap.data_at(h, i, key) {
                 Some(v) => Some(Hit::Value(v)),
-                // An accessor's getter (D3470), read as the loop reads it.
-                None => hot_data_at(heap.arena().bytes(), h.offset(), i, key)
-                    .filter(|hit| matches!(hit, Hit::Getter(_))),
+                None => accessor_at(heap, h, i, key),
             }
         }
     }
@@ -218,80 +226,96 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     // (An absent read's index field is 0: it returns before `index` is used.)
     let index = (w0 & INDEX_MASK).wrapping_sub(1);
     let depth = kind(w0);
-    if depth == 0 {
+    // The object whose slot `index` holds the property: the receiver (an accessor of its
+    // own), or the holder on its prototype chain.
+    let h = if depth == 0 {
         // `Heap::shaped_get`.
         let obj = o.as_object()?.offset();
         let v = r32(obj + Object::PROPS.offset);
         if dictionary(obj) || v == 0 || r32(v + PropValues::SHAPE.offset) != r32(at + 4) {
             return None;
         }
-        return Some(Hit::Value(super::hot::ld(
-            b,
-            PropValues::VALUES.at(v, index),
-        )));
-    }
-    if depth == KIND_ADD || r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
-        return None;
-    }
-    // `proto_start`, without its own-property lookup: the receiver's shape word must be
-    // the remembered one.
-    let proto = match o.as_object() {
-        Some(obj) => {
-            let obj = obj.offset();
-            let class = r32(obj + Object::CLASS.offset);
-            let length = key == crate::heap::atoms::LENGTH;
-            if class == ObjectClass::Proxy as u32
-                || class == ObjectClass::TypedArray as u32
-                || (class == ObjectClass::Array as u32 && length)
-                || (class == ObjectClass::Function as u32
-                    && (length || key == crate::heap::atoms::NAME))
-            {
-                return None;
-            }
-            let shape = if dictionary(obj) {
-                0
-            } else {
-                match r32(obj + Object::PROPS.offset) {
-                    0 => EMPTY_SHAPE,
-                    v => r32(v + PropValues::SHAPE.offset),
-                }
-            };
-            if shape == 0 || shape != r32(at + 12) {
-                return None;
-            }
-            r32(obj + Object::PROTO.offset)
+        if r32(at + 8) & OWN_ACCESSOR == 0 {
+            return Some(Hit::Value(super::hot::ld(
+                b,
+                PropValues::VALUES.at(v, index),
+            )));
         }
-        None => {
-            let i = if o.as_string().is_some() {
-                if key == crate::heap::atoms::LENGTH || key.as_int().is_some() {
-                    return None;
-                }
-                Intrinsic::StringProto
-            } else if o.is_number() {
-                Intrinsic::NumberProto
-            } else {
-                return None;
-            };
-            let realm = super::hot::ld(b, Roots::REALM.offset).as_internal()?;
-            let p = super::hot::ld(b, crate::heap::cells::Realm::INTRINSICS.at(realm, i as u32));
-            p.as_object()?.offset()
-        }
-    };
-    if proto == 0 || proto != r32(at + 4) {
-        return None;
-    }
-    if w0 & INDEX_MASK == 0 {
-        // An absent read: nothing on the chain has the key.
-        return Some(Hit::Value(Value::UNDEFINED));
-    }
-    let mut h = proto;
-    for _ in 1..depth {
-        h = r32(h + Object::PROTO.offset);
-        if h == 0 {
+        obj
+    } else {
+        if depth == KIND_ADD || r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
             return None;
         }
-    }
+        // `proto_start`, without its own-property lookup: the receiver's shape word must be
+        // the remembered one.
+        let proto = match o.as_object() {
+            Some(obj) => {
+                let obj = obj.offset();
+                let class = r32(obj + Object::CLASS.offset);
+                let length = key == crate::heap::atoms::LENGTH;
+                if class == ObjectClass::Proxy as u32
+                    || class == ObjectClass::TypedArray as u32
+                    || (class == ObjectClass::Array as u32 && length)
+                    || (class == ObjectClass::Function as u32
+                        && (length || key == crate::heap::atoms::NAME))
+                {
+                    return None;
+                }
+                let shape = if dictionary(obj) {
+                    0
+                } else {
+                    match r32(obj + Object::PROPS.offset) {
+                        0 => EMPTY_SHAPE,
+                        v => r32(v + PropValues::SHAPE.offset),
+                    }
+                };
+                if shape == 0 || shape != r32(at + 12) {
+                    return None;
+                }
+                r32(obj + Object::PROTO.offset)
+            }
+            None => {
+                let i = if o.as_string().is_some() {
+                    if key == crate::heap::atoms::LENGTH || key.as_int().is_some() {
+                        return None;
+                    }
+                    Intrinsic::StringProto
+                } else if o.is_number() {
+                    Intrinsic::NumberProto
+                } else {
+                    return None;
+                };
+                let realm = super::hot::ld(b, Roots::REALM.offset).as_internal()?;
+                let p =
+                    super::hot::ld(b, crate::heap::cells::Realm::INTRINSICS.at(realm, i as u32));
+                p.as_object()?.offset()
+            }
+        };
+        if proto == 0 || proto != r32(at + 4) {
+            return None;
+        }
+        if w0 & INDEX_MASK == 0 {
+            // An absent read: nothing on the chain has the key.
+            return Some(Hit::Value(Value::UNDEFINED));
+        }
+        let mut h = proto;
+        for _ in 1..depth {
+            h = r32(h + Object::PROTO.offset);
+            if h == 0 {
+                return None;
+            }
+        }
+        h
+    };
     hot_data_at(b, h, index, key)
+}
+
+/// Slot `i` of `h` if it is the accessor `key` (D3470), read as the loop reads it: the
+/// getter, or undefined for an accessor without one. For a slot `Heap::data_at` refused.
+/// Out of line: [`cached_get`]'s two uses share it.
+#[inline(never)]
+fn accessor_at(heap: &Heap, h: Obj, i: u32, key: Atom) -> Option<Hit> {
+    hot_data_at(heap.arena().bytes(), h.offset(), i, key)
 }
 
 /// What [`hot_get`] found.
@@ -407,7 +431,8 @@ impl Exec<'_> {
     }
 
     /// Fills cache slot `ic`, allocating the function's cache array on first use. Out of
-    /// memory just leaves the slot empty.
+    /// memory just leaves the slot empty. (Out of line: seven fills call it.)
+    #[inline(never)]
     fn ic_write(&mut self, ic: u32, words: Slot) {
         if ic == NO_CACHE as u32 {
             return;
@@ -437,6 +462,12 @@ impl Exec<'_> {
             let at = U32Array::DATA.at(a, ic * WORDS + k as u32);
             self.heap.arena_mut().write(at, w);
         }
+    }
+
+    /// `Heap::own_entry_index`, out of line: the fills are cold and five of them ask.
+    #[inline(never)]
+    fn entry_index(&self, o: Obj, key: Atom) -> Option<u32> {
+        self.heap.own_entry_index(o, key)
     }
 
     fn lex_epoch(&self) -> u32 {
@@ -495,14 +526,14 @@ impl Exec<'_> {
     #[inline(never)]
     pub(super) fn ic_global_fill(&mut self, key: Atom, ic: u32) {
         let lex = realm::global_lex(self.heap);
-        if let Some(i) = self.heap.own_entry_index(lex, key) {
+        if let Some(i) = self.entry_index(lex, key) {
             if self.heap.data_at(lex, i, key).is_some() {
                 self.ic_write(ic, [(i + 1) | IN_LEX, 0, 0, 0, 0]);
             }
             return;
         }
         let g = intrinsic_obj(self.heap, Intrinsic::Global);
-        if let Some(i) = self.heap.own_entry_index(g, key)
+        if let Some(i) = self.entry_index(g, key)
             && self.heap.data_at(g, i, key).is_some()
         {
             let epoch = self.lex_epoch();
@@ -561,7 +592,7 @@ impl Exec<'_> {
                 _ => return,
             }
         }
-        let Some(i) = self.heap.own_entry_index(holder, key) else {
+        let Some(i) = self.entry_index(holder, key) else {
             return;
         };
         if i + 1 > INDEX_MASK || (!accessor && self.heap.data_at(holder, i, key).is_none()) {
@@ -605,6 +636,26 @@ impl Exec<'_> {
         self.ic_write(ic, [w0, proto.offset(), epoch, shape, 0]);
     }
 
+    /// After a slow lookup found the accessor `key` on `obj` itself, a shape-mode object:
+    /// remembers its slot (D3470).
+    #[inline(never)]
+    pub(super) fn ic_own_accessor_fill(&mut self, obj: Obj, key: Atom, ic: u32) {
+        let shape = self.heap.receiver_shape(obj);
+        if key.as_int().is_some()
+            || exotic_own(self.heap, obj, key)
+            || shape == 0
+            || shape == crate::heap::object::EMPTY_SHAPE
+        {
+            return;
+        }
+        if let Some(slot) = self.entry_index(obj, key)
+            && slot < INDEX_MASK
+        {
+            let w0 = IC_OFFSET_SLOT | (slot + 1);
+            self.ic_write(ic, [w0, shape, OWN_ACCESSOR, 0, 0]);
+        }
+    }
+
     /// After a slow access to `obj[key]`: remembers the property if `key` is an own data
     /// property of `obj` (and not an array index).
     #[inline(never)]
@@ -619,7 +670,7 @@ impl Exec<'_> {
             }
             return;
         }
-        if let Some(i) = self.heap.own_entry_index(obj, key)
+        if let Some(i) = self.entry_index(obj, key)
             && self.heap.data_at(obj, i, key).is_some()
         {
             self.ic_write(ic, [i + 1, 0, 0, 0, 0]);

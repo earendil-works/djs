@@ -1,0 +1,8 @@
+levels undefined undefined undefined top top mid mid leaf leaf mid top undefined
+protos undefined from-b undefined from-b undefined from-b from-b from-b
+object.prototype // // // inherited//inherited inherited//inherited inherited//inherited // // //
+accessor g1:1 g1:2 g1:1 g2:2 g2:1 data data undefined undefined g3:2 g3:1 g3:2 g3:1 undefined 9
+own 1/RangeError/was getter/str:3/num:8// 2/RangeError/now data/str:3/num:8// 3/RangeError/now data/str:3/num:8// 4/RangeError/now data/str:3/num:8// / 4
+method TypeError undefined TypeError undefined TypeError undefined m3 function m3 function m3 function got6 function got6 function got6 function
+builtins 6444
+=== completed

@@ -3542,8 +3542,12 @@ impl<'h> Exec<'h> {
                 }
             }
             // An accessor on the prototype chain, and a key nothing has (D3470).
-            Lookup::Found(h, Property::Accessor { .. }) if Value::object(h) != o => {
-                self.ic_proto_fill(o, key, h, true, ic);
+            Lookup::Found(h, Property::Accessor { .. }) => {
+                if Value::object(h) == o {
+                    self.ic_own_accessor_fill(h, key, ic);
+                } else {
+                    self.ic_proto_fill(o, key, h, true, ic);
+                }
             }
             Lookup::Absent => {
                 if let Some(obj) = o.as_object() {
