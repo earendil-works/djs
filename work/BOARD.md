@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0261 | Instantiation and sandbox setup costs (exports, data segment, setup calls) | pstart | .worktrees/pstart |
-| 0257 | Idle memory: elastic shadow stack, data padding, dlmalloc first segment | pidle | .worktrees/pidle |
+| 0262 | Object and collection ops: Map/Set string keys, spread, entries, comparator sort, padStart | pidle | .worktrees/pidle |
 | 0258 | GC: minor collections skip the builtin prefix; headroom, big-string survivors | pgc | .worktrees/pgc |
 | 0259 | Builtin calls without finding the callee | pcall | .worktrees/pcall |
 | 0260 | Byte kernels word at a time (SWAR; simd128 measured for the owner) | pscan | .worktrees/pscan |
@@ -49,6 +49,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0257 | Idle memory: elastic shadow stack, seeded dlmalloc segment | 6f25c16e (agent pidle; D3280-D3283; idle 576->448 KiB, every workload -128 KiB but heavy; +624 B gz net) |
 | 0256 | Per-VM and per-byte costs: base injection, hash keys, zeroing | 2e547378 (agent pstart; D3270-D3273; new sandbox -28%, small bodies -7..9%; zeroing dropped) |
 | 0249 | djs-embed: report and shrink an instance's heap after reset | d0957337 (coordinator; D3247; djs-embed 0.1.1, CHANGES.md) |
 | 0240 | djs-embed: the native embedding crate (E1–E7) | e847b7fa (agent embed; D3180-D3184) |
