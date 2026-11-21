@@ -12280,3 +12280,38 @@ Shipped 429,780 → 429,353 B gz (−427), slim 362,805 → 362,423. The ceiling
 from 429,830 to 429,648 (D3282's raise undone; the module is 295 B under it). Tried and
 dropped: one copy of `vm_new_host_function`/`vm_new_async_host_function` (−145 raw,
 +42 gz) and `ts_try`/`ts_lookahead` through `dyn FnMut` (+350 gz: an inlining cascade).
+
+## D3320: djs-wasm exports one function, `djs(op, a, b, c, d, e, f, t)`
+date: 2026-11-21 · by: pstart · issue: 0261
+V8 makes a function object for every exported function of every instance (and a call
+wrapper on each one's first call): with 75 exports that was about a quarter of
+`new WebAssembly.Instance` (synthetic modules: ~0.3-0.8 µs per export). The module now
+exports `memory`, `__stack_pointer` and `djs`, which runs operation `op` with integer
+arguments `a`-`f` and the f64 `t` (`vm_set_now`, `vm_resolve_host_call_at`); the former
+exports are its operations, numbered by `ops!` in crates/djs-wasm/src/lib.rs (a const
+check keeps the numbers dense) and by `OPS` in js/src/abi.ts (a test compares them).
+Operation 0 is `djs_abi_version` in every ABI; `djs_has(op)` says whether a build has an
+operation (dump, docs, alloc-stats and compiled-prelude ones). `djsExports(module)` makes
+an instance's operations functions by their old names, which need no `this`, so hosts
+changed only where they instantiate. ABI version 6. Instantiation 81-85 → 59-65 µs (load
+~13-20); a call through `djs` costs ~5 ns against ~2 ns for a direct export.
+Size −499 B gz (export names and entries gone, a dispatcher added).
+
+## D3321: Sandbox setup: the elastic wrapper in place, short names encoded in place
+date: 2026-11-21 · by: pstart · issue: 0261
+`elasticStack` copied the exports into a fresh `Object.create(null)` object (~70
+properties, ~8 µs per sandbox); it now replaces the functions in the `djsExports` object,
+which is the caller's own. `stageText` encodes names of up to 1,024 units with
+`encodeInto` straight into the staging buffer (3 bytes per unit reserved) instead of
+allocating a Uint8Array per name and copying it; longer text keeps the exact-size path.
+js/pi/vm.ts seeds from the same kind of entropy pool as the Sandbox (D3273). The
+console's host functions stay nine small calls: they cost ~1 µs each, mostly the first
+touch of the arena's tail, which a batched call would pay as well.
+
+## D3322: A rope compares to a flat string chunk by chunk
+date: 2026-11-21 · by: pstart · issue: 0261
+`str_eq` of a concatenation rope and a flat string (interning a computed key such as
+`o[a + b]`, which finds the atom by hash and then compares) walked both through per-unit
+iterators (0.8% of `sequential`). It now compares each chunk of the rope with the flat
+string's slice at its offset (bytes for equal widths). sequential −2.5% (800 interleaved
+runs, load ~21); +185 B gz.

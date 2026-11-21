@@ -157,16 +157,28 @@ fn rope_equals_flat_chunk_by_chunk() {
     let y = s(&mut h, &"y".repeat(20));
     let xy = h.concat(x, y).unwrap();
     assert_eq!(h.cell_kind(xy.0), CellKind::Rope);
-    let flat = s(&mut h, &alloc::format!("{}{}", "x".repeat(20), "y".repeat(20)));
-    let other = s(&mut h, &alloc::format!("{}{}z", "x".repeat(20), "y".repeat(19)));
+    let flat = s(
+        &mut h,
+        &alloc::format!("{}{}", "x".repeat(20), "y".repeat(20)),
+    );
+    let other = s(
+        &mut h,
+        &alloc::format!("{}{}z", "x".repeat(20), "y".repeat(19)),
+    );
     assert!(h.str_eq(xy, flat) && h.str_eq(flat, xy));
     assert!(!h.str_eq(xy, other) && !h.str_eq(other, xy));
     // Two-byte, with a one-byte chunk.
     let e = s(&mut h, &"€".repeat(20));
     let xe = h.concat(x, e).unwrap();
     assert_eq!(h.cell_kind(xe.0), CellKind::Rope);
-    let flat = s(&mut h, &alloc::format!("{}{}", "x".repeat(20), "€".repeat(20)));
-    let other = s(&mut h, &alloc::format!("{}{}", "x".repeat(19), "€".repeat(21)));
+    let flat = s(
+        &mut h,
+        &alloc::format!("{}{}", "x".repeat(20), "€".repeat(20)),
+    );
+    let other = s(
+        &mut h,
+        &alloc::format!("{}{}", "x".repeat(19), "€".repeat(21)),
+    );
     assert!(h.str_eq(xe, flat) && h.str_eq(flat, xe));
     assert!(!h.str_eq(xe, other));
 }
