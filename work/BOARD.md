@@ -6,7 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0271 | A smaller base image: idle at QuickJS parity | pstart | .worktrees/pstart |
+| 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
+| 0274 | pi cached start: image-cache key, restore zero-fill, instantiation | pstart | .worktrees/pstart |
 | 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
 | 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
 | 0273 | test262 under GC stress as a full-only gate leg | pgc (after 0269) | .worktrees/pgc |
