@@ -519,15 +519,22 @@ impl Heap {
     }
 
     /// A string from Latin-1 bytes (each byte is one code unit).
-    /// `s[a .. b)` of a flat one-byte string, as a new flat string copied within the arena
-    /// once; `None` if `s` is not a flat one-byte cell.
+    /// `s[a .. b)` of a flat one-byte string or a slice, as a new flat string copied within
+    /// the arena once; `None` for anything else.
     pub(crate) fn latin1_copy(&mut self, s: Str, a: u32, b: u32) -> Result<Option<Str>, HeapError> {
-        if self.arena().get(s.0, Header::KIND) != CellKind::Str8 as u8 {
+        let k = self.arena().get(s.0, Header::KIND);
+        let from = if k == CellKind::Str8 as u8 {
+            s.0 + Str8::DATA.offset
+        } else if k == CellKind::Slice as u8 {
+            // (A short piece of a split line: copied from the parent.)
+            let (parent, start) = self.slice_parts(s.0);
+            parent + Str8::DATA.offset + start
+        } else {
             return Ok(None);
-        }
+        };
         let dst = self.alloc_flat(b - a, false)?;
         self.arena_mut()
-            .copy_within(s.0 + Str8::DATA.offset + a, b - a, dst + Str8::DATA.offset);
+            .copy_within(from + a, b - a, dst + Str8::DATA.offset);
         Ok(Some(Str(dst)))
     }
 
@@ -586,12 +593,28 @@ impl Heap {
         pieces: &[(Str, u32, u32)],
         total: u32,
     ) -> Result<Str, HeapError> {
-        let mut leaves = Vec::new();
-        for &(s, a, b) in pieces {
-            if a < b {
-                self.collect_range(s, a, b, &mut leaves);
+        // A few pieces without ropes (a substring, a short join) need no list on the heap.
+        let mut small = [(0, 0, 0); 4];
+        let mut list = Vec::new();
+        let leaves: &[(u32, u32, u32)] = if pieces.len() <= small.len()
+            && pieces
+                .iter()
+                .all(|p| self.cell_kind(p.0.0) != CellKind::Rope)
+        {
+            let mut n = 0;
+            for &(s, a, b) in pieces.iter().filter(|p| p.1 < p.2) {
+                small[n] = (s.0, a, b - a);
+                n += 1;
             }
-        }
+            &small[..n]
+        } else {
+            for &(s, a, b) in pieces {
+                if a < b {
+                    self.collect_range(s, a, b, &mut list);
+                }
+            }
+            &list
+        };
         // Two-byte only with a unit above 0xFF (a part of a two-byte leaf may have none).
         let two_byte = leaves.iter().any(|&(leaf, first, len)| {
             self.cell_kind(leaf) == CellKind::Str16
@@ -603,7 +626,7 @@ impl Heap {
                         .any(|u| u > 0xFF))
         });
         let dst = self.alloc_flat(total, two_byte)?;
-        self.write_leaves(&leaves, dst, 0);
+        self.write_leaves(leaves, dst, 0);
         Ok(Str(dst))
     }
 

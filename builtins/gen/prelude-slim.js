@@ -6815,26 +6815,10 @@ function StringPrototypeSlice(start, end) {}
 // builtins/string.ts:272 String.prototype.substring
 function StringPrototypeSubstring(start, end) {}
 
-// builtins/string.ts:284 String.prototype.substr
-function StringPrototypeSubstr(start, length) {
-  const s = ThisToString(this);
-  const size = (%StrLength(s));
-  const intStart = RelativeIndex(start, size, 0);
-  let intLength = size;
-  if (length !== undefined) {
-    intLength = ToIntegerOrInfinity(length);
-  }
-  let intEnd = intStart + intLength;
-  if (intEnd > size) {
-    intEnd = size;
-  }
-  if (intStart >= intEnd) {
-    return "";
-  }
-  return %StrSubstring(s, intStart, intEnd);
-}
+// builtins/string.ts:285 String.prototype.substr
+function StringPrototypeSubstr(start, length) {}
 
-// builtins/string.ts:307 String.prototype.concat
+// builtins/string.ts:308 String.prototype.concat
 function StringPrototypeConcat(...args) {
   let r = ThisToString(this);
   const n = LengthOfArrayLike(args);
@@ -6844,10 +6828,10 @@ function StringPrototypeConcat(...args) {
   return r;
 }
 
-// builtins/string.ts:322 String.prototype.repeat
+// builtins/string.ts:323 String.prototype.repeat
 function StringPrototypeRepeat(count) {}
 
-// builtins/string.ts:335
+// builtins/string.ts:336
 function StringPad(s, maxLength, fillString, atStart) {
   const intMaxLength = ToLength(maxLength);
   const stringLength = (%StrLength(s));
@@ -6865,44 +6849,44 @@ function StringPad(s, maxLength, fillString, atStart) {
   return %StrPad(s, filler, intMaxLength - stringLength, atStart);
 }
 
-// builtins/string.ts:359 String.prototype.padEnd
+// builtins/string.ts:360 String.prototype.padEnd
 function StringPrototypePadEnd(maxLength, fillString) {}
 
-// builtins/string.ts:369 String.prototype.padStart
+// builtins/string.ts:370 String.prototype.padStart
 function StringPrototypePadStart(maxLength, fillString) {}
 
-// builtins/string.ts:380 String.prototype.toLowerCase
+// builtins/string.ts:381 String.prototype.toLowerCase
 function StringPrototypeToLowerCase() {}
 
-// builtins/string.ts:389 String.prototype.toUpperCase
+// builtins/string.ts:390 String.prototype.toUpperCase
 function StringPrototypeToUpperCase() {}
 
-// builtins/string.ts:398 String.prototype.toLocaleLowerCase
+// builtins/string.ts:399 String.prototype.toLocaleLowerCase
 function StringPrototypeToLocaleLowerCase() {}
 
-// builtins/string.ts:407 String.prototype.toLocaleUpperCase
+// builtins/string.ts:408 String.prototype.toLocaleUpperCase
 function StringPrototypeToLocaleUpperCase() {}
 
-// builtins/string.ts:416 String.prototype.trim
+// builtins/string.ts:417 String.prototype.trim
 function StringPrototypeTrim() {}
 
-// builtins/string.ts:426 String.prototype.trimStart String.prototype.trimLeft
+// builtins/string.ts:427 String.prototype.trimStart String.prototype.trimLeft
 function StringPrototypeTrimStart() {}
 
-// builtins/string.ts:436 String.prototype.trimEnd String.prototype.trimRight
+// builtins/string.ts:437 String.prototype.trimEnd String.prototype.trimRight
 function StringPrototypeTrimEnd() {}
 
-// builtins/string.ts:444 String.prototype.isWellFormed
+// builtins/string.ts:445 String.prototype.isWellFormed
 function StringPrototypeIsWellFormed() {
   return %StrIsWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:452 String.prototype.toWellFormed
+// builtins/string.ts:453 String.prototype.toWellFormed
 function StringPrototypeToWellFormed() {
   return %StrToWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:461 String.prototype.normalize
+// builtins/string.ts:462 String.prototype.normalize
 function StringPrototypeNormalize(form) {
   const s = ThisToString(this);
   let f = "NFC";
@@ -6928,13 +6912,13 @@ function StringPrototypeNormalize(form) {
   return %AsStr(r);
 }
 
-// builtins/string.ts:494 String.fromCharCode
+// builtins/string.ts:495 String.fromCharCode
 function StringFromCharCode(...codeUnits) {
   CoerceNumbers(codeUnits);
   return %StrFromCodeUnits(codeUnits);
 }
 
-// builtins/string.ts:504 String.fromCodePoint
+// builtins/string.ts:505 String.fromCodePoint
 function StringFromCodePoint(...codePoints) {
   if (%AllCodePoints(codePoints)) {
     return %StrFromCodePoints(codePoints);
@@ -6951,7 +6935,7 @@ function StringFromCodePoint(...codePoints) {
   return %StrFromCodePoints(codePoints);
 }
 
-// builtins/string.ts:525 String.raw
+// builtins/string.ts:526 String.raw
 function StringRaw(template, ...substitutions) {
   const cooked = %ToObject(template);
   const literals = %ToObject(%Get(cooked, "raw"));
@@ -8093,6 +8077,7 @@ function GlobalAtob(...args) {
 %MarkFast(StringPrototypeEndsWith);
 %MarkFast(StringPrototypeSlice);
 %MarkFast(StringPrototypeSubstring);
+%MarkFast(StringPrototypeSubstr);
 %MarkFast(StringPrototypeRepeat);
 %MarkFast(StringPrototypePadEnd);
 %MarkFast(StringPrototypePadStart);
