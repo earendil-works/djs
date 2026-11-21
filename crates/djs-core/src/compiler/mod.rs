@@ -376,15 +376,14 @@ fn parse<T>(
 /// Whether a compile of `src` stops before it begins for the Unicode property tables
 /// (D3350): the build has none, the host hands them over (with the elastic stack), and
 /// `src` may hold a property escape (`\p{` or `\P{`, which a regular expression literal
-/// can only spell so). Then [`Heap::props_need`] is set, the compile fails like one that
+/// can only spell so). Then `Heap::tables_need` has `unicode::PROPS`, the compile fails like one that
 /// needs the larger stack and runs again with the tables: no attempt without them has an
 /// effect, so heaps and fuel are those of a build with the tables. A source that only
 /// mentions the text loads the tables for nothing, which changes no result.
 pub(crate) fn needs_props(heap: &mut Heap, src: &[u8]) -> bool {
     #[cfg(feature = "regexp-unicode-props")]
     if heap.props.is_none() && heap.stack_elastic && has_property_escape(src) {
-        heap.props_need = true;
-        return true;
+        return heap.need_tables(crate::unicode::PROPS).is_some();
     }
     let _ = (heap, src);
     false

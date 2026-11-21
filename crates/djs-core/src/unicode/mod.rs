@@ -26,7 +26,7 @@ pub mod case;
 pub use props::{PROPS_HASH, PROPS_LEN};
 
 /// The property tables (`props.bin`) this build has built in: all but the shipped wasm
-/// module, whose host hands them over at the first `\p` (`cold-unicode`, D3350).
+/// module, whose host hands them over at their first use (`cold-unicode`, D3350).
 #[cfg(feature = "regexp-unicode-props")]
 pub fn builtin_props() -> Option<&'static [u8]> {
     #[cfg(not(feature = "cold-unicode"))]
@@ -35,13 +35,50 @@ pub fn builtin_props() -> Option<&'static [u8]> {
     None
 }
 
-/// Whether `bytes` are this build's property tables: their length and FNV-1a hash.
-#[cfg(feature = "regexp-unicode-props")]
-pub fn props_valid(bytes: &[u8]) -> bool {
+#[cfg(feature = "unicode-normalization")]
+pub use norm_tables::{NORM_HASH, NORM_LEN};
+
+/// The normalization tables (`norm.bin`) built in, like [`builtin_props`].
+#[cfg(feature = "unicode-normalization")]
+pub fn builtin_norm() -> Option<&'static [u8]> {
+    #[cfg(not(feature = "cold-unicode"))]
+    return Some(&norm_tables::NORM);
+    #[cfg(feature = "cold-unicode")]
+    None
+}
+
+/// The families of tables a host hands over (D3350), as bits: what `Vm::needs_tables`
+/// reports and `Vm::set_tables` takes.
+pub const PROPS: u8 = 1;
+pub const NORM: u8 = 2;
+
+/// Whether `bytes` are this build's tables of `family` ([`PROPS`] or [`NORM`]): their
+/// length and FNV-1a hash.
+#[cfg(any(feature = "regexp-unicode-props", feature = "unicode-normalization"))]
+pub fn tables_valid(family: u8, bytes: &[u8]) -> bool {
     let h = bytes.iter().fold(0x811C_9DC5u32, |h, &b| {
         (h ^ b as u32).wrapping_mul(0x0100_0193)
     });
-    bytes.len() == PROPS_LEN && h == PROPS_HASH
+    let want = match family {
+        #[cfg(feature = "regexp-unicode-props")]
+        PROPS => (PROPS_LEN, PROPS_HASH),
+        #[cfg(feature = "unicode-normalization")]
+        NORM => (NORM_LEN, NORM_HASH),
+        _ => return false,
+    };
+    (bytes.len(), h) == want
+}
+
+/// The length of the tables of `family`, 0 if the build has none.
+#[cfg(any(feature = "regexp-unicode-props", feature = "unicode-normalization"))]
+pub fn tables_len(family: u8) -> usize {
+    match family {
+        #[cfg(feature = "regexp-unicode-props")]
+        PROPS => PROPS_LEN,
+        #[cfg(feature = "unicode-normalization")]
+        NORM => NORM_LEN,
+        _ => 0,
+    }
 }
 
 pub use tables::UNICODE_VERSION;

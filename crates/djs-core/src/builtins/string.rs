@@ -536,6 +536,14 @@ pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>
     #[cfg(feature = "unicode-normalization")]
     {
         use crate::unicode::normalize::{self as norm, Form};
+        // The host hands the tables over and this instruction runs again (D3350); a host
+        // that cannot gets what a build without them gives.
+        let Some(t) = heap.norm.map(norm::Norm) else {
+            return match heap.need_tables(crate::unicode::NORM) {
+                Some(f) => Err(f),
+                None => Ok(None),
+            };
+        };
         let form = match form {
             0 => Form::Nfc,
             1 => Form::Nfd,
@@ -543,10 +551,10 @@ pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>
             _ => Form::Nfkd,
         };
         let u = units(heap, s)?;
-        if norm::is_normalized_quick(&u, form) {
+        if norm::is_normalized_quick(t, &u, form) {
             return Ok(Some(s));
         }
-        let out = norm::normalize(&u, form, &mut heap.compositions);
+        let out = norm::normalize(t, &u, form, &mut heap.compositions);
         if out == u {
             return Ok(Some(s));
         }
@@ -564,14 +572,26 @@ pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fau
     #[cfg(feature = "unicode-normalization")]
     let (ua, ub) = {
         use crate::unicode::normalize::{self as norm, Form};
-        let mut nfc = |u: Vec<u16>| {
-            if norm::is_normalized_quick(&u, Form::Nfc) {
-                u
-            } else {
-                norm::normalize(&u, Form::Nfc, &mut heap.compositions)
+        // Below U+0300 NFC changes nothing. Else the tables: the host hands them over and
+        // this instruction runs again (D3350); a host that cannot gets code point order.
+        let plain = |u: &[u16]| u.iter().all(|&c| c < 0x300);
+        match heap.norm.map(norm::Norm) {
+            _ if plain(&ua) && plain(&ub) => (ua, ub),
+            Some(t) => {
+                let mut nfc = |u: Vec<u16>| {
+                    if norm::is_normalized_quick(t, &u, Form::Nfc) {
+                        u
+                    } else {
+                        norm::normalize(t, &u, Form::Nfc, &mut heap.compositions)
+                    }
+                };
+                (nfc(ua), nfc(ub))
             }
-        };
-        (nfc(ua), nfc(ub))
+            None => match heap.need_tables(crate::unicode::NORM) {
+                Some(f) => return Err(f),
+                None => (ua, ub),
+            },
+        }
     };
     let (ca, cb) = (code_points_of(&ua), code_points_of(&ub));
     for (x, y) in ca.iter().zip(&cb) {

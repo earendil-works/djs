@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Sandbox, SandboxError, loadModule } from "../src/sandbox.ts";
-import { stackMoves } from "../src/trap.ts";
+import { stackMoves, tableLoads } from "../src/trap.ts";
 
 const nested: Record<string, (n: number) => string> = {
   parens: (n) => "(".repeat(n) + "1" + ")".repeat(n),
@@ -113,5 +113,36 @@ test("a compile on the larger stack leaves the same heap and fuel", async () => 
     assert.deepEqual(a.value, b.value, src.slice(0, 40));
     assert.equal(a.fuel, b.fuel, `fuel: ${src.slice(0, 40)}`);
     assert.ok(Buffer.compare(a.arena, b.arena) === 0, `heap: ${src.slice(0, 40)}`);
+  }
+});
+
+// The Unicode tables (D3350): the shipped module leaves its property and normalization tables
+// out of its memory, and the elastic wrapper hands an instance the module's `djs_props` or
+// `djs_norm` section when a compile or an instruction needs them. Programs get the same
+// results either way (crates/djs-core's vm::props_tests compares fuel and heaps); each
+// instance takes a family once.
+test("\\p, normalize and localeCompare get the Unicode tables when they need them", async () => {
+  const module = await loadModule();
+  const cold = WebAssembly.Module.customSections(module, "djs_props").length > 0;
+  const programs: [string, unknown][] = [
+    [String.raw`return /\p{Lu}+/u.exec("abcDEFg")[0];`, "DEF"],
+    [String.raw`const b = String.fromCharCode(92); return new RegExp(b + "p{Nd}+", "u").exec("x123y")[0];`, "123"],
+    [String.raw`const b = String.fromCharCode(92); return eval("/" + b + "P{L}/u.test('1')");`, true],
+    [String.raw`const f = (s) => /\p{Script=Greek}/u.test(s); return [f("α"), f("a")];`, [true, false]],
+    [String.raw`try { new RegExp("\\p{Nope}", "u"); } catch (e) { return String(e); }`, "SyntaxError: unknown unicode property name"],
+    [`return /a/.test("a");`, true],
+    [`return ["e\\u0301".normalize(), "é".normalize("NFD").length];`, ["é", 2]],
+    [`return ["b", "a\\u0301", "á", "a"].sort((x, y) => x.localeCompare(y)).join();`, "a,b,a\u0301,á"],
+    [`return "résumé".localeCompare("resume") + "abc".normalize("NFKD");`, "132abc"],
+  ];
+  for (const [src, want] of programs) {
+    const sb = new Sandbox({ module });
+    const before = tableLoads;
+    assert.deepEqual(sb.run(src), want, src);
+    // Again in the same instance: the tables stay.
+    assert.deepEqual(sb.run(src), want, src);
+    const loads = tableLoads - before;
+    assert.equal(loads, cold && /\\p|fromCharCode|u0301|NFD/.test(src) ? 1 : 0, `loads: ${src}`);
+    sb.dispose();
   }
 });

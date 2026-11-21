@@ -38,7 +38,7 @@ export function trapText(x: TrapExports, e: Error): string {
 const NEED_STACK = 6;
 /** `vm_compile*`'s result for such a compile (`u32::MAX` as an i32). */
 const COMPILE_NEED_STACK = -1;
-/** `vm_run`'s status for an instruction that needs the Unicode property tables (D3350). */
+/** `vm_run`'s status for an instruction that needs Unicode tables the module leaves out (D3350). */
 const NEED_TABLES = 7;
 /** `vm_compile*`'s result for a compile that needs them (`u32::MAX - 1` as an i32). */
 const COMPILE_NEED_TABLES = -2;
@@ -49,8 +49,9 @@ const BIG_STACK = 128 * 1024;
 export interface StackExports {
   memory: WebAssembly.Memory;
   __stack_pointer?: WebAssembly.Global;
-  djs_props_ptr?(len: number): number;
-  djs_props_set?(): number;
+  djs_tables_ptr?(family: number, len: number): number;
+  djs_tables_set?(): number;
+  vm_tables_need?(vm: number): number;
   djs_elastic_stack?(on: number): void;
   djs_stack?(len: number): number;
   vm_run(vm: number, fuel: number): number;
@@ -66,10 +67,11 @@ export interface StackExports {
  * `vm_compile*`, or at run time: `eval`, `Function`, `new RegExp`, a lazy function's first
  * call) stops before it has any effect; the wrappers then move the stack pointer to a larger
  * block for one more call and back. What compiles and its errors are the same as with a large
- * stack. The shipped module also leaves its Unicode property tables out of its memory
- * (D3350): a compile or instruction that needs them (a regular expression with `\p{..}`)
- * stops the same way, and the wrappers hand the instance the module's `djs_props` section
- * (`module`'s, required for such a module) and call again. Modules without the exports are
+ * stack. The shipped module also leaves its Unicode property and normalization tables out
+ * of its memory (D3350): a compile or instruction that needs them (a regular expression
+ * with `\p{..}`, `normalize` or `localeCompare` of non-Latin text) stops the same way, and
+ * the wrappers hand the instance the module's section of that family (`djs_props`,
+ * `djs_norm`; `module` is required for such a module) and call again. Modules without the exports are
  * returned as they are. Call it again after the instance's memory was reset (a pooled
  * instance). Replaces the functions in `x` (an object of `djsExports`, which is the caller's
  * own): copying its ~70 properties into a new object cost a sandbox more than the rest of its
@@ -92,13 +94,17 @@ export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.
     stack(0);
     return r;
   };
-  const tables = () => {
-    const bytes = module && propsSection(module);
-    const at = bytes && x.djs_props_ptr ? x.djs_props_ptr(bytes.length) : 0;
-    if (!bytes || at === 0) throw new Error("djs-wasm: the program needs the module's Unicode property tables (its djs_props section), which this host cannot hand over");
-    new Uint8Array(x.memory.buffer, at, bytes.length).set(bytes);
-    if (x.djs_props_set?.() !== 1) throw new Error("djs-wasm refused the djs_props section");
-    tableLoads++;
+  const tables = (vm: number) => {
+    const need = x.vm_tables_need?.(vm) ?? 0;
+    for (const [family, name] of TABLE_SECTIONS) {
+      if (!(need & family)) continue;
+      const bytes = module && tableSection(module, name);
+      const at = bytes && x.djs_tables_ptr ? x.djs_tables_ptr(family, bytes.length) : 0;
+      if (!bytes || at === 0) throw new Error(`djs-wasm: the program needs the module's Unicode tables (its ${name} section), which this host cannot hand over`);
+      new Uint8Array(x.memory.buffer, at, bytes.length).set(bytes);
+      if (x.djs_tables_set?.() !== 1) throw new Error(`djs-wasm refused the ${name} section`);
+      tableLoads++;
+    }
   };
   const y = x;
   const run = x.vm_run;
@@ -114,7 +120,7 @@ export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.
     for (;;) {
       if (s === NEED_TABLES) {
         carry += fuelUsed(vm);
-        tables();
+        tables(vm);
         s = run(vm, 0);
       } else if (s === NEED_STACK) {
         s = big(() => {
@@ -137,7 +143,7 @@ export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.
     (y as Record<string, unknown>)[name] = (...a: number[]) => {
       let h = f(...a);
       if (h === COMPILE_NEED_TABLES) {
-        tables();
+        tables(a[0]);
         h = f(...a);
       }
       return h === COMPILE_NEED_STACK ? big(() => f(...a)) : h;
@@ -147,17 +153,25 @@ export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.
   return y;
 }
 
-/** The module's property tables, once per module. */
-const propsSections = new WeakMap<WebAssembly.Module, Uint8Array | undefined>();
-function propsSection(module: WebAssembly.Module): Uint8Array | undefined {
-  if (!propsSections.has(module)) {
-    const [section] = WebAssembly.Module.customSections(module, "djs_props");
-    propsSections.set(module, section && new Uint8Array(section));
+/** The table families (`vm_tables_need`'s bits) and their sections. */
+const TABLE_SECTIONS = [
+  [1, "djs_props"],
+  [2, "djs_norm"],
+] as const;
+
+/** A table section of the module, once per module and name. */
+const tableSections = new WeakMap<WebAssembly.Module, Map<string, Uint8Array | undefined>>();
+function tableSection(module: WebAssembly.Module, name: string): Uint8Array | undefined {
+  let m = tableSections.get(module);
+  if (!m) tableSections.set(module, (m = new Map()));
+  if (!m.has(name)) {
+    const [section] = WebAssembly.Module.customSections(module, name);
+    m.set(name, section && new Uint8Array(section));
   }
-  return propsSections.get(module);
+  return m.get(name);
 }
 
-/** How often an instance was handed the property tables in this process (for tests). */
+/** How often an instance was handed a family of tables in this process (for tests). */
 export let tableLoads = 0;
 
 const wrapped = new WeakSet<object>();

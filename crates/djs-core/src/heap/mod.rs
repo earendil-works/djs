@@ -212,11 +212,14 @@ pub struct Heap {
     pub(crate) stack_deep: bool,
     pub(crate) stack_need: bool,
     pub(crate) stack_elastic: bool,
-    /// The Unicode property tables (D3350): built in, or what the host handed over
-    /// (`Vm::set_unicode_props`). `props_need`: a compile or instruction stopped for them.
+    /// The Unicode property and normalization tables (D3350): built in, or what the host
+    /// handed over (`Vm::set_tables`). `tables_need`: the families (`unicode::PROPS`,
+    /// `unicode::NORM`) a compile or instruction stopped for.
     #[cfg(feature = "regexp-unicode-props")]
     pub(crate) props: Option<&'static [u8]>,
-    pub(crate) props_need: bool,
+    #[cfg(feature = "unicode-normalization")]
+    pub(crate) norm: Option<&'static [u8]>,
+    pub(crate) tables_need: u8,
     /// While a compile is recorded for the compile cache (D3040): every interning, in
     /// order (`compile_cache::Intern`).
     #[cfg(feature = "compile-cache")]
@@ -236,6 +239,16 @@ impl Heap {
         return self.props;
         #[cfg(not(feature = "regexp-unicode-props"))]
         None
+    }
+
+    /// Stops the current compile or instruction for the tables of `family` (D3350), if
+    /// the host hands them over (with the elastic stack): the fault the caller returns,
+    /// before any effect. `None`: it cannot stop; the caller goes on without them.
+    pub(crate) fn need_tables(&mut self, family: u8) -> Option<crate::interp::conv::Fault> {
+        self.stack_elastic.then(|| {
+            self.tables_need |= family;
+            crate::interp::conv::Fault::need_stack()
+        })
     }
 
     /// A fresh heap with the default memory cap.
@@ -348,7 +361,9 @@ impl Heap {
             stack_elastic: false,
             #[cfg(feature = "regexp-unicode-props")]
             props: crate::unicode::builtin_props(),
-            props_need: false,
+            #[cfg(feature = "unicode-normalization")]
+            norm: crate::unicode::builtin_norm(),
+            tables_need: 0,
             #[cfg(feature = "compile-cache")]
             intern_log: None,
             #[cfg(test)]

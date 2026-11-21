@@ -119,9 +119,10 @@ pub(crate) fn create(
                 }
                 // The property tables (D3350): the host hands them over and this
                 // instruction runs again, as for the stack; the compile had no effect.
-                if r.as_ref().is_err_and(|e| e.need_tables()) && heap.stack_elastic {
-                    heap.props_need = true;
-                    return Err(Fault::need_stack());
+                if r.as_ref().is_err_and(|e| e.need_tables())
+                    && let Some(f) = heap.need_tables(crate::unicode::PROPS)
+                {
+                    return Err(f);
                 }
                 let prog = match r {
                     Ok(prog) => prog,

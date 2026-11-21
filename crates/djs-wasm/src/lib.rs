@@ -57,10 +57,12 @@ pub mod status {
     /// to go on with the fuel this run had left (the fuel this one used is not counted
     /// in the next one's `vm_fuel_used`).
     pub const NEED_STACK: u32 = 6;
-    /// The next instruction compiles a regular expression with a property escape, and
-    /// the module has no property tables (D3350, `cold-unicode`; with `djs_elastic_stack`):
-    /// hand over the module's `djs_props` section (`djs_props_ptr`, `djs_props_set`) and
-    /// `vm_run` again with fuel 0, as for NEED_STACK.
+    /// The next instruction needs Unicode tables the module leaves out (D3350,
+    /// `cold-unicode`; with `djs_elastic_stack`): a regular expression with a property
+    /// escape, or a string `normalize` or `localeCompare` needs. Hand over the families
+    /// `vm_tables_need` names (the module's sections `djs_props`, `djs_norm`, through
+    /// `djs_tables_ptr` and `djs_tables_set`) and `vm_run` again with fuel 0, as for
+    /// NEED_STACK.
     pub const NEED_TABLES: u32 = 7;
 }
 
@@ -68,8 +70,8 @@ pub mod status {
 /// again on one.
 pub const COMPILE_NEED_STACK: u32 = u32::MAX;
 
-/// What `vm_compile` returns for a compile that needs the property tables (D3350): hand
-/// them over and compile again.
+/// What `vm_compile` returns for a compile that needs Unicode tables (D3350): hand over
+/// the families `vm_tables_need` names and compile again.
 pub const COMPILE_NEED_TABLES: u32 = u32::MAX - 1;
 
 /// One VM and what the last `vm_run` reported.
@@ -135,53 +137,82 @@ instance_locals! {
     static BIG_STACK: core::cell::Cell<(*mut u8, usize)> = core::cell::Cell::new((core::ptr::null_mut(), 0));
     /// `djs_elastic_stack`.
     static ELASTIC: core::cell::Cell<bool> = core::cell::Cell::new(false);
-    /// The property tables the host handed over (D3350), kept for the instance's life,
-    /// and the copy it is writing (`djs_props_ptr`).
+    /// The Unicode tables the host handed over (D3350), by family (`unicode::PROPS`,
+    /// `unicode::NORM` as bits 1, 2), kept for the instance's life; and the copy it is
+    /// writing (`djs_tables_ptr`).
     #[cfg(feature = "cold-unicode")]
-    static PROPS: core::cell::Cell<Option<&'static [u8]>> = core::cell::Cell::new(None);
+    static TABLES: core::cell::Cell<[Option<&'static [u8]>; 2]> = core::cell::Cell::new([None; 2]);
     #[cfg(feature = "cold-unicode")]
-    static PROPS_PENDING: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+    static TABLES_PENDING: RefCell<Option<(u8, Vec<u8>)>> = RefCell::new(None);
 }
 
-// The property tables as the module's custom section `djs_props` (D3350), outside its
-// linear memory: the host hands them to an instance whose program needs them.
+// The Unicode tables as the module's custom sections `djs_props` and `djs_norm` (D3350),
+// outside its linear memory: the host hands them to an instance whose program needs them.
 #[cfg(all(feature = "cold-unicode", target_arch = "wasm32"))]
-include!(concat!(env!("OUT_DIR"), "/props_section.rs"));
+include!(concat!(env!("OUT_DIR"), "/tables_sections.rs"));
 
-/// Room for the property tables, the module's section `djs_props` (D3350): the host
-/// writes the section's `len` bytes there and calls `djs_props_set`. 0 if the instance
-/// has them or `len` is not their length.
+/// The slot of a family in `TABLES` (`unicode::PROPS` 1, `unicode::NORM` 2).
 #[cfg(feature = "cold-unicode")]
-pub extern "C" fn djs_props_ptr(len: usize) -> usize {
-    if PROPS.with(|p| p.get().is_some()) || len != djs_core::unicode::PROPS_LEN {
+fn table_slot(family: u32) -> Option<usize> {
+    match family {
+        1 | 2 => Some(family as usize - 1),
+        _ => None,
+    }
+}
+
+/// Room for the tables of `family` (D3350: 1 the property tables, the module's section
+/// `djs_props`; 2 the normalization tables, `djs_norm`): the host writes the section's
+/// `len` bytes there and calls `djs_tables_set`. 0 if the instance has them or `len` is not
+/// their length.
+#[cfg(feature = "cold-unicode")]
+pub extern "C" fn djs_tables_ptr(family: u32, len: usize) -> usize {
+    let Some(i) = table_slot(family) else {
+        return 0;
+    };
+    if TABLES.with(|t| t.get()[i].is_some()) || len != djs_core::unicode::tables_len(family as u8) {
         return 0;
     }
-    PROPS_PENDING.with(|p| {
+    TABLES_PENDING.with(|p| {
         let mut buf = alloc::vec![0; len];
         let at = buf.as_mut_ptr() as usize;
-        *p.borrow_mut() = Some(buf);
+        *p.borrow_mut() = Some((family as u8, buf));
         at
     })
 }
 
-/// Takes the bytes written at `djs_props_ptr` as the instance's property tables, for
-/// every VM it has and makes, if they are the tables (`unicode::props_valid`): 1, else 0.
+/// Takes the bytes written at `djs_tables_ptr` as the instance's tables of their family,
+/// for every VM it has and makes, if they are those tables (`unicode::tables_valid`): 1,
+/// else 0.
 #[cfg(feature = "cold-unicode")]
-pub extern "C" fn djs_props_set() -> u32 {
-    let Some(buf) = PROPS_PENDING.with(|p| p.borrow_mut().take()) else {
+pub extern "C" fn djs_tables_set() -> u32 {
+    let Some((family, buf)) = TABLES_PENDING.with(|p| p.borrow_mut().take()) else {
         return 0;
     };
-    if !djs_core::unicode::props_valid(&buf) {
+    let Some(i) = table_slot(family as u32) else {
+        return 0;
+    };
+    if !djs_core::unicode::tables_valid(family, &buf) {
         return 0;
     }
-    let props: &'static [u8] = alloc::boxed::Box::leak(buf.into_boxed_slice());
-    PROPS.with(|p| p.set(Some(props)));
+    let bytes: &'static [u8] = alloc::boxed::Box::leak(buf.into_boxed_slice());
+    TABLES.with(|t| {
+        let mut all = t.get();
+        all[i] = Some(bytes);
+        t.set(all);
+    });
     with(|s| {
         for slot in s.vms.iter_mut().flatten() {
-            slot.vm.set_unicode_props(props);
+            slot.vm.set_tables(family, bytes);
         }
     });
     1
+}
+
+/// The families of tables (bits: 1 the property tables, 2 the normalization tables) that
+/// the last `vm_run` or `vm_compile*` of `vm` stopped for (NEED_TABLES,
+/// COMPILE_NEED_TABLES).
+pub extern "C" fn vm_tables_need(vm: u32) -> u32 {
+    with(|s| s.slot(vm).vm.needs_tables() as u32)
 }
 
 /// Records the message of a panic for `djs_panic_ptr` (best effort: never panics).
@@ -392,8 +423,10 @@ impl State {
         #[cfg(feature = "cold-unicode")]
         let vm = {
             let mut vm = vm;
-            if let Some(p) = PROPS.with(|p| p.get()) {
-                vm.set_unicode_props(p);
+            for (i, t) in TABLES.with(|t| t.get()).into_iter().enumerate() {
+                if let Some(t) = t {
+                    vm.set_tables(1 << i, t);
+                }
             }
             vm
         };
@@ -1014,7 +1047,7 @@ fn compile_with(
         .map(|f| (f, None::<Vec<u8>>))
         .map_err(|e| e.text());
         match result {
-            Err(msg) if slot.vm.needs_tables() => {
+            Err(msg) if slot.vm.needs_tables() != 0 => {
                 s.set_out(msg.as_bytes());
                 COMPILE_NEED_TABLES
             }
@@ -1502,7 +1535,7 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
         let slot = s.slot(vm);
         let (st, used) = elastic(&mut slot.vm, |vm| vm.run_metered(fuel as u64));
         slot.fuel_used = used;
-        if st == Status::OutOfFuel && slot.vm.needs_tables() {
+        if st == Status::OutOfFuel && slot.vm.needs_tables() != 0 {
             return status::NEED_TABLES;
         }
         if st == Status::OutOfFuel && slot.vm.needs_stack() {
@@ -1941,6 +1974,7 @@ ops! {
     72 djs_stack(a);
     #[cfg(feature = "alloc-stats")] 73 djs_alloc_stats(a);
     74 djs_has(a);
-    #[cfg(feature = "cold-unicode")] 75 djs_props_ptr(a);
-    #[cfg(feature = "cold-unicode")] 76 djs_props_set();
+    #[cfg(feature = "cold-unicode")] 75 djs_tables_ptr(a, b);
+    #[cfg(feature = "cold-unicode")] 76 djs_tables_set();
+    77 vm_tables_need(a);
 }

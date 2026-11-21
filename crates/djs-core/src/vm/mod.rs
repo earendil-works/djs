@@ -965,27 +965,45 @@ impl Vm {
         self.heap.stack_deep
     }
 
-    /// Whether a compile or run stopped for the Unicode property tables (D3350): a build
-    /// without them built in (`cold-unicode`, the shipped wasm module) whose host hands
-    /// them over ([`Vm::set_elastic_stack`]) stops a compile whose source may have a
-    /// property escape, and an instruction whose regular expression has one, before any
-    /// effect, as for the stack. The host passes them to [`Vm::set_unicode_props`] and
-    /// calls again.
-    pub fn needs_tables(&self) -> bool {
-        self.heap.props_need
+    /// The families of Unicode tables (`unicode::PROPS`, `unicode::NORM`) a compile or run
+    /// stopped for, as bits (D3350). A build without them built in (`cold-unicode`, the
+    /// shipped wasm module) whose host hands them over ([`Vm::set_elastic_stack`]) stops
+    /// before any effect, as for the stack: a compile whose source may have a property
+    /// escape, an instruction whose regular expression has one, and `normalize` or
+    /// `localeCompare` of a string that needs the normalization tables. The host passes
+    /// them to [`Vm::set_tables`] and calls again.
+    pub fn needs_tables(&self) -> u8 {
+        self.heap.tables_need
     }
 
-    /// Hands over the property tables (D3350; `unicode::props_valid` checks a copy).
-    #[cfg(feature = "regexp-unicode-props")]
-    pub fn set_unicode_props(&mut self, props: &'static [u8]) {
-        self.heap.props = Some(props);
-        self.heap.props_need = false;
+    /// Hands over the tables of `family` (`unicode::PROPS` or `unicode::NORM`, D3350;
+    /// `unicode::tables_valid` checks a copy).
+    #[cfg_attr(
+        not(any(feature = "regexp-unicode-props", feature = "unicode-normalization")),
+        allow(unreachable_code, unused_variables)
+    )]
+    pub fn set_tables(&mut self, family: u8, bytes: &'static [u8]) {
+        match family {
+            #[cfg(feature = "regexp-unicode-props")]
+            crate::unicode::PROPS => self.heap.props = Some(bytes),
+            #[cfg(feature = "unicode-normalization")]
+            crate::unicode::NORM => self.heap.norm = Some(bytes),
+            _ => return,
+        }
+        self.heap.tables_need &= !family;
     }
 
-    /// Drops the property tables (tests: a build without them built in).
-    #[cfg(all(test, feature = "regexp-unicode-props"))]
-    pub(crate) fn drop_unicode_props(&mut self) {
-        self.heap.props = None;
+    /// Drops the tables (tests: a build without them built in).
+    #[cfg(test)]
+    pub(crate) fn drop_tables(&mut self) {
+        #[cfg(feature = "regexp-unicode-props")]
+        {
+            self.heap.props = None;
+        }
+        #[cfg(feature = "unicode-normalization")]
+        {
+            self.heap.norm = None;
+        }
     }
 
     /// Runs with `fuel` (instruction cost units).
@@ -1545,7 +1563,13 @@ mod frozen_tests;
 mod lazy_tests;
 #[cfg(all(test, feature = "embed"))]
 mod module_tests;
-#[cfg(all(test, feature = "lazy", feature = "regexp-unicode-props"))]
+#[cfg(all(
+    test,
+    feature = "lazy",
+    feature = "regexp-unicode-props",
+    feature = "unicode-normalization",
+    not(feature = "cold-unicode")
+))]
 mod props_tests;
 #[cfg(test)]
 mod slim_tests;

@@ -271,7 +271,7 @@ def jobs():
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
           " --features compiled-prelude,dump --quiet", group="target/wasm-dev", build=True),
         J("build:wasm-nodump", "CARGO_TARGET_DIR=target/wasm-nodump cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --features compiled-prelude --quiet",
+          " --target wasm32-unknown-unknown --features compiled-prelude,cold-unicode --quiet",
           group="target/wasm-nodump", build=True),
 
         # --- The shipped modules (D020, D2411): LTO, one codegen unit, one core each, and

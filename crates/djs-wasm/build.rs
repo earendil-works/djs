@@ -9,24 +9,26 @@
 // its function sizes include the padding).
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    // The property tables as a custom section (D3350): an array literal in a `pub` static
+    // The Unicode tables as custom sections (D3350): array literals in `pub` statics
     // without `#[used]`, as djs-prelude does for `djs_base` (through `include_bytes!` the
     // bytes would stay in the data segment too).
     if std::env::var_os("CARGO_FEATURE_COLD_UNICODE").is_some() {
-        let path = "../djs-core/src/unicode/props.bin";
-        println!("cargo:rerun-if-changed={path}");
-        let bytes = std::fs::read(path).expect("cannot read the property tables");
-        let list: Vec<String> = bytes.iter().map(|b| b.to_string()).collect();
-        let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("props_section.rs");
-        std::fs::write(
-            out,
-            format!(
-                "#[unsafe(link_section = \"djs_props\")]\npub static PROPS_SECTION: [u8; {}] = [{}];\n",
+        let mut out = String::new();
+        for (section, file) in [("djs_props", "props.bin"), ("djs_norm", "norm.bin")] {
+            let path = format!("../djs-core/src/unicode/{file}");
+            println!("cargo:rerun-if-changed={path}");
+            let bytes = std::fs::read(&path).expect("cannot read the Unicode tables");
+            let list: Vec<String> = bytes.iter().map(|b| b.to_string()).collect();
+            out += &format!(
+                "#[unsafe(link_section = \"{section}\")]\npub static {}: [u8; {}] = [{}];\n",
+                section.to_uppercase(),
                 bytes.len(),
                 list.join(",")
-            ),
-        )
-        .expect("cannot write the property section");
+            );
+        }
+        let dir = std::env::var("OUT_DIR").unwrap();
+        std::fs::write(std::path::Path::new(&dir).join("tables_sections.rs"), out)
+            .expect("cannot write the table sections");
     }
     println!("cargo:rerun-if-env-changed=CARGO_PROFILE_WASM_STRIP");
     let wasm = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "wasm32");

@@ -34,8 +34,9 @@ dump = ["djs-core/dump", "djs-core/lazy", "djs-core/compile-cache", "djs-prelude
 # Unchecked arena field access in djs-core (D2520). The shipped and slim modules turn it on
 # (scripts/build-wasm.sh, D3100); native builds, the dump and docs modules and the tests don't.
 unsafe-heap = ["djs-core/unsafe-heap"]
-# The Unicode property tables outside linear memory (D3350): the custom section
-# `djs_props`, handed over by the host at the first `\p` (`djs_props_ptr`, NEED_TABLES).
+# The Unicode property and normalization tables outside linear memory (D3350): the custom
+# sections `djs_props` and `djs_norm`, handed over by the host at their first use
+# (`djs_tables_ptr`, NEED_TABLES).
 # The shipped module turns it on (scripts/build-wasm.sh).
 cold-unicode = ["djs-core/cold-unicode"]
 
