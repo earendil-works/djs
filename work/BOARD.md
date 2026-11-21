@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0278 | for-in and destructuring, size-neutral | pidle | .worktrees/pidle |
 | 0276 | Call path and cache follow-ups (typeof, FAST flag, collection for-of, absent props, add cache) | pcall | .worktrees/pcall |
 
 ## Open (ready)
@@ -52,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0278 | for-in enumerable keys only, no re-intern (object rest parked) | 27c8a9a4 (agent pidle; D3490, D3491; for-in 5 keys 20.5k->13.2k, array 60.5k->29.9k; -50 B gz) |
 | 0275 | Regexp match/replace shortcuts, pristine check from the latch, small JSON.parse | 005f87b4 (agent pscan; D3460-D3463; match 37.7k->18.6k instr, replace /g -33%, JSON.parse small -4..-9%; text -3.8%, heavy -1.8%; +113 B gz) |
 | 0277 | localeCompare in place, short concat/templates | e6ffd8f4 (agent pgc; D3480-D3482; localeCompare 7,250->1,990 instr (QJS 3,730), sort with it 2.3x faster; -8 B gz) |
 | 0270 | Sweep of everyday ops; Map/Set drain, new Set/Map, Date.parse (construct path parked) | 93aadaf7 (agent pidle; D3410-D3412; [...new Set(arr)] 192k->39k, new Map(pairs) 126k->21k, Date.parse 8.3k->4.4k; +817 B gz, slim ceiling +260) |
