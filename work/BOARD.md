@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
 | 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
 | 0273 | test262 under GC stress as a full-only gate leg | pgc (after 0269) | .worktrees/pgc |
-| 0268 | run_hot sensitivity, receiver method calls, the general path | pcall | .worktrees/pcall |
+| 0276 | Call path and cache follow-ups (typeof, FAST flag, collection for-of, absent props, add cache) | pcall | .worktrees/pcall |
 | 0275 | Regexp exec with captures, global replace; JSON.parse of small objects | pscan | .worktrees/pscan |
 
 ## Open (ready)
@@ -54,6 +54,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0268 | run_hot: frame-level checks, slice-read ICs, string keys wired, concat arms; why edits move the loop | 4bc50cb6 (agent pcall; D3390-D3394; tight -23%/-5%, arrays -14%/-14%, prop1 -19%/-12%, strbuild -15%; net -289 B gz) |
 | 0274 | pi cached start | 82edffa9 (agent pstart; D3450-D3452; cached start 1,089K -> 800K instr (-26.5%); pi.bench.ts pool fix) |
 | 0272 | Callback array builtins per element | 162c24bd (agent pscan; D3430, D3431; forEach/map/filter/reduce/some 0.77-0.93x quickjs-wasi; heavy -2.3%; in-loop return measured, dropped: V8 register allocation) |
 | 0267 | Regexp literal runs as one node (JSON escape variants measured, dropped) | 3431a787 (agent pscan; D3380; regexp compile -10%, 1.85x->1.67x QuickJS; +275 B gz) |
