@@ -8,7 +8,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0286 | Builtin method calls on primitives outside the loop | pcall | .worktrees/pcall |
 | 0287 | Short result strings | pidle | .worktrees/pidle |
-| 0284 | Refresh the published numbers after 0280-0282 | pstart | .worktrees/pstart |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 
 ## Open (ready)
@@ -54,6 +53,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0284 | Refresh of size/speed/startup/pi records after 0280-0282 (engines/ops/bridge kept from 0279: load) | e64d552d (agent pstart) |
 | 0285 | Fast keyed hash (owner: no strong flood resistance) | b1c5e9c9 (agent pgc; D3540, COMPAT 11; Map/Set/o[k]/JSON keys -4..-10%, json -2%, compile -1.3%; -117 B gz) |
 | 0282 | Fast builtin getters (Map/Set size, typed-array length/byteLength/byteOffset) in the loop; typed arrays in named-key caches | fe9ac03c (agent pcall; D3530, D3531, COMPAT 10; m.size 4.7x->0.89x QJS; loop/step string-key interning equivalence fixed; +515 B gz) |
 | 0283 | Builtin families list for the owner (work/research/0283/families.md) | 9e981724 (agent pstart; packages A/B/C; B = idle 320 KiB, ~-35 KB gz, pi-safe with an Int8Array stub) |
