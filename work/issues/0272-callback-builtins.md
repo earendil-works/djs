@@ -1,6 +1,6 @@
 # 0272: Per-element cost of callback array builtins
 
-status: open
+status: in-progress
 agent: pscan
 branch: issue/0272-callback-builtins
 depends-on: 0268 (batch 1)
