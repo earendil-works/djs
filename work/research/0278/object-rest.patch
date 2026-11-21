@@ -1,0 +1,130 @@
+From f8758b3397cb63b88ebe6b6a02770b393053ed62 Mon Sep 17 00:00:00 2001
+From: Armin Ronacher <armin.ronacher@active-4.com>
+Date: Sat, 21 Nov 2026 07:47:42 +0100
+Subject: [PATCH] 0278: object rest without the builtin loop where no getter
+ runs (48k -> 13.6k), via copy_data_props with excluded keys
+
+---
+ crates/djs-core/src/interp/run.rs      | 22 +++++++++++------
+ crates/djs-core/src/interp/run/iter.rs | 34 +++++++++++++++++++++++++-
+ 2 files changed, 47 insertions(+), 9 deletions(-)
+
+diff --git a/crates/djs-core/src/interp/run.rs b/crates/djs-core/src/interp/run.rs
+index 355af68f..96ea26e1 100644
+--- a/crates/djs-core/src/interp/run.rs
++++ b/crates/djs-core/src/interp/run.rs
+@@ -2725,7 +2725,7 @@ impl<'h> Exec<'h> {
+                     ));
+                 }
+                 let (o, src) = (self.top(1), self.top(0));
+-                if !self.copy_data_props(o.as_object().expect("object literal"), src)? {
++                if !self.copy_data_props(o.as_object().expect("object literal"), src, &[])? {
+                     // Getters run user code: in the builtin language (builtins/spread.ts),
+                     // `o src` becomes `%CopyDataProperties undefined o src`, pushing o.
+                     let g = realm::installed_intrinsic(self.heap, intrinsics::COPY_DATA_PROPERTIES);
+@@ -3859,12 +3859,17 @@ impl<'h> Exec<'h> {
+         })
+     }
+ 
+-    /// `{...src}` (CopyDataProperties without excluded keys). Like QuickJS, primitive
+-    /// sources contribute nothing.
+-    /// Object spread of plain data properties. Returns false, having copied nothing,
+-    /// when the source needs the general CopyDataProperties (an enumerable getter, a
+-    /// string's indexes).
+-    fn copy_data_props(&mut self, o: Obj, src: Value) -> Result<bool, Fault> {
++    /// `{...src}` (CopyDataProperties without excluded keys), or an object rest's copy
++    /// without the keys `excluded` (0278). Like QuickJS, primitive sources contribute
++    /// nothing. Object spread of plain data properties. Returns false, having copied
++    /// nothing, when the source needs the general CopyDataProperties (an enumerable
++    /// getter, a string's indexes).
++    pub(super) fn copy_data_props(
++        &mut self,
++        o: Obj,
++        src: Value,
++        excluded: &[Atom],
++    ) -> Result<bool, Fault> {
+         if src.as_string().is_some_and(|s| self.heap.str_len(s) > 0) {
+             return Ok(false);
+         }
+@@ -3872,7 +3877,7 @@ impl<'h> Exec<'h> {
+             return Ok(true);
+         };
+         // The first spread of plain data into a fresh literal: a copy of the values.
+-        if self.heap.spread_clone(o, s)? {
++        if excluded.is_empty() && self.heap.spread_clone(o, s)? {
+             return Ok(true);
+         }
+         if self.heap.is_proxy(s) {
+@@ -3889,6 +3894,7 @@ impl<'h> Exec<'h> {
+         for k in keys {
+             if let Some(Property::Data { value, flags }) = self.heap.get_own_property_alloc(s, k)?
+                 && flags.enumerable()
++                && !excluded.contains(&k)
+             {
+                 self.heap.create_data_property(o, k, value)?;
+             }
+diff --git a/crates/djs-core/src/interp/run/iter.rs b/crates/djs-core/src/interp/run/iter.rs
+index 86317e94..a166074a 100644
+--- a/crates/djs-core/src/interp/run/iter.rs
++++ b/crates/djs-core/src/interp/run/iter.rs
+@@ -29,6 +29,7 @@ use crate::value::Str;
+ const STRING_KIND: i32 = 3;
+ 
+ const GET_ITERATOR: u16 = id("GetIterator");
++const COPY_DATA_PROPERTIES_EXCLUDING: u16 = id("CopyDataPropertiesExcluding");
+ const ITERATOR_CLOSE: u16 = id("IteratorClose");
+ const MAP_ITERATOR_NEXT: u16 = id("MapIteratorPrototypeNext");
+ const SET_ITERATOR_NEXT: u16 = id("SetIteratorPrototypeNext");
+@@ -45,10 +46,13 @@ impl Exec<'_> {
+         base: u32,
+         argc: u32,
+     ) -> Result<Option<Value>, Fault> {
++        let a0 = self.get(base);
++        if id == COPY_DATA_PROPERTIES_EXCLUDING {
++            return self.object_rest(a0, self.get(base + 1));
++        }
+         if argc != 1 {
+             return Ok(None);
+         }
+-        let a0 = self.get(base);
+         match id {
+             GET_ITERATOR => {
+                 let (holder, original, proto, target, kind) = if a0.as_string().is_some() {
+@@ -196,6 +200,34 @@ impl Exec<'_> {
+         matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))
+     }
+ 
++    /// `%CopyDataPropertiesExcluding(src, excluded)` (an object rest, `{a, ...rest} =
++    /// src`) where it runs no user code: `copy_data_props` into a new object, without
++    /// the keys of the compiler's array `excluded` (property keys already; strings here,
++    /// 0278).
++    #[inline(never)]
++    fn object_rest(&mut self, src: Value, excluded: Value) -> Result<Option<Value>, Fault> {
++        let ex = excluded.as_object().expect("excluded keys");
++        // String keys (the usual ones); a string no atom exists for names no property.
++        let mut keys = alloc::vec::Vec::new();
++        for j in 0..self.heap.array_length(ex) {
++            let Some(s) = self
++                .heap
++                .get_element_fast(ex, j)
++                .and_then(|k| k.as_string())
++            else {
++                return Ok(None);
++            };
++            if let Some(a) = self.heap.existing_key_atom(s) {
++                crate::PushOut::push_out(&mut keys, a);
++            }
++        }
++        let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
++        let o = self.heap.new_object(Some(proto))?;
++        Ok(self
++            .copy_data_props(o, src, &keys)?
++            .then_some(Value::object(o)))
++    }
++
+     /// `it` if it is a Map or Set Iterator.
+     fn collection_iter(&self, it: Value) -> Option<Obj> {
+         it.as_object()
+-- 
+2.54.0 (Apple Git-157)
+
