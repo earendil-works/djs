@@ -1,6 +1,6 @@
 # 0263: Compile speed for small bodies; static data audit
 
-status: in-progress
+status: done
 agent: pstart
 branch: issue/0263-compile-speed
 depends-on: -
@@ -22,9 +22,9 @@ decisions: D3340-D3349
    164,659) and shrinks the module.
 
 ## Acceptance criteria
-- [ ] compile instructions per byte and small-workload times, main vs branch
-- [ ] identical bytecode (or justified differences) — the corpus, test262, golden fixtures and lazy/eager equality (vm::lazy_tests) stay green
-- [ ] size reported (prefer shrinking); gate green; decisions recorded
+- [x] compile instructions per byte and small-workload times, main vs branch
+- [x] identical bytecode (or justified differences) — the corpus, test262, golden fixtures and lazy/eager equality (vm::lazy_tests) stay green
+- [x] size reported (prefer shrinking); gate green; decisions recorded
 
 ## Notes
 - 0259 (pcall) changes the compiler to recognize builtin call sites (resolve / call
@@ -84,5 +84,28 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   Memory per workload unchanged (mem.ts).
 
 ## Follow-ups
+- What is left of a compile is spread thin (wasm, steady state, after this issue):
+  `finish_unit` 38% (emit_function 30% incl., 8.6% self; alloc_template_in 9%, the stack
+  walk ~4% of it), lexing 9%, pattern scans 4%, dlmalloc + Vec growth ~10%, UnitPool's
+  keyed hashing of constants 2%. The larger remaining items are in compiler/resolve.rs
+  (0259's file): `UnitPool::intern` could hash with a per-compile unkeyed hash (the pool
+  never reaches a heap table), ~2%; folding the depth computation into the re-emit (idea
+  10) would remove the walk's decode, ~4%, but trades the independent check for one in
+  the emitter. A structural win (fewer passes over each instruction: phase-1 encode,
+  decode, peephole, re-encode, jump shortening, walk) is a larger project.
+- Allocation churn per compile (~500 allocations) stays: a bump zone was faster but moved
+  dlmalloc's placement (D3342). Fewer, pre-sized Vecs per function would get part of it
+  without the placement risk.
+- `bytecode::ops::OPS` (4,280 B, 214 × 20 B) could pack to ~13 B per op (−1.5 KB data) if
+  the hot reads (`cost`, `size`) stay one load; with the `\p` tables it reaches the
+  two-page line.
+- Media's run got 15-17% faster with D3341 alone though its compile is 6% faster: not
+  pinned (dlmalloc placement after the walk's smaller scratch, most likely).
 
 ## Result
+Landed (main eba51b55, 26d5de4a): D3340 (intrinsic names only where read: −4,145 B gz
+shipped, −4,027 slim, data segment −8.2 KB), D3341 (stack walk in code order: compile
+−3..−4%, +126 B), D3343 (string literals without copies: compile −2..−5%, −59 B). Compile
+of the codemode bodies −4.7..−7.8% (wasm, interleaved); whole small runs −2..−3%; memory
+unchanged; net size −4,078 B gz. Measured and dropped: a compile bump zone (D3342: faster
+but moved wasm memory), early pattern-scan stops in every build (no gain, +390 B).
