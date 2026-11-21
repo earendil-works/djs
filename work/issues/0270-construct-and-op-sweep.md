@@ -1,6 +1,6 @@
 # 0270: The construct path, and a sweep of everyday codemode operations vs QuickJS
 
-status: open
+status: in-progress
 agent: pidle
 branch: issue/0270-construct-op-sweep
 depends-on: 0266
