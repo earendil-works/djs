@@ -1,6 +1,6 @@
 # 0264: Cold Unicode tables out of the data segment: stack + data in two pages
 
-status: in-progress
+status: done
 agent: pscan
 branch: issue/0264-cold-unicode-tables
 depends-on: 0261, 0263 (batch 1)
@@ -91,3 +91,26 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 ## Follow-ups
 
 ## Result
+Landed (main eed09e26, D3350, ABI 7): the Unicode property tables (props.bin, 25,641 B)
+and normalization tables (norm.bin, 22,782 B) are custom sections `djs_props` and
+`djs_norm` of the shipped module instead of static data; what needs them stops before
+any effect and the host hands them over (status 7 NEED_TABLES, `vm_compile*` −2,
+`vm_tables_need`, `djs_tables_ptr`/`djs_tables_set`; js/src/trap.ts `elasticStack(x,
+module)`). Native, test, slim, dump and docs builds keep them built in. Hosts without the
+elastic stack: SyntaxError for `\p`, a no-tables build's `normalize`/`localeCompare`.
+
+Numbers: static data 92.2 → 41.1 KB (data end 157,780 → 106,616 B; two initial pages).
+Size 426,545 → 426,858 B gz (+313). Memory per row with D3362's floor (KiB, main
+09f9b41f → branch, 8 perturbed runs, all equal): idle 448/448, sequential 576/576,
+fanout 1536/1536, media 832/832, inspect 512/512, loop 768/768, text 1088/1088, json
+1280/1280, heavy 3840 → 3776.
+
+For whoever lowers the floor: the seed (the data page's rest) is now 24.4 KB, so one
+primed page gives dlmalloc 88.4 KB in front of the arena. Once dlmalloc needs ≤ 88 KB
+there (floor ≤ 88 KB), PRIME drops to 1 and every row and idle lose a page (idle 384
+KiB). Measured before the floor with seed + one page: 66 KB moved fanout's and text's
+arenas (2,944 and 1,408 KiB); 88 KB kept every row at −64 KiB (fanout 1600, text 1024,
+sequential 512, json 1280, heavy 4672 on 6a83498c).
+
+Known gaps: the identifier and case tables (~11 KB) stay (no clean stop); the stack stays
+64 KiB (the runtime peak is not measured).
