@@ -1,6 +1,6 @@
 # 0285: A fast keyed hash instead of SipHash-1-3 (owner: no strong flood resistance needed)
 
-status: open
+status: in-progress
 agent: pgc
 branch: issue/0285-fast-keyed-hash
 depends-on: -
