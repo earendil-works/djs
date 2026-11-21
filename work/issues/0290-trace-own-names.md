@@ -48,7 +48,17 @@ follows V8; record it).
   A renamed function pays the lookup (19.9k → 20.6k). Shipped +54 B gz.
 - Side effect: methods with computed or symbol keys now show their name (`ab`, `[s]`) as
   qjs does; 0266's first follow-up is fixed.
-- Tests: djs-core --lib all pass; difftest errors 30/30; djs-docs check ok.
+- First merge attempt: the size ratchet failed (431,792 > ceiling 431,736, +54 B over
+  main). With the own name read first, the template-name path's `Name::Atom` arm (a
+  template named by an index; its closures store their `name`, so it was reached only
+  after a delete or a non-string redefine) only formatted a degenerate case; dropped it:
+  such a frame is anonymous, as in qjs. Shipped 431,750 → 431,645 B gz (−105). (Tried
+  sharing `own_name` with `installed_name`: wrong, a builtin's lazy name is its
+  installed one, `map` showed as an empty native frame; difftest errors caught it.)
+- Final numbers (opsins.py, main → unconditional → landed): 5 nested functions 37.5k →
+  38.8k → 37.7k, one 19.6k → 20.0k → 19.6k, top level 14.4k → 14.4k → 14.3k.
+- Tests: djs-core --lib all pass; difftest errors/codemode/builtins 183/183; djs-docs
+  check ok.
 - Guide: interpreter.md (how a frame is named), continuations.md (`$djs.k` gives `K`
   the name), dumps.md (the helper table row).
 
@@ -59,4 +69,4 @@ A bytecode frame in a stack trace is named by its function's own `name` when tha
 string data property (else the compiled name); `$djs.k` gives a continuation its
 origin's own string name, so traces after a plain dump's load match the uninterrupted
 run. The lookup only runs for closures whose `name` is stored (lazy-name flag): `new
-Error` costs the same as on main. D3580. Credit: rt2zz (GitHub PR #2).
+Error` costs the same as on main; shipped −105 B gz. D3580. Credit: rt2zz (GitHub PR #2).

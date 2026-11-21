@@ -978,7 +978,10 @@ fn error_stack_traces_use_a_functions_own_name() {
          Object.defineProperty(h, 'name', { value: '' });\n\
          try { h(); } catch (e) { console.log(e.stack); }\n\
          const k = 'ab', o = { [k]() { return new Error().stack; }, [Symbol('s')]() { return new Error().stack; } };\n\
-         console.log(o.ab() + o[Object.getOwnPropertySymbols(o)[0]]());\n",
+         console.log(o.ab() + o[Object.getOwnPropertySymbols(o)[0]]());\n\
+         const i = { 1() { return new Error().stack; }, 2() { return new Error().stack; } };\n\
+         delete i[2].name;\n\
+         console.log(i[1]() + i[2]());\n",
     );
     assert_eq!(
         out.log[0],
@@ -996,6 +999,11 @@ fn error_stack_traces_use_a_functions_own_name() {
     assert_eq!(
         out.log[3],
         "    at ab (t.js:10:47)\n    at <eval> (t.js:11:17)\n    at [s] (t.js:10:94)\n    at <eval> (t.js:11:59)\n"
+    );
+    // An index-named method's `name` is stored; deleted, the frame is anonymous (qjs).
+    assert_eq!(
+        out.log[4],
+        "    at 1 (t.js:12:35)\n    at <eval> (t.js:14:17)\n    at <anonymous> (t.js:12:70)\n    at <eval> (t.js:14:26)\n"
     );
 }
 

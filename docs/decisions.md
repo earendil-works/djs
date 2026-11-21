@@ -13902,10 +13902,14 @@ property holding a string (read without running code; empty means anonymous), el
 template's name as before; `$djs.k(K, f, ...)` defines `K`'s `name` from `f`'s own string
 `name`. A renamed function, a computed-key or symbol method (SetFunctionName's name, which
 the template does not hold) and a continuation now show what V8 and qjs show; a `name`
-getter is not run and the compiled name stands (V8; qjs prints `<anonymous>`). The lookup
-is skipped while the closure's name is still the unstored lazy one (D2445, the flag
-`OBJ_LAZY_NAME`): only a function whose `name` was defined, deleted or set at creation
-pays it. Wasm instructions per op (opsins.py, main → unconditional lookup → flag-gated):
-`new Error('x')` in 5 nested functions 37.6k → 38.5k → 37.6k, in one 19.5k → 19.9k →
-19.5k, top level 14.7k → 14.3k → 14.5k (noise ±0.3k), in a renamed function 19.9k →
-20.5k → 20.6k. Shipped +54 B gz.
+getter is not run and the compiled name stands (V8; qjs prints `<anonymous>`). Only a
+method named by an index (whose closures store their `name`, never lazy) shows as
+anonymous once that `name` is deleted or not a string, as in qjs: the trace no longer
+formats a template's non-string name atom, which made the change smaller than main
+(shipped 431,750 → 431,645 B gz, −105). The lookup is skipped while the closure's name is
+still the unstored lazy one (D2445, the flag `OBJ_LAZY_NAME`): only a function whose
+`name` was defined, deleted or set at creation pays it. Wasm instructions per op
+(work/scratch/0290/opsins.py, node --no-liftoff, load 9-27, noise ±0.3k), main →
+unconditional lookup → as landed: `new Error('x')` in 5 nested functions 37.5k → 38.8k →
+37.7k, in one 19.6k → 20.0k → 19.6k, top level 14.4k → 14.4k → 14.3k; in a renamed
+function 19.9k → 20.5k → 20.5k (it pays the lookup).

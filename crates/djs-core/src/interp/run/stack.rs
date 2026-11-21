@@ -41,8 +41,6 @@ enum Name {
     /// Anonymous.
     None,
     Str(Str),
-    /// A template's name that is an index or a symbol.
-    Atom(Atom),
     /// A Script's top level or a codemode body.
     Eval,
 }
@@ -156,12 +154,13 @@ impl Exec<'_> {
                 } else if let Some(n) = self.own_name(f) {
                     n
                 } else {
+                    // (A closure of a template named by an index stores its `name`,
+                    // read above; once that is deleted or not a string, the frame is
+                    // anonymous, as in qjs.)
                     let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
                     match self.heap.atom_str_value(name) {
                         Some(s) if self.heap.str_len(s) > 0 => Name::Str(s),
-                        Some(_) => Name::None,
-                        None if name.is_null() => Name::None,
-                        None => Name::Atom(name),
+                        _ => Name::None,
                     }
                 };
                 // (An unnamed script's file is empty.)
@@ -274,7 +273,6 @@ impl Exec<'_> {
             } else {
                 match fr.name {
                     Name::Str(s) => out.extend(self.heap.str_units(s)),
-                    Name::Atom(a) => out.extend(self.heap.atom_name(a).encode_utf16()),
                     Name::Eval => lit(&mut out, "<eval>"),
                     Name::None if fr.native => {}
                     Name::None => lit(&mut out, "<anonymous>"),
@@ -389,7 +387,6 @@ impl Exec<'_> {
             let name = match fr.name {
                 Name::None => Value::NULL,
                 Name::Str(s) => Value::string(s),
-                Name::Atom(a) => Value::string(self.heap.alloc_str(&self.heap.atom_name(a))?),
                 Name::Eval => Value::string(self.heap.alloc_str("<eval>")?),
             };
             let file = match (fr.func, fr.file) {
