@@ -84,7 +84,7 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   over builtins, language, codemode; new corpus case builtins/collection-drain.js.
   Guide: builtins.md (the Set/Map `new` entries), interpreter.md (the drain).
 
-### The sweep (wasm instructions per op, incl. a ~350 (djs) / ~450 (QuickJS) loop; main 5bd8 builds)
+### The sweep (wasm instructions per op, incl. a ~350 (djs) / ~450 (QuickJS) loop; main builds of 2026-11-21)
 
 | op | djs | QuickJS 2026 | ratio | cause / owner |
 | --- | ---: | ---: | ---: | --- |
