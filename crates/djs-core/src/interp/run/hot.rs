@@ -869,9 +869,7 @@ impl Exec<'_> {
                     break 'run Exit::General;
                 }
                 loop {
-                    // Out of fuel: the run stops, unless a safepoint is wanted (a
-                    // collection, or fuel the leaves owe, 0289): then it goes on to it.
-                    if fuel <= 0 && (!collect || self.opts.gc_stress) {
+                    if fuel <= 0 {
                         break Exit::Budget;
                     }
                     debug_assert!(ip < end, "pc past the end of the code");
@@ -1915,6 +1913,10 @@ impl Exec<'_> {
                         }
                     }
                 }
+            }
+            // Run on past the fuel: once, to the first exit (the safepoint, or progress).
+            if self.hot_bias != 0 {
+                return None;
             }
             if self.fuel <= 0 {
                 return None;

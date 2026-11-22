@@ -374,11 +374,12 @@ impl Exec<'_> {
         self.pc = s;
         // (Out of fuel with a collection wanted: the run stops after it, as the run loop
         // has it, 0289.)
-        if self.fuel <= 0 && (self.opts.gc_stress || !self.heap.gc_pending()) {
+        let out = || self.fuel <= self.hot_bias;
+        if out() && (self.opts.gc_stress || !self.heap.gc_pending()) {
             return true;
         }
         self.safepoint();
-        self.fuel <= 0
+        self.fuel <= self.hot_bias
     }
 
     #[cfg_attr(target_arch = "wasm32", inline(never))]

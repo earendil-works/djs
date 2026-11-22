@@ -291,7 +291,7 @@ impl Exec<'_> {
         st: &mut ExecState,
     ) -> Outcome {
         self.fuel -= self.heap.take_work();
-        let budget = self.fuel.max(1);
+        let budget = (self.fuel - self.hot_bias).max(1);
         let mut fuel = budget;
         let limits = ExecLimits::default();
         let result = {
@@ -721,7 +721,7 @@ impl Exec<'_> {
         // Every match in one borrow of the program and the string: nothing in the loop
         // allocates on the heap.
         self.fuel -= self.heap.take_work();
-        let budget = self.fuel.max(1);
+        let budget = (self.fuel - self.hot_bias).max(1);
         let mut fuel = budget;
         let outcome = {
             let prog = re::program(self.heap, r);

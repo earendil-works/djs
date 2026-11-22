@@ -347,6 +347,10 @@ pub(crate) struct Exec<'h> {
     /// The fuel the run started its instructions with (after paying the debt, D1740);
     /// `None` while it has not executed any (it returned a status right away).
     fuel_start: Option<i64>,
+    /// Added to the fuel while the run goes on past the end of its own to a safepoint
+    /// that is wanted (0289): the tier-0 loop's check of the fuel stays as it is, and the
+    /// loop returns at its first exit.
+    pub(super) hot_bias: i64,
 }
 
 /// `Exec::retry_len` when the current instruction is not retried.
@@ -394,6 +398,7 @@ impl<'h> Exec<'h> {
             n_retrying: false,
             n_res: None,
             fuel_start: None,
+            hot_bias: 0,
         }
     }
 
@@ -1190,7 +1195,16 @@ impl<'h> Exec<'h> {
             // The tier-0 loop (D1930) runs everything, `step` included, until fuel runs
             // out, the run stops, or it returns for V8's tier-up. Off is for tests.
             if self.opts.hot_loop {
-                if let Some(st) = self.run_hot() {
+                if self.fuel <= 0 {
+                    self.hot_bias = 1 << 40;
+                    self.fuel += self.hot_bias;
+                }
+                let st = self.run_hot();
+                self.fuel -= core::mem::take(&mut self.hot_bias);
+                if self.host_oom {
+                    self.fuel = 0;
+                }
+                if let Some(st) = st {
                     return st;
                 }
                 continue;
