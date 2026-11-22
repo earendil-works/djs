@@ -1193,9 +1193,10 @@ pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usiz
 }
 
 /// Defines property staging[0..name_len] of object `obj` (a handle) as `value` (a handle),
-/// writable and configurable but not enumerable, like builtins. Returns 0, or -1 if `obj`
-/// is not an object or the heap is full.
-pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i32 {
+/// writable and configurable, and not enumerable, like builtins, unless bit 0 of `flags`
+/// is set (data, as an assignment makes it, D3592; a host that leaves `flags` out passes
+/// 0). Returns 0, or -1 if `obj` is not an object or the heap is full.
+pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flags: u32) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let name = staged_str(staging, 0, name_len);
@@ -1203,11 +1204,12 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
             return -1;
         };
         let v = slot.value(value);
-        if slot.vm.define(o, name, v).is_ok() {
-            0
+        let r = if flags & 1 != 0 {
+            slot.vm.define_enumerable(o, name, v)
         } else {
-            -1
-        }
+            slot.vm.define(o, name, v)
+        };
+        if r.is_ok() { 0 } else { -1 }
     })
 }
 
@@ -1944,7 +1946,7 @@ ops! {
     36 vm_dump_runtime(a, b);
     37 vm_new_host_function(a, b, c);
     38 vm_new_async_host_function(a, b, c);
-    39 vm_define(a, b, c, d);
+    39 vm_define(a, b, c, d, e);
     #[cfg(feature = "dump")] 40 vm_dump(a, b);
     41 vm_decode_wire(a, b);
     42 vm_parse_json(a, b);

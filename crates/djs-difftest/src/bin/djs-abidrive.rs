@@ -64,13 +64,13 @@ fn main() {
     stage(b"log");
     let log = vm_new_host_function(vm, 1, 3);
     stage(b"log");
-    vm_define(vm, console, 3, log);
+    vm_define(vm, console, 3, log, 0);
     stage(b"console");
-    vm_define(vm, g, 7, console);
+    vm_define(vm, g, 7, console, 0);
     stage(b"tool");
     let tool = vm_new_async_host_function(vm, 2, 4);
     stage(b"tool");
-    vm_define(vm, g, 4, tool);
+    vm_define(vm, g, 4, tool, 0);
     stage(&src);
     let f = vm_compile(vm, 1, 0, src.len());
     assert!(f != 0, "compile: {}", String::from_utf8_lossy(&out()));

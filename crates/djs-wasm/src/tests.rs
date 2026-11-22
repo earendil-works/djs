@@ -91,7 +91,7 @@ fn host_calls_and_fuel() {
     let log = vm_new_host_function(vm, 7, 3);
     let console = vm_new_object(vm);
     stage(b"log");
-    assert_eq!(vm_define(vm, console, 3, log), 0);
+    assert_eq!(vm_define(vm, console, 3, log, 0), 0);
     let f = compile_body(
         vm,
         "console",

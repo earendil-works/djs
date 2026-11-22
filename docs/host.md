@@ -429,7 +429,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_global(vm) -> h`, `vm_new_object(vm) -> h` | objects |
 | `vm_new_host_function(vm, fn_id, name_len) -> h` | a function that parks the VM with `fn_id` |
 | `vm_new_async_host_function(vm, fn_id, name_len) -> h` | a function that returns a promise and adds a pending call (D1374) |
-| `vm_define(vm, obj, name_len, value) -> 0/-1` | define a non-enumerable property (name in staging) |
+| `vm_define(vm, obj, name_len, value, flags) -> 0/-1` | define a property (name in staging): non-enumerable, enumerable with `flags` bit 0 |
 | `vm_decode_wire(vm, len) -> h` | decode wire data from staging (docs/wire.md) |
 | `vm_string_reserve(vm, len) -> h` | a new one-byte string of `len` zero units, whose `len` data bytes (at `vm_arena_ptr` + the value's offset from `vm_handle_bits` + 16) the host fills, one Latin-1 unit per byte (ASCII UTF-8 as is), before anything allocates (D2551) |
 | `vm_parse_json(vm, len) -> h` | parse UTF-8 JSON text from staging (`JSON.parse`) |

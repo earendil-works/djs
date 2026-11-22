@@ -115,11 +115,26 @@ export interface SandboxOptions {
    */
   bindings?: Record<string, string>;
   /**
-   * Host data bound as globals (prototype): deep-frozen copies of JSON-like values that the
-   * host gives every run (`ALL_TOOLS`). Dumps refer to them as `$djs.host(name)` and never
-   * write them, so a loading sandbox must be given them again. Default: none.
+   * Host data bound as globals: deep-frozen copies of values the host gives every run
+   * (`ALL_TOOLS`), each a global of its name and a host value of that identity (for
+   * `bindings`). Dumps refer to them as `$djs.host(name)` and never write them, so a
+   * sandbox that loads such a dump must be given them again. A name that is also a host
+   * function's or namespace's identity, or a bound global, is a misuse. Default: none.
    */
   values?: Record<string, unknown>;
+  /**
+   * The JSON boundary: the arguments of every call of a host function given in `functions`
+   * and `asyncFunctions`, and the result of every run, are converted inside the VM as
+   * `JSON.parse(JSON.stringify(v))` (`toJSON` is called, a Date becomes its string, a Map
+   * `{}`, `undefined` and functions are left out of objects; an `undefined` argument stays
+   * `undefined`). A value JSON cannot carry (a cycle, a BigInt) fails at the call: a sync
+   * function's call throws the TypeError, an async one's returns a promise rejected with
+   * it, and a result fails the run. The functions scripts see are then the sandbox's
+   * converting functions, one per identity, which dumps name as `$djs.host(identity)`
+   * like the functions themselves. `console` is not converted. Default false: arguments
+   * and results cross as wire values (a Date as an `Opaque`).
+   */
+  jsonBoundary?: boolean;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
   console?: ConsoleLike;
   /**
@@ -214,7 +229,7 @@ export interface SandboxOptions {
   debugger?: HostFunction | AsyncHostFunction;
 }
 
-export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged" | "suspended";
+export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged" | "suspended" | "aborted";
 
 /**
  * One entry of a run's journal (D1730, docs/host.md "Journals"): everything a
@@ -277,11 +292,56 @@ export interface LoadedDump {
  * the sync calls, every `settle` in order and a check at every idle point; `replay` runs
  * it like a `runAsync` journal.
  */
-export interface BeginOptions extends RunOptions {
+export interface BeginOptions extends RunOptions, StepOptions {
   /**
    * The script's name, as stack traces show it (`sleep.js:4:13`); default `sandbox.js`.
    */
   filename?: string;
+  /**
+   * Run the first step now (default), with the step options given here (but `yieldMs`:
+   * `begin` returns synchronously). `false`: compile and start the call, run nothing, and
+   * return the run in state `"ready"`; its first `advance` runs the first step, which can
+   * then yield.
+   */
+  start?: boolean;
+}
+
+/**
+ * Bounds of one step of a host-driven run (`Run.advance`, `begin`'s first step): the step
+ * stops between fuel slices when one is reached. A step that stops this way ends the run
+ * (as `maxFuel` does): it rejects with a SandboxError, and the run's state is `"threw"`.
+ */
+export interface StepOptions {
+  /** Checked before every fuel slice: once aborted, the step fails with kind `aborted`. */
+  signal?: AbortSignal;
+  /** The step's fuel budget: past it, the step fails with kind `fuel`. Default: none. */
+  fuel?: number;
+  /**
+   * Yield to the host's event loop (a macrotask) between fuel slices once the step has run
+   * this many milliseconds since it started or last yielded, so an in-thread host stays
+   * responsive while a script computes (and a `signal` can be aborted meanwhile). Only in
+   * `advance`. Default: never (the step runs to its end in one go, but for sync host
+   * functions that return promises).
+   */
+  yieldMs?: number;
+}
+
+/**
+ * Thrown by a host function to end the run at once (`exit()`): the script cannot catch
+ * it, and no more script code runs. The run ends as done with `value` (`Run.exited` is
+ * true; `run` and `runAsync` return it, a task's result is it); its open calls are dropped.
+ * A sync host function throws it from its call; an async one in a run the sandbox drives
+ * (`runAsync`, a task) throws it or rejects with it, and a host-driven run's host can
+ * settle a call with it (`{ ok: false, value: new RunExit() }`): the run exits when the
+ * result is applied. What the script did before is what the host saw.
+ */
+export class RunExit extends Error {
+  readonly value: unknown;
+  constructor(value?: unknown) {
+    super("the run exited");
+    this.name = "RunExit";
+    this.value = value;
+  }
 }
 
 /** Why a sandbox operation failed. `value` is the thrown VM value (kind "threw"). */
@@ -316,6 +376,31 @@ const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
 const HOOK_SOURCE = 0x7fff_fff2;
 const HOOK_HOST = 0x7fff_fff3;
+/**
+ * The sandbox's own helper in the VM, made only for `values` and `jsonBoundary`: one
+ * function `(op, a, b)`. op 0: `a` through JSON (the boundary's conversion); 1:
+ * deep-freezes `a` (a host value); 2 and 3: the converting function of sync (2) or
+ * async (3) host function `a`, named `b`. It takes the builtins it uses when it is made, before any
+ * script runs, so a script that replaces `JSON.stringify` does not change the boundary.
+ * Nothing a dump writes holds it: the converting functions are host values.
+ */
+const HELPER = `"use strict";
+(() => {
+  const apply = Reflect.apply, json = JSON, stringify = JSON.stringify, parse = JSON.parse, def = Object.defineProperty;
+  const freezeOne = Object.freeze, isFrozen = Object.isFrozen, keys = Object.keys, isView = ArrayBuffer.isView;
+  const P = Promise, reject = Promise.reject;
+  const clone = (v) => { const j = apply(stringify, json, [v]); return j === undefined ? undefined : apply(parse, json, [j]); };
+  const each = (a) => { const n = a.length, out = []; for (let i = 0; i < n; i++) def(out, i, { value: clone(a[i]), writable: true, enumerable: true, configurable: true }); return out; };
+  const freeze = (o) => { if (o !== null && typeof o === "object" && !isView(o) && !isFrozen(o)) { freezeOne(o); const ks = keys(o); for (let i = 0; i < ks.length; i++) freeze(o[ks[i]]); } };
+  const wrap = (f, name, async) => {
+    const w = async
+      ? (...a) => { let c; try { c = each(a); } catch (e) { return apply(reject, P, [e]); } return apply(f, undefined, c); }
+      : (...a) => apply(f, undefined, each(a));
+    def(w, "name", { value: name });
+    return w;
+  };
+  return (op, a, b) => op === 0 ? clone(a) : op === 1 ? freeze(a) : wrap(a, b, op === 3);
+})()`;
 /** An identity `ns.member` of two identifiers: member `member` of the namespace `ns` (D2632). */
 const NAMESPACE_MEMBER = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -395,7 +480,8 @@ interface Exports {
   vm_dump_runtime?(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
-  vm_define(vm: number, obj: number, nameLen: number, value: number): number;
+  /** `flags` bit 0 (since 0291, D3592): enumerable; older modules ignore it. */
+  vm_define(vm: number, obj: number, nameLen: number, value: number, flags?: number): number;
   vm_decode_wire(vm: number, len: number): number;
   /** Since 0162 (D2551); older modules lack it. */
   vm_string_reserve?(vm: number, len: number): number;
@@ -522,11 +608,17 @@ interface RunCore {
   result: number;
   /** Fuel used so far: `maxFuel` is per run, across all its steps. */
   used: number;
+  /** With `jsonBoundary`: the result went through the conversion (it runs once). */
+  converted?: boolean;
+  /** A host function ended the run (`RunExit`): applied before the next fuel slice. */
+  exit?: RunExit;
+  /** The bounds of the step in progress. */
+  step?: StepOptions;
   /** A new async call (`runAsync`: call the host function now). */
   onCall?(call: OpenCall, fnId: number): void;
   /** Before every fuel slice (`runAsync`: pass back the results that came in). */
   beforeSlice?(): void;
-  advance(): Promise<RunEnd>;
+  advance(step?: StepOptions): Promise<RunEnd>;
   settle(id: number, s: Settlement): void;
   /** Passes a result back; `at`: a replayed result's clock. */
   deliver(id: number, ok: boolean, value: unknown, at?: number): void;
@@ -534,7 +626,7 @@ interface RunCore {
   dump(states?: [number, string][]): string;
 }
 
-type RunEnd = { state: "idle" } | { state: "done"; value: unknown } | { state: "threw"; error: SandboxError };
+type RunEnd = { state: "idle" } | { state: "done"; value: unknown; exited?: boolean } | { state: "threw"; error: SandboxError };
 
 /**
  * A run the host drives itself (docs/host.md "Host-driven runs"; the part 0179
@@ -545,10 +637,15 @@ type RunEnd = { state: "idle" } | { state: "done"; value: unknown } | { state: "
  * can outlive the process that issued it. Sync host functions are called as in `run`.
  */
 export class Run {
-  /** "idle": waiting on `calls`; "done": `value` is the result; "threw": `error`. */
-  state: "idle" | "done" | "threw" = "idle";
+  /**
+   * "ready": started with `start: false`, nothing ran yet (`advance` runs the first step);
+   * "idle": waiting on `calls`; "done": `value` is the result; "threw": `error`.
+   */
+  state: "ready" | "idle" | "done" | "threw" = "idle";
   value: unknown = undefined;
   error: SandboxError | undefined = undefined;
+  /** Done because a host function ended the run (`RunExit`); `value` is the exit's. */
+  exited = false;
   readonly #core: RunCore;
 
   /** Made by `Sandbox.begin` and `Sandbox.resume`. */
@@ -574,9 +671,16 @@ export class Run {
    * sync host functions the script calls meanwhile (awaiting them if they return
    * promises). New async calls show up in `calls`.
    */
-  async advance(): Promise<void> {
-    if (this.state !== "idle") throw new SandboxError("misuse", `the run is ${this.state}`);
-    this.end(await this.#core.advance());
+  async advance(step: StepOptions = {}): Promise<void> {
+    if (this.state !== "idle" && this.state !== "ready") throw new SandboxError("misuse", `the run is ${this.state}`);
+    this.state = "idle";
+    try {
+      this.end(await this.#core.advance(step));
+    } catch (e) {
+      // The run is over (out of fuel, aborted, a host-side failure).
+      if (e instanceof SandboxError) this.end({ state: "threw", error: e });
+      throw e;
+    }
   }
 
   /**
@@ -594,7 +698,10 @@ export class Run {
   /** Records how a step ended. */
   end(e: RunEnd): void {
     this.state = e.state;
-    if (e.state === "done") this.value = e.value;
+    if (e.state === "done") {
+      this.value = e.value;
+      this.exited = e.exited === true;
+    }
     if (e.state === "threw") this.error = e.error;
   }
 }
@@ -673,6 +780,7 @@ interface RawImage {
   clock?: number;
   namespaces: [string, number][];
   fnHandles: [number, number][];
+  wrappers: [number, number][];
   globals: string[];
 }
 
@@ -705,6 +813,13 @@ export class Sandbox {
   private readonly namespaces = new Map<string, number>();
   /** The host function objects by id, as handles: one per identity (D2970). */
   private readonly fnHandles = new Map<number, number>();
+  /**
+   * With `jsonBoundary`: the converting functions scripts see instead of the host
+   * functions, by id, as handles; host values of the functions' identities.
+   */
+  private readonly wrappers = new Map<number, number>();
+  /** The sandbox's helper in the VM (`HELPER`), as a handle; 0 until needed. */
+  private helper = 0;
   private readonly fnAsync = new Map<number, boolean>();
   /** The globals the sandbox bound to host functions and namespaces (a dump's host globals). */
   private readonly globalNames = new Set<string>();
@@ -820,6 +935,7 @@ export class Sandbox {
       if (opts.deterministic) this.clock = raw.clock ?? opts.deterministic.startedAt;
       for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
       for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
+      for (const [id, h] of raw.wrappers) this.wrappers.set(id, h);
       for (const g of raw.globals) this.globalNames.add(g);
       // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
       // so it is staged with the arena's capacity (D1942).
@@ -849,12 +965,12 @@ export class Sandbox {
       });
     } else {
       // `console` is a namespace like `tools` (a host root of dumps, D2971).
-      for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false);
+      for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false, false);
       for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
       for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
       if (opts.debugger !== undefined) {
         if (!x.vm_dump) throw new SandboxError("misuse", "the debugger option needs a djs-wasm module with the dumper (the `dump` feature)");
-        this.addFunction("debugger", opts.debugger, true);
+        this.addFunction("debugger", opts.debugger, true, false);
       }
       const globals = { ...(opts.globals ?? this.defaultGlobals()) };
       if (opts.debugger !== undefined) globals.debugger = "debugger";
@@ -862,17 +978,23 @@ export class Sandbox {
       // Host data (`values`): deep-frozen copies, host roots like the namespaces, so a dump
       // names them (`$djs.host(name)`) instead of writing them.
       for (const [name, value] of Object.entries(opts.values ?? {})) {
-        this.guard(() => {
-          const h = this.toHandle(value);
-          if (h === 0) return;
-          this.namespaces.set(name, h);
-          this.bindGlobal(name, name);
-        });
+        if (this.hostValue(name) !== undefined || this.globalNames.has(name)) {
+          throw new SandboxError("misuse", `value ${name}: the name of a host function, namespace or global already`);
+        }
+        let h: number;
+        try {
+          h = this.guard(() => this.toHandle(value));
+        } catch (e) {
+          if (e instanceof SandboxError) throw e;
+          throw new SandboxError("misuse", `value ${name}: ${(e as Error).message}`);
+        }
+        if (h === 0) continue;
+        this.guard(() => this.x.vm_handle_free(vm, this.callHelper(1, h)));
+        this.namespaces.set(name, h);
+        this.bindGlobal(name, name);
       }
-      if (opts.values !== undefined && Object.keys(opts.values).length > 0) {
-        const names = JSON.stringify(Object.keys(opts.values));
-        this.run(`const freeze = (o) => { if (o !== null && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); for (const k of Object.keys(o)) freeze(o[k]); } };\nfor (const name of ${names}) freeze(globalThis[name]);`);
-      }
+      // The boundary converts results with the helper, also with no host function.
+      if (opts.jsonBoundary && this.helper === 0) this.guard(() => this.x.vm_handle_free(vm, this.callHelper(1, 0)));
       // What a new VM starts with; an image keeps its own (D1680).
       const det = opts.deterministic;
       const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
@@ -906,12 +1028,70 @@ export class Sandbox {
   }
 
   /** Makes host function `name` and, for `ns.member`, adds it to the namespace `ns`. */
-  private addFunction(name: string, f: HostFunction | AsyncHostFunction, async: boolean): void {
+  private addFunction(name: string, f: HostFunction | AsyncHostFunction, async: boolean, convert = this.opts.jsonBoundary === true): void {
     this.guard(() => {
-      const h = this.hostFunction(name, f, async);
+      const before = this.fnHandles.get(this.fnNames.indexOf(name) + 1);
+      let h = this.hostFunction(name, f, async);
+      const id = this.fnNames.indexOf(name) + 1;
+      const old = this.wrappers.get(id);
+      if (convert && old !== undefined && before === h) h = old;
+      else if (convert) {
+        // The JSON boundary: scripts get the converting function, never the host function.
+        const n = this.toHandle(name.slice(name.lastIndexOf(".") + 1));
+        const w = this.callHelper(async ? 3 : 2, h, n);
+        this.x.vm_handle_free(this.vm, n);
+        this.wrappers.set(id, w);
+        h = w;
+        if (old !== undefined) this.x.vm_handle_free(this.vm, old);
+      }
       const m = NAMESPACE_MEMBER.exec(name);
       if (m) this.defineOn(this.namespace(m[1]), m[2], h);
     });
+  }
+
+  /**
+   * Calls the sandbox's helper (`HELPER`, made on first use) with `op` and the handles
+   * `args`, to its end: no script runs meanwhile, and
+   * it calls no host function. Returns the result's handle; an exception is a misuse.
+   */
+  private callHelper(op: number, ...args: number[]): number {
+    const x = this.x;
+    const vm = this.vm;
+    const finish = (): number => {
+      let st = x.vm_run(vm, 1_000_000);
+      while (st === STATUS_OUT_OF_FUEL) st = x.vm_run(vm, 1_000_000);
+      const h = x.vm_result(vm);
+      if (st === STATUS_DONE) return h;
+      const why = st === STATUS_THREW ? this.display(h) : `status ${st}`;
+      if (h !== 0) x.vm_handle_free(vm, h);
+      x.vm_abort(vm);
+      throw new SandboxError("misuse", `the sandbox's helper failed: ${why}`);
+    };
+    if (this.helper === 0) {
+      const src = textEncoder.encode(HELPER);
+      this.stage(src);
+      const f = this.check(x.vm_compile_file(vm, 0, 0, 0, src.length), "memory");
+      this.stage(new Uint8Array(0));
+      const r = x.vm_call(vm, f, 0, 0);
+      x.vm_handle_free(vm, f);
+      if (r !== 0) throw new SandboxError("misuse", "a call is already in progress");
+      this.helper = finish();
+    }
+    this.startHelper(op, args);
+    return finish();
+  }
+
+  /** Starts the call of the helper (made already) with `op` and `args`; the caller runs it. */
+  private startHelper(op: number, args: number[]): void {
+    const x = this.x;
+    const argv = [this.toHandle(op), ...args];
+    const bytes = new Uint8Array(4 * argv.length);
+    const dv = new DataView(bytes.buffer);
+    argv.forEach((h, i) => dv.setUint32(4 * i, h, true));
+    this.stage(bytes);
+    const r = x.vm_call(this.vm, this.helper, 0, argv.length);
+    x.vm_handle_free(this.vm, argv[0]);
+    if (r !== 0) throw new SandboxError("misuse", "a call is already in progress");
   }
 
   /** The namespace object `ns`, made on first use (D2632); bound nowhere by itself. */
@@ -943,7 +1123,8 @@ export class Sandbox {
 
   /** The object of a namespace or host function by identity (D2970), as a handle the sandbox owns. */
   private hostValue(identity: string): number | undefined {
-    return this.namespaces.get(identity) ?? this.fnHandles.get(this.fnNames.indexOf(identity) + 1);
+    const id = this.fnNames.indexOf(identity) + 1;
+    return this.namespaces.get(identity) ?? this.wrappers.get(id) ?? this.fnHandles.get(id);
   }
 
   private bindGlobal(name: string, identity: string): void {
@@ -1001,6 +1182,11 @@ export class Sandbox {
     this.beginJournal(code, params, opts);
     this.enter(code, params, false, opts.filename);
     const core = this.startRun([], 0);
+    if (opts.start === false) {
+      core.run.state = "ready";
+      return core.run;
+    }
+    core.step = { signal: opts.signal, fuel: opts.fuel };
     try {
       core.run.end(this.step(core, false).next().value as RunEnd);
     } catch (e) {
@@ -1163,7 +1349,8 @@ export class Sandbox {
       result,
       used: 0,
       run: undefined as unknown as Run,
-      advance: async () => {
+      advance: async (step) => {
+        core.step = step;
         try {
           const it = this.step(core, true);
           let r = it.next();
@@ -1185,6 +1372,14 @@ export class Sandbox {
       deliver: (id, ok, value, at) => {
         const call = core.open.get(id);
         core.open.delete(id);
+        if (!ok && value instanceof RunExit) {
+          // The run exits before its next slice; the result is never applied.
+          core.exit ??= value;
+          const j = this.journal;
+          if (j) j.delivered++;
+          if (j?.mode === "record" && call) j.push({ type: "async", callId: id, fn: call.fn, args: call.args, ok, value: errorJson(ok, value), now: this.clock ?? 0 });
+          return;
+        }
         const now = this.complete(id, ok, value, true, at);
         const j = this.journal;
         if (j) j.delivered++;
@@ -1206,7 +1401,7 @@ export class Sandbox {
   private *step(core: RunCore, async: boolean): Generator<Promise<unknown>, RunEnd, unknown> {
     try {
       const r = yield* this.drive(async, core);
-      if (r !== IDLE) return { state: "done", value: r };
+      if (r !== IDLE) return { state: "done", value: r, exited: core.exit !== undefined };
       this.recordCheck();
       return { state: "idle" };
     } catch (e) {
@@ -1280,6 +1475,19 @@ export class Sandbox {
     }
   }
 
+  /**
+   * A host function ended the run (`RunExit`): the VM drops its call, its jobs and the
+   * open calls, and the run is done with the exit's value.
+   */
+  private exitRun(run: RunCore): unknown {
+    const e = run.exit!;
+    this.guard(() => this.x.vm_abort(this.vm));
+    run.open.clear();
+    const j = this.journal;
+    if (j) j.finish({ type: "end", ok: true, value: e.value }, this.canonicalHash());
+    return e.value;
+  }
+
   /** Records a `check` entry at an idle point, when recording. */
   private recordCheck(): void {
     const j = this.journal;
@@ -1351,6 +1559,7 @@ export class Sandbox {
       clock: sb.clock,
       namespaces: [...sb.namespaces],
       fnHandles: [...sb.fnHandles],
+      wrappers: [...sb.wrappers],
       globals: [...sb.globalNames],
     });
     // One dump-module sandbox per module and memory limit, kept between dumps (D2701,
@@ -1375,6 +1584,8 @@ export class Sandbox {
     for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
     this.fnHandles.clear();
     for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
+    this.wrappers.clear();
+    for (const [id, h] of raw.wrappers) this.wrappers.set(id, h);
     this.globalNames.clear();
     for (const g of raw.globals) this.globalNames.add(g);
     if (!x.vm_replace_image) {
@@ -1487,7 +1698,10 @@ export class Sandbox {
       names.join(","),
       this.fnNames.join("\t"),
       handles.map(([name, h]) => `${h}:${name}`).join("\t"),
-      [...this.namespaces].map(([name, h]) => `${h}:${name}`).join("\t"),
+      // The converting functions first, by identity; then the namespaces and values.
+      [...[...this.wrappers].map(([id, h]): [string, number] => [this.fnNames[id - 1], h]), ...this.namespaces]
+        .map(([name, h]) => `${h}:${name}`)
+        .join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
@@ -1615,6 +1829,10 @@ export class Sandbox {
           if (result instanceof Promise) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise while a dump loads`);
         } catch (e) {
           if (e instanceof SandboxError && e.kind === "trap") throw e;
+          if (e instanceof RunExit) {
+            this.guard(() => x.vm_abort(vm));
+            throw new SandboxError("misuse", `cannot load the dump: host function ${this.fnNames[fnId - 1]} exited the run`);
+          }
           [ok, result] = [false, e];
         }
       }
@@ -1872,8 +2090,8 @@ export class Sandbox {
     return h;
   }
 
-  private defineOn(obj: number, name: string, value: number): void {
-    if (this.x.vm_define(this.vm, obj, this.stageText(name), value) !== 0) {
+  private defineOn(obj: number, name: string, value: number, enumerable = false): void {
+    if (this.x.vm_define(this.vm, obj, this.stageText(name), value, enumerable ? 1 : 0) !== 0) {
       throw new SandboxError("memory", `cannot define ${name}`);
     }
   }
@@ -1973,11 +2191,22 @@ export class Sandbox {
     const slice = this.opts.fuelSlice ?? 1_000_000;
     const maxFuel = this.opts.maxFuel ?? Infinity;
     const j = this.journal;
+    // The step's bounds (D3592).
+    const step = run.step ?? {};
+    const budget = step.fuel ?? Infinity;
+    const start = run.used;
+    let resumed = Date.now();
     for (;;) {
       run.beforeSlice?.();
+      if (run.exit !== undefined) return this.exitRun(run);
+      if (step.signal?.aborted) {
+        const why = step.signal.reason;
+        throw new SandboxError("aborted", `the step was aborted${why === undefined ? "" : `: ${why instanceof Error ? why.message : String(why)}`}`);
+      }
+      const left = budget - (run.used - start);
       const st = this.guard(() => {
         this.setClock();
-        return x.vm_run(vm, slice);
+        return x.vm_run(vm, Math.max(1, Math.min(slice, left)));
       });
       // Counted across sync host calls too, which end a slice early (D2653, D2702).
       run.used += x.vm_fuel_used ? x.vm_fuel_used(vm) : st === STATUS_OUT_OF_FUEL ? slice : 0;
@@ -2010,11 +2239,20 @@ export class Sandbox {
             h = r;
             threw = ps === 3;
           }
+          if (!threw && this.opts.jsonBoundary && !run.converted) {
+            // The JSON boundary: the result goes through the helper first, a call of its
+            // own that this loop runs (toJSON may call host functions).
+            run.converted = true;
+            this.startHelper(0, [h]);
+            x.vm_handle_free(vm, h);
+            return undefined;
+          }
           const value = this.readHandle(h);
           const message = threw ? this.display(h) : "";
           x.vm_handle_free(vm, h);
           return { value, message, threw };
         });
+        if (outcome === undefined) continue;
         const { value, message, threw } = outcome;
         if (j) {
           const end = { type: "end" as const, ok: !threw, value: threw ? message : value };
@@ -2028,6 +2266,12 @@ export class Sandbox {
         if (run.used >= maxFuel) {
           // `run` abandons the call (vm_abort), so the sandbox stays usable.
           throw new SandboxError("fuel", `out of fuel after ${run.used} units`);
+        }
+        if (run.used - start >= budget) throw new SandboxError("fuel", `the step ran out of its fuel (${budget} units)`);
+        if (async && step.yieldMs !== undefined && Date.now() - resumed >= step.yieldMs) {
+          // Between slices: the host's other tasks (timers, I/O, an abort) run now.
+          yield macrotask();
+          resumed = Date.now();
         }
         continue;
       }
@@ -2072,6 +2316,11 @@ export class Sandbox {
       if (journaled && j.mode === "record") {
         j.issued++;
         j.push({ type: "sync", fn, args, ok, value: errorJson(ok, result) });
+      }
+      if (!ok && result instanceof RunExit) {
+        // The host ends the run: the call never returns (the next slice aborts the VM's call).
+        run.exit = result;
+        continue;
       }
       this.complete(callId, ok, result, false);
     }
@@ -2178,13 +2427,21 @@ export class Sandbox {
         const msg = this.stageText(e instanceof Error ? e.message : String(e));
         const kind = e instanceof TypeError ? 1 : e instanceof RangeError ? 2 : 0;
         const error = this.check(x.vm_new_error(vm, kind, msg), "memory");
-        // The host error's own data properties (a tool's `structuredOutput`, a `code`) go
-        // with it, so the script's catch sees them: wire values, not name/message/stack.
+        // The host error's own enumerable properties (a tool's `structuredOutput`, a
+        // `code`) go with it, so the script's catch sees them (D3592): as wire values, not
+        // name/message/stack, and not the ones the wire cannot carry (a function).
         if (typeof e === "object" && e !== null) {
           for (const [key, v] of Object.entries(e)) {
             if (key === "name" || key === "message" || key === "stack" || v === undefined) continue;
-            const p = this.toHandle(v);
-            this.defineOn(error, key, p);
+            let p: number;
+            try {
+              p = this.toHandle(v);
+            } catch (err) {
+              // (The wire's refusal is a TypeError; a trap or out of memory goes on up.)
+              if (!(err instanceof TypeError)) throw err;
+              continue;
+            }
+            this.defineOn(error, key, p, true);
             if (p !== 0) x.vm_handle_free(vm, p);
           }
         }
@@ -2210,6 +2467,12 @@ export class Sandbox {
 }
 
 const WEAK_REF_MODES = { collected: 0, strong: 1, absent: 2 } as const;
+
+/** A macrotask: `setImmediate` where there is one (node, Bun), else a zero timeout. */
+function macrotask(): Promise<void> {
+  const g = globalThis as { setImmediate?: (f: () => void) => void };
+  return new Promise((resolve) => (g.setImmediate ? g.setImmediate(resolve) : setTimeout(resolve, 0)));
+}
 
 /** A call's hook view (`this` of `call`, the argument of `save` and `resume`) and its abort. */
 function newCall(id: number, fn: string, args: unknown[], state?: unknown): LiveCall {
@@ -2291,12 +2554,14 @@ class Journal {
 /** A host value as a journal records it: errors as `{ name, message }`. */
 function errorJson(ok: boolean, v: unknown): unknown {
   if (ok) return v;
+  if (v instanceof RunExit) return { name: "RunExit", message: v.message, value: v.value };
   return v instanceof Error ? { name: v.name, message: v.message } : { name: "Error", message: String(v) };
 }
 
 /** The host error a journal entry stands for, of the same kind. */
 function errorFromJson(v: unknown): Error {
-  const { name, message } = (v ?? {}) as { name?: string; message?: string };
+  const { name, message, value } = (v ?? {}) as { name?: string; message?: string; value?: unknown };
+  if (name === "RunExit") return new RunExit(value);
   const E = name === "TypeError" ? TypeError : name === "RangeError" ? RangeError : Error;
   return new E(message ?? "");
 }

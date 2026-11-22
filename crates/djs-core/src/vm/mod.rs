@@ -758,6 +758,16 @@ impl Vm {
         define_hidden(&mut self.heap, o, key, v)
     }
 
+    /// [`Vm::define`], but enumerable, as an assignment makes a property: host data on a
+    /// script's object (a host error's `code` or `structuredOutput`, D3592).
+    pub fn define_enumerable(&mut self, o: Obj, name: &str, v: Value) -> Result<(), HeapError> {
+        let key = self.heap.atom_str(name)?;
+        let flags = PropFlags::WRITABLE | PropFlags::ENUMERABLE | PropFlags::CONFIGURABLE;
+        self.heap
+            .define_own_property(o, key, &PropertyDescriptor::data(v, flags))?;
+        Ok(())
+    }
+
     /// Defines a global binding (a property of the global object).
     pub fn define_global(&mut self, name: &str, v: Value) -> Result<(), HeapError> {
         let g = self.global();
