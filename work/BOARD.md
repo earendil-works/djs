@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0291 | Host-driven runs for durable code mode: JSON boundary, exit, bounded steps, host data, dump compatibility | pdurable | .worktrees/pdurable |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 
 ## Open (ready)
@@ -19,7 +18,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0292 | Code mode bodies import host modules (`import { x } from "@mcp/github"`, namespaces, dumps); agent pdurable after 0291 | 0291 |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
 | - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
@@ -48,6 +46,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Bridge follow-ups (0238): Sandbox sync host call ~3 us vs ~1.7 us C embedding; Uint8Array in with one copy (like long ASCII strings); Math.max ratio 1.08 -> 1.79 vs QuickJS (noise or regression?); lazily read tool results (host buffer read on demand; ties to result buffers) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
+| - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
 | - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | dropped with image persistence (D2560); revisit for dumps |
@@ -56,6 +55,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0292 | Code mode bodies import host modules: named, namespace, default imports bound by a lazy resolver; dumps name them by identity | 44d44420 (agent pdurable; D3597; import() of host modules still rejects (size); +49 B gz, 17 B under the ceiling) |
+| 0291 | Host-driven runs for durable code mode: jsonBoundary, RunExit, bounded/abortable/yielding steps, host error data, `values`; dumps an exception to D024 | 035cb8cc (agent pdurable; D3592-D3596; golden host dumps; pi prototype on pi-mono-djs uses it) |
 | 0289 | Builtins charge fuel for the work they do (GitHub #3) | 0702f0e0 (agent pidle; D3590, D3591 (owner: allowance +1 KB); work counter in the heap; worst 1M-fuel slice 128 s -> ~43 ms native; +1,163 B gz, slim +617 B) |
 | 0290 | Trace frames named by own `name`; continuations by their origin (GitHub PR #2, rt2zz co-author) | ffe07762 (agent pcall; D3580; lazy-name functions skip the lookup: new Error in 5 frames 37.5k->37.7k; computed/symbol method names shown; -105 B gz) |
 | 0288 | for-of over strings out of line, last step finished once | cdd82d1f (agent pidle; D3570; ASCII 22.3k->17.9k (QuickJS 2026 13.2k); +301 B gz; ~294 B of the owner allowance left) |
