@@ -1,6 +1,6 @@
 # 0292: Code mode bodies import host modules: `import { x } from "@mcp/github"`, namespaces, dumps
 
-status: open
+status: in-progress
 agent: pdurable
 branch: issue/0292-codemode-imports
 depends-on: 0291
