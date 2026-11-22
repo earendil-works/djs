@@ -1,6 +1,6 @@
 # 0291: Host-driven runs for durable code mode: a JSON boundary, exit, bounded steps, host data, dump compatibility
 
-status: open
+status: in-progress
 agent: pdurable
 branch: issue/0291-durable-host-runs
 depends-on: -
