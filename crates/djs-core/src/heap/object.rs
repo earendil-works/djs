@@ -650,6 +650,8 @@ impl Heap {
             .ok()
             .filter(|&n| n <= atom_int_max())
             .ok_or(HeapError::OutOfMemory)?;
+        // (The values were made one by one: a split's pieces, a key list's strings.)
+        self.charge_elements(values.len());
         let o = self.new_array(proto, n)?;
         if n > 0 {
             let el = self.elements(o);

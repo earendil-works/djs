@@ -1622,6 +1622,16 @@ impl Heap {
         if a == b {
             return Ok(Ordering::Equal);
         }
+        match (self.str_view(a), self.str_view(b)) {
+            // (Short one-byte strings, the most: free, `work.rs`.)
+            (Some(StrView::Latin1(x)), Some(StrView::Latin1(y)))
+                if x.len().min(y.len()) <= super::work::FREE_COMPARE as usize =>
+            {
+                return Ok(x.cmp(y));
+            }
+            (Some(x), Some(y)) => return Ok(self.view_cmp(x, y)),
+            _ => {}
+        }
         self.str_view_flat(a)?;
         self.str_view_flat(b)?;
         let (x, y) = (self.str_view(a), self.str_view(b));

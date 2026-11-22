@@ -841,11 +841,10 @@ impl Exec<'_> {
             let mut sp = self.sp;
             let mut fuel = self.fuel;
             let exit = 'run: {
-                // Fuel the leaves charged and the next safepoint takes (0289): until
-                // then the run does not stop for lack of fuel.
-                let mut owed = self.heap.work_owed();
-                // (A safepoint is wanted for a collection, or to take that fuel.)
-                let mut collect = self.opts.gc_stress || self.heap.gc_pending() || owed;
+                // A safepoint is wanted for a collection, or to take the fuel the
+                // leaves charged into the run's (0289).
+                let mut collect =
+                    self.opts.gc_stress || self.heap.gc_pending() || self.heap.work_owed();
                 let mut b: &mut [u8] = self.heap.arena_mut().hot_bytes();
                 // Ends the slice for a leaf heap call (`$e`), then takes it back.
                 macro_rules! heap_call {
@@ -853,8 +852,8 @@ impl Exec<'_> {
                         let r = $e;
                         // The fuel of the call's work is taken at the next safepoint
                         // (0289), as the general path does.
-                        owed = self.heap.work_owed();
-                        collect = self.opts.gc_stress || self.heap.gc_pending() || owed;
+                        collect =
+                            self.opts.gc_stress || self.heap.gc_pending() || self.heap.work_owed();
                         b = self.heap.arena_mut().hot_bytes();
                         r
                     }};
@@ -870,7 +869,9 @@ impl Exec<'_> {
                     break 'run Exit::General;
                 }
                 loop {
-                    if fuel <= 0 && !owed {
+                    // Out of fuel: the run stops, unless a safepoint is wanted (a
+                    // collection, or fuel the leaves owe, 0289): then it goes on to it.
+                    if fuel <= 0 && (!collect || self.opts.gc_stress) {
                         break Exit::Budget;
                     }
                     debug_assert!(ip < end, "pc past the end of the code");
@@ -1891,11 +1892,9 @@ impl Exec<'_> {
                         Exit::Decline(op) => op,
                         _ => 0,
                     };
-                    // The instruction started with fuel left: an attempt that declined
-                    // may have charged its work (0289), but the instruction completes
-                    // before the run stops (else a slice smaller than the attempt's work
-                    // would make it again at every resume). A host refusal (which set
-                    // the fuel to 0) stops here.
+                    // (The instruction started as the loop's check allows: with fuel, or
+                    // on the way to a safepoint that is wanted. A host refusal, which set
+                    // the fuel to 0, stops here.)
                     if self.host_oom && self.fuel <= 0 {
                         return None;
                     }

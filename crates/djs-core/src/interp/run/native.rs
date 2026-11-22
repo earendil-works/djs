@@ -372,11 +372,13 @@ impl Exec<'_> {
         // With the work of the leaves of the iteration (0289).
         self.fuel -= BACKEDGE_FUEL + self.heap.take_work();
         self.pc = s;
-        if self.fuel <= 0 {
+        // (Out of fuel with a collection wanted: the run stops after it, as the run loop
+        // has it, 0289.)
+        if self.fuel <= 0 && (self.opts.gc_stress || !self.heap.gc_pending()) {
             return true;
         }
         self.safepoint();
-        false
+        self.fuel <= 0
     }
 
     #[cfg_attr(target_arch = "wasm32", inline(never))]

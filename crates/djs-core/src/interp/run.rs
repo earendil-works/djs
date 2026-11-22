@@ -1172,9 +1172,15 @@ impl<'h> Exec<'h> {
         self.fuel = self.fuel.saturating_sub(debt);
         self.fuel_start = Some(self.fuel);
         loop {
-            // (Not while the leaves owe fuel the next safepoint takes: the run stops
-            // where its fuel is exact, whatever the slicing, 0289.)
-            if self.fuel <= 0 && (self.host_oom || !self.heap.work_owed()) {
+            // Out of fuel: the run stops, unless a safepoint is wanted (a collection, or
+            // fuel the leaves owe, which it takes, 0289): then it goes on to that one, so
+            // that it stops where its fuel is exact, whatever the slicing. (Not under GC
+            // stress, which wants every safepoint.)
+            if self.fuel <= 0
+                && (self.host_oom
+                    || self.opts.gc_stress
+                    || !(self.heap.gc_pending() || self.heap.work_owed()))
+            {
                 self.flush();
                 if self.host_oom {
                     return Status::HostOutOfMemory;

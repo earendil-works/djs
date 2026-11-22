@@ -895,6 +895,8 @@ fn filled_collection(
         return Ok(None);
     }
     let c = heap.collection_new(class, proto)?;
+    // (Each element hashed and added: two elements' worth, 0289.)
+    heap.charge_elements(2 * heap.array_length(a) as usize);
     for i in 0..heap.array_length(a) {
         let Some(x) = element(heap, a, i) else {
             return Ok(None);

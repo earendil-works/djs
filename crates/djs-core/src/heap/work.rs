@@ -41,6 +41,13 @@ pub(crate) const ELEMENTS: u32 = 4;
 /// The units of two strings a comparison or a hash reads for free: [`equal_blocks`]'
 /// block.
 pub(crate) const FREE_COMPARE: u32 = 256;
+/// Small work is free, as a small allocation is: the call that does it pays (4 units of
+/// fuel at least), and a charge of a fraction of a unit per call would only make the
+/// tier-0 loop leave for a safepoint every few calls to take it. A scan of up to this
+/// many code units...
+pub(crate) const FREE_UNITS: usize = 64;
+/// ... and a loop over up to this many elements.
+pub(crate) const FREE_ELEMENTS: usize = 16;
 
 impl Heap {
     /// Adds `n` sixteenths of a unit of fuel. (Out of line: the charges are many and
@@ -57,13 +64,17 @@ impl Heap {
     /// Charges a scan, comparison or copy of `n` code units.
     #[inline(always)]
     pub(crate) fn charge_units(&self, n: usize) {
-        self.charge16((n as u64) * u64::from(16 / UNITS));
+        if n > FREE_UNITS {
+            self.charge16((n as u64) * u64::from(16 / UNITS));
+        }
     }
 
     /// Charges a loop over `n` elements or keys, or a move of `n` elements.
     #[inline(always)]
     pub(crate) fn charge_elements(&self, n: usize) {
-        self.charge16((n as u64) * u64::from(16 / ELEMENTS));
+        if n > FREE_ELEMENTS {
+            self.charge16((n as u64) * u64::from(16 / ELEMENTS));
+        }
     }
 
     /// Charges an allocation of `size` bytes (a small one, the most, costs a compare).
