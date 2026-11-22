@@ -1054,6 +1054,8 @@ impl<'h> Exec<'h> {
     /// Collects if the heap asks for it (or always under `gc_stress`).
     #[inline(always)]
     fn safepoint(&mut self) {
+        // The work the leaves charged since the last one (0289, `heap/work.rs`).
+        self.fuel -= self.heap.take_work();
         if self.opts.gc_stress || self.heap.gc_pending() {
             self.safepoint_collect();
         }
@@ -1171,7 +1173,9 @@ impl<'h> Exec<'h> {
         // takes it too: `run_hot`'s exits and `step_once`.
         self.fuel -= self.heap.take_work();
         loop {
-            if self.fuel <= 0 {
+            // (Not while the leaves owe fuel the next safepoint takes: the run stops
+            // where its fuel is exact, whatever the slicing, 0289.)
+            if self.fuel <= 0 && !self.heap.work_owed() {
                 self.flush();
                 if self.host_oom {
                     return Status::HostOutOfMemory;
@@ -1197,7 +1201,6 @@ impl<'h> Exec<'h> {
                     && fast::is_call(self.byte(self.pc))
                     && self.fast_leaf_call(self.byte(self.pc)))
             {
-                self.fuel -= self.heap.take_work();
                 continue;
             }
             if let Some(st) = self.step_once() {

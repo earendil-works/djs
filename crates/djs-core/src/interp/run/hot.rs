@@ -841,15 +841,20 @@ impl Exec<'_> {
             let mut sp = self.sp;
             let mut fuel = self.fuel;
             let exit = 'run: {
-                let mut collect = self.opts.gc_stress || self.heap.gc_pending();
+                // Fuel the leaves charged and the next safepoint takes (0289): until
+                // then the run does not stop for lack of fuel.
+                let mut owed = self.heap.work_owed();
+                // (A safepoint is wanted for a collection, or to take that fuel.)
+                let mut collect = self.opts.gc_stress || self.heap.gc_pending() || owed;
                 let mut b: &mut [u8] = self.heap.arena_mut().hot_bytes();
                 // Ends the slice for a leaf heap call (`$e`), then takes it back.
                 macro_rules! heap_call {
                     ($e:expr) => {{
                         let r = $e;
-                        // The fuel of the call's work (0289).
-                        fuel -= self.heap.take_work();
-                        collect = self.opts.gc_stress || self.heap.gc_pending();
+                        // The fuel of the call's work is taken at the next safepoint
+                        // (0289), as the general path does.
+                        owed = self.heap.work_owed();
+                        collect = self.opts.gc_stress || self.heap.gc_pending() || owed;
                         b = self.heap.arena_mut().hot_bytes();
                         r
                     }};
@@ -865,7 +870,7 @@ impl Exec<'_> {
                     break 'run Exit::General;
                 }
                 loop {
-                    if fuel <= 0 {
+                    if fuel <= 0 && !owed {
                         break Exit::Budget;
                     }
                     debug_assert!(ip < end, "pc past the end of the code");

@@ -84,6 +84,12 @@ impl Heap {
         i64::from(w >> SHIFT)
     }
 
+    /// Whether a whole unit of fuel is owed: [`Heap::take_work`] would take some.
+    #[inline(always)]
+    pub(crate) fn work_owed(&self) -> bool {
+        u32::from_le_bytes(self.work.get()) >> SHIFT != 0
+    }
+
     /// The fraction of a unit left after [`Heap::take_work`], in sixteenths; clears the
     /// counter. A run that stops carries it in its debt (D1740).
     pub(crate) fn take_fraction(&self) -> u32 {
