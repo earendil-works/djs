@@ -114,7 +114,7 @@ impl Parser<'_, '_> {
     }
 
     /// An import declaration at `import`. Returns whether it is type-only (erased).
-    fn strip_import(&mut self, start: u32) -> PResult<bool> {
+    pub(super) fn strip_import(&mut self, start: u32) -> PResult<bool> {
         self.next()?;
         if self.is(TokenKind::String) {
             self.strip_module_name()?;

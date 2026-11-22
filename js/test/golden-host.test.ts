@@ -1,9 +1,9 @@
 // Golden dumps of host-driven code mode runs (0291, D3596): tests/dump/v2/golden-host/ has
 // codemode bodies (`NAME.body.js`) that run in the scope below (namespace and bound host
 // functions by identity, `values`, the JSON boundary) and the dumps a Sandbox wrote of them
-// at every idle point (`NAME.K.dump.js`). Each dump loads in a fresh sandbox of the same
-// scope, the open calls are answered, and the output up to idle point K plus the loaded
-// run's must equal the uninterrupted run's. A golden dump is never rewritten to make a
+// at every idle point (`NAME.K.dump.js`); some import host modules (0292). Each dump
+// loads in a fresh sandbox of the same scope, the open calls are answered, and the output
+// up to idle point K plus the loaded run's must equal the uninterrupted run's. A golden dump is never rewritten to make a
 // build pass; new programs get their dumps with
 // `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts` (only programs with none).
 
@@ -15,7 +15,7 @@ import { loadModule, type Run, Sandbox, type SandboxOptions } from "../src/sandb
 const DIR = new URL("../../tests/dump/v2/golden-host/", import.meta.url);
 
 /** The programs whose dumps are written with the body's text (`inlineSources`): they load with no `sources`. */
-const INLINE = new Set(["inline"]);
+const INLINE = new Set(["inline", "imports-inline"]);
 
 const ALL_TOOLS = [
   { name: "read", description: "Reads a file" },
@@ -35,6 +35,10 @@ function answer(fn: string, args: unknown[]): { ok: boolean; value: unknown } {
       return { ok: false, value: Object.assign(new Error("denied"), { structuredOutput: { by: "person" } }) };
     case "@mcp/github#search_issues":
       return { ok: true, value: [{ title: `issue about ${a.q}` }] };
+    case "@mcp/linear#create_issue":
+      return { ok: true, value: `made ${(args[0] as { title: string }).title}` };
+    case "@mcp/linear#list":
+      return { ok: true, value: [`${a.path} 1`, `${a.path} 2`] };
   }
   throw new Error(`no answer for ${fn}`);
 }
@@ -71,6 +75,13 @@ function scope(module: Pick<SandboxOptions, "module" | "dumpModule">, lines: str
     globals: { text: "text", store: "store", load: "load", tools: "tools", console: "console" },
     bindings: { search_issues: "@mcp/github#search_issues" },
     values: { ALL_TOOLS },
+    // Host modules (imports): functions made on first import, by `specifier#export`.
+    modules: (spec) =>
+      spec === "@mcp/linear"
+        ? { exports: { create_issue: {}, list: {}, default: "tools.list" } }
+        : spec === "@mcp/github"
+          ? { exports: { search_issues: "@mcp/github#search_issues" } }
+          : undefined,
     sources: body === undefined ? undefined : (n) => (n === `${name}.js` ? body : undefined),
   };
 }

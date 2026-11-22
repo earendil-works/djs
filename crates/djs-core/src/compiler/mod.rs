@@ -701,6 +701,26 @@ pub fn compile_dynamic_function(
     .map_err(|e| error_at(src, e))
 }
 
+/// Where a codemode body's leading import declarations end (D3597): the byte offset
+/// after the last one (0 without any). A dump writes the body as an async function whose
+/// parameters include the imports' names, with this part blanked.
+#[cfg(feature = "dump")]
+pub fn body_imports_end(
+    heap: &mut Heap,
+    src: &[u8],
+    typescript: bool,
+) -> Result<u32, CompileError> {
+    let opts = CompileOptions {
+        typescript,
+        ..CompileOptions::async_body("", &[])
+    };
+    parse(heap, src, &opts, |mut p| {
+        p.skip_body_imports()?;
+        Ok(p.prev_end)
+    })
+    .map_err(|e| error_at(src, e))
+}
+
 /// TypeScript erasure for the strip-types oracle (TESTING.md): compiles `src` with the
 /// TypeScript grammar and returns it with every erased type range blanked (spaces;
 /// line breaks stay, so positions do not move). The heap only holds the compiled

@@ -75,6 +75,7 @@ All options are optional:
 | `module` | the compiled djs-wasm module; default `loadModule()` |
 | `functions`, `asyncFunctions` | the host functions, by name ([below](#host-functions)) |
 | `globals`, `bindings` | where scripts find them: as globals, or as parameters of every body |
+| `modules` | the host modules bodies import, resolved by specifier ([below](#host-modules)) |
 | `values` | host data bound as frozen globals, which dumps name instead of writing ([below](#host-data)) |
 | `jsonBoundary` | convert what crosses to the host as JSON would ([below](#the-json-boundary)) |
 | `console` | receives `console.log`, `info`, `warn` and `error`; default the host's `console` |
@@ -152,7 +153,8 @@ sandbox.run("return myTool('x')");                       // "tool(x)"; no global
 ```
 
 `defineFunction(name, f)` and `defineAsyncFunction(name, f)` add functions to a sandbox
-that exists, bound by the default rule.
+that exists, bound by the default rule. Or scripts import them from [host
+modules](#host-modules).
 
 **Errors with data.** An error a host function throws, or an async one rejects with,
 reaches the script as an `Error` of the same kind (`TypeError`, `RangeError`, else
@@ -167,6 +169,69 @@ is done with `value`: `run` and `runAsync` return it, a task's result is it, and
 host-driven run is `done` with `exited` set. That is how an agent's `exit()` helper is
 written. An async host function may throw or reject with it too; the run ends when that
 result would be applied.
+
+### Host modules
+
+A body can import host functions from modules the host defines
+([imports in a body](language.md#imports-in-a-body)). The `modules` option resolves a
+specifier to the module's exports, and the sandbox asks it once per specifier, only for
+those the scripts import, so a host with a hundred tool servers lists none up front:
+
+```ts
+const sandbox = await Sandbox.create({
+  modules: (specifier) => {
+    const server = mcpServers.get(specifier);              // "@mcp/github"
+    if (server === undefined) return undefined;            // Cannot find module
+    return { exports: Object.fromEntries(server.tools.map((t) => [t.name, { fn: (args) => server.call(t.name, args) }])) };
+  },
+});
+await sandbox.runAsync(`
+  import { search_issues } from "@mcp/github";
+  return (await search_issues({ q: "dumps" })).length;
+`);
+```
+
+Each export is one of:
+
+- an object `{ fn, sync }`: a host function the sandbox defines on the first import, with
+  the name `specifier#export` (`@mcp/github#search_issues`), async unless `sync` is set.
+  `fn` may be left out where the host drives the run itself, which never calls async host
+  functions: the calls show up in `run.calls` under that name;
+- a string: the name of a host function, namespace or value the sandbox has already, such
+  as `"tools.read"`.
+
+An unknown module or export is a `syntax` error of the run, with the specifier or the
+name and their position: `SyntaxError: Cannot find module '@mcp/nope' at 1:19`. The
+imported names are the body's parameters after `params` and `bindings`, so a name taken
+twice is one too. A namespace import (`import * as linear from "@mcp/linear"`) gives one
+frozen object per specifier in the sandbox, with every export as a member, named by the
+specifier in dumps; a specifier that is also the name of a namespace such as `tools`
+cannot be imported as a namespace. A sandbox that loads a dump makes the module's values
+the dump names before it runs it, through the same `modules`.
+
+The resolver's descriptor can serve the scripts' documentation too. A host that lets the
+model read a virtual `.d.ts` file per module writes it from the same table, so what the
+model reads and what the sandbox binds cannot drift (djs itself never reads `.d.ts`
+text):
+
+```ts
+interface ToolSpec { name: string; params: string; result: string; doc: string }
+const servers = new Map<string, ToolSpec[]>([
+  ["@mcp/github", [{ name: "search_issues", params: "{ q: string }", result: "{ title: string }[]", doc: "Searches issues." }]],
+]);
+
+/** What `cat node_modules/@mcp/github/index.d.ts` shows the model. */
+function declarations(specifier: string): string | undefined {
+  return servers.get(specifier)?.map((t) => `/** ${t.doc} */\nexport function ${t.name}(args: ${t.params}): Promise<${t.result}>;`).join("\n");
+}
+
+const sandbox = await Sandbox.create({
+  modules: (specifier) => {
+    const tools = servers.get(specifier);
+    return tools && { exports: Object.fromEntries(tools.map((t) => [t.name, { fn: (args) => callTool(specifier, t.name, args) }])) };
+  },
+});
+```
 
 ### Host data
 

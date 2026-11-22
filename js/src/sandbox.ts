@@ -8,6 +8,7 @@ import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
 import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
 import { envVar } from "./env.ts";
+import { ImportSyntaxError, leadingImports, lineColumn } from "./imports.ts";
 
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
@@ -54,6 +55,27 @@ export interface AsyncHostFunction<S = unknown> {
    * (no hooks) is not continued: its call rejects.
    */
   resume?(state: S, call: HostCall<S>): unknown;
+}
+
+/**
+ * A host module (`SandboxOptions.modules`, D3597): what a codemode body's
+ * `import ... from specifier` binds. Each export (`default` for a default import) is the
+ * identity of a host function, namespace or value the sandbox has, or a host function the
+ * sandbox defines on first import under the identity `specifier#export`.
+ */
+export interface HostModule {
+  exports: Record<string, string | HostModuleFunction>;
+}
+
+/** A host function a module defines on first import, as `specifier#export`. */
+export interface HostModuleFunction {
+  /**
+   * The function: async (as in `asyncFunctions`) unless `sync`. Default: one that throws,
+   * enough for host-driven runs, which never call async host functions themselves.
+   */
+  fn?: HostFunction | AsyncHostFunction;
+  /** A sync host function (as in `functions`). Default false. */
+  sync?: boolean;
 }
 
 export interface ConsoleLike {
@@ -135,6 +157,17 @@ export interface SandboxOptions {
    * and results cross as wire values (a Date as an `Opaque`).
    */
   jsonBoundary?: boolean;
+  /**
+   * The host modules codemode bodies import (D3597): `import { a } from "spec"`, `import *
+   * as ns from "spec"` and `import d from "spec"` at the top of a body bind host values,
+   * as parameters of the body after `params` and `bindings`. Called once per specifier
+   * (lazily: for the modules scripts import, and for those a loaded dump names); an
+   * unknown module (`undefined`) or export is a `syntax` error of the run. A namespace
+   * import is one frozen object per specifier, a host value named by the specifier, so
+   * dumps write `$djs.host(specifier)`; an export's function is a host value by its
+   * identity. Default: no modules.
+   */
+  modules?: (specifier: string) => HostModule | undefined;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
   console?: ConsoleLike;
   /**
@@ -820,6 +853,10 @@ export class Sandbox {
   private readonly wrappers = new Map<number, number>();
   /** The sandbox's helper in the VM (`HELPER`), as a handle; 0 until needed. */
   private helper = 0;
+  /** `opts.modules`'s answers, by specifier (null: no such module). */
+  private readonly hostModules = new Map<string, HostModule | null>();
+  /** The specifiers whose namespace objects this sandbox made (in `namespaces`). */
+  private readonly moduleNamespaces = new Set<string>();
   private readonly fnAsync = new Map<number, boolean>();
   /** The globals the sandbox bound to host functions and namespaces (a dump's host globals). */
   private readonly globalNames = new Set<string>();
@@ -957,8 +994,11 @@ export class Sandbox {
       // The VM already has its host functions; bind the ids to the given implementations.
       restoredFns.forEach((name, i) => {
         const a = name === "debugger" && opts.debugger !== undefined ? opts.debugger : opts.asyncFunctions?.[name];
-        const f = builtins[name] ?? opts.functions?.[name] ?? (typeof a === "object" ? a.call : a);
-        if (f === undefined) throw new SandboxError("misuse", `the image needs host function ${name}`);
+        // (A module's function, made on first import, is not in the options: the dump
+        // module's sandbox calls none.)
+        const f = builtins[name] ?? opts.functions?.[name] ?? (typeof a === "object" ? a.call : a) ?? (() => {
+          throw new Error(`${name}: not callable while dumping`);
+        });
         this.fnNames.push(name);
         this.fns.set(i + 1, f);
         if (typeof a === "object") this.hooks.set(i + 1, a);
@@ -1125,6 +1165,127 @@ export class Sandbox {
   private hostValue(identity: string): number | undefined {
     const id = this.fnNames.indexOf(identity) + 1;
     return this.namespaces.get(identity) ?? this.wrappers.get(id) ?? this.fnHandles.get(id);
+  }
+
+  /**
+   * The imports of codemode body `code` (D3597): its leading import declarations, each
+   * name with the host value it binds. `taken`: a name the body has as a parameter already.
+   */
+  private bodyImports(code: string, taken: (local: string) => boolean): [string, number][] {
+    if (!code.includes("import")) return [];
+    const fail = (why: string, at: number) => {
+      const [line, col] = lineColumn(code, at);
+      return new SandboxError("syntax", `SyntaxError: ${why} at ${line}:${col}`);
+    };
+    let decls;
+    try {
+      decls = leadingImports(code, this.opts.typescript === true);
+    } catch (e) {
+      if (!(e instanceof ImportSyntaxError)) throw e;
+      // Before the first import: the compiler reports it in its own words.
+      if (e.at < code.indexOf("import")) return [];
+      throw fail(e.message, e.at);
+    }
+    const out: [string, number][] = [];
+    for (const d of decls) {
+      const mod = this.hostModule(d.specifier);
+      if (mod === undefined) throw fail(`Cannot find module '${d.specifier}'`, d.at);
+      for (const b of d.bindings) {
+        const h = b.name === "*" ? this.moduleNamespace(d.specifier, mod) : this.moduleExport(d.specifier, mod, b.name);
+        if (h === undefined) {
+          throw fail(b.name === "*" ? `The module '${d.specifier}' cannot be imported as a namespace: a host value has that name` : `The requested module '${d.specifier}' does not provide an export named '${b.name}'`, b.at);
+        }
+        if (taken(b.local) || out.some(([l]) => l === b.local)) throw fail(`Identifier '${b.local}' has already been declared`, b.at);
+        out.push([b.local, h]);
+      }
+    }
+    return out;
+  }
+
+  /** `opts.modules(specifier)`, asked once. */
+  private hostModule(specifier: string): HostModule | undefined {
+    let m = this.hostModules.get(specifier);
+    if (m === undefined) {
+      const r = this.opts.modules?.(specifier);
+      m = r !== undefined && r !== null && typeof r.exports === "object" && r.exports !== null ? r : null;
+      this.hostModules.set(specifier, m);
+    }
+    return m ?? undefined;
+  }
+
+  /** The host value export `name` of module `specifier` binds (its function made on first use); undefined if none. */
+  private moduleExport(specifier: string, mod: HostModule, name: string): number | undefined {
+    if (!Object.hasOwn(mod.exports, name)) return undefined;
+    const e = mod.exports[name];
+    if (typeof e === "string") {
+      const h = this.hostValue(e);
+      if (h === undefined) throw new SandboxError("misuse", `module ${specifier}: export ${name} names no host function, namespace or value ${e}`);
+      return h;
+    }
+    const identity = `${specifier}#${name}`;
+    if (this.fnNames.indexOf(identity) === -1) {
+      const f = e.fn ?? (() => {
+        throw new Error(`${identity} has no implementation in this sandbox`);
+      });
+      this.addFunction(identity, f, e.sync !== true);
+    }
+    return this.hostValue(identity);
+  }
+
+  /**
+   * The namespace object of module `specifier` (D3597): made on first use with every
+   * export as an enumerable member, and frozen; a host value named by the specifier.
+   * Undefined when another host value has that name.
+   */
+  private moduleNamespace(specifier: string, mod: HostModule): number | undefined {
+    if (this.moduleNamespaces.has(specifier)) return this.namespaces.get(specifier);
+    if (this.hostValue(specifier) !== undefined) return undefined;
+    const members = Object.keys(mod.exports).map((name): [string, number] => {
+      const h = this.moduleExport(specifier, mod, name);
+      return [name, h!];
+    });
+    return this.guard(() => {
+      const ns = this.check(this.x.vm_new_object(this.vm), "memory");
+      for (const [name, h] of members) this.defineOn(ns, name, h, true);
+      this.x.vm_handle_free(this.vm, this.callHelper(1, ns));
+      this.namespaces.set(specifier, ns);
+      this.moduleNamespaces.add(specifier);
+      return ns;
+    });
+  }
+
+  /**
+   * Before a dump loads: makes the host values of modules it names (`$djs.host(...)`,
+   * `$djs.resume(..., identity, ...)`) that this sandbox has not made yet, by the
+   * identities modules give them (D3597): `specifier#export` is export `export` of module
+   * `specifier`, a name without `#` a namespace. The loading Script cannot wait for them:
+   * they are made while the VM runs nothing.
+   */
+  private prepareModules(dump: string): void {
+    if (this.opts.modules === undefined) return;
+    const names = new Set<string>();
+    for (const m of dump.matchAll(/\$djs\.(?:host|resume)\((?:\d+,\s*)?("(?:[^"\\\n]|\\.)*")/g)) {
+      try {
+        names.add(JSON.parse(m[1].replace(/\\x([0-9a-fA-F]{2})/g, "\\u00$1")) as string);
+      } catch {
+        // Not a name this could make.
+      }
+    }
+    for (const name of names) {
+      if (this.hostValue(name) !== undefined || this.fnNames.includes(name)) continue;
+      const hash = name.lastIndexOf("#");
+      if (hash > 0) {
+        const spec = name.slice(0, hash);
+        const mod = this.hostModule(spec);
+        const e = mod?.exports[name.slice(hash + 1)];
+        if (mod !== undefined && e !== undefined && typeof e !== "string" && Object.hasOwn(mod.exports, name.slice(hash + 1))) {
+          this.moduleExport(spec, mod, name.slice(hash + 1));
+        }
+      } else {
+        const mod = this.hostModule(name);
+        if (mod !== undefined) this.moduleNamespace(name, mod);
+      }
+    }
   }
 
   private bindGlobal(name: string, identity: string): void {
@@ -1730,6 +1891,7 @@ export class Sandbox {
     if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
     const plain = plainDump(dump);
     if (!plain) throw new SandboxError("misuse", 'cannot load the dump: not a djs dump (no "djs-dump"; header)');
+    this.prepareModules(dump);
     return this.loadPlain(dump, plain.typescript);
   }
 
@@ -2143,7 +2305,10 @@ export class Sandbox {
         if (h === undefined) throw new SandboxError("misuse", `binding ${p}: no host function or namespace ${identity}`);
         return h;
       });
-      const names = [...Object.keys(params), ...bound.map(([p]) => p)];
+      // The body's imports (D3597): parameters after the bindings.
+      const imported = script ? [] : this.bodyImports(code, (local) => Object.hasOwn(params, local) || bound.some(([p]) => p === local));
+      for (const [, h] of imported) boundHandles.push(h);
+      const names = [...Object.keys(params), ...bound.map(([p]) => p), ...imported.map(([p]) => p)];
       const handles = Object.values(params).map((v) => this.toHandle(v));
       const name = textEncoder.encode(filename ?? "");
       const head = textEncoder.encode(names.join("\n"));

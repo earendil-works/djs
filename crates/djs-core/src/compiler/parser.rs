@@ -521,6 +521,9 @@ impl<'a, 'h> Parser<'a, 'h> {
                 || (crate::MODULES && self.f.kind == FuncKind::Module)
                 || self.strip,
         );
+        if self.f.kind == FuncKind::AsyncBody && !self.strip {
+            self.skip_body_imports()?;
+        }
         while self.tok.kind != TokenKind::Eof {
             self.parse_statement_list_item()?;
         }
@@ -532,6 +535,17 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.code().return_();
         } else {
             self.emit_return_undef();
+        }
+        Ok(())
+    }
+
+    /// A codemode body's leading import declarations (D3597): the host binds their names
+    /// as the body's parameters, so they compile to nothing; they are checked as import
+    /// syntax and skipped. One later in the body is the usual SyntaxError.
+    pub(super) fn skip_body_imports(&mut self) -> PResult<()> {
+        while self.is(TokenKind::Import) && self.strip_at_module_item() {
+            let start = self.tok.start;
+            self.strip_import(start)?;
         }
         Ok(())
     }

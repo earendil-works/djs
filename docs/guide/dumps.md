@@ -464,6 +464,19 @@ run was started with). A text whose hash differs, or that was compiled with othe
 parameters or options, is refused, because the continuations would not fit it. A host
 that would rather not keep scripts sets `inlineSources`, and its dumps carry the text.
 
+### Imports
+
+A body that [imports host modules](language.md#imports-in-a-body) dumps like one that
+gets its functions as parameters, because that is what its imports are: each imported
+name is a parameter of the body, after the host's own. A continuation receives an
+imported function as `$djs.host("@mcp/github#search_issues")` and a namespace as
+`$djs.host("@mcp/linear")`, so `===` between what the run held and what the module gives
+holds after a load. A dump that refers to the script by `$djs.source` names the script
+as written, imports included, with the imported names among its parameters; a dump with
+`inlineSources` writes the body as an async function whose parameters include them, with
+the import declarations replaced by spaces, since an import cannot stand in a function.
+The loading host needs the same modules, and makes their values before it runs the dump.
+
 ## Storing dumps
 
 A dump is plain text, and it compresses well: hosts store it compressed with zstd at

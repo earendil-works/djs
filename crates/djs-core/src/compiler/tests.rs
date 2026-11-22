@@ -3248,3 +3248,65 @@ fn module_errors() {
         }
     }
 }
+
+/// A codemode body's leading import declarations compile to nothing (D3597): the host
+/// binds their names as parameters (here `console`), and one after a statement is an error.
+#[test]
+fn body_imports_are_skipped() {
+    let ok = [
+        "import { log } from \"@x/console\";\nreturn 1",
+        "// a comment\nimport * as ns from 'x'\nimport d, { a as b, 'c d' as e } from \"y\"; import \"z\";\nreturn 2",
+        "import console from \"x\"\nconsole.log('hi'); return 3",
+    ];
+    let want = ["=> 1", "=> 2", "hi\n=> 3"];
+    for (src, want) in ok.iter().zip(want) {
+        assert_eq!(run_body(src), want, "{src}");
+    }
+    // TypeScript's type-only imports too.
+    assert_eq!(
+        run_body_opts(
+            "import type { T } from 'x';\nimport { type U, console } from 'y';\nconst n: number = 4; return n",
+            true
+        ),
+        "=> 4"
+    );
+    for src in [
+        "const a = 1;\nimport { b } from 'x';\nreturn a",
+        "{ import { b } from 'x'; }",
+        "import { b } from;",
+        "import { b }",
+    ] {
+        assert!(
+            run_body(src).starts_with("compile error: SyntaxError"),
+            "{src}: {}",
+            run_body(src)
+        );
+    }
+    // `import(...)` and `import.meta` still start expressions, and a Script has no imports.
+    assert!(
+        run_body("const p = import('x'); p.catch(() => {}); return typeof p")
+            .ends_with("=> object")
+    );
+    let mut heap = Heap::new().unwrap();
+    assert!(
+        compile(
+            &mut heap,
+            b"import { a } from 'x';",
+            &CompileOptions::script("s.js")
+        )
+        .is_err()
+    );
+}
+
+#[cfg(feature = "dump")]
+#[test]
+fn body_imports_end_is_after_the_last_import() {
+    let mut heap = Heap::new().unwrap();
+    let src = "/* c */ import { a } from 'x';\nimport * as b from \"y\"\n\nreturn a(b);";
+    let end = body_imports_end(&mut heap, src.as_bytes(), false).unwrap() as usize;
+    assert_eq!(
+        &src[..end],
+        "/* c */ import { a } from 'x';\nimport * as b from \"y\""
+    );
+    assert_eq!(body_imports_end(&mut heap, b"return 1", false).unwrap(), 0);
+}

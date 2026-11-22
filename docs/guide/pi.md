@@ -119,6 +119,9 @@ of pi's sits in the VM, so none is in a dump.
 - **Output and the store are sync host functions** (`text`, `image`, `store`, `load`,
   `console.*`); their checks and limits live on pi's side. `exit()` throws `RunExit`, so
   the script cannot catch it.
+- **MCP servers are host modules** (`modules`): a script imports their tools
+  (`import { search_issues } from "@mcp/github"`) after reading the module's `.d.ts`,
+  which pi writes from the same descriptor, and `tools.*` stays for pi's own tools.
 - **`ALL_TOOLS` is host data** (`values`): a dump names it instead of carrying the tool
   list, and the resuming process gives it again.
 - **The JSON boundary** makes what a script passes to tools, stores and returns what

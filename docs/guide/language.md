@@ -77,6 +77,40 @@ return total;
 A body's declarations are local to it: two runs in the same sandbox share only what the
 first one put on `globalThis`.
 
+### Imports in a body
+
+A body may start with import declarations of **host modules**: names that the host gives
+a meaning, such as a tool server's functions.
+
+```js
+import { search_issues } from "@mcp/github";
+import * as linear from "@mcp/linear";
+const hits = await search_issues({ q: "dumps" });
+return await linear.create_issue({ title: hits[0].title });
+```
+
+Every form of an import declaration works: named and renamed imports, string names
+(`"get issue" as get`), a namespace (`* as linear`), a default import, an import for its
+check alone (`import "spec"`), and in TypeScript `import type` and `type` specifiers,
+which are erased. The host resolves each specifier to the module's exports, its own host
+functions and objects; an unknown module or export is a `SyntaxError` before any of the
+body runs. A namespace is one frozen object per module in a sandbox, with the exports as
+its members.
+
+A body that imports is still a body, not a module:
+
+- the imports come first, before its first other statement (comments may come between);
+  an import declaration later in the body is a `SyntaxError`;
+- each imported name is a parameter of the body, bound to the host's value when the run
+  starts: it can be assigned like any parameter, and it is not a live binding;
+- there is no `export`, and the body still returns its result;
+- `import()` is not an import of a host module: it returns a rejected promise, as below;
+- import attributes (`with { type: "json" }`) are not supported.
+
+A run that imported functions [dumps](dumps.md) like any other: an imported function is
+written as the host function it is, a namespace as the host's object, and the script is
+the one the run started with, imports included.
+
 The second kind of code is a **Script** in the specification's sense: top-level `var`
 and function declarations become properties of the global object, `let`, `const` and
 `class` go into a global lexical scope that later Scripts see, and the Script has a
@@ -135,7 +169,8 @@ handed code), and any attribute other than `type` is a `SyntaxError` when the gr
 Modules come with the native build for Rust hosts, together with the rest of what only
 such hosts use: `TextEncoder` and `TextDecoder` are the other part. The wasm modules leave
 them out, since codemode scripts are one piece of code that gets its data from host
-functions. There `import` and `export` declarations are syntax errors, `import()`
+functions. There `export` declarations are syntax errors, and so are import declarations
+but the leading ones of a body, which [import host modules](#imports-in-a-body); `import()`
 compiles everywhere but returns a rejected promise, as below (as it does in a native VM
 whose host does not answer imports), and a use of `TextEncoder` is a ReferenceError that
 names the build.
@@ -146,7 +181,7 @@ names the build.
 | --- | --- |
 | Sloppy mode, `with` | See above: one set of semantics. `with` is a syntax error. |
 | Direct `eval` | A direct `eval` can see and change the caller's local variables, so every function that contains one would need its scopes kept by name. `eval(x)` is always an indirect eval: it compiles `x` as a global Script. The `Function` constructors work. |
-| ES modules in codemode | A codemode script is one piece of code: in a body or a Script, `import` and `export` declarations are syntax errors, and `import()` compiles and returns a rejected promise. Hosts give scripts their functions as globals or parameters instead ([bindings](js-api.md#host-functions)). Native hosts can load [modules](#modules). |
+| ES modules in codemode | A codemode script is one piece of code: in a Script, `import` and `export` declarations are syntax errors, in a body all but its leading [imports of host modules](#imports-in-a-body), and `import()` compiles and returns a rejected promise. Hosts give scripts their functions as imports, globals or parameters ([bindings](js-api.md#host-functions)). Native hosts can load [modules](#modules). |
 | `Intl` | Locale data is megabytes. `toLocaleString` and friends use a fixed, locale-independent form. |
 | `Temporal` | Not needed by the scripts djs runs; `Date` is there. |
 | `SharedArrayBuffer`, `Atomics`, workers | A sandbox is one thread. |

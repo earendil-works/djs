@@ -14094,3 +14094,41 @@ boundary's functions, source references and an inlined source). Neither is ever
 rewritten to make a build pass, and the D024 escape in D2619 ("an incompatible format
 change, which then rewrites all of them") is withdrawn: changing or removing a golden
 dump needs an owner's decision. Images, snapshots and the wasm ABI stay under D024.
+
+## D3597: Codemode bodies import host modules: leading imports, bound as parameters
+date: 2026-11-22 · by: pdurable · issue: 0292
+A codemode body (the async body goal) may start with import declarations (`import { a,
+b as c } from "spec"`, `import * as ns from "spec"`, `import d from "spec"`, `import
+"spec"`, TypeScript's `import type` and `type` specifiers, erased). They are not ES
+modules: the body has no `export`, still returns, and runs as one async function. How
+they differ from a module's imports: (1) they come first, before the body's first other
+statement (comments between are fine); one later is a SyntaxError, as before; (2) each
+name is a parameter of the body after the run's `params` and the sandbox's `bindings`
+(D2972's "imports later are one more binding"), so it is assignable and not a live
+binding; (3) what a specifier means is the host's: no module graph, no evaluation, no
+attributes; (4) `import()` still rejects ("could not load module"): host modules are
+imported statically. Where it lives, by cost (the shipped module is at its size ceiling;
+ES modules are not in djs-wasm, D3171): the engine only skips leading import declarations
+in a body (`Parser::skip_body_imports`, the strip parser's `strip_import`, already in the
+module), compiling them to nothing; the Sandbox reads them itself (js/src/imports.ts) and
+binds their names as parameters. So the script is compiled as written, `$djs.source`'s
+hash covers it as written, and its params (which name the imports) come from the script
+on every host: no rewrite. The resolver is `SandboxOptions.modules(specifier) =>
+{ exports: { name: identity | { fn?, sync? } } } | undefined`, asked once per specifier,
+lazily; an unknown module or export, or a name taken twice, is a `syntax` SandboxError
+(`SyntaxError: Cannot find module 'x' at 1:19`, `... does not provide an export named
+'y'`). An export given as an identity binds that host value; one given as a function
+spec is defined on first import as `specifier#export` (D2970's convention), async unless
+`sync`, with a throwing default (host-driven runs never call async functions). A
+namespace import is one object per specifier per VM, frozen, with every export as an
+enumerable member, a host root named by the specifier; a specifier that names another
+host value cannot be imported as a namespace. Dumps: K and the origin name the imports
+like any parameter (`$djs.host("@mcp/github#search_issues")`, `$djs.host("@mcp/linear")`);
+an inlined body is written as `async function (params, imports) {...}` with its import
+declarations blanked (spaces, so offsets hold; `compiler::body_imports_end`, dump builds
+only). A loading sandbox makes the module values a dump names before running it (a scan
+of the dump's `$djs.host`/`$djs.resume` names: `specifier#export` and specifiers, through
+`modules`), since the loading Script cannot wait for the helper. Rejected: imports as
+ES module records (the dumper knows none, and module code is off in djs-wasm); a
+compile-time import list from the engine (wasm size); read-only bindings (a const flag on
+those parameters would need the engine to read the clause names; left out).

@@ -5318,11 +5318,13 @@ impl Sources {
                     .get()
                     .map(|p| text_of(h, crate::value::Str(p)))
                     .unwrap_or_default();
+                let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
+                let ts = bits & crate::compiler::CompileOptions::TYPESCRIPT_BIT != 0;
                 Some(cat!(
                     "async function (",
                     params.replace(',', ", "),
                     ") {\n",
-                    src,
+                    &blank_body_imports(src, ts),
                     "\n}"
                 ))
             }
@@ -5331,6 +5333,33 @@ impl Sources {
                 .map(String::from),
         }
     }
+}
+
+/// A codemode body's text with its leading import declarations blanked (D3597): their
+/// names are the body's parameters (the host bound them), and an async function cannot
+/// hold an import. Spaces in their place keep every offset and line.
+fn blank_body_imports(src: &str, typescript: bool) -> String {
+    if !src.contains("import") {
+        return String::from(src);
+    }
+    let end = Heap::new()
+        .ok()
+        .and_then(|mut heap| {
+            crate::compiler::body_imports_end(&mut heap, src.as_bytes(), typescript).ok()
+        })
+        .unwrap_or(0) as usize;
+    let mut out = String::with_capacity(src.len());
+    for c in src[..end.min(src.len())].chars() {
+        if c == '\n' || c == '\r' {
+            out.push(c);
+        } else {
+            for _ in 0..c.len_utf8() {
+                out.push(' ');
+            }
+        }
+    }
+    out.push_str(&src[end.min(src.len())..]);
+    out
 }
 
 /// An arrow's `text` (at `at` in its script) with the `arguments` of its frame's function

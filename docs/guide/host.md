@@ -159,7 +159,9 @@ call under its old id from inside the `$djs.resume` hook, and the other two rest
 ## Driving a run
 
 A run is a loop on the host side. The host compiles the script as a codemode function
-body (`vm_compile`), starts the call (`vm_call`, the argument handles in staging) and
+body (`vm_compile`; leading import declarations compile to nothing, and the host passes
+the values they import as parameters named by them), starts the call (`vm_call`, the
+argument handles in staging) and
 then calls `vm_run` with a fuel slice. `vm_run` returns a status, the host acts on it and
 runs again:
 
