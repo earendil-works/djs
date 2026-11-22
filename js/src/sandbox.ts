@@ -114,6 +114,12 @@ export interface SandboxOptions {
    * that calls `myTool("x")` finds it there. Default: none.
    */
   bindings?: Record<string, string>;
+  /**
+   * Host data bound as globals (prototype): deep-frozen copies of JSON-like values that the
+   * host gives every run (`ALL_TOOLS`). Dumps refer to them as `$djs.host(name)` and never
+   * write them, so a loading sandbox must be given them again. Default: none.
+   */
+  values?: Record<string, unknown>;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
   console?: ConsoleLike;
   /**
@@ -853,6 +859,20 @@ export class Sandbox {
       const globals = { ...(opts.globals ?? this.defaultGlobals()) };
       if (opts.debugger !== undefined) globals.debugger = "debugger";
       for (const [name, identity] of Object.entries(globals)) this.bindGlobal(name, identity);
+      // Host data (`values`): deep-frozen copies, host roots like the namespaces, so a dump
+      // names them (`$djs.host(name)`) instead of writing them.
+      for (const [name, value] of Object.entries(opts.values ?? {})) {
+        this.guard(() => {
+          const h = this.toHandle(value);
+          if (h === 0) return;
+          this.namespaces.set(name, h);
+          this.bindGlobal(name, name);
+        });
+      }
+      if (opts.values !== undefined && Object.keys(opts.values).length > 0) {
+        const names = JSON.stringify(Object.keys(opts.values));
+        this.run(`const freeze = (o) => { if (o !== null && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); for (const k of Object.keys(o)) freeze(o[k]); } };\nfor (const name of ${names}) freeze(globalThis[name]);`);
+      }
       // What a new VM starts with; an image keeps its own (D1680).
       const det = opts.deterministic;
       const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
@@ -2157,7 +2177,18 @@ export class Sandbox {
       h = this.guard(() => {
         const msg = this.stageText(e instanceof Error ? e.message : String(e));
         const kind = e instanceof TypeError ? 1 : e instanceof RangeError ? 2 : 0;
-        return this.check(x.vm_new_error(vm, kind, msg), "memory");
+        const error = this.check(x.vm_new_error(vm, kind, msg), "memory");
+        // The host error's own data properties (a tool's `structuredOutput`, a `code`) go
+        // with it, so the script's catch sees them: wire values, not name/message/stack.
+        if (typeof e === "object" && e !== null) {
+          for (const [key, v] of Object.entries(e)) {
+            if (key === "name" || key === "message" || key === "stack" || v === undefined) continue;
+            const p = this.toHandle(v);
+            this.defineOn(error, key, p);
+            if (p !== 0) x.vm_handle_free(vm, p);
+          }
+        }
+        return error;
       });
     }
     return this.guard(() => {
