@@ -347,9 +347,11 @@ loop {
 - **Promises and jobs:** the microtask queue is a heap structure (D1370, D1371). Running a
   job means pushing a frame. Results of async host calls wait in the host inbox and are
   applied one at a time when the job queue is empty (D1670).
-- **Fuel:** a counter decremented per instruction, weighted by cost. Native ops charge fuel
-  in proportion to the work they do (bytes copied, elements visited); `@fast` entries
-  cost a flat 2 (D1850). Running out of fuel is just another suspension. The embedder
+- **Fuel:** a counter decremented per instruction, weighted by cost. Native work is
+  charged in proportion to what it does (bytes allocated, code units scanned or compared,
+  elements and keys visited or moved) by the heap's primitives into a work counter, which
+  the interpreter takes into its fuel at safepoints; a run stops only where no work is
+  owed (D3580). Running out of fuel is just another suspension. The embedder
   turns it into a timeout or a time slice. An instruction's overshoot
   carries to the next run as a debt in the heap, so a budget given in different slices
   stops at the same instruction (D1740, D1711, D1712).
@@ -460,7 +462,7 @@ The GC and fuel rules that keep this simple:
   local except the operation's arguments, which are rooted on the stack first (a state's
   final call, or a call that is a whole statement, which djs-bgen marks).
 - **Fuel is charged per transition** (4 per loop back-edge, 2 per call, D1633, and in
-  proportion to the work leaf calls do). A loop back-edge is a transition and a
+  proportion to the work leaf calls do, through the heap's work counter, D3580). A loop back-edge is a transition and a
   safepoint, so a `map` over a million elements can run out of fuel and suspend in the
   middle, like bytecode would.
 - **Fast paths are tried inline, and the slow path is a resume point.** For example `get`

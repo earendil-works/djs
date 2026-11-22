@@ -585,7 +585,7 @@ impl Exec<'_> {
             }
             Err(_) => return Ok(false),
         };
-        // Like the string leaf intrinsics the builtins call, no charge per code unit.
+        // (Its work is the heap's to charge, `heap/work.rs`.)
         self.fuel -= FAST_FUEL;
         self.sp = base;
         match cont {

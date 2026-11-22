@@ -26,17 +26,39 @@ Fuel is djs's unit of work. Every instruction costs fuel before it runs, by its 
 | `Alloc` | 3 | instructions that allocate a cell |
 | `Call` | 5 | calls and constructs |
 
-Work that is not one instruction is charged in proportion to what it does: a builtin
-that copies a string charges for the characters it copies, `JSON.parse` for the bytes it
-reads, the regular expression matcher for every step it takes, and a builtin compiled to
-native code charges 4 per loop iteration and 2 per call it makes. So fuel bounds the
+Work that is not one instruction is charged in proportion to what it does: `JSON.parse`
+for the bytes it reads, the regular expression matcher for every step it takes, a
+builtin compiled to native code 4 per loop iteration and 2 per call it makes, and every
+builtin for the work of the heap operations it is built on:
+
+| work | fuel |
+| --- | ---: |
+| allocating a cell, past its first 64 bytes | 1 per 32 bytes |
+| scanning, comparing or hashing a string, scanning for case or normalization | 1 per 16 code units |
+| parsing a number from a string | 1 per 4 digits |
+| visiting, moving or clearing array elements, enumerating keys | 1 per 4 |
+| a value made into an array (a piece of a split, a key of `Object.keys`), an element added by `new Set(array)` | 1 per 2 |
+
+Small work is free, as a small allocation is: a scan of up to 64 code units, a loop
+over up to 16 elements, a comparison or hash of up to 256 units. The call that does it
+already pays a few units. So `s.indexOf(c)` over a million characters, `a.join()` of
+30,000 elements and `new Set(a)` cost what they do, and a builtin added later on top of
+the same heap operations is charged without anyone having to think of it. Fuel bounds the
 *work* a run does, not its instruction count: one instruction that parses a large tool
 result costs as much as the parsing. As a rough scale, a million units are a few
-milliseconds of a tight loop in wasm.
+milliseconds of a tight loop in wasm, and of the worst-charged builtin about twenty
+times that.
 
-An expensive instruction can take a slice below zero. That overshoot is carried as a
-debt and paid first by the next slice, so a budget stops at the same instruction however
-it is sliced.
+The heap operations add their charge to a counter in sixteenths of a unit, which the
+interpreter takes into the run's fuel at the next safepoint (a loop back-edge, a call or
+a return). A run that is out of fuel goes on to that safepoint before it stops, so it
+stops only where its fuel is exact. A fast path that gives up charges nothing, since the
+general path does the same work again; neither do garbage collections, whose timing is
+not the program's.
+
+An expensive instruction can take a slice below zero. That overshoot, and the fraction
+of a unit the counter still holds, are carried as a debt and paid first by the next
+slice, so a budget stops at the same instruction however it is sliced.
 
 > **Trade-off.** Fuel over wall-clock time. Time is what the host cares about, but a time
 > limit makes the stopping point depend on the machine and its load, so the same script

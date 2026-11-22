@@ -82,7 +82,9 @@ parts of the engine exists to keep it:
 
 - **Fuel** stops a run at the same instruction however the budget was sliced, because an
   overshoot is carried to the next run as a debt ([Suspending
-  anywhere](suspension.md)).
+  anywhere](suspension.md)). The work builtins charge is taken at safepoints, and a run
+  stops only where none is owed, so where that happens does not depend on the slicing
+  either; collections charge nothing ([fuel](limits.md#fuel)).
 - **Collections** happen at the same instructions under any slicing and restore. The
   threshold lives in the heap, and nothing about a stop allocates or collects
   ([The garbage collector](gc.md)). So does the choice between a minor and a full
@@ -205,7 +207,8 @@ Some things are deliberately outside the guarantee:
   when collections run, and collections the host requests or a smaller heap cap change
   that. Deterministic mode makes them strong or absent for this reason.
 - **Fuel of builtins in Rust.** A builtin compiled to Rust charges fuel per loop
-  iteration and call, or a flat amount per call, where bytecode charges per instruction.
+  iteration and call, and for the work of its heap operations, where bytecode charges
+  per instruction.
   Which builtins run as Rust is part of the build, so a different build may spend
   different fuel on the same script.
 - **Other builds.** Journals are tied to the build hash, which covers the engine's

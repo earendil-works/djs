@@ -260,7 +260,8 @@ Two rules keep this safe:
   the cap collects and runs again, but only at points where bgen knows that the
   generated code holds no other heap value in a Rust local.
 - **Fuel per transition.** A native frame charges 4 fuel per back-edge and 2 per call,
-  where bytecode charges per instruction ([fuel](limits.md#fuel)).
+  where bytecode charges per instruction, and its leaf operations charge for their work
+  through the heap ([fuel](limits.md#fuel)).
 
 The callback loops of `forEach`, `map`, `filter`, `some`, `every`, `find`, `findIndex`
 and `reduce`, and `Array.from(arrayLike, f)`, are bytecode builtins, not native ones. Their dense part is one intrinsic, `%EachDense`: it enters the callback's frame

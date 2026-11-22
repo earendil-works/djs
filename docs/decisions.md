@@ -13913,3 +13913,72 @@ still the unstored lazy one (D2445, the flag `OBJ_LAZY_NAME`): only a function w
 unconditional lookup → as landed: `new Error('x')` in 5 nested functions 37.5k → 38.8k →
 37.7k, in one 19.6k → 20.0k → 19.6k, top level 14.4k → 14.4k → 14.3k; in a renamed
 function 19.9k → 20.5k → 20.5k (it pays the lookup).
+## D3580: Builtins charge fuel for their work: a work counter in the heap
+date: 2026-11-22 · by: pidle · issue: 0289
+GitHub issue #3: many builtins charged a flat amount whatever their input (`@fast` entries
+2, `@rust` leaves 2, the leaf intrinsics they call nothing), so one slice of a million
+units of fuel ran for up to 128 s (`new Set` of 30,000 elements) where a tight loop takes
+2 ms. Fuel now bounds the work (amends D1850's "Fuel: 2 per fast call", D1740's
+overshoot, D1633's per-transition charge for native code).
+- **Where the charge is made.** At the heap's primitives, not per builtin
+  (`heap/work.rs`): allocation (1 unit per 32 bytes past the first 64 of a cell), string
+  search, comparison, case and normalization scans, number parsing (1 per 16 code units;
+  parsing 1 per 4 digits), element and key loops and moves (`dense_range`, dense search,
+  fill, splice/shift/unshift's move, `length` truncation, key enumeration, string join
+  pieces: 1 per 4), values made into an array (`new_array_from_values`: 2 per 4), a
+  `new Set/Map(array)` add (2 per 4), and the keyed hash of a string when it is computed.
+  A new builtin built on them is charged without thought. Small work is free (a scan of
+  up to 64 units, a loop of up to 16 elements, a compare or hash of up to 256 units): the
+  call pays for it, and the tier-0 loop compares short strings itself.
+- **The counter.** `Heap::work`, sixteenths of a unit, a `Cell` (so primitives with
+  `&Heap` charge), four bytes as the heap's last field (it moves no other field).
+  `Heap::take_work` takes whole units into `Exec::fuel` and leaves the fraction; a run
+  that stops carries the fraction in `Interp::FUEL_DEBT` (`units + sixteenths / 16`, the
+  debt clamped to ±2^48 so the Number holds it exactly; COMPAT_VERSION 14). So the sum
+  never depends on where the counter is taken.
+- **Where it is taken.** At safepoints (`Exec::safepoint`, so at every back-edge, call and
+  return of bytecode and native code), before a regexp's budget, and at the end of a
+  run. The tier-0 loop does not touch its fuel after a heap call (that cost every
+  instruction 1-18% in V8, measured): `heap_call!` sets `collect` when a whole unit is
+  owed, so the loop leaves at its next safepoint. A run out of fuel does not stop while a
+  safepoint is wanted (a collection, or owed work, not under GC stress): it goes on to it,
+  the tier-0 loop with its fuel biased (`Exec::hot_bias`, outside the loop's own code)
+  and returning at its first exit, native back-edges likewise. So a run stops only where
+  its fuel is exact, and a budget stops at the same instruction for any slicing (D1740's
+  test, with and without the loop).
+- **What charges nothing.** Collections (the counter is saved around `collect`,
+  `collect_minor`, `collect_canonical`: they depend on the schedule), suspension records
+  (`begin_unbudgeted`), host work between runs (a run starts from its carried fraction),
+  a fast path that declines (`fast_builtin_call`, `try_fast_call`, `try_fast_new`,
+  `fast_getter`, `pure_leaf_hit` reset the counter: the general path does the work again
+  and pays), and the debug builds' second comparisons in the loop.
+- **Other changes.** `Heap::str_cmp` flattens a rope (an append rope is read in place)
+  and returns a `Result`; IsStrictlyEqual of two strings charges the shorter's units past
+  256; `hot_str_eq` compares in the loop only up to 256 units. The loop-top
+  out-of-fuel exit is `Exit::Budget` (it was `General`); a declined instruction's exit no
+  longer stops before the general path runs it.
+Tests: `crates/djs-prelude/tests/builtin_fuel.rs` (80 operations at n = 60 and 6,000 must
+grow by at least n/32, with and without the tier-0 loop, same fuel and result; full-build
+cases apart), `slices::fuel_independent_of_slice` (`builtin-work`) and
+`slices::fuel_independent_of_collections` (GC stress, same fuel).
+Measured (release native, one slice of 10^6 fuel, `builtin_fuel -- --ignored
+slice_wall_clock`; tight loop 2.1 ms): join of 30k 7.9 s → 12 ms; indexOf over 1M
+6.0 s → 1.2 ms; Object.keys of 30k 12.8 s → 24 ms; new Set of 30k 128 s → 24 ms;
+`===` of two 1M strings 15 s → 0.5 ms; Map.get with a fresh 1M key 24 s → 8.6 ms; the
+worst, split('') of 1M, 43 ms (20x the tight loop). Fuel at n = 30 / 3,000 / 30,000:
+`s.split('')` 14 / 14 / 14 → 27 / 1,543 / 15,043; `a.join('-')` 14 flat → 22 / 950 /
+9,387; `s.indexOf('!')` 14 flat → 14 / 201 / 2,825; `new Set(na)` 13 flat → 69 / 8,645 /
+72,312. Speed (wasm, slope.py, instructions per iteration, main → branch): call +0.4%,
+empty +1.3%, local +0.3%, mathf +0.9%, method +0.3%, prop +1.0%, push +1.1%, strm
++0.3%, tight +0.6%, trim +1.0%; builtin calls: includes +0.5%, indexOf +1.9%, join +1.6%,
+Object.keys +0.9%, toLowerCase +1.5%, Map.get −8% (noise), parseInt +0.6%, Set.add
++1.9%, split +4.1%, `===` +0.7%, `<` of short strings +3.3%. Size: shipped 431,736 →
+432,899 B gz (+1,163), slim 365,655 → 366,272 (+617): D3581.
+
+## D3581: The size budget gets 1 KB more for the fuel fix (owner)
+date: 2026-11-22 · by: owner (recorded by pidle) · issue: 0289
+owner: allowance raised for the fuel fix (GitHub #3). D3580 makes the shipped module
+1,163 B gz bigger (431,736 → 432,899, 869 B past the budget of 432,030) after slimming
+(charges out of line, the string comparisons shared, the counter a field that moves no
+other); `budget_allowance_gzip` goes from 2,048 to 3,072 (what it needs, rounded up to
+the next 256 B), the ceiling to 432,899, the slim ceiling to 366,272 (+617).

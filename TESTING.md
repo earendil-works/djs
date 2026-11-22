@@ -850,8 +850,8 @@ tool for work on a gap the comparison shows.
 ### Size budget (D020)
 
 The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) must stay within
-1.5x quickjs-wasi's size, gzip -9, plus an allowance of 2,048 bytes the owner added to
-land speedups that had been parked for size (D3510). The gate builds it beside its other steps (in
+1.5x quickjs-wasi's size, gzip -9, plus an allowance of 3,072 bytes the owner added to
+land speedups that had been parked for size (D3510) and the fuel fix (D3581). The gate builds it beside its other steps (in
 `target/size`) and its last step runs `scripts/size/budget.py` on it, which compares its
 gzip with `tests/scores/size.tsv`:
 
