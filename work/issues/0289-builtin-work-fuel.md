@@ -69,7 +69,7 @@ instructions comparing strings charge per instruction.
 ## Log
 - Baseline survey (scratch issue3/fuel_survey.rs at main 389d83ca): 40+ operations flat
   (work/scratch/0289/survey-before.txt).
-- Design (D3580): `Heap::work`, a counter in sixteenths of a unit, charged by the heap's
+- Design (D3590): `Heap::work`, a counter in sixteenths of a unit, charged by the heap's
   primitives (allocation past 64 B, string search/compare/scan/hash, number parsing,
   element/key loops and moves, values made into arrays). Taken into `Exec::fuel` at
   safepoints; the fraction carries over in `FUEL_DEBT` (COMPAT_VERSION 14). GC,
@@ -92,11 +92,11 @@ instructions comparing strings charge per instruction.
   (+10% on `includes`).
 - Size: +1,163 B gz shipped, +617 slim after slimming (charges out of line, string
   compares shared through `Heap::str_cmp`/`view_cmp`, counter as the heap's last field).
-  The owner raised the allowance by 1,024 B (D3581).
+  The owner raised the allowance by 1,024 B (D3591).
 - Guide: limits.md (fuel section rewritten), builtins.md (fuel per transition),
   determinism.md (fuel bullets). ARCH "Fuel" and the GC/fuel rules. TESTING.md budget.
 - Numbers: work/scratch/0289/{survey-after.txt,wall-after.txt,slope-default.txt,
-  slope-ops.txt}; summary in D3580.
+  slope-ops.txt}; summary in D3590.
 
 ## Follow-ups
 - A Map/Set or atom lookup with a long string key whose hash is cached, and the content
@@ -119,4 +119,4 @@ One slice of a million units now takes at most ~43 ms natively (split('') of 1M;
 loop 2 ms) where it took up to 128 s. Fuel stays slice-, GC- and loop-independent
 (D1740 tests, `slices::fuel_independent_of_collections`, the hot-loop invisibility
 tests). `crates/djs-prelude/tests/builtin_fuel.rs` fails for a new flat builtin; its
-ignored `slice_wall_clock` prints the wall-clock table. Decisions D3580, D3581.
+ignored `slice_wall_clock` prints the wall-clock table. Decisions D3590, D3591.

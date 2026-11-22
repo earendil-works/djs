@@ -23,10 +23,10 @@
 # raised by 0287, D3560: the one-unit string cache, +81 B over the ceiling (+187 B over main's module before 0285/0286), slim +80 B;
 # raised by 0286, D3551: @fast builtin calls inside the loop, a primitive's builtin method from the cache slot, +403 B, slim +387 B;
 # raised by 0288, D3570: for-of over strings out of the general path, +301 B, slim +291 B;
-# raised by 0289, D3580/D3581: builtins charge fuel for their work, +1,163 B, slim +617 B).
+# raised by 0289, D3590/D3591: builtins charge fuel for their work, +1,163 B, slim +617 B).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 # budget_allowance_gzip: added to 1.5x by the owner (D3510, 2026-11-21) to land the speedups
-# parked for size, raised by 1,024 for the fuel fix (D3581, 2026-11-22); the ceiling below
+# parked for size, raised by 1,024 for the fuel fix (D3591, 2026-11-22); the ceiling below
 # still rises only by recorded batches.
 quickjs_wasi_gzip	286655
 budget_allowance_gzip	3072

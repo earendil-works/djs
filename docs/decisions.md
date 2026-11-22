@@ -13913,7 +13913,7 @@ still the unstored lazy one (D2445, the flag `OBJ_LAZY_NAME`): only a function w
 unconditional lookup → as landed: `new Error('x')` in 5 nested functions 37.5k → 38.8k →
 37.7k, in one 19.6k → 20.0k → 19.6k, top level 14.4k → 14.4k → 14.3k; in a renamed
 function 19.9k → 20.5k → 20.5k (it pays the lookup).
-## D3580: Builtins charge fuel for their work: a work counter in the heap
+## D3590: Builtins charge fuel for their work: a work counter in the heap
 date: 2026-11-22 · by: pidle · issue: 0289
 GitHub issue #3: many builtins charged a flat amount whatever their input (`@fast` entries
 2, `@rust` leaves 2, the leaf intrinsics they call nothing), so one slice of a million
@@ -13973,11 +13973,11 @@ empty +1.3%, local +0.3%, mathf +0.9%, method +0.3%, prop +1.0%, push +1.1%, str
 +0.3%, tight +0.6%, trim +1.0%; builtin calls: includes +0.5%, indexOf +1.9%, join +1.6%,
 Object.keys +0.9%, toLowerCase +1.5%, Map.get −8% (noise), parseInt +0.6%, Set.add
 +1.9%, split +4.1%, `===` +0.7%, `<` of short strings +3.3%. Size: shipped 431,736 →
-432,899 B gz (+1,163), slim 365,655 → 366,272 (+617): D3581.
+432,899 B gz (+1,163), slim 365,655 → 366,272 (+617): D3591.
 
-## D3581: The size budget gets 1 KB more for the fuel fix (owner)
+## D3591: The size budget gets 1 KB more for the fuel fix (owner)
 date: 2026-11-22 · by: owner (recorded by pidle) · issue: 0289
-owner: allowance raised for the fuel fix (GitHub #3). D3580 makes the shipped module
+owner: allowance raised for the fuel fix (GitHub #3). D3590 makes the shipped module
 1,163 B gz bigger (431,736 → 432,899, 869 B past the budget of 432,030) after slimming
 (charges out of line, the string comparisons shared, the counter a field that moves no
 other); `budget_allowance_gzip` goes from 2,048 to 3,072 (what it needs, rounded up to
