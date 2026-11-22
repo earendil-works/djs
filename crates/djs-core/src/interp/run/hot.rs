@@ -1917,8 +1917,6 @@ impl Exec<'_> {
                     }
                 }
             }
-            // The work of what ran outside the loop (0289).
-            self.fuel -= self.heap.take_work();
             if self.fuel <= 0 {
                 return None;
             }

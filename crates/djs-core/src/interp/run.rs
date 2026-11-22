@@ -403,6 +403,8 @@ impl<'h> Exec<'h> {
     pub(super) fn host_out_of_memory(&mut self) {
         self.host_oom = true;
         self.fuel = 0;
+        // (Nothing owed either: the run stops at the next instruction boundary.)
+        self.heap.take_fraction();
     }
 
     /// The fuel the last `run` spent on instructions (its overshoot included, the debt
@@ -1169,13 +1171,10 @@ impl<'h> Exec<'h> {
         // the fuel, the run stops at once and the rest of the debt carries on.
         self.fuel = self.fuel.saturating_sub(debt);
         self.fuel_start = Some(self.fuel);
-        // The work of starting a job or a throw (0289). Every way back to the check below
-        // takes it too: `run_hot`'s exits and `step_once`.
-        self.fuel -= self.heap.take_work();
         loop {
             // (Not while the leaves owe fuel the next safepoint takes: the run stops
             // where its fuel is exact, whatever the slicing, 0289.)
-            if self.fuel <= 0 && !self.heap.work_owed() {
+            if self.fuel <= 0 && (self.host_oom || !self.heap.work_owed()) {
                 self.flush();
                 if self.host_oom {
                     return Status::HostOutOfMemory;
@@ -1249,10 +1248,7 @@ impl<'h> Exec<'h> {
         let fuel0 = self.fuel;
         let work0 = self.heap.work_mark();
         let retry = self.retry_operands();
-        let r = self.step();
-        // The work of the instruction's leaves (0289).
-        self.fuel -= self.heap.take_work();
-        match r {
+        match self.step() {
             Ok(None) => None,
             Ok(Some(st)) => Some(st),
             Err(f) => {
@@ -1271,10 +1267,7 @@ impl<'h> Exec<'h> {
                     self.flush();
                     return Some(Status::OutOfFuel);
                 }
-                let st = self.throw_fault(f, pc0);
-                // (And the error's: its message and stack.)
-                self.fuel -= self.heap.take_work();
-                st
+                self.throw_fault(f, pc0)
             }
         }
     }
