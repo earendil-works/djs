@@ -590,11 +590,20 @@ the codemode body; a program whose idle points are all refused (instances with p
 names, D2878) is listed in tests/dump/v2/plain-refusals.txt. Since the dumps are
 JavaScript, they hold the runtime and the engine to the format, not the exporter: a
 change to the exporter leaves them alone. **A golden dump is never rewritten to make a
-build pass** (D2619): changing or deleting one needs a decision that says why the old
-dump may stop running (the runtime changed incompatibly, which D024 allows while djs is
-unreleased). New programs get their dumps with `DJS_GOLDEN_WRITE=1 cargo test -p
+build pass** (D2619): plain dumps are an exception to D024 (D3596), so changing or
+deleting one needs an owner's decision; a runtime helper may be added, never changed or
+removed. New programs get their dumps with `DJS_GOLDEN_WRITE=1 cargo test -p
 djs-core --lib write_golden_dumps -- --ignored`, which writes only programs that have
-none. (The goldens were rewritten as plain dumps when format 2 was retired, D2920; the
+none.
+
+tests/dump/v2/golden-host/ holds the same promise for dumps a Sandbox writes of
+host-driven code mode runs (js/test/golden-host.test.ts, in the gate's js tests, D3596):
+`NAME.body.js` bodies that run in the test's scope (namespace and bound host functions by
+identity, `values`, the JSON boundary, source references or `inlineSources`) and
+`NAME.K.dump.js`, the dump at idle point K. Each loads in a fresh sandbox of that scope,
+in both packagings, without `sources` for an inlined one; its open calls are answered and
+the output up to K plus the loaded run's must equal the uninterrupted run's. New programs
+get their dumps with `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts`. (The goldens were rewritten as plain dumps when format 2 was retired, D2920; the
 two-commit check of format 2, scripts/dumps-across-builds.sh, went with it.)
 
 ## Peak memory claims (D2048)

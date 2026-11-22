@@ -1,6 +1,6 @@
 # 0291: Host-driven runs for durable code mode: a JSON boundary, exit, bounded steps, host data, dump compatibility
 
-status: in-progress
+status: done
 agent: pdurable
 branch: issue/0291-durable-host-runs
 depends-on: -
@@ -34,10 +34,10 @@ issue fixes. Without pi's prelude nothing serializes values at the host boundary
 dump and load, and `store("k", new Map())` stores one.
 
 ## Acceptance criteria
-- [ ] The prototype commit lands with tests: error data properties (own enumerable,
+- [x] The prototype commit lands with tests: error data properties (own enumerable,
       not name/message/stack, wire values), `values` (deep-frozen, named in dumps, given
       again on load, a collision with a function or namespace identity is a misuse error).
-- [ ] A JSON host boundary, opt-in per sandbox (or per host function): arguments of host
+- [x] A JSON host boundary, opt-in per sandbox (or per host function): arguments of host
       calls are converted with `JSON.stringify` semantics inside the VM (toJSON, Date ->
       string, Map -> {}, undefined/functions dropped from objects, `undefined` argument
       stays undefined); a value JSON cannot carry (cycle, BigInt) fails at the call site
@@ -45,21 +45,21 @@ dump and load, and `store("k", new Map())` stores one.
       async call returns a rejected promise. Same rule for what sync functions such as
       `store`/`text` receive and for the run's result. Decide where it lives (engine
       native vs Sandbox) by cost; record the decision.
-- [ ] A host function can end the run so the script cannot catch it and no more script
+- [x] A host function can end the run so the script cannot catch it and no more script
       code runs (`exit()`): e.g. a sentinel the host function throws or a `Run` method;
       the run ends with a distinct state or `done` with a value, and its effects up to that
       point are what the host saw. Record the decision.
-- [ ] Bounded steps: `advance()` (and `begin`/`loadRun`'s first step) can be bounded and
+- [x] Bounded steps: `advance()` (and `begin`/`loadRun`'s first step) can be bounded and
       interrupted: an AbortSignal checked between fuel slices, a fuel budget per step,
       and yielding to the host's event loop between slices so an in-thread host stays
       responsive (`while (true) i++` must not freeze node). Tests.
-- [ ] Dump compatibility as an explicit exception to D024, recorded: what a stored dump
+- [x] Dump compatibility as an explicit exception to D024, recorded: what a stored dump
       may rely on forever (the `$djs.*` vocabulary: `k`, `resume`, `host`, `source`, `seed`
       and the helpers; identities are opaque host strings; `inlineSources` dumps need no
       script), and how that is guarded (tests/dump golden dumps; add golden dumps of
       host-driven code mode runs: open calls by identity, a captured host function, a
       `values` root, inlined source).
-- [ ] Guide pages updated (js-api.md host-driven runs, dumps.md, host.md, pi.md: how pi's
+- [x] Guide pages updated (js-api.md host-driven runs, dumps.md, host.md, pi.md: how pi's
       durable code mode uses host-driven runs; the next-mode adapter's status).
 
 ## Notes
@@ -73,7 +73,50 @@ dump and load, and `store("k", new Map())` stores one.
 - Merge with scripts/merge-to-main.sh as usual.
 
 ## Log
+- Read the prototype client (pi-mono-djs `packages/codemode/src/djs.ts`,
+  `packages/durable/src/codemode/djs-call.ts`) and pi's prelude for the semantics to match.
+- Prototype landed with tests (js/test/durable.test.ts): host error properties are now
+  defined *enumerable* (the prototype's `vm_define` made them hidden, so `Object.keys(e)`
+  was empty, unlike the prelude): `vm_define` got a fifth argument `flags` (bit 0),
+  `Vm::define_enumerable` in djs-core; unencodable properties are skipped. `values`:
+  collision checks (identity, namespace, bound global) and the deep freeze moved into a
+  sandbox helper function in the VM (no script compiled under `sandbox.js`). D3592.
+- JSON boundary (`jsonBoundary`): Sandbox-made converting functions in the VM, host values
+  by identity (dump roots first, before namespaces), the result converted by a second
+  helper call in the run loop. Decided against an engine-native conversion by cost
+  (JSON.stringify's full algorithm is JS; wasm size). D3593.
+- `RunExit` (exported): thrown by a sync host function, thrown/rejected by an async one
+  in sandbox-driven runs, or settled by a host-driven host; vm_abort before the next
+  slice; done with `exited`. Journaled; replays. D3594.
+- Bounded steps: `StepOptions { signal, fuel, yieldMs }` on `advance` and begin's first
+  step, `begin(..., { start: false })` (state `ready`), new error kind `aborted`. A
+  stopped step ends the run (`threw`). D3595.
+- Dump compatibility: D3596 (plain dumps are an exception to D024; the vocabulary and the
+  guard). Golden dumps of host-driven code mode runs: tests/dump/v2/golden-host/ (tools:
+  4 idle points with source refs; inline: 3 with inlined body and bindings, loaded with no
+  `sources`), js/test/golden-host.test.ts (both packagings). TESTING.md updated.
+- Guide: js-api.md (options, errors with data, RunExit, host data, the JSON boundary,
+  error kinds, bounded steps), dumps.md (`$djs.host` names, "What later builds keep"),
+  host.md (`vm_define` flags, ending a run with vm_abort), pi.md (durable code mode on
+  host-driven runs; the next mode's status). docs/host.md's export table.
+- Checked: js tests (171), djs-wasm tests, clippy, djs-docs check, pi tests next mode,
+  and the client's `test/codemode-djs.test.ts` with modules built from this branch.
 
 ## Follow-ups
+- `runAsync`/tasks take no `StepOptions` (only host-driven runs do); add if a host needs
+  them.
+- The JSON boundary is per sandbox; per-function opt-in if a host needs it.
 
 ## Result
+Landed in js/src/sandbox.ts (+ `vm_define` flags in djs-wasm, `Vm::define_enumerable`):
+- `SandboxOptions.values` (host data; misuse on collisions), host error properties in the
+  script's catch (enumerable).
+- `SandboxOptions.jsonBoundary`: JSON conversion of host-call arguments and run results in
+  the VM; failures at the call site (sync throws, async rejects).
+- `RunExit` (export): `throw new RunExit(value)` in a host function ends the run
+  uncatchably; `run.exited`; `run.settle(id, { ok: false, value: new RunExit() })`.
+- `StepOptions { signal, fuel, yieldMs }`: `run.advance(step)`, `begin(code, params,
+  { fuel, signal, start })`; `start: false` gives state `ready`; kind `aborted`.
+- D3592-D3596; golden host dumps in tests/dump/v2/golden-host/.
+Known gaps: see Follow-ups. A module built before this branch still works with the new
+Sandbox, but defines error properties non-enumerable.

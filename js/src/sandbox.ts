@@ -382,7 +382,7 @@ const HOOK_HOST = 0x7fff_fff3;
  * deep-freezes `a` (a host value); 2 and 3: the converting function of sync (2) or
  * async (3) host function `a`, named `b`. It takes the builtins it uses when it is made, before any
  * script runs, so a script that replaces `JSON.stringify` does not change the boundary.
- * Nothing a dump writes holds it: the converting functions are host values.
+ * Nothing a dump writes holds it: the converting functions are host values (D3592, D3593).
  */
 const HELPER = `"use strict";
 (() => {
@@ -1476,7 +1476,7 @@ export class Sandbox {
   }
 
   /**
-   * A host function ended the run (`RunExit`): the VM drops its call, its jobs and the
+   * A host function ended the run (`RunExit`, D3594): the VM drops its call, its jobs and the
    * open calls, and the run is done with the exit's value.
    */
   private exitRun(run: RunCore): unknown {
@@ -2191,7 +2191,7 @@ export class Sandbox {
     const slice = this.opts.fuelSlice ?? 1_000_000;
     const maxFuel = this.opts.maxFuel ?? Infinity;
     const j = this.journal;
-    // The step's bounds (D3592).
+    // The step's bounds (D3595).
     const step = run.step ?? {};
     const budget = step.fuel ?? Infinity;
     const start = run.used;

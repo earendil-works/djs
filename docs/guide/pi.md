@@ -13,7 +13,8 @@ in general.
 > image of the VM after the prelude and starts later scripts from it, and it polls pi's
 > interrupt every 10,000 fuel. In its *next* mode, with a prelude reshaped for djs and
 > frozen builtins, a waiting session is written as a continuation dump and resumed in a
-> new process or a later djs.
+> new process or a later djs. pi's durable code mode goes further: no prelude, a
+> host-driven run whose latest dump is the script's state.
 
 ## pi's VM contract
 
@@ -98,6 +99,41 @@ the resumed session posts results under the ids pi knows.
 pi makes runs durable today by recording tool results and replaying them into a fresh
 run. Dumps are the alternative it would adopt: a resumed session does not run the script
 again.
+
+The next mode keeps pi's prelude, reshaped, and its protocol of a bridge function, so
+that pi's test suite runs on it unchanged. It stays as that test of the prelude's shape;
+pi's durable code mode below does not build on it.
+
+## Durable code mode on host-driven runs
+
+pi's durable code mode, being built on djs, drops the prelude altogether: a script runs as
+a [host-driven run](js-api.md#host-driven-runs) of a plain `Sandbox`, and everything it
+can reach outside the language is a host function named by a stable identity. No code
+of pi's sits in the VM, so none is in a dump.
+
+- **Tools and globals are async host functions** with identities such as `tools.read`,
+  `searchTools` or `@mcp/github#search_issues`, bound as the `tools` namespace, as
+  globals, or as bindings of the body. The run never calls them: they show up in
+  `run.calls`, and pi answers each one as a nested task of its own, keyed by the call's
+  id, so that a call can outlive the process that issued it.
+- **Output and the store are sync host functions** (`text`, `image`, `store`, `load`,
+  `console.*`); their checks and limits live on pi's side. `exit()` throws `RunExit`, so
+  the script cannot catch it.
+- **`ALL_TOOLS` is host data** (`values`): a dump names it instead of carrying the tool
+  list, and the resuming process gives it again.
+- **The JSON boundary** makes what a script passes to tools, stores and returns what
+  pi's prelude made of it: JSON, with a `TypeError` at the call for a cycle or a BigInt.
+  Errors of tools carry their `structuredOutput` into the script's `catch`.
+- **Saving.** Before a call leaves the VM, and before the script parks to wait for a
+  person or a slow job, pi writes the idle run as a dump, with the output and store
+  writes so far. A restart or a wake, maybe weeks later and with another djs, loads the
+  dump with `loadRun` and the same scope, finds each open call's task by its id and goes
+  on. Nothing is replayed, and no journal is kept: the latest dump is the script's
+  state. [What later builds keep](dumps.md#what-later-builds-keep) is what makes that
+  safe.
+- **Steps.** pi runs code mode on its own thread, so each `advance` is bounded:
+  `yieldMs` keeps pi responsive while a script computes, and pi's abort signal stops
+  the step.
 
 ## pi's tests on djs
 
@@ -186,13 +222,18 @@ since the `Sandbox` covers it:
    them as parameters of the body ([host functions](js-api.md#host-functions)).
 2. **Output as sync host functions.** Helpers such as `text(...)` that only record
    output are sync host functions: cheap, and they keep the order of output.
-3. **Limits.** Choose a heap cap, a fuel budget and a slice ([limits](limits.md)); poll
-   your own deadline between slices if you need wall-clock limits.
+3. **Limits.** Choose a heap cap, a fuel budget and a slice ([limits](limits.md)); in a
+   host-driven run, bound each step with a signal, a fuel budget and yields to your
+   event loop ([bounded steps](js-api.md#host-driven-runs)).
 4. **Frozen builtins** instead of a lockdown in a prelude, which also makes dumps
    possible.
 5. **Persistence.** Start each script as a task; when the agent must wait long (a person,
    a slow job), suspend the task into a dump, store it compressed with the open calls'
-   state, and resume it later with `Sandbox.resume` ([dumps](dumps.md)).
+   state, and resume it later with `Sandbox.resume` ([dumps](dumps.md)). Or, as pi's
+   durable code mode does, drive the run yourself and keep its latest dump.
+6. **Values at the boundary.** `jsonBoundary` gives tools JSON, as a prelude that
+   stringifies arguments would, without a prelude ([the JSON
+   boundary](js-api.md#the-json-boundary)).
 
 ## Where to look
 

@@ -189,7 +189,10 @@ finished.
 A host function is made with a numeric id of the host's choosing and a name
 (`vm_new_host_function`, `vm_new_async_host_function`) and bound wherever the host likes
 with `vm_define`: as a global, as a member of a namespace object such as `tools`, or
-passed as a parameter of the body. There are two kinds:
+passed as a parameter of the body. `vm_define` makes a property as builtins have them,
+not enumerable; with bit 0 of its `flags` argument set, an enumerable one, as data a host
+attaches to an object of the script's, such as the `code` of an error it throws into the
+script. There are two kinds:
 
 - A **sync host function** parks the VM: `vm_run` returns HOST_CALL, and
   `vm_host_call` writes the call's record to the out buffer: `[call id, function id,
@@ -208,6 +211,11 @@ passed as a parameter of the body. There are two kinds:
 
 The open calls are a table in the heap, so a VM that waits for ten tools is as complete
 an image as any other ([suspension](suspension.md#host-calls)).
+
+A host function can also end the run instead of returning, as an agent's `exit()` does:
+the host leaves the call unresolved and calls `vm_abort`, which drops the VM's call
+stack, its job queue, the results not yet applied and the open calls, so no more of the
+script runs, not even its `finally` blocks, and the VM is ready for the next run.
 
 Results of async calls can come back at any time: after a fuel slice, while the VM is
 parked on another call, several at once. If the VM applied each result as soon as the

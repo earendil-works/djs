@@ -75,6 +75,8 @@ All options are optional:
 | `module` | the compiled djs-wasm module; default `loadModule()` |
 | `functions`, `asyncFunctions` | the host functions, by name ([below](#host-functions)) |
 | `globals`, `bindings` | where scripts find them: as globals, or as parameters of every body |
+| `values` | host data bound as frozen globals, which dumps name instead of writing ([below](#host-data)) |
+| `jsonBoundary` | convert what crosses to the host as JSON would ([below](#the-json-boundary)) |
 | `console` | receives `console.log`, `info`, `warn` and `error`; default the host's `console` |
 | `memoryLimit` | the heap cap in bytes; default 4 GiB ([limits](limits.md#memory)) |
 | `fuelSlice` | fuel per step: how often the host gets control back; default 1,000,000 |
@@ -152,6 +154,54 @@ sandbox.run("return myTool('x')");                       // "tool(x)"; no global
 `defineFunction(name, f)` and `defineAsyncFunction(name, f)` add functions to a sandbox
 that exists, bound by the default rule.
 
+**Errors with data.** An error a host function throws, or an async one rejects with,
+reaches the script as an `Error` of the same kind (`TypeError`, `RangeError`, else
+`Error`) with its message, and with the host error's own enumerable properties but
+`name`, `message` and `stack`, as values in: a tool's `{ code, structuredOutput }` is
+there in the script's `catch`. A property the wire cannot carry, such as a function, is
+left out.
+
+**Ending the run.** A host function that throws `new RunExit(value)` ends the run where
+it is: the script cannot catch it, no `finally` runs and no more of its code runs. The run
+is done with `value`: `run` and `runAsync` return it, a task's result is it, and a
+host-driven run is `done` with `exited` set. That is how an agent's `exit()` helper is
+written. An async host function may throw or reject with it too; the run ends when that
+result would be applied.
+
+### Host data
+
+`values` binds host data as globals: each is copied in, deep-frozen, and is a host value
+of its name, like a namespace, so `bindings` can name it too. A list of the tools a script
+may call is the typical one:
+
+```ts
+const sandbox = await Sandbox.create({ values: { ALL_TOOLS: tools.map(({ name, description }) => ({ name, description })) } });
+```
+
+A dump does not write such data: it refers to it by name, so the sandbox that loads the
+dump must be given the same values again. A name that is also a host function's or
+namespace's, or a global the sandbox binds, is a `misuse` error.
+
+### The JSON boundary
+
+By default, values cross to the host as the reader reads them, so a `Date` or a `Map` an
+argument holds arrives as an `Opaque` marker. With `jsonBoundary: true`, the arguments of
+every call of the host's functions, and every run's result, are converted inside the VM
+as `JSON.parse(JSON.stringify(value))` would: `toJSON` is called, a `Date` becomes its
+ISO string, a `Map` `{}`, `undefined` and functions are left out of objects, and an
+`undefined` argument stays `undefined`. A value JSON cannot carry, a cycle or a BigInt,
+fails at the call: a sync function's call throws the `TypeError`, where the script can
+catch it, an async function's call returns a promise rejected with it, and the host
+function is not called. A result that cannot be converted fails the run. `console` is
+not converted.
+
+The conversion is done by functions the sandbox makes in the VM, one per host function,
+which scripts see in its place. They count as host values of the functions' names, so a
+dump refers to them by name and a loading sandbox with the boundary supplies its own: a
+function the script holds is still `===` to `tools.read` after a load, and the
+conversion's code is never in a dump. They take the builtins they use when the sandbox is
+made, so a script that replaces `JSON.stringify` does not change what the host receives.
+
 ## Values in and out
 
 **In.** Parameters, `setGlobal` values and host function results go into the VM in a
@@ -175,7 +225,8 @@ the VM's memory, without running any code in the VM:
 The result is a tree, like JSON: an object referenced twice is read twice, and a cycle is
 a `TypeError` naming its path. A value budget turns a blow-up (a small structure
 referenced many times) into an error. To get a `Map` or a `Date` out, a script converts
-it: `Object.fromEntries(map)`, `date.toISOString()`.
+it: `Object.fromEntries(map)`, `date.toISOString()`, or the host converts everything
+that crosses with [the JSON boundary](#the-json-boundary).
 
 > **Trade-off.** Reading the VM's memory over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
@@ -192,7 +243,8 @@ for an exception, the thrown `value`:
 | --- | --- | --- |
 | `threw` | the script threw, or its promise rejected; `message` is the error's display text (`TypeError: bad`), `value` the thrown value as a host value (an `Opaque` for an `Error`) | usable |
 | `syntax` | the code did not compile; `message` gives the position (`SyntaxError: ... at 1:11`) | usable |
-| `fuel` | the run used up `maxFuel` (`out of fuel after N units`) | usable |
+| `fuel` | the run used up `maxFuel` (`out of fuel after N units`), or a step its own budget | usable |
+| `aborted` | a step's `signal` was aborted ([host-driven runs](#host-driven-runs)) | usable |
 | `memory` | the host could not provide memory below the cap, or a host-side allocation failed | usable |
 | `trap` | the engine trapped: a bug, never something a script can cause | unusable |
 | `misuse` | the API was used wrongly: a run already in progress, a dump without frozen builtins, a module without a needed export | depends |
@@ -293,7 +345,32 @@ else throw run.error;
 end. Sync host functions are still called as the script calls them. While the run is
 idle, `run.dump(states)` writes it as a dump, with the host's state of each open call by
 id, and `sandbox.loadRun(dump)` loads one into a fresh sandbox and returns the run with
-its open calls and their states, for the host to settle, issue again or reject.
+its open calls and their states, for the host to settle, issue again or reject. Settling
+a call with `{ ok: false, value: new RunExit() }` ends the run as a host function's
+`RunExit` does.
+
+**Bounded steps.** A step can be bounded, so that a script that computes for long does
+not hold the host:
+
+```ts
+const run = sandbox.begin(code, params, { start: false });   // state "ready": nothing ran yet
+await run.advance({ signal, fuel: 50_000_000, yieldMs: 10 });
+```
+
+- `signal`, an `AbortSignal`, is checked before every fuel slice; once it is aborted the
+  step fails with kind `aborted`.
+- `fuel` is the step's own budget, beside the run's `maxFuel`; past it the step fails
+  with kind `fuel`.
+- `yieldMs` lets the host's event loop run (a macrotask) between slices once the step
+  has run that many milliseconds since it started or last yielded: timers and I/O of a
+  host on the same thread go on, and a `signal` can be aborted meanwhile, while
+  `while (true) i++` runs. A small `fuelSlice` makes the yields more frequent.
+
+A step stopped by a bound ends the run: `advance` rejects with the error, the run's state
+is `threw`, and the sandbox can run again. A run can only be dumped at an idle point, so
+a host that persists runs goes on from the last dump it kept. `begin` takes `signal` and
+`fuel` for its first step too, but it returns synchronously and cannot yield; with
+`start: false` it only compiles and starts the body, and the first `advance` runs it.
 
 ## Continuation dumps
 

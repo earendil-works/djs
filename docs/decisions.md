@@ -13982,3 +13982,115 @@ owner: allowance raised for the fuel fix (GitHub #3). D3590 makes the shipped mo
 (charges out of line, the string comparisons shared, the counter a field that moves no
 other); `budget_allowance_gzip` goes from 2,048 to 3,072 (what it needs, rounded up to
 the next 256 B), the ceiling to 432,899, the slim ceiling to 366,272 (+617).
+
+## D3592: Host errors carry their data; `values` are host data a dump names
+date: 2026-11-22 · by: pdurable · issue: 0291
+The prototype for durable code mode, landed with tests (js/test/durable.test.ts). (1) A
+host function's error (a sync throw, an async rejection, a host-driven `settle` with `ok`
+false) becomes a VM Error of its kind and message as before, plus the host error's own
+enumerable properties but `name`, `message` and `stack`, as wire values, defined
+enumerable as an assignment would: a tool's `structuredOutput` or a `code` reaches the
+script's catch, as pi's prelude gives them. A property the wire cannot carry (a function)
+is left out rather than failing the call. Enumerable needs `vm_define`'s new fifth
+argument, `flags` (bit 0 enumerable, `Vm::define_enumerable`); JS passes a missing
+argument as 0 and an older module ignores an extra one, so the ABI version stays.
+(2) `SandboxOptions.values`: host data bound as globals of their names, copied in through
+the wire and deep-frozen in the VM, host roots like namespaces, so a dump writes
+`$djs.host(name)` (members two levels deep as reads on it) and never the data, and the
+loading sandbox must be given the value again (else `host: unknown host value`). A value
+is a host value by identity, so `bindings` can name it. A name that is already a host
+function's or namespace's identity, or a bound global, is a misuse: a dump could not tell
+them apart. The freeze runs in the sandbox's helper (D3593), not as a script, so it
+leaves no script in the process's `sources`.
+
+## D3593: The JSON boundary: converting functions in the VM, made by the Sandbox
+date: 2026-11-22 · by: pdurable · issue: 0291
+`SandboxOptions.jsonBoundary` converts, inside the VM, the arguments of every call of the
+host's `functions` and `asyncFunctions` and the result of every run as
+`JSON.parse(JSON.stringify(v))`, one argument at a time (an `undefined` argument stays
+`undefined`): a `Date` reaches the host as its string, a `Map` as `{}`, and nothing
+becomes an `Opaque` whose heap address a dump and load would change. A value JSON cannot
+carry fails at the call site as pi's prelude fails it: a sync call throws the TypeError,
+an async call returns a promise rejected with it (the host function is not called); a
+result fails the run. Where it lives, by cost: a native conversion in the engine would
+need the full `JSON.stringify` (the native fast path bails out on `toJSON`, accessors and
+classes to the prelude's JS, which calls user code) inside the host-call path, which
+cannot run JS, plus wasm size in a module whose budget is counted in hundreds of bytes;
+a host-side conversion cannot call `toJSON`. So the Sandbox makes, per identity, a
+converting function in the VM from one helper script it compiles at creation (`HELPER`
+in js/src/sandbox.ts; builtins captured first, so a script that replaces
+`JSON.stringify` changes nothing), and binds it wherever the host function would be
+(globals, namespace members, `bindings`). The converting functions are host values by
+the function's identity: dumps write `$djs.host(identity)`, never their code, and a
+loading sandbox with the boundary answers with its own, so `===` holds across a load
+and no helper code is in a dump. The run's result goes through the helper as a second
+call the run loop drives (a `toJSON` may call host functions). Runtime cost: a
+stringify and a parse in the VM per argument, small next to a tool call. `console` is
+not converted (its arguments are for display; a cycle must not throw there).
+Per-function opt-in was left out until a host needs it.
+
+## D3594: `RunExit`: a host function ends the run uncatchably
+date: 2026-11-22 · by: pdurable · issue: 0291
+pi's `exit()` must stop the script where it is, past the script's `catch` and `finally`;
+a thrown Error cannot. A host function throws `new RunExit(value)` (exported by the
+Sandbox): the sandbox does not resolve the call; before the next fuel slice it aborts the
+VM's call (`vm_abort`: frames, jobs, inbox and open calls dropped), and the run is done
+with `value` (`Run.exited` true; `run`/`runAsync` return it, a task resolves to it). The
+same from an async function in a run the sandbox drives (thrown or rejected) and from a
+host-driven host that settles a call with it: the run exits when the result would be
+applied, not before. The sandbox is usable afterwards. A journal records the call (or
+result) as `{ name: "RunExit", value }` and the end, so a replay exits at the same
+point. A host function that exits while a dump loads fails the load (misuse). Rejected:
+a distinct run state `exited` (every host would handle one more state for what is a
+successful end), and a `Run.exit()` method (a host-driven host settles with `RunExit`
+instead, and sync host functions are where scripts call `exit()`).
+
+## D3595: Bounded steps of host-driven runs
+date: 2026-11-22 · by: pdurable · issue: 0291
+`Run.advance(step)` and `begin`'s first step take `StepOptions`: `signal` (an
+AbortSignal checked before every fuel slice: kind `aborted`, a new SandboxErrorKind),
+`fuel` (the step's own budget, the slice capped to what is left: kind `fuel`) and
+`yieldMs` (in `advance` only: between slices, once the step has run that long since it
+started or last yielded, the run loop awaits a macrotask, `setImmediate` or a zero
+timeout, so an in-thread host's timers and I/O run and `while (true) i++` does not freeze
+it). A step stopped by a bound ends the run as `maxFuel` does (the VM's call is
+abandoned; `advance` rejects and the run's state is `threw` with that error): a run
+cannot be dumped mid-slice anyway, so the host keeps its last dump, and a paused state
+that can be neither dumped nor settled meaningfully would be one more state for every
+host. `begin(code, params, { start: false })` compiles and enters the body without
+running it (state `ready`), so the first step is an `advance` that can yield. `loadRun`
+runs only the dump's Script, whose continuations stop at their first await (script code
+after it runs in later steps), bounded by `maxFuel`; it takes no step options.
+
+## D3596: Plain dumps are an exception to D024: what a stored dump may rely on
+date: 2026-11-22 · by: pdurable · issue: 0291
+Hosts keep plain continuation dumps for days or weeks (a durable code mode script parked
+until a person answers) and load them with a later djs, a later host and a changed tool
+set. So D024 no longer covers them: from now on a dump written by any build loads in
+every later build, released or not. What a stored dump may rely on:
+- **The Script.** `"djs-dump";` (or `"djs-dump typescript";`) first, strict, run as a
+  Script with `$djs` defined; it reads the language's builtins by their standard paths
+  and the host's bound globals by name, and calls nothing else of the host.
+- **The hooks.** `$djs.seed(lo, hi[, next])` and `$djs.seed(next)`, `$djs.resume(id,
+  identity, args[, state])`, `$djs.source(name, hash[, params[, wrapper]])` with the hash
+  as defined now (FNV-1a 64 over params, NUL, option bits, NUL, source, folded to 32
+  bits; the option bits' meanings fixed), and `$djs.host(name)`.
+- **The helpers.** Every member of the dump runtime (crates/djs-core/src/vm/dump_runtime.rs,
+  js/src/dump-runtime.js: `k`, `L`, `I`, `R`, `advance`, ...) keeps its name, arguments
+  and meaning. A helper may be added; a changed meaning is a new name, and the old one
+  stays as long as dumps that call it may exist (forever, until an owner's decision).
+  The exporter may change freely: new dumps may call new helpers.
+- **Identities are opaque host strings.** djs never parses one (`ns.member` and
+  `specifier#export` are host conventions); the host keeps answering `$djs.host` and
+  `$djs.resume` for the identities and root names it handed out (functions, namespaces,
+  `values`, the JSON boundary's converting functions), or refuses the load.
+- **Inlined sources.** A dump written with `inlineSources` carries the body's text and
+  loads with no `sources`; one with `$djs.source` needs the script with the same hash.
+How it is guarded: the Rust goldens (tests/dump/v2/golden/, D2619) and the Sandbox
+goldens of host-driven code mode runs (tests/dump/v2/golden-host/,
+js/test/golden-host.test.ts: open calls by identity, Promise.all, a captured host
+function, a bound import-like function, a `values` root and its members, the JSON
+boundary's functions, source references and an inlined source). Neither is ever
+rewritten to make a build pass, and the D024 escape in D2619 ("an incompatible format
+change, which then rewrites all of them") is withdrawn: changing or removing a golden
+dump needs an owner's decision. Images, snapshots and the wasm ABI stay under D024.

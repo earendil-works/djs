@@ -297,9 +297,14 @@ may return any function. A dump written with `inlineSources` has no `$djs.source
 body's text is in the dump as a function expression in its place.
 
 **`$djs.host(name)`** returns the host value the run held under `name`: a host function
-by its identity (`"tools.read"`, `"console.log"`), or a namespace object of host
-functions (`"tools"`, `"console"`). It must be the very object the run's globals and
-parameters give, since the run may compare them or keep them in a `Map`.
+by its identity (`"tools.read"`, `"console.log"`, `"@mcp/github#search_issues"`), a
+namespace object of host functions (`"tools"`, `"console"`), or a value of host data the
+sandbox bound (`"ALL_TOOLS"`), whose members the dump reads from it
+(`$djs.host("ALL_TOOLS")[0]`) instead of writing them. With the JSON boundary, the
+function under an identity is the sandbox's converting function, which the loading
+sandbox makes again. It must be the very object the run's globals and parameters give,
+since the run may compare them or keep them in a `Map`. Names are opaque strings to djs:
+what a dotted name or a `#` means is the host's convention.
 
 **The runtime helpers** are the same for every dump. Each is a plain function that uses
 neither `this` nor another member of `$djs`, so a continuation copies the ones it calls
@@ -477,6 +482,31 @@ keeps a 20,000-line log across its tool calls dumps to <!--n dumps/log-raw mb-->
 <!--n dumps/log-zstd kb-->403 KB<!--/n--> compressed.
 
 A dump is code: a host loads only dumps it wrote or trusts, into a fresh sandbox.
+
+## What later builds keep
+
+A dump may wait for weeks, for a person's answer say, and be loaded by a later djs, in a
+host whose own code and tools changed meanwhile. Every later djs loads it. What a stored
+dump relies on, and what djs therefore never changes:
+
+- the Script's shape: the `"djs-dump";` header, strict code that reads the language's
+  builtins by their standard names and the host's bound globals by theirs, and calls
+  nothing of the host but `$djs`;
+- the four hooks, `seed`, `resume`, `source` and `host`, with their arguments as above,
+  and the definition of `source`'s hash;
+- every runtime helper, by its name, its arguments and what it does. Helpers may be added
+  for what later dumps need; one is never changed or removed, so a change of meaning is
+  a helper of a new name.
+
+The writer, by contrast, may change in any way: a later djs writes different dumps of the
+same run, and loads the old ones as they are. The host keeps its side: it answers
+`$djs.host` and `$djs.resume` for the names it handed out, or refuses the load, and it
+keeps the script a dump refers to by `$djs.source`, unless it writes dumps with
+`inlineSources`, which then load with no script at all. Golden dumps in
+[`tests/dump/`](../../tests/dump/) hold djs to this: dumps of small programs at every idle
+point, and dumps a `Sandbox` wrote of code mode runs that hold host functions by
+identity, a bound host value, host data and inlined bodies. Each test run loads them and
+finishes the runs, and a golden dump is never rewritten to make a build pass.
 
 ## What a dump needs
 
