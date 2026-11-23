@@ -593,21 +593,32 @@ class Reader {
     return -1;
   }
 
-  /** The string data property `name` of `off` (or its prototype chain), else undefined. */
-  stringProperty(off: number, name: string, own = false): string | undefined {
-    const at = this.lookup(off, name, own);
-    return at < 0 ? undefined : this.slotIfString(at);
+  /**
+   * The data property `name` of `off` (or its prototype chain) as `String()` makes a
+   * primitive text (D3622); undefined when it is missing, an accessor, `undefined`, a
+   * symbol or an object (whose conversion would run code).
+   */
+  textProperty(off: number, name: string): string | undefined {
+    const at = this.lookup(off, name);
+    if (at < 0) return undefined;
+    const hi = this.view.getUint32(at + 4, true);
+    if (hi >>> 16 === TAG_PREFIX) {
+      const tag = hi & 0xffff;
+      if (tag !== tags.STRING && tag !== tags.INT && tag !== tags.BOOL && tag !== tags.NULL && tag !== tags.BIGINT) return undefined;
+    }
+    return String(this.slot(at));
   }
 
   /**
    * An Error as a host Error, read without running code: `name` and `message` as data
-   * properties of the error or its prototypes (else "Error" and ""), the VM's stack trace
+   * properties of the error or its prototypes, primitives as `String()` makes them (else
+   * "Error" and ""), the VM's stack trace
    * and `cause`, and its own enumerable data properties.
    */
   error(off: number): Error {
     const dom = this.slotCount(off) >= 3;
-    const name = (dom ? this.slotIfString(off + OBJ_SLOTS + 8) : this.stringProperty(off, "name")) ?? "Error";
-    const message = (dom ? this.slotIfString(off + OBJ_SLOTS + 16) : this.stringProperty(off, "message")) ?? "";
+    const name = (dom ? this.slotIfString(off + OBJ_SLOTS + 8) : this.textProperty(off, "name")) ?? "Error";
+    const message = (dom ? this.slotIfString(off + OBJ_SLOTS + 16) : this.textProperty(off, "message")) ?? "";
     let stack: string | undefined = undefined;
     if (this.slotCount(off) > 0) {
       const at = off + OBJ_SLOTS;

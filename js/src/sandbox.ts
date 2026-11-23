@@ -447,9 +447,15 @@ const HOOK_SOURCE = 0x7fff_fff2;
 const HOOK_HOST = 0x7fff_fff3;
 /** `SandboxOptions.missingMember`, as the namespaces' Proxies call it; not a host function of an identity. */
 const HOOK_MISSING = 0x7fff_fff4;
-/** `vm_define`'s flags: bit 0 enumerable (D3592), bit 1 freeze the object afterwards (0295). */
+/**
+ * `vm_define`'s flags: bit 0 enumerable (D3592), bit 1 freeze the object afterwards
+ * (D3611), bit 2 non-writable and non-configurable (D3621).
+ */
 const DEFINE_ENUMERABLE = 1;
 const DEFINE_FREEZE = 2;
+const DEFINE_READONLY = 4;
+/** `vm_new_object`'s flag: a null prototype (D3623). */
+const NULL_PROTO = 1;
 /**
  * The sandbox's own helper in the VM, made only for `values`, `jsonBoundary` and
  * `missingMember`: one function `(op, a, b, c)`. op 0: `a` through JSON (the boundary's
@@ -464,12 +470,12 @@ const HELPER = `"use strict";
 (() => {
   const apply = Reflect.apply, json = JSON, stringify = JSON.stringify, parse = JSON.parse, def = Object.defineProperty;
   const freezeOne = Object.freeze, isFrozen = Object.isFrozen, keys = Object.keys, isView = ArrayBuffer.isView;
-  const P = Promise, reject = Promise.reject, Px = Proxy, get = Reflect.get, TE = TypeError, capture = Error.captureStackTrace;
+  const P = Promise, reject = Promise.reject, Px = Proxy, get = Reflect.get, TE = TypeError, capture = Error.captureStackTrace, OP = Object.prototype;
   const clone = (v) => { const j = apply(stringify, json, [v]); return j === undefined ? undefined : apply(parse, json, [j]); };
   const cloneOr = (v) => { try { return clone(v); } catch { return undefined; } };
   const guard = (o, ns, missing) => {
     const h = { get(t, p, r) {
-      if (typeof p === "string" && !(p in t) && p !== "then" && p !== "toJSON") {
+      if (typeof p === "string" && !(p in t) && !(p in OP) && p !== "then" && p !== "toJSON") {
         const m = apply(missing, undefined, [ns, p]);
         if (typeof m === "string") { const e = new TE(m); apply(capture, undefined, [e, h.get]); throw e; }
       }
@@ -559,7 +565,8 @@ interface Exports {
   vm_compile(vm: number, goal: number, paramsLen: number, srcLen: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_global(vm: number): number;
-  vm_new_object(vm: number): number;
+  /** `flags` bit 0 (ABI 8, D3623): a null prototype. */
+  vm_new_object(vm: number, flags?: number): number;
   /** Since 0207 (D2903): the plain dump runtime, `$djs`'s helpers. */
   vm_dump_runtime?(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
@@ -1213,7 +1220,7 @@ export class Sandbox {
   private namespace(ns: string): number {
     let o = this.nsTargets.get(ns);
     if (o === undefined) {
-      o = this.check(this.x.vm_new_object(this.vm), "memory");
+      o = this.check(this.x.vm_new_object(this.vm, NULL_PROTO), "memory");
       this.nsTargets.set(ns, o);
       let value = o;
       const missing = this.opts.missingMember;
@@ -1332,7 +1339,7 @@ export class Sandbox {
       return [name, h!];
     });
     return this.guard(() => {
-      const ns = this.check(this.x.vm_new_object(this.vm), "memory");
+      const ns = this.check(this.x.vm_new_object(this.vm, NULL_PROTO), "memory");
       members.forEach(([name, h], i) => this.defineOn(ns, name, h, DEFINE_ENUMERABLE | (i === members.length - 1 ? DEFINE_FREEZE : 0)));
       if (members.length === 0) this.x.vm_handle_free(this.vm, this.callHelper(1, ns));
       this.namespaces.set(specifier, ns);
@@ -1379,8 +1386,9 @@ export class Sandbox {
     const h = this.hostValue(identity);
     if (h === undefined) throw new SandboxError("misuse", `global ${name}: no host function or namespace ${identity}`);
     this.guard(() => {
+      // Read-only and non-configurable, as pi's prelude bound its globals (D3621).
       const g = this.x.vm_global(this.vm);
-      this.defineOn(g, name, h);
+      this.defineOn(g, name, h, DEFINE_READONLY);
       this.x.vm_handle_free(this.vm, g);
     });
     this.globalNames.add(name);
@@ -2035,7 +2043,11 @@ export class Sandbox {
       }
       if (st === STATUS_OUT_OF_FUEL) continue;
       if (st !== STATUS_HOST_CALL) break;
-      const { callId, fnId, args } = this.guard(() => this.readCall(x.vm_host_call(vm)));
+      const { callId, fnId, args, unreadable } = this.guard(() => this.readCall(x.vm_host_call(vm)));
+      if (unreadable) {
+        this.complete(callId, false, unreadable, false);
+        continue;
+      }
       if (fnId === HOOK_RESUME) {
         const [id, name, callArgs, state] = args;
         const f = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
@@ -2466,8 +2478,15 @@ export class Sandbox {
       });
       // Counted across sync host calls too, which end a slice early (D2653, D2702).
       run.used += x.vm_fuel_used ? x.vm_fuel_used(vm) : st === STATUS_OUT_OF_FUEL ? slice : 0;
+      let rejected = false;
       for (const callId of this.newHostCalls()) {
-        const { fnId, args } = this.callInfo(callId);
+        const { fnId, args, unreadable } = this.callInfo(callId);
+        if (unreadable) {
+          // The call's promise rejects with it; the host never sees the call (D3620).
+          this.complete(callId, false, unreadable, false);
+          rejected = true;
+          continue;
+        }
         const call = { id: callId, fn: this.fnNames[fnId - 1], args };
         run.open.set(callId, call);
         if (j) j.issued++;
@@ -2521,6 +2540,8 @@ export class Sandbox {
         throw new SandboxError("memory", "out of host memory");
       }
       if (st === STATUS_IDLE) {
+        // (A rejection just delivered: the script goes on with it first.)
+        if (rejected) continue;
         this.checkRejections();
         // The body's result settled while async calls are open: the run is over, and
         // the calls are dropped (D3612), as when no call was open.
@@ -2533,10 +2554,15 @@ export class Sandbox {
       }
       if (st !== STATUS_HOST_CALL) return undefined;
       if (run.used >= maxFuel) throw new SandboxError("fuel", `out of fuel after ${run.used} units`);
-      const { callId, fnId, args } = this.guard(() => {
+      const { callId, fnId, args, unreadable } = this.guard(() => {
         const argc = x.vm_host_call(vm);
         return this.readCall(argc);
       });
+      if (unreadable) {
+        // A TypeError at the call, which the script can catch, as the JSON boundary's (D3620).
+        this.complete(callId, false, unreadable, false);
+        continue;
+      }
       let ok = true;
       let result: unknown;
       const fn = this.fnNames[fnId - 1];
@@ -2646,17 +2672,34 @@ export class Sandbox {
   }
 
   /** The function and arguments of pending host call `callId`. */
-  private callInfo(callId: number): { fnId: number; args: unknown[] } {
+  private callInfo(callId: number): { fnId: number; args: unknown[]; unreadable?: TypeError } {
     return this.guard(() => this.readCall(this.x.vm_host_call_info(this.vm, callId)));
   }
 
-  /** Reads `[call_id, fn_id, this, args...]` from the out buffer. */
-  private readCall(argc: number): { callId: number; fnId: number; args: unknown[] } {
+  /**
+   * Reads `[call_id, fn_id, this, args...]` from the out buffer. An argument the reader
+   * cannot read (a cycle, a blow-up) is `unreadable`, the TypeError the call fails with
+   * (D3620); `console` gets its reason as text instead, since output must not throw.
+   */
+  private readCall(argc: number): { callId: number; fnId: number; args: unknown[]; unreadable?: TypeError } {
     const x = this.x;
     const w = outWords(x, 4 + 2 * argc);
+    const fnId = w[1];
     const args: unknown[] = [];
-    for (let i = 0; i < argc; i++) args.push(this.read(w[4 + 2 * i], w[5 + 2 * i]));
-    return { callId: w[0], fnId: w[1], args };
+    let unreadable: TypeError | undefined;
+    for (let i = 0; i < argc; i++) {
+      try {
+        args.push(this.read(w[4 + 2 * i], w[5 + 2 * i]));
+      } catch (e) {
+        if (!(e instanceof TypeError || e instanceof RangeError)) throw e;
+        if (this.fnNames[fnId - 1]?.startsWith("console.")) args.push(`[${e.message}]`);
+        else {
+          unreadable ??= new TypeError(`argument ${i + 1}: ${e.message}`);
+          args.push(undefined);
+        }
+      }
+    }
+    return { callId: w[0], fnId, args, unreadable };
   }
 
   /**

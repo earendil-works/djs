@@ -60,7 +60,7 @@ fn main() {
     vm_set_now(vm, 1_700_000_000_000.0);
     vm_set_time_zone_offset(vm, 90);
     let g = vm_global(vm);
-    let console = vm_new_object(vm);
+    let console = vm_new_object(vm, 0);
     stage(b"log");
     let log = vm_new_host_function(vm, 1, 3);
     stage(b"log");

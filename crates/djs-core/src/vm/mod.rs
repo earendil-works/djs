@@ -737,6 +737,11 @@ impl Vm {
             .collect()
     }
 
+    /// A new ordinary object with a null prototype (a host's namespace object, D3623).
+    pub fn new_null_proto_object(&mut self) -> Result<Obj, HeapError> {
+        self.heap.new_object(None)
+    }
+
     /// A new ordinary object.
     pub fn new_object(&mut self) -> Result<Obj, HeapError> {
         let proto = intrinsic_obj(&self.heap, Intrinsic::ObjectProto);
@@ -750,11 +755,17 @@ impl Vm {
         define_hidden(&mut self.heap, o, key, v)
     }
 
-    /// [`Vm::define`], but enumerable, as an assignment makes a property: host data on a
-    /// script's object (a host error's `code` or `structuredOutput`, D3592).
-    pub fn define_enumerable(&mut self, o: Obj, name: &str, v: Value) -> Result<(), HeapError> {
+    /// Defines a data property with `flags`: enumerable as an assignment makes host data
+    /// (a host error's `code` or `structuredOutput`, D3592), or read-only and
+    /// non-configurable (the globals a host binds, D3621).
+    pub fn define_with(
+        &mut self,
+        o: Obj,
+        name: &str,
+        v: Value,
+        flags: PropFlags,
+    ) -> Result<(), HeapError> {
         let key = self.heap.atom_str(name)?;
-        let flags = PropFlags::WRITABLE | PropFlags::ENUMERABLE | PropFlags::CONFIGURABLE;
         self.heap
             .define_own_property(o, key, &PropertyDescriptor::data(v, flags))?;
         Ok(())

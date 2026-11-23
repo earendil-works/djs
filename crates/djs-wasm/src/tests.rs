@@ -89,7 +89,7 @@ fn host_calls_and_fuel() {
     let vm = vm_new(0);
     stage(b"log");
     let log = vm_new_host_function(vm, 7, 3);
-    let console = vm_new_object(vm);
+    let console = vm_new_object(vm, 0);
     stage(b"log");
     assert_eq!(vm_define(vm, console, 3, log, 0), 0);
     let f = compile_body(
@@ -136,8 +136,8 @@ fn host_calls_and_fuel() {
 #[test]
 fn define_flags_enumerable_and_freeze() {
     let vm = vm_new(0);
-    let ns = vm_new_object(vm);
-    let one = vm_new_object(vm);
+    let ns = vm_new_object(vm, 0);
+    let one = vm_new_object(vm, 0);
     stage(b"a");
     assert_eq!(vm_define(vm, ns, 1, one, 1), 0);
     // Bit 1 freezes the object after the define (0295, D3611).
@@ -157,6 +157,30 @@ fn define_flags_enumerable_and_freeze() {
     let (ok, r) = outcome(vm, status::DONE);
     assert!(ok);
     assert_eq!(display(vm, r), "a,b true false");
+    vm_free(vm);
+}
+
+#[test]
+fn define_read_only_and_null_prototype_objects() {
+    let vm = vm_new(0);
+    // vm_new_object's bit 0: a null prototype; vm_define's bit 2: non-writable and
+    // non-configurable (0296, D3621, D3623).
+    let ns = vm_new_object(vm, 1);
+    let g = vm_global(vm);
+    stage(b"ns");
+    assert_eq!(vm_define(vm, g, 2, ns, 4), 0);
+    let f = compile_body(
+        vm,
+        "",
+        "const d = Object.getOwnPropertyDescriptor(globalThis, 'ns'); \
+         let threw = false; try { ns = 1; } catch (e) { threw = e instanceof TypeError; } \
+         return [Object.getPrototypeOf(ns) === null, d.writable, d.configurable, d.enumerable, threw].join(' ')",
+    );
+    call(vm, f, &[]);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    let (ok, r) = outcome(vm, status::DONE);
+    assert!(ok);
+    assert_eq!(display(vm, r), "true false false false true");
     vm_free(vm);
 }
 

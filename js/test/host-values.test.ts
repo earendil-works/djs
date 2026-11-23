@@ -146,7 +146,8 @@ test("missingMember: reading a member a namespace lacks throws the host's messag
     `) as unknown[];
     assert.deepEqual(out, [
       [true, "tools.Echo does not exist. Did you mean tools.echo?", "    at <eval> (sandbox.js:3:18)"],
-      false, true, true, true, "function", true,
+      // (A namespace has a null prototype, D3623: an inherited name is not there, and not asked about.)
+      false, true, true, true, "undefined", true,
       "{}", true, 2,
       "console.trace does not exist. Did you mean console.trace?",
     ]);

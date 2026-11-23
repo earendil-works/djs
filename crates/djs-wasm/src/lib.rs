@@ -33,7 +33,7 @@ use core::cell::RefCell;
 mod allocator;
 
 use djs_core::compiler::{CompileOptions, Goal};
-use djs_core::heap::Handle;
+use djs_core::heap::{Handle, PropFlags};
 use djs_core::interp::{ErrorKind, Intrinsic, intrinsic};
 use djs_core::json;
 use djs_core::value::Value;
@@ -1115,11 +1115,17 @@ pub extern "C" fn vm_global(vm: u32) -> u32 {
     })
 }
 
-/// A handle to a new ordinary object (0 if out of memory).
-pub extern "C" fn vm_new_object(vm: u32) -> u32 {
+/// A handle to a new ordinary object (0 if out of memory); `flags` bit 0 (ABI 8, D3623): with
+/// a null prototype.
+pub extern "C" fn vm_new_object(vm: u32, flags: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
-        match slot.vm.new_object() {
+        let o = if flags & 1 != 0 {
+            slot.vm.new_null_proto_object()
+        } else {
+            slot.vm.new_object()
+        };
+        match o {
             Ok(o) => slot.handle(Value::object(o)),
             Err(_) => 0,
         }
@@ -1171,7 +1177,8 @@ pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usiz
 /// writable and configurable, and not enumerable, like builtins, unless bit 0 of `flags`
 /// is set (data, as an assignment makes it, D3592; a host that leaves `flags` out passes
 /// 0). Bit 1 (part of ABI 8, D3611) freezes `obj` afterwards, as `Object.freeze` (a
-/// namespace object once the host made it). Returns 0, or -1 if `obj` is not an object, the heap is full or
+/// namespace object once the host made it). Bit 2 (ABI 8, D3621) makes the property
+/// non-writable and non-configurable (a global the host binds). Returns 0, or -1 if `obj` is not an object, the heap is full or
 /// `obj` cannot be frozen.
 pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flags: u32) -> i32 {
     with(|s| {
@@ -1181,10 +1188,20 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flag
             return -1;
         };
         let v = slot.value(value);
-        let r = if flags & 1 != 0 {
-            slot.vm.define_enumerable(o, name, v)
-        } else {
+        let r = if flags & 5 == 0 {
             slot.vm.define(o, name, v)
+        } else {
+            let e = if flags & 1 != 0 {
+                PropFlags::ENUMERABLE
+            } else {
+                PropFlags::NONE
+            };
+            let w = if flags & 4 == 0 {
+                PropFlags::WRITABLE | PropFlags::CONFIGURABLE
+            } else {
+                PropFlags::NONE
+            };
+            slot.vm.define_with(o, name, v, e | w)
         };
         if r.is_err() || (flags & 2 != 0 && !slot.vm.freeze(o)) {
             return -1;
@@ -1921,7 +1938,7 @@ ops! {
     #[cfg(feature = "dump")] 31 vm_compile_cached(a, b, c, d, e, f);
     #[cfg(feature = "docs")] 32 djs_disasm(a, b, c);
     33 vm_global(a);
-    34 vm_new_object(a);
+    34 vm_new_object(a, b);
     35 vm_dump_runtime(a, b);
     36 vm_new_host_function(a, b, c);
     37 vm_new_async_host_function(a, b, c);
