@@ -9,6 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0297 | Remove everything that exists for backwards compatibility (owner) | pcompat | .worktrees/pns |
 | 0298 | The dumper's size: same dumps, far less code (dump feature 334.6 KB gz of 767.7) | pdiet | .worktrees/pone |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
+| 0297 | missingMember's TypeError stack shows the Sandbox's Proxy trap frame | pns | .worktrees/pns |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
 ## Open (ready)
