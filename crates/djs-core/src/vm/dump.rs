@@ -897,7 +897,7 @@ fn member(key: &str) -> String {
     }
 }
 
-/// (Only ArrayBuffers, which the slim build does not have, are written as base64.)
+/// An ArrayBuffer's bytes as base64 (`$djs.bytes`).
 #[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
