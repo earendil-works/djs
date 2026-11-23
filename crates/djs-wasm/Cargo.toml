@@ -28,11 +28,12 @@ alloc-stats = []
 # Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
 # Off by default: the shipping module does not carry the disassembler.
 docs = ["djs-core/intrinsic-names"]
-# Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript. Off by
-# default: it costs the module 58 KB gzip (D2352); the gate's debug build turns it on.
+# Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript. Not a
+# default feature (the native tools and tests pick it per crate), but the one shipped
+# module has it (scripts/build-wasm.sh, D3600), and so does the gate's debug build.
 dump = ["djs-core/dump", "djs-core/lazy", "djs-core/compile-cache", "djs-prelude/names"]
 # Unchecked arena field access in djs-core (D2520). The shipped and slim modules turn it on
-# (scripts/build-wasm.sh, D3100); native builds, the dump and docs modules and the tests don't.
+# (scripts/build-wasm.sh, D3100); native builds, the docs module and the tests don't.
 unsafe-heap = ["djs-core/unsafe-heap"]
 # The Unicode property and normalization tables outside linear memory (D3350): the custom
 # sections `djs_props` and `djs_norm`, handed over by the host at their first use

@@ -1,7 +1,7 @@
 // pi's adapter in next mode with a dump and a resume in a new instance at every idle point
 // (D2651), N sessions of a small script, for profiling the wasm side as pi pays it (0215):
 //
-//   DJS_WASM=target/djs-dump.wasm N=300 node --cpu-prof scripts/dump-costs/pi-sessions.ts
+//   DJS_WASM=target/wasm32-unknown-unknown/wasm/djs_wasm.wasm N=300 node --cpu-prof scripts/dump-costs/pi-sessions.ts
 //
 // work/research/0215/pi-phases.patch adds per-phase timings to js/pi (PI_PROF_OUT=file).
 import { loadModule } from "../../js/src/sandbox.ts";
