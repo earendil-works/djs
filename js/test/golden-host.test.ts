@@ -47,7 +47,7 @@ function answer(fn: string, args: unknown[]): { ok: boolean; value: unknown } {
  * The scope every program runs in; `lines` gets the output. The store is the host's state:
  * a loaded run gets the writes made before its dump again, from the lines.
  */
-function scope(module: Pick<SandboxOptions, "module" | "dumpModule">, lines: string[], name: string, body: string | undefined): SandboxOptions {
+function scope(module: Pick<SandboxOptions, "module">, lines: string[], name: string, body: string | undefined): SandboxOptions {
   const stored = new Map<string, string>();
   for (const line of lines) {
     const m = /^store (\S+) (.*)$/.exec(line);
@@ -131,9 +131,10 @@ test("write the dumps of golden host programs that have none", { skip: process.e
 
 test("golden host dumps load and finish as their programs do", async () => {
   const module = await loadModule();
-  const packagings: [string, Pick<SandboxOptions, "module" | "dumpModule">][] = [["A", { module }]];
+  // Loading needs no dumper (a dump is code): also in a build without it, when given.
+  const modules: [string, Pick<SandboxOptions, "module">][] = [["the module", { module }]];
   const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) packagings.push(["B", { module: await loadModule(nodump), dumpModule: module }]);
+  if (nodump) modules.push(["without the dumper", { module: await loadModule(nodump) }]);
   for (const name of programs) {
     assert.ok(dumps.some((d) => d.startsWith(`${name}.`)), `${name}: no dump`);
   }
@@ -148,7 +149,7 @@ test("golden host dumps load and finish as their programs do", async () => {
     const text = readFileSync(new URL(file, DIR), "utf8");
     assert.ok(text.startsWith('"djs-dump";\n'), `${file}: not a dump`);
     if (INLINE.has(name)) assert.doesNotMatch(text, /\$djs\.source\(/, `${file}: inlined`);
-    for (const [label, mod] of packagings) {
+    for (const [label, mod] of modules) {
       const lines = want.slice(0, marks[k - 1]);
       // An inlined dump needs no script; one with references gets it from `sources`.
       const sb = new Sandbox(scope(mod, lines, name, INLINE.has(name) ? undefined : body));

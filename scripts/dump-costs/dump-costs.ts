@@ -3,13 +3,12 @@
 // harvested corpus, tests/corpus/codemode-harvest) a Sandbox runs the script host-driven
 // and at every idle point measures the dump: `Run.dump()` time (the best of REPS), text
 // size raw and zstd (levels 3 and 19), `Sandbox.resume()` time (the best of REPS; a new
-// sandbox included, the bare `Sandbox.create` is given separately); with packaging A (one
-// module with the dumper) and B (the shipped module plus the dump module, D2635: dumps
-// move the image to the dump module and back). The run goes on in the original sandbox.
+// sandbox included, the bare `Sandbox.create` is given separately), on the shipped module
+// (it has the dumper, D3600). The run goes on in the original sandbox.
 // Writes work/scratch/dump-costs/report.md (or OUT/report.md).
 //
-//   scripts/build-wasm.sh && scripts/build-wasm.sh --dump
-//   node scripts/dump-costs/dump-costs.ts [OUT] [--no-corpus] [--no-cases] [--reps=N] [--packaging=A|B]
+//   scripts/build-wasm.sh
+//   node scripts/dump-costs/dump-costs.ts [OUT] [--no-corpus] [--no-cases] [--reps=N]
 //
 // The tools are scripts/snapshot-research/wasm.ts's (real source files and prose).
 
@@ -25,7 +24,6 @@ const argv = process.argv.slice(2);
 const noCorpus = argv.includes("--no-corpus");
 const noCases = argv.includes("--no-cases");
 const REPS = Number(argv.find((a) => a.startsWith("--reps="))?.slice(7) ?? 3);
-const onlyPackaging = argv.find((a) => a.startsWith("--packaging="))?.slice(12);
 const out = argv.filter((a) => !a.startsWith("--"))[0] ?? join(root, "work/scratch/dump-costs");
 mkdirSync(out, { recursive: true });
 
@@ -147,15 +145,8 @@ const TOOLS = ["search", "read", "ask", "shell", "logs", "lookup", "list_issues"
 // ---- Modules ---------------------------------------------------------------------------
 
 const mainPath = process.env.DJS_WASM ?? join(root, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm");
-const dumpPath = process.env.DJS_DUMP_WASM ?? join(root, "target/djs-dump.wasm");
 const main = await loadModule(mainPath);
-const dumper = await loadModule(dumpPath);
-const PACKAGINGS: [string, SandboxOptions][] = (
-  [
-    ["A (dump module alone)", { module: dumper }],
-    ["B (djs.wasm + djs-dump.wasm)", { module: main, dumpModule: dumper }],
-  ] as [string, SandboxOptions][]
-).filter(([k]) => onlyPackaging === undefined || k.startsWith(onlyPackaging));
+const PACKAGINGS: [string, SandboxOptions][] = [["djs.wasm", { module: main }]];
 // A corpus case whose script throws after its run was given up on rejects in the
 // background: counted, not fatal.
 let lateRejections = 0;
@@ -281,7 +272,7 @@ let report = `djs-wasm: A ${relative(root, dumpPath)}, B ${relative(root, mainPa
 {
   const t = performance.now();
   for (let i = 0; i < 20; i++) new Sandbox(toolOpts({ module: main })).dispose();
-  report += `\nA new Sandbox (B's main module, 20 times): ${ms((performance.now() - t) / 20)} ms; Sandbox.resume includes one.\n`;
+  report += `\nA new Sandbox (20 times): ${ms((performance.now() - t) / 20)} ms; Sandbox.resume includes one.\n`;
 }
 
 const caseFiles = [

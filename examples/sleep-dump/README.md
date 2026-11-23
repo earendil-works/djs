@@ -20,9 +20,9 @@ examples/sleep-dump/run.sh 300          # a shorter sleep
 ```
 
 `run.sh` runs [sleep-dump.ts](sleep-dump.ts) with node (22.6 or later: it runs TypeScript
-directly) on the release build of djs-wasm with the dumper, `target/djs-dump.wasm` (cargo
-feature `dump`, which the shipped module leaves out: it is needed to write a dump, not to
-load one). It builds that module the first time, which takes a minute or two, and again
+directly) on the release build of djs-wasm, the module djs ships, which has the dumper
+(`scripts/build-wasm.sh`: target/wasm32-unknown-unknown/wasm/djs_wasm.wasm). It builds that
+module the first time, which takes a minute or two, and again
 only when a source of it changed; after that a run takes no noticeable time besides the
 sleeps. `js/test/sleep-dump.test.ts` runs it with sleeps of 20 to 50 ms.
 

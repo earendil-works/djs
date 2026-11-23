@@ -299,8 +299,8 @@ impl Vm {
         Vm::over(Heap::from_bytes(bytes, opts.memory_limit)?, opts)
     }
 
-    /// [`Vm::from_bytes`] for an image this process made (a wasm host's module
-    /// transport, pi's prelude images): only the header and the dependency descriptor are
+    /// [`Vm::from_bytes`] for an image this process made (pi's prelude images, an
+    /// embedder's snapshot): only the header and the dependency descriptor are
     /// checked, not every cell. Images are not a persistence format (D2700): nothing
     /// loads one from outside the process, so nothing needs the verification there.
     pub fn from_bytes_trusted(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
@@ -309,19 +309,11 @@ impl Vm {
     }
 
     /// Replaces this VM's state by an image this process made, as
-    /// [`Vm::from_bytes_trusted`] would restore it, but keeps what the VM holds outside
-    /// its heap (its options, and what it derived from the base once): for a host that
-    /// dumps many images with one VM (a wasm host's dump module, D2701).
-    pub fn replace_image(&mut self, bytes: Vec<u8>) -> Result<(), LoadError> {
-        let fresh = Vm::from_bytes_trusted(bytes, self.opts)?;
-        self.heap = fresh.heap;
-        Ok(())
-    }
-
-    /// [`Vm::replace_image`] from a borrowed image, copied into this VM's own arena
-    /// buffer: one copy and, once the buffer is big enough, no allocation (D3182). For an
-    /// embedder that resets a VM to the same snapshot after every call (djs-embed). On an
-    /// error the VM has no heap left and must be dropped.
+    /// [`Vm::from_bytes_trusted`] would restore it, but keeps the VM's options; the image
+    /// is borrowed and copied into this VM's own arena buffer: one copy and, once the
+    /// buffer is big enough, no allocation (D3182). For an embedder that resets a VM to
+    /// the same snapshot after every call (djs-embed). On an error the VM has no heap left
+    /// and must be dropped.
     #[cfg(feature = "embed")]
     pub fn reset_to(&mut self, image: &[u8]) -> Result<(), LoadError> {
         Vm::check_image(image)?;

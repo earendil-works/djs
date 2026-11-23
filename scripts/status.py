@@ -17,12 +17,12 @@ usage:
                                       scripts/perf/setup.sh; takes minutes)
   scripts/status.py pi                pi's codemode tests on djs (`node js/pi/pi-tests.ts`: the
                                       default mode, the next mode, the next mode with a dump at
-                                      every idle point on the dump module; needs pi-private)
+                                      every idle point; needs pi-private)
                                       and pi's benchmark vs quickjs-wasi (js/bench/pi.bench.ts,
                                       the median of 3 runs)
   scripts/status.py startup           js/bench/sandbox.bench.ts: vm_new, Sandbox.create, the
                                       first run (median of 3 runs)
-  scripts/status.py dumps             scripts/dump-costs/dump-costs.ts, packaging B: dump sizes
+  scripts/status.py dumps             scripts/dump-costs/dump-costs.ts: dump sizes
                                       and times over the harvested corpus, and the log case
   scripts/status.py bounds            what the arena's bounds checks would cost: the shipped
                                       module (unchecked, `unsafe-heap`) against the same build
@@ -63,7 +63,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FILE = os.path.join(ROOT, "tests/scores/status.tsv")
 WASM = os.path.join(ROOT, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
 SLIM = os.path.join(ROOT, "target/djs-slim.wasm")
-DUMP = os.path.join(ROOT, "target/djs-dump.wasm")
+# The shipped build without the dumper, for what the dumper adds (`dump/extra-gzip`).
+NODUMP = os.path.join(ROOT, "target/nodump-wasm/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
 HEADER = [
     "# Measured status numbers (D2101): `scripts/status.py` writes this file, and the",
     "# `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.",
@@ -151,10 +152,18 @@ def build(*flags):
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh"), *flags], check=True)
 
 
-def size():
+def build_nodump():
+    subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/with-wasm-env.sh"), "cargo", "build",
+                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm", "--quiet",
+                    "--features", "unsafe-heap,cold-unicode"],
+                   cwd=ROOT, env=dict(os.environ, CARGO_TARGET_DIR=os.path.join(ROOT, "target/nodump-wasm")),
+                   check=True)
+
+
+def size(rows):
     build()
     build("--slim")
-    build("--dump")
+    build_nodump()
     b = open(WASM, "rb").read()
     code, data = section_sizes(b)
     _, coded, ops = base(WASM)
@@ -169,13 +178,16 @@ def size():
     if shutil.which("brotli"):
         r = subprocess.run(["brotli", "-c", "-q", "11"], input=b, capture_output=True, check=True)
         new["wasm/brotli"] = len(r.stdout)
-    for name, path in (("slim", SLIM), ("dump", DUMP)):
-        m = open(path, "rb").read()
-        new[f"{name}/bytes"] = len(m)
-        new[f"{name}/gzip"] = len(gzip.compress(m, compresslevel=9, mtime=0))
+    m = open(SLIM, "rb").read()
+    new["slim/bytes"] = len(m)
+    new["slim/gzip"] = len(gzip.compress(m, compresslevel=9, mtime=0))
     new["slim/base"], _, _ = base(SLIM)
-    # What the dumper adds to the shipped module (the dump module is the same build with it).
-    new["dump/extra-gzip"] = new["dump/gzip"] - new["wasm/gzip"]
+    # What the dumper adds to the shipped module: the same build without it (D3600).
+    nodump = len(gzip.compress(open(NODUMP, "rb").read(), compresslevel=9, mtime=0))
+    new["dump/extra-gzip"] = new["wasm/gzip"] - nodump
+    # The dump module's own sizes: there is no second module any more.
+    for k in ("dump/bytes", "dump/gzip"):
+        rows.pop(k, None)
     return new
 
 
@@ -212,7 +224,7 @@ def pi():
     modes = [
         ("pi", [], None),
         ("pi/next", ["--next"], None),
-        ("pi/dump", ["--next", "--dump-every-idle"], {"DJS_WASM": DUMP}),
+        ("pi/dump", ["--next", "--dump-every-idle"], None),
     ]
     for key, flags, env in modes:
         # Failing tests make it exit non-zero; the count is what is recorded.
@@ -263,11 +275,10 @@ def startup():
 
 def dumps():
     out_dir = os.path.join(ROOT, "work/scratch/status-dumps")
-    report = node("scripts/dump-costs/dump-costs.ts", out_dir, "--packaging=B")
+    report = node("scripts/dump-costs/dump-costs.ts", out_dir)
     import json
     points = json.load(open(os.path.join(out_dir, "points.json")))
-    # Keyed by the packaging's label, "B (djs.wasm + djs-dump.wasm)".
-    corpus = next(v for k, v in points.items() if k.startswith("corpus B"))
+    corpus = points["corpus djs.wasm"]
     m = re.search(r"(\d+) cases ran \((\d+) failed to start\), (\d+) idle points, (\d+) refused", report)
     if not m:
         sys.exit(f"status.py: no corpus summary in dump-costs' report:\n{report}")
@@ -299,7 +310,8 @@ def bounds():
     # (no `unsafe-heap`) to say what they would cost.
     target = os.path.join(ROOT, "target/checked-wasm")
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/with-wasm-env.sh"), "cargo", "build",
-                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm", "--quiet"],
+                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm", "--quiet",
+                    "--features", "dump,cold-unicode"],
                    cwd=ROOT, env=dict(os.environ, CARGO_TARGET_DIR=target), check=True)
     checked = os.path.join(target, "wasm32-unknown-unknown/wasm/djs_wasm.wasm")
     gz = lambda p: len(gzip.compress(open(p, "rb").read(), compresslevel=9, mtime=0))
@@ -522,21 +534,19 @@ def main():
         sys.exit(__doc__)
     rows = load()
     if args[0] == "size":
-        save(rows, size())
+        save(rows, size(rows))
     elif args[0] == "speed":
         n = int(args[2]) if len(args) > 2 and args[1] == "-n" else 3
         build()
         save(rows, loaded(speed(n), "speed"))
     elif args[0] == "pi":
         build()
-        build("--dump")
         save(rows, loaded(pi(), "pi"))
     elif args[0] == "startup":
         build()
         save(rows, loaded(startup(), "startup"))
     elif args[0] == "dumps":
         build()
-        build("--dump")
         save(rows, loaded(dumps(), "dumps"))
     elif args[0] == "bounds":
         build()
@@ -556,7 +566,7 @@ def main():
         subprocess.run([os.path.join(ROOT, "scripts/bench-engines.sh"), "--setup"], cwd=ROOT, check=True)
         save(rows, bridge())
     elif args[0] == "all":
-        save(rows, size())
+        save(rows, size(rows))
         save(rows, loaded(speed(3), "speed"))
         save(rows, loaded(pi(), "pi"))
         save(rows, loaded(startup(), "startup"))

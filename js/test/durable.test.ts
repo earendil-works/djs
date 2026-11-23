@@ -6,15 +6,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadModule, type Run, RunExit, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
 
-/** The packagings that dump: the module with the dumper, and (when given) the one without it plus the dump module. */
-async function packagings(): Promise<[string, Pick<SandboxOptions, "module" | "dumpModule">][]> {
-  const module = await loadModule();
-  const out: [string, Pick<SandboxOptions, "module" | "dumpModule">][] = [["A", { module }]];
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B", { module: await loadModule(nodump), dumpModule: module }]);
-  return out;
-}
-
 const quiet = { log() {}, info() {}, warn() {}, error() {} };
 
 /** Settles every open call with `answer` and advances until the run is not idle. */
@@ -65,34 +56,33 @@ test("a host error's own data properties reach the script's catch", async () => 
 const TOOLS = [{ name: "read", description: "reads" }, { name: "ask", description: "asks a person" }];
 
 test("values are deep-frozen globals that dumps name and loads must be given again", async () => {
-  for (const [label, mods] of await packagings()) {
-    const opts: SandboxOptions = { ...mods, frozenBuiltins: true, console: quiet, asyncFunctions: { "tools.ask": () => 0 }, values: { ALL_TOOLS: TOOLS, LIMIT: 3 } };
-    const sb = new Sandbox(opts);
-    const code = `
-      const first = ALL_TOOLS[0], all = ALL_TOOLS;
-      const frozen = [Object.isFrozen(ALL_TOOLS), Object.isFrozen(first), LIMIT];
-      try { ALL_TOOLS[0].name = "x"; } catch (e) { frozen.push(e instanceof TypeError); }
-      const answer = await tools.ask(ALL_TOOLS.map((t) => t.name));
-      return [frozen, answer, all === ALL_TOOLS, first === ALL_TOOLS[0], first.name];
-    `;
-    const run = sb.begin(code, {}, { filename: "values.js" });
-    assert.deepEqual(run.calls[0].args, [["read", "ask"]], label);
-    const dump = run.dump();
-    assert.match(dump, /\$djs\.host\("ALL_TOOLS"\)/, label);
-    assert.doesNotMatch(dump, /asks a person/, `${label}: the data is not written`);
-    sb.dispose();
+  const module = await loadModule();
+  const opts: SandboxOptions = { module, frozenBuiltins: true, console: quiet, asyncFunctions: { "tools.ask": () => 0 }, values: { ALL_TOOLS: TOOLS, LIMIT: 3 } };
+  const sb = new Sandbox(opts);
+  const code = `
+    const first = ALL_TOOLS[0], all = ALL_TOOLS;
+    const frozen = [Object.isFrozen(ALL_TOOLS), Object.isFrozen(first), LIMIT];
+    try { ALL_TOOLS[0].name = "x"; } catch (e) { frozen.push(e instanceof TypeError); }
+    const answer = await tools.ask(ALL_TOOLS.map((t) => t.name));
+    return [frozen, answer, all === ALL_TOOLS, first === ALL_TOOLS[0], first.name];
+  `;
+  const run = sb.begin(code, {}, { filename: "values.js" });
+  assert.deepEqual(run.calls[0].args, [["read", "ask"]]);
+  const dump = run.dump();
+  assert.match(dump, /\$djs\.host\("ALL_TOOLS"\)/);
+  assert.doesNotMatch(dump, /asks a person/, "the data is not written");
+  sb.dispose();
 
-    const again = new Sandbox(opts);
-    const resumed = again.loadRun(dump);
-    await finish(resumed, () => "yes");
-    assert.deepEqual(resumed.value, [[true, true, 3, true], "yes", true, true, "read"], label);
-    again.dispose();
+  const again = new Sandbox(opts);
+  const resumed = again.loadRun(dump);
+  await finish(resumed, () => "yes");
+  assert.deepEqual(resumed.value, [[true, true, 3, true], "yes", true, true, "read"]);
+  again.dispose();
 
-    // A sandbox without the value cannot load the dump.
-    const without = new Sandbox({ ...opts, values: { LIMIT: 3 } });
-    assert.throws(() => without.loadRun(dump), /unknown host value ALL_TOOLS/, label);
-    without.dispose();
-  }
+  // A sandbox without the value cannot load the dump.
+  const without = new Sandbox({ ...opts, values: { LIMIT: 3 } });
+  assert.throws(() => without.loadRun(dump), /unknown host value ALL_TOOLS/);
+  without.dispose();
 });
 
 test("a value named like a host function, namespace or global is a misuse", async () => {
@@ -171,44 +161,43 @@ test("the JSON boundary converts the run's result; a result JSON cannot carry fa
 });
 
 test("converting functions are host values: one per identity, named in dumps, === across a load", async () => {
-  for (const [label, mods] of await packagings()) {
-    const opts: SandboxOptions = {
-      ...mods,
-      frozenBuiltins: true,
-      console: quiet,
-      jsonBoundary: true,
-      asyncFunctions: { "tools.read": () => 0, "@mcp/github#search_issues": () => 0 },
-      bindings: { search_issues: "@mcp/github#search_issues" },
-    };
-    const sb = new Sandbox(opts);
-    const code = `
-      const read = tools.read, search = search_issues;
-      const a = await read({ at: new Date(0) });
-      const b = await search({ q: "dumps", seen: new Set([1]) });
-      return [a, b, read === tools.read, search === search_issues, read.name, typeof read];
-    `;
-    const run = sb.begin(code, {}, { filename: "json.js" });
-    assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["tools.read", [{ at: "1970-01-01T00:00:00.000Z" }]]], label);
-    const dump = run.dump();
-    assert.match(dump, /\$djs\.host\("tools\.read"\)|\$djs\.host\("tools"\)/, label);
-    assert.match(dump, /\$djs\.host\("@mcp\/github#search_issues"\)/, label);
-    assert.doesNotMatch(dump, /stringify/, `${label}: the boundary's code is not in the dump`);
-    sb.dispose();
-    const again = new Sandbox(opts);
-    const resumed = again.loadRun(dump);
-    assert.deepEqual(resumed.calls.map((c) => [c.fn, c.args]), [["tools.read", [{ at: "1970-01-01T00:00:00.000Z" }]]], label);
-    await finish(resumed, (fn, args) => `${fn} ${JSON.stringify(args)}`);
-    assert.equal(resumed.state, "done", String(resumed.error));
-    assert.deepEqual(resumed.value, [
-      'tools.read [{"at":"1970-01-01T00:00:00.000Z"}]',
-      '@mcp/github#search_issues [{"q":"dumps","seen":{}}]',
-      true,
-      true,
-      "read",
-      "function",
-    ], label);
-    again.dispose();
-  }
+  const module = await loadModule();
+  const opts: SandboxOptions = {
+    module,
+    frozenBuiltins: true,
+    console: quiet,
+    jsonBoundary: true,
+    asyncFunctions: { "tools.read": () => 0, "@mcp/github#search_issues": () => 0 },
+    bindings: { search_issues: "@mcp/github#search_issues" },
+  };
+  const sb = new Sandbox(opts);
+  const code = `
+    const read = tools.read, search = search_issues;
+    const a = await read({ at: new Date(0) });
+    const b = await search({ q: "dumps", seen: new Set([1]) });
+    return [a, b, read === tools.read, search === search_issues, read.name, typeof read];
+  `;
+  const run = sb.begin(code, {}, { filename: "json.js" });
+  assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["tools.read", [{ at: "1970-01-01T00:00:00.000Z" }]]]);
+  const dump = run.dump();
+  assert.match(dump, /\$djs\.host\("tools\.read"\)|\$djs\.host\("tools"\)/);
+  assert.match(dump, /\$djs\.host\("@mcp\/github#search_issues"\)/);
+  assert.doesNotMatch(dump, /stringify/, "the boundary's code is not in the dump");
+  sb.dispose();
+  const again = new Sandbox(opts);
+  const resumed = again.loadRun(dump);
+  assert.deepEqual(resumed.calls.map((c) => [c.fn, c.args]), [["tools.read", [{ at: "1970-01-01T00:00:00.000Z" }]]]);
+  await finish(resumed, (fn, args) => `${fn} ${JSON.stringify(args)}`);
+  assert.equal(resumed.state, "done", String(resumed.error));
+  assert.deepEqual(resumed.value, [
+    'tools.read [{"at":"1970-01-01T00:00:00.000Z"}]',
+    '@mcp/github#search_issues [{"q":"dumps","seen":{}}]',
+    true,
+    true,
+    "read",
+    "function",
+  ]);
+  again.dispose();
 });
 
 test("console is not converted by the JSON boundary", async () => {

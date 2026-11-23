@@ -4933,7 +4933,7 @@ const MAPS_KEPT: usize = 8;
 /// What a VM's dumps keep between dumps (0198): the suspension maps of the scripts they
 /// compiled again, by their text and options. The maps depend on nothing else, and a run
 /// dumped at its idle points has the same scripts each time; so they stay valid across
-/// the VM's collections, its runs and image replacements (D2701).
+/// the VM's collections and its runs.
 #[derive(Default, Clone)]
 pub(crate) struct Cache {
     pub(super) maps: Vec<CachedMaps>,

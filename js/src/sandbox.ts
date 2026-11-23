@@ -88,14 +88,6 @@ export interface ConsoleLike {
 export interface SandboxOptions {
   /** The compiled djs-wasm module; default: `loadModule()`. */
   module?: WebAssembly.Module;
-  /**
-   * The dump module (`djs-dump.wasm`: djs-wasm with the `dump` feature) for a `module`
-   * without the dumper (packaging B, D2635): `dump`, `Run.dump` and a task's `suspend`
-   * and `checkpoint` copy the VM's image to an instance of it. Not needed when `module`
-   * has the dumper itself, nor for loading (`load`, `loadRun`, `Sandbox.resume`): a dump
-   * is a Script.
-   */
-  dumpModule?: WebAssembly.Module;
   /** Heap cap in bytes; default: the engine's (4 GiB). */
   memoryLimit?: number;
   /** Fuel per `vm_run` call: how often the host gets control back. Default 1,000,000. */
@@ -257,7 +249,8 @@ export interface SandboxOptions {
    * `suspend`, `Run.dump`); a dump writes the pause as any open call, and a sandbox with
    * this option that loads it pauses again at the next `debugger;`. Outside async
    * functions the statement does nothing, as without the option. Needs a `module` with the
-   * dumper (the dump module), since a dump compiles the script again with the same options.
+   * dumper (the shipped module has it), since a dump compiles the script again with the same
+   * options.
    */
   debugger?: HostFunction | AsyncHostFunction;
 }
@@ -395,7 +388,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 7;
+const ABI_VERSION = 8;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
@@ -498,9 +491,6 @@ interface Exports {
   vm_set_dump_source_refs?(vm: number, on: number): void;
   /** Dump builds only (D3054): `line:col:file` of the activation waiting on a call, in the out buffer. */
   vm_call_site?(vm: number, callId: number): number;
-  vm_from_bytes(len: number, memoryLimit: number): number;
-  /** Since 0177 (D2701). */
-  vm_replace_image?(vm: number, len: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
@@ -561,17 +551,9 @@ const modules = new Map<string, Promise<WebAssembly.Module>>();
 const compiled = new Map<string, WebAssembly.Module>();
 
 /**
- * The dump module's sandboxes, one per module and memory limit in the process (D2802):
- * every sandbox with that `dumpModule` moves its image into the same instance and VM for
- * a dump or a load, which runs no host function (the loader refuses host calls), so the
- * VM is the only state they share, and it is replaced each time.
- */
-const dumpers = new WeakMap<WebAssembly.Module, Map<number, Sandbox>>();
-
-/**
  * The default location of djs-wasm: `$DJS_WASM`, else, running from the repository's
- * sources (js/src/*.ts), the `wasm` profile build. The package's entry points have their
- * own defaults (`Sandbox.defaultModule`), the modules shipped in the package (D3106).
+ * sources (js/src/*.ts), the `wasm` profile build. The package's entry point has its own
+ * default (`Sandbox.defaultModule`), the module shipped in the package (D3106, D3602).
  */
 export function defaultWasmPath(): string | URL {
   const env = envVar("DJS_WASM");
@@ -803,28 +785,13 @@ export class Task {
   }
 }
 
-/**
- * A VM image moving between the main module and the dump module (packaging B, D2635):
- * the arena as is, with what the sandbox keeps beside it.
- */
-interface RawImage {
-  image: Uint8Array;
-  functions: string[];
-  clock?: number;
-  namespaces: [string, number][];
-  fnHandles: [number, number][];
-  wrappers: [number, number][];
-  globals: string[];
-}
-
 /** `drive`'s value at an idle point of a host-driven run. */
 const IDLE = Symbol("idle");
 
 export class Sandbox {
   private readonly x: Exports;
   private readonly module: WebAssembly.Module;
-  /** The VM; replaced when the dump module's sandbox takes another image (`takeImage`). */
-  private vm: number;
+  private readonly vm: number;
   private readonly opts: SandboxOptions;
   /** Host function names by id - 1. */
   private readonly fnNames: string[] = [];
@@ -867,8 +834,8 @@ export class Sandbox {
 
   /**
    * Where `create` and the constructor find the module when `opts.module` is not given:
-   * here `defaultWasmPath()`; each entry point of the package overrides it with its own
-   * module (D3106).
+   * here `defaultWasmPath()`; the package's entry point overrides it with the package's
+   * module (D3106, D3602).
    */
   static defaultModule(): string | URL {
     return defaultWasmPath();
@@ -929,10 +896,9 @@ export class Sandbox {
 
   /**
    * A new sandbox (its own wasm instance and VM), synchronously: needs a compiled module,
-   * `opts.module` or one `loadModule()` has finished loading. (`raw`: internal, a VM image
-   * of this process moving to the dump module, D2635.)
+   * `opts.module` or one `loadModule()` has finished loading.
    */
-  constructor(opts: SandboxOptions = {}, raw?: RawImage) {
+  constructor(opts: SandboxOptions = {}) {
     let module = opts.module;
     if (module === undefined) {
       try {
@@ -953,35 +919,17 @@ export class Sandbox {
     if (x.djs_abi_version() !== ABI_VERSION) {
       throw new SandboxError("misuse", `djs-wasm ABI ${x.djs_abi_version()}, expected ${ABI_VERSION}`);
     }
+    // The module's base, decoded once by its first instance, not by each (D2252), and
+    // kept for later instances before `vm_new` takes this instance's bytes as its arena
+    // (D2060).
+    provideBase(module, x);
+    rememberBase(module, x);
     let vm: number;
-    let restoredFns: string[] = [];
-    if (raw === undefined) {
-      // The module's base, decoded once by its first instance, not by each (D2252), and
-      // kept for later instances before `vm_new` takes this instance's bytes as its arena
-      // (D2060).
-      provideBase(module, x);
-      rememberBase(module, x);
-      if (opts.frozenBuiltins) {
-        if (!x.vm_new_with) throw new SandboxError("misuse", "the djs-wasm module has no frozenBuiltins (vm_new_with)");
-        vm = x.vm_new_with(opts.memoryLimit ?? 0, 0, VM_FROZEN_BUILTINS);
-      } else vm = x.vm_new(opts.memoryLimit ?? 0);
-      if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
-    } else {
-      const image = raw.image;
-      restoredFns = raw.functions;
-      if (opts.deterministic) this.clock = raw.clock ?? opts.deterministic.startedAt;
-      for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
-      for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
-      for (const [id, h] of raw.wrappers) this.wrappers.set(id, h);
-      for (const g of raw.globals) this.globalNames.add(g);
-      // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
-      // so it is staged with the arena's capacity (D1942).
-      const limit = opts.memoryLimit ?? 0;
-      const at = x.djs_image_staging ? x.djs_image_staging(image.length, limit) : x.djs_staging(image.length);
-      new Uint8Array(x.memory.buffer).set(image, at);
-      vm = x.vm_from_bytes(image.length, opts.memoryLimit ?? 0);
-      if (vm === 0) throw new SandboxError("misuse", outText(x));
-    }
+    if (opts.frozenBuiltins) {
+      if (!x.vm_new_with) throw new SandboxError("misuse", "the djs-wasm module has no frozenBuiltins (vm_new_with)");
+      vm = x.vm_new_with(opts.memoryLimit ?? 0, 0, VM_FROZEN_BUILTINS);
+    } else vm = x.vm_new(opts.memoryLimit ?? 0);
+    if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     this.x = x;
     this.module = module;
     this.vm = vm;
@@ -990,64 +938,49 @@ export class Sandbox {
     this.cons = cons;
     const builtins: Record<string, HostFunction> = {};
     for (const m of CONSOLE_METHODS) builtins[`console.${m}`] = (...a) => cons[m](...a);
-    if (raw !== undefined) {
-      // The VM already has its host functions; bind the ids to the given implementations.
-      restoredFns.forEach((name, i) => {
-        const a = name === "debugger" && opts.debugger !== undefined ? opts.debugger : opts.asyncFunctions?.[name];
-        // (A module's function, made on first import, is not in the options: the dump
-        // module's sandbox calls none.)
-        const f = builtins[name] ?? opts.functions?.[name] ?? (typeof a === "object" ? a.call : a) ?? (() => {
-          throw new Error(`${name}: not callable while dumping`);
-        });
-        this.fnNames.push(name);
-        this.fns.set(i + 1, f);
-        if (typeof a === "object") this.hooks.set(i + 1, a);
-      });
-    } else {
-      // `console` is a namespace like `tools` (a host root of dumps, D2971).
-      for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false, false);
-      for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
-      for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
-      if (opts.debugger !== undefined) {
-        if (!x.vm_dump) throw new SandboxError("misuse", "the debugger option needs a djs-wasm module with the dumper (the `dump` feature)");
-        this.addFunction("debugger", opts.debugger, true, false);
+    // `console` is a namespace like `tools` (a host root of dumps, D2971).
+    for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false, false);
+    for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
+    for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
+    if (opts.debugger !== undefined) {
+      if (!x.vm_dump) throw new SandboxError("misuse", "the debugger option needs a djs-wasm module with the dumper (the `dump` feature)");
+      this.addFunction("debugger", opts.debugger, true, false);
+    }
+    const globals = { ...(opts.globals ?? this.defaultGlobals()) };
+    if (opts.debugger !== undefined) globals.debugger = "debugger";
+    for (const [name, identity] of Object.entries(globals)) this.bindGlobal(name, identity);
+    // Host data (`values`): deep-frozen copies, host roots like the namespaces, so a dump
+    // names them (`$djs.host(name)`) instead of writing them.
+    for (const [name, value] of Object.entries(opts.values ?? {})) {
+      if (this.hostValue(name) !== undefined || this.globalNames.has(name)) {
+        throw new SandboxError("misuse", `value ${name}: the name of a host function, namespace or global already`);
       }
-      const globals = { ...(opts.globals ?? this.defaultGlobals()) };
-      if (opts.debugger !== undefined) globals.debugger = "debugger";
-      for (const [name, identity] of Object.entries(globals)) this.bindGlobal(name, identity);
-      // Host data (`values`): deep-frozen copies, host roots like the namespaces, so a dump
-      // names them (`$djs.host(name)`) instead of writing them.
-      for (const [name, value] of Object.entries(opts.values ?? {})) {
-        if (this.hostValue(name) !== undefined || this.globalNames.has(name)) {
-          throw new SandboxError("misuse", `value ${name}: the name of a host function, namespace or global already`);
-        }
-        let h: number;
-        try {
-          h = this.guard(() => this.toHandle(value));
-        } catch (e) {
-          if (e instanceof SandboxError) throw e;
-          throw new SandboxError("misuse", `value ${name}: ${(e as Error).message}`);
-        }
-        if (h === 0) continue;
-        this.guard(() => this.x.vm_handle_free(vm, this.callHelper(1, h)));
-        this.namespaces.set(name, h);
-        this.bindGlobal(name, name);
+      let h: number;
+      try {
+        h = this.guard(() => this.toHandle(value));
+      } catch (e) {
+        if (e instanceof SandboxError) throw e;
+        throw new SandboxError("misuse", `value ${name}: ${(e as Error).message}`);
       }
-      // The boundary converts results with the helper, also with no host function.
-      if (opts.jsonBoundary && this.helper === 0) this.guard(() => this.x.vm_handle_free(vm, this.callHelper(1, 0)));
-      // What a new VM starts with; an image keeps its own (D1680).
-      const det = opts.deterministic;
-      const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
-      x.vm_set_random_seed(vm, lo, hi);
-      const weak = opts.weakRefs ?? (det ? "strong" : "collected");
-      if (this.guard(() => x.vm_set_weak_refs(vm, WEAK_REF_MODES[weak])) !== 0) {
-        throw new SandboxError("misuse", `bad weakRefs mode ${String(weak)}`);
-      }
-      if (det) {
-        this.clock = det.startedAt;
-        x.vm_set_now(vm, det.startedAt);
-        x.vm_set_time_zone_offset(vm, 0);
-      }
+      if (h === 0) continue;
+      this.guard(() => this.x.vm_handle_free(vm, this.callHelper(1, h)));
+      this.namespaces.set(name, h);
+      this.bindGlobal(name, name);
+    }
+    // The boundary converts results with the helper, also with no host function.
+    if (opts.jsonBoundary && this.helper === 0) this.guard(() => this.x.vm_handle_free(vm, this.callHelper(1, 0)));
+    // What a new VM starts with (D1680).
+    const det = opts.deterministic;
+    const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
+    x.vm_set_random_seed(vm, lo, hi);
+    const weak = opts.weakRefs ?? (det ? "strong" : "collected");
+    if (this.guard(() => x.vm_set_weak_refs(vm, WEAK_REF_MODES[weak])) !== 0) {
+      throw new SandboxError("misuse", `bad weakRefs mode ${String(weak)}`);
+    }
+    if (det) {
+      this.clock = det.startedAt;
+      x.vm_set_now(vm, det.startedAt);
+      x.vm_set_time_zone_offset(vm, 0);
     }
   }
 
@@ -1696,92 +1629,29 @@ export class Sandbox {
    * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
-    // Dumps need frozen builtins (D2836): the VM's mode, which a restored sandbox keeps
-    // from its image.
+    // Dumps need frozen builtins (D2836): the VM's mode.
     if (this.x.vm_frozen_builtins?.(this.vm) !== 1) {
       throw new SandboxError("misuse", "cannot dump: dumps need frozen builtins (SandboxOptions.frozenBuiltins, D2836)");
     }
-    const refs = !this.opts.inlineSources;
-    return this.viaDumper((sb) => sb.dumpHere(names, handles, states, refs));
-  }
-
-  /**
-   * Runs `f` on a sandbox with the dumper: this one, or (with `opts.dumpModule`, D2635)
-   * a transient sandbox in the dump module made from this VM's image. The image travels
-   * as is, so a dump leaves this VM untouched (D2633).
-   */
-  private viaDumper<T>(f: (sb: Sandbox) => T): T {
-    const dm = this.opts.dumpModule;
-    if (dm === undefined) return f(this);
-    this.alive();
-    const raw = (sb: Sandbox): RawImage => ({
-      image: sb.arena().slice(),
-      functions: [...sb.fnNames],
-      clock: sb.clock,
-      namespaces: [...sb.namespaces],
-      fnHandles: [...sb.fnHandles],
-      wrappers: [...sb.wrappers],
-      globals: [...sb.globalNames],
-    });
-    // One dump-module sandbox per module and memory limit, kept between dumps (D2701,
-    // D2802): an instance costs a base, and its VM keeps what the dumper derives from the
-    // base on the first dump.
-    const limit = this.opts.memoryLimit ?? 0;
-    let byLimit = dumpers.get(dm);
-    if (byLimit === undefined) dumpers.set(dm, (byLimit = new Map()));
-    let d = byLimit.get(limit);
-    if (d === undefined || d.dead !== null) {
-      d = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
-      byLimit.set(limit, d);
-    } else d.takeImage(raw(this));
-    return f(d);
-  }
-
-  /** The dump module's sandbox: takes the main sandbox's image into the same VM. */
-  private takeImage(raw: RawImage): void {
     const x = this.x;
-    this.fnNames.splice(0, this.fnNames.length, ...raw.functions);
-    this.namespaces.clear();
-    for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
-    this.fnHandles.clear();
-    for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
-    this.wrappers.clear();
-    for (const [id, h] of raw.wrappers) this.wrappers.set(id, h);
-    this.globalNames.clear();
-    for (const g of raw.globals) this.globalNames.add(g);
-    if (!x.vm_replace_image) {
-      this.replaceVm(raw);
-      return;
-    }
-    this.guard(() => {
-      const limit = this.opts.memoryLimit ?? 0;
-      const at = x.djs_image_staging ? x.djs_image_staging(raw.image.length, limit) : x.djs_staging(raw.image.length);
-      new Uint8Array(x.memory.buffer).set(raw.image, at);
-      if (x.vm_replace_image!(this.vm, raw.image.length) !== 0) {
-        throw new SandboxError("misuse", `the image does not load in the dump module: ${outText(x)}`);
-      }
-    });
-    this.clock = raw.clock;
-    this.atomCache.length = 0;
-  }
-
-  /** Replaces this sandbox's VM with an image (from the dump module). */
-  private replaceVm(raw: RawImage): void {
-    const x = this.x;
-    this.guard(() => {
-      x.vm_free(this.vm);
-      const limit = this.opts.memoryLimit ?? 0;
-      const at = x.djs_image_staging ? x.djs_image_staging(raw.image.length, limit) : x.djs_staging(raw.image.length);
-      new Uint8Array(x.memory.buffer).set(raw.image, at);
-      const vm = x.vm_from_bytes(raw.image.length, limit);
-      if (vm === 0) {
-        this.dead = `lost its VM: ${outText(x)}`;
-        throw new SandboxError("misuse", `the dump module's image does not load here: ${outText(x)}`);
-      }
-      this.vm = vm;
-    });
-    this.clock = raw.clock;
-    this.atomCache.length = 0;
+    x.vm_set_dump_source_refs?.(this.vm, this.opts.inlineSources ? 0 : 1);
+    if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): it was built without the `dump` feature");
+    const host = this.globalNames;
+    const text = [
+      [...host].join(","),
+      names.join(","),
+      this.fnNames.join("\t"),
+      handles.map(([name, h]) => `${h}:${name}`).join("\t"),
+      // The converting functions first, by identity; then the namespaces and values.
+      [...[...this.wrappers].map(([id, h]): [string, number] => [this.fnNames[id - 1], h]), ...this.namespaces]
+        .map(([name, h]) => `${h}:${name}`)
+        .join("\t"),
+      states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
+      states.map(([, json]) => json).join(""),
+    ].join("\n");
+    const r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
+    if (r !== 0) throw new SandboxError("misuse", `cannot dump:\n${outText(x)}`);
+    return outText(x);
   }
 
   /**
@@ -1846,29 +1716,6 @@ export class Sandbox {
   private failHook(callId: number, e: Error): void {
     this.hookError ??= e;
     this.complete(callId, false, e, false);
-  }
-
-  /** `vm_dump` in this sandbox's own module. */
-  private dumpHere(names: string[], handles: [string, number][], states: [number, string][], sourceRefs = true): string {
-    const x = this.x;
-    x.vm_set_dump_source_refs?.(this.vm, sourceRefs ? 1 : 0);
-    if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): build it with the `dump` feature, or pass `dumpModule`");
-    const host = this.globalNames;
-    const text = [
-      [...host].join(","),
-      names.join(","),
-      this.fnNames.join("\t"),
-      handles.map(([name, h]) => `${h}:${name}`).join("\t"),
-      // The converting functions first, by identity; then the namespaces and values.
-      [...[...this.wrappers].map(([id, h]): [string, number] => [this.fnNames[id - 1], h]), ...this.namespaces]
-        .map(([name, h]) => `${h}:${name}`)
-        .join("\t"),
-      states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
-      states.map(([, json]) => json).join(""),
-    ].join("\n");
-    const r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
-    if (r !== 0) throw new SandboxError("misuse", `cannot dump:\n${outText(x)}`);
-    return outText(x);
   }
 
   /**

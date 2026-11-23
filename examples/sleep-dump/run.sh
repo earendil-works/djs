@@ -1,6 +1,6 @@
 #!/bin/sh
-# Runs the example on the release dump module (djs-wasm with the dumper, the `dump`
-# feature, which the shipped module leaves out):
+# Runs the example on the release module (scripts/build-wasm.sh: the shipped build, which
+# has the dumper):
 #   examples/sleep-dump/run.sh [ms]             one process: suspend, drop the sandbox, resume
 #   examples/sleep-dump/run.sh --restart [ms]   two processes: the first suspends into
 #                                               out/sleep.dump.js and exits, the second resumes
@@ -9,13 +9,13 @@
 set -e
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
-wasm=target/djs-dump.wasm
+wasm=target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
 # Built once (a minute or two), and again only when a source of it is newer: asking cargo
 # whether anything changed costs more than the rest of a run.
 if [ ! -f $wasm ] || [ -n "$(find crates/djs-core crates/djs-prelude crates/djs-lzrc crates/djs-wasm \
   builtins tests/builtins Cargo.toml Cargo.lock -newer $wasm -type f | head -1)" ]; then
   echo "--- building $wasm"
-  scripts/build-wasm.sh --dump
+  scripts/build-wasm.sh
 fi
 export DJS_WASM="$root/$wasm"
 # Node caches the code it compiled from the TypeScript sources: a third of its startup.

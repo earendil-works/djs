@@ -1,6 +1,6 @@
 {
   "name": "@earendil-works/djs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small, sandboxed JavaScript and TypeScript engine in WebAssembly: runs untrusted scripts with fuel and memory limits, and suspends runs into dumps that continue later.",
   "keywords": ["javascript", "typescript", "sandbox", "interpreter", "webassembly", "wasm", "codemode"],
   "type": "module",
@@ -14,9 +14,6 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./slim": { "types": "./dist/slim.d.ts", "default": "./dist/slim.js" },
-    "./dump": { "types": "./dist/dump.d.ts", "default": "./dist/dump.js" },
-    "./dump-runtime": { "types": "./dist/dump-runtime.d.ts", "default": "./dist/dump-runtime.js" },
     "./wasm/*.wasm": "./wasm/*.wasm",
     "./package.json": "./package.json"
   },

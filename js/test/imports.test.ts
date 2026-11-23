@@ -9,14 +9,6 @@ import { leadingImports } from "../src/imports.ts";
 
 const quiet = { log() {}, info() {}, warn() {}, error() {} };
 
-async function packagings(): Promise<[string, Pick<SandboxOptions, "module" | "dumpModule">][]> {
-  const module = await loadModule();
-  const out: [string, Pick<SandboxOptions, "module" | "dumpModule">][] = [["A", { module }]];
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B", { module: await loadModule(nodump), dumpModule: module }]);
-  return out;
-}
-
 async function finish(run: Run, answer: (fn: string, args: unknown[]) => unknown): Promise<void> {
   while (run.state === "idle" && run.calls.length > 0) {
     for (const c of run.calls) run.settle(c.id, { ok: true, value: answer(c.fn, c.args) });
@@ -120,7 +112,7 @@ test("TypeScript bodies erase type-only imports", async () => {
   sb.dispose();
 });
 
-test("a run with imports dumps at every idle point and loads with no rewrite, in both packagings", async () => {
+test("a run with imports dumps at every idle point and loads with no rewrite", async () => {
   const code = `// imports, then the body
 import { search_issues } from "@mcp/github";
 import * as linear from "@mcp/linear";
@@ -136,40 +128,39 @@ return [made, search === search_issues, ns === linear, Object.keys(ns)];`;
     true,
     ["create_issue", "list"],
   ];
-  for (const [label, mods] of await packagings()) {
-    for (const inline of [false, true]) {
-      for (const json of [false, true]) {
-        const opts = (): SandboxOptions => ({
-          ...mods,
-          frozenBuiltins: true,
-          console: quiet,
-          inlineSources: inline,
-          jsonBoundary: json,
-          modules: modules(),
-          sources: (n) => (n === "imports.js" ? code : undefined),
-        });
-        for (let k = 0; k < 2; k++) {
-          const what = `${label} inline ${inline} json ${json} at idle point ${k + 1}`;
-          const sb = new Sandbox(opts());
-          const run = sb.begin(code, {}, { filename: "imports.js" });
-          for (let i = 0; i < k; i++) {
-            for (const c of run.calls) run.settle(c.id, { ok: true, value: answer(c.fn, c.args) });
-            await run.advance();
-          }
-          const dump = run.dump();
-          if (!inline) assert.match(dump, /\$djs\.source\("imports\.js", "[0-9a-f]{8}", "search_issues,linear"\)/, what);
-          else assert.doesNotMatch(dump, /\bimport\s*\{/, `${what}: the inlined body has no import`);
-          if (k === 1) assert.match(dump, /\$djs\.host\("@mcp\/linear"\)/, what);
-          assert.match(dump, /\$djs\.host\("@mcp\/github#search_issues"\)/, what);
-          sb.dispose();
-          // A fresh sandbox has made none of the modules' values: the load makes them.
-          const again = new Sandbox(opts());
-          const resumed = again.loadRun(dump);
-          await finish(resumed, answer);
-          assert.equal(resumed.state, "done", `${what}: ${String(resumed.error)}`);
-          assert.deepEqual(resumed.value, want, what);
-          again.dispose();
+  const module = await loadModule();
+  for (const inline of [false, true]) {
+    for (const json of [false, true]) {
+      const opts = (): SandboxOptions => ({
+        module,
+        frozenBuiltins: true,
+        console: quiet,
+        inlineSources: inline,
+        jsonBoundary: json,
+        modules: modules(),
+        sources: (n) => (n === "imports.js" ? code : undefined),
+      });
+      for (let k = 0; k < 2; k++) {
+        const what = `inline ${inline} json ${json} at idle point ${k + 1}`;
+        const sb = new Sandbox(opts());
+        const run = sb.begin(code, {}, { filename: "imports.js" });
+        for (let i = 0; i < k; i++) {
+          for (const c of run.calls) run.settle(c.id, { ok: true, value: answer(c.fn, c.args) });
+          await run.advance();
         }
+        const dump = run.dump();
+        if (!inline) assert.match(dump, /\$djs\.source\("imports\.js", "[0-9a-f]{8}", "search_issues,linear"\)/, what);
+        else assert.doesNotMatch(dump, /\bimport\s*\{/, `${what}: the inlined body has no import`);
+        if (k === 1) assert.match(dump, /\$djs\.host\("@mcp\/linear"\)/, what);
+        assert.match(dump, /\$djs\.host\("@mcp\/github#search_issues"\)/, what);
+        sb.dispose();
+        // A fresh sandbox has made none of the modules' values: the load makes them.
+        const again = new Sandbox(opts());
+        const resumed = again.loadRun(dump);
+        await finish(resumed, answer);
+        assert.equal(resumed.state, "done", `${what}: ${String(resumed.error)}`);
+        assert.deepEqual(resumed.value, want, what);
+        again.dispose();
       }
     }
   }

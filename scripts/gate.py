@@ -246,8 +246,8 @@ def jobs():
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
         # without `full`/`unicode` (slim), slim with the dumper (and `lazy`, as djs-wasm's
         # `dump` turns it on, D2990), full without them; and the
-        # wasm modules in release as they ship: main and slim unchecked (D3100), dump, slim
-        # with dump. Libraries only: the
+        # wasm modules in release as they ship: the shipped one (with the dumper, D3600) and
+        # slim unchecked (D3100), slim with dump. Libraries only: the
         # tests build in the default combination (and slim's in its own legs).
         J("clippy (djs-core feature combinations)", "for f in '--no-default-features'"
           " '--no-default-features --features dump,lazy' '--no-default-features --features full,unicode';"
@@ -257,14 +257,15 @@ def jobs():
         *[J(f"clippy (wasm {name} module in release)",
             f"CARGO_TARGET_DIR=target/clippy-wasm-{name} cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
             f" --release {flags} --quiet -- -D warnings", cls="rust", group=f"target/clippy-wasm-{name}")
-          # One target directory each: four feature sets build nothing in common, and one
+          # One target directory each: the feature sets build nothing in common, and one
           # after another they were the gate's second-longest path (0197).
-          for name, flags in (("main", "--features unsafe-heap"),
-                              ("slim", "--no-default-features --features unsafe-heap"), ("dump", "--features dump"),
+          for name, flags in (("main", "--features unsafe-heap,cold-unicode,dump"),
+                              ("slim", "--no-default-features --features unsafe-heap"),
                               ("slim-dump", "--no-default-features --features dump"))],
 
-        # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023),
-        # with and without the dumper (0175, D2635).
+        # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023):
+        # with the dumper, as the shipped module, and without it (a debug or custom build:
+        # dumping refuses clearly, loading works, D3600).
         J("no_std/wasm build of djs-core",
           "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
           cls="rust", group="target/wasm-dev"),
@@ -274,10 +275,11 @@ def jobs():
           " --target wasm32-unknown-unknown --features compiled-prelude,cold-unicode --quiet",
           group="target/wasm-nodump", build=True),
 
-        # --- The shipped modules (D020, D2411): LTO, one codegen unit, one core each, and
-        # unchecked arena access, as scripts/build-wasm.sh builds them (D3100).
+        # --- The shipped module, with the dumper (D3600), and the slim one (D020, D2411): LTO,
+        # one codegen unit, one core each, and unchecked arena access, as scripts/build-wasm.sh
+        # builds them (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode --quiet",
+          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,dump --quiet",
           group="target/size", build=True),
         J("build:size-slim", "CARGO_TARGET_DIR=target/size-slim scripts/with-wasm-env.sh cargo build -p djs-wasm"
           " --target wasm32-unknown-unknown --profile wasm --no-default-features --features unsafe-heap --quiet",
@@ -314,17 +316,15 @@ def jobs():
         # 0229: the codemode workload set of the benchmarks page runs on djs and gives node's
         # results, with a dump and a load at every idle point (D3113); 0238: every payload of
         # the bridge benchmark reads back as it went in (D3165): about 4 s.
-        J("codemode workloads", f"DJS_WASM=$PWD/{nodump} DJS_DUMP_WASM=$PWD/{wasm}"
-          " node js/bench/engines/run.ts --quick --engines djs"
-          f" && DJS_WASM=$PWD/{nodump} node js/bench/engines/bridge.ts --quick --engines djs",
-          cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
+        J("codemode workloads", f"DJS_WASM=$PWD/{wasm} node js/bench/engines/run.ts --quick --engines djs"
+          f" && DJS_WASM=$PWD/{wasm} node js/bench/engines/bridge.ts --quick --engines djs",
+          cls="nodocs", needs=["build:wasm"]),
         # 0228: the npm package stays publishable (D3109): it builds (tsc, with the
-        # declarations), packs, and the packed tarball's smoke test runs in node. The gate's
-        # builds stand in for the release ones: the main and slim modules as they ship, the
-        # dev module for the dump module (the publish workflow tests the real ones).
-        J("npm package", f'd=$(mktemp -d); t=$(scripts/npm-pack.sh --modules {size_mod} {slim_mod} {wasm}'
+        # declarations), packs, and the packed tarball's smoke test runs in node, on the gate's
+        # build of the shipped module (D3600).
+        J("npm package", f'd=$(mktemp -d); t=$(scripts/npm-pack.sh --module {size_mod}'
           ' --out "$d") && scripts/npm-test.sh "$t" node; rc=$?; rm -rf "$d"; exit $rc',
-          cls="nodocs", ext=("base", "npm"), needs=["build:size", "build:size-slim", "build:wasm"]),
+          cls="nodocs", ext=("base", "npm"), needs=["build:size"]),
         # 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.
         J("native vs wasm images", f"DJS_ABIDRIVE={G}/bin/djs-abidrive"
           f" ./scripts/determinism/native-vs-wasm.sh $PWD/{wasm}",
@@ -388,7 +388,7 @@ def jobs():
           " --group active --quiet --expected tests/test262/expected-failures-slim.txt",
           cls="rust", needs=["build:slim-bins"], summary=r"^ratchet:|^\| active"),
 
-        # --- The shipped modules: the size budget (D020), pi's tests on the slim module
+        # --- The shipped module and slim: the size budget (D020), pi's tests on the slim module
         # without pi's lockdown (D2411), and in the adapter's next mode (0176, D2650).
         J("size budget", f"python3 scripts/size/budget.py {size_mod} && python3 scripts/size/budget.py"
           f" {slim_mod} --slim", cls="rust", needs=["build:size", "build:size-slim"]),
@@ -419,9 +419,9 @@ def jobs():
           cls="rust", needs=["build:test262"], full_only=True,
           summary=r"^mode:|^ratchet:|^\| active|^deadline:|^slowest:|^ +[0-9.]+s "),
         # Pi's tests in the next mode with a dump and a resume at every idle point, on the
-        # release dump module (its own LTO build, 0176).
-        J("pi tests (next mode with a dump at every idle point)", "scripts/pi-dump-every-idle.sh",
-          cls="nodocs", ext=("base", "pi"), group="target/dump-wasm", full_only=True,
+        # shipped module (0176, D3600).
+        J("pi tests (next mode with a dump at every idle point)", f"scripts/pi-dump-every-idle.sh $PWD/{size_mod}",
+          cls="nodocs", ext=("base", "pi"), needs=["build:size"], full_only=True,
           summary=r"^pi tests:"),
     ]
 

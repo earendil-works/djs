@@ -1,10 +1,7 @@
 // Continuation dumps through the Sandbox (0175, D2830, docs/plain-js-dumps.md): at every idle
 // point of a run, dump it, resume the dump in a fresh sandbox and continue there. The
 // transcript (console output, the open calls with their ids at each idle point, the
-// result) must equal the uninterrupted run's. Dumps need frozen builtins (D2836). In both packagings (D2635): A, the main module with the dumper;
-// B, a main module without it plus the dump module, the VM's image moving between them.
-// B runs with the module below as the dump module and, when $DJS_WASM_NODUMP names a
-// build without the `dump` feature (the gate builds one), with that as the main module.
+// result) must equal the uninterrupted run's. Dumps need frozen builtins (D2836).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -88,25 +85,16 @@ interface Transcript {
   result: unknown;
 }
 
-interface Packaging {
+interface Setup {
   module: WebAssembly.Module;
-  dumpModule?: WebAssembly.Module;
   frozenBuiltins: boolean;
 }
 
-/** The packagings to test: A, B with one module, B with a real dumper-less main module. */
-async function packagings(): Promise<[string, Packaging][]> {
-  const module = await loadModule();
-  const out: [string, Packaging][] = [
-    ["A", { module, frozenBuiltins: true }],
-    ["B (image transport)", { module, dumpModule: module, frozenBuiltins: true }],
-  ];
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, frozenBuiltins: true }]);
-  return out;
+async function setup(): Promise<Setup> {
+  return { module: await loadModule(), frozenBuiltins: true };
 }
 
-function sandboxOptions(p: Packaging, lines: string[]): SandboxOptions {
+function sandboxOptions(p: Setup, lines: string[]): SandboxOptions {
   const log = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
   const tool = () => 0; // a host-driven run never calls them
   return {
@@ -122,7 +110,7 @@ function sandboxOptions(p: Packaging, lines: string[]): SandboxOptions {
  * Runs `code` one result per idle point (the oldest open call first). With `dumpEvery`,
  * the run moves to a fresh sandbox through a dump at every idle point.
  */
-async function drive(module: Packaging, code: string, dumpEvery: boolean): Promise<Transcript & { dumps: number }> {
+async function drive(module: Setup, code: string, dumpEvery: boolean): Promise<Transcript & { dumps: number }> {
   const lines: string[] = [];
   let sb = new Sandbox(sandboxOptions(module, lines));
   let run: Run = sb.begin(code);
@@ -146,24 +134,21 @@ async function drive(module: Packaging, code: string, dumpEvery: boolean): Promi
 }
 
 for (const [name, code] of Object.entries(CASES)) {
-  test(`dump and resume at every idle point: ${name}`, async (t) => {
-    for (const [pk, p] of await packagings()) {
-      await t.test(pk, async () => {
-        const plain = await drive(p, code, false);
-        const dumped = await drive(p, code, true);
-        assert.ok(dumped.dumps >= 2, `${dumped.dumps} idle points`);
-        assert.deepEqual(dumped.lines, plain.lines);
-        assert.deepEqual(dumped.result, plain.result);
-      });
-    }
+  test(`dump and resume at every idle point: ${name}`, async () => {
+    const p = await setup();
+    const plain = await drive(p, code, false);
+    const dumped = await drive(p, code, true);
+    assert.ok(dumped.dumps >= 2, `${dumped.dumps} idle points`);
+    assert.deepEqual(dumped.lines, plain.lines);
+    assert.deepEqual(dumped.result, plain.result);
   });
 }
 
-test("refusals are SandboxErrors", async (t) => {
-  for (const [pk, p] of await packagings()) await t.test(pk, () => refusals(p));
+test("refusals are SandboxErrors", async () => {
+  await refusals(await setup());
 });
 
-async function refusals(p: Packaging): Promise<void> {
+async function refusals(p: Setup): Promise<void> {
   const lines: string[] = [];
   const sb = new Sandbox(sandboxOptions(p, lines));
   // A weak collection cannot be written.
@@ -193,3 +178,14 @@ async function refusals(p: Packaging): Promise<void> {
   const thawed = new Sandbox({ ...sandboxOptions(p, lines), frozenBuiltins: false }).begin("return await tools.echo(1);");
   assert.throws(() => thawed.dump(), (e: unknown) => e instanceof SandboxError && /dumps need frozen builtins/.test(e.message));
 }
+
+test("a module without the dumper refuses to dump with a clear error", async () => {
+  // A debug or custom build without the `dump` feature ($DJS_WASM_NODUMP, which the gate
+  // builds); the shipped module has the dumper.
+  const nodump = process.env.DJS_WASM_NODUMP;
+  if (!nodump) return;
+  const sb = new Sandbox({ module: await loadModule(nodump), frozenBuiltins: true, console: { log() {}, info() {}, warn() {}, error() {} } });
+  sb.run("globalThis.x = 1");
+  assert.throws(() => sb.dump(["x"]), (e: unknown) => e instanceof SandboxError && e.kind === "misuse" && /built without the `dump` feature/.test(e.message));
+  sb.dispose();
+});

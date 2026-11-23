@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds the npm package @earendil-works/djs (js/, D2842, D3105) and packs it:
-#   scripts/npm-pack.sh [--modules MAIN SLIM DUMP] [--out DIR]
-# 1. the three wasm modules: the shipped, slim and dump builds of scripts/build-wasm.sh (release,
-#    build-std, as they ship), or the given files (--modules: the gate packs its own builds);
+#   scripts/npm-pack.sh [--module MODULE] [--out DIR]
+# 1. the one wasm module djs ships, wasm/djs.wasm: scripts/build-wasm.sh's (release, build-std,
+#    with the dumper, as it ships, D3600), or the given file (--module: the gate packs its own
+#    build);
 # 2. the JavaScript and its declarations: tsc over js/src (js/tsconfig.build.json), with
 #    TypeScript from js/package-lock.json (npm ci, once);
 # 3. the package directory DIR/package (default target/npm/package): dist/, wasm/, js/README.md,
@@ -12,22 +13,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 out=target/npm
-modules=()
+module=
 while [ $# -gt 0 ]; do
   case "$1" in
-    --modules) modules=("$2" "$3" "$4"); shift 4 ;;
+    --module) module=$2; shift 2 ;;
     --out) out=$2; shift 2 ;;
-    *) echo "usage: scripts/npm-pack.sh [--modules MAIN SLIM DUMP] [--out DIR]" >&2; exit 2 ;;
+    *) echo "usage: scripts/npm-pack.sh [--module MODULE] [--out DIR]" >&2; exit 2 ;;
   esac
 done
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 
-if [ ${#modules[@]} -eq 0 ]; then
+if [ -z "$module" ]; then
   scripts/build-wasm.sh >&2
-  scripts/build-wasm.sh --slim >&2
-  scripts/build-wasm.sh --dump >&2
-  modules=(target/wasm32-unknown-unknown/wasm/djs_wasm.wasm target/djs-slim.wasm target/djs-dump.wasm)
+  module=target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
 fi
 
 # TypeScript as js/package-lock.json pins it; installed again only when that changed.
@@ -54,9 +53,7 @@ node -e '
     fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(/(from |import\()"(\.\/[^"]+)\.ts"/g, "$1\"$2.js\""));
   }
 ' "$pkg/dist"
-cp "${modules[0]}" "$pkg/wasm/djs.wasm"
-cp "${modules[1]}" "$pkg/wasm/djs-slim.wasm"
-cp "${modules[2]}" "$pkg/wasm/djs-dump.wasm"
+cp "$module" "$pkg/wasm/djs.wasm"
 cp js/README.md LICENSE-MIT LICENSE-APACHE "$pkg/"
 node -e '
   const fs = require("fs");

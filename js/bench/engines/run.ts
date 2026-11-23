@@ -11,7 +11,7 @@
 // after a warm-up (a host process that has run the engine before: V8 has tiered its code
 // up). Every engine's result must be the string node computes. For djs also: the
 // continuation dumps at every idle point of each workload, run through the Sandbox with
-// async host tools (the shipped module plus the dump module): dump time and size,
+// async host tools (the shipped module, which has the dumper): dump time and size,
 // load time (a new sandbox with the run loaded).
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -159,7 +159,6 @@ const dumps: Record<string, DumpResult> = {};
 if (engines.some((e) => e.name === "djs")) {
   const mainPath = djs().files[0];
   const main = await WebAssembly.compile(readFileSync(mainPath));
-  const dumper = await WebAssembly.compile(readFileSync(process.env.DJS_DUMP_WASM ?? join(root, "target/djs-dump.wasm")));
   const tools = ["read", "bash", "edit", "write", "web_search", "query_rows", "render_view", "read_image"];
   const time = (f: () => void) => {
     const t0 = now();
@@ -169,7 +168,6 @@ if (engines.some((e) => e.name === "djs")) {
   for (const w of W) {
     const opts: SandboxOptions = {
       module: main,
-      dumpModule: dumper,
       typescript: w.ts,
       deterministic: { startedAt: 1_762_000_000_000, seed: 42 },
       // Dumps need frozen builtins.

@@ -1,28 +1,19 @@
 // Tasks (0189, D2770, D2771): runs the sandbox drives, suspended into a dump while they wait
 // on host calls and continued from it. Async host functions declared `{ call, save,
-// resume }` carry their state through the dump. In both packagings (D2635), as in
-// dumpresume.test.ts.
+// resume }` carry their state through the dump.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { type AsyncHostFunction, type HostCall, loadModule, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
 
-interface Packaging {
+interface Setup {
   module: WebAssembly.Module;
-  dumpModule?: WebAssembly.Module;
   frozenBuiltins: boolean;
 }
 
-async function packagings(): Promise<[string, Packaging][]> {
-  const module = await loadModule();
-  const out: [string, Packaging][] = [
-    // Dumps need frozen builtins (D2836).
-    ["A", { module, frozenBuiltins: true }],
-    ["B (image transport)", { module, dumpModule: module, frozenBuiltins: true }],
-  ];
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, frozenBuiltins: true }]);
-  return out;
+async function setup(): Promise<Setup> {
+  // Dumps need frozen builtins (D2836).
+  return { module: await loadModule(), frozenBuiltins: true };
 }
 
 /** A promise the test resolves by hand. */
@@ -33,7 +24,7 @@ function later<T = unknown>(): { promise: Promise<T>; resolve(v: T): void } {
 }
 
 /** Host functions whose calls the test answers by hand, and what the hooks saw. */
-function host(p: Packaging) {
+function host(p: Setup) {
   const lines: string[] = [];
   const log = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
   const pending = new Map<string, { resolve(v: unknown): void }>();
@@ -88,74 +79,68 @@ const CODE = `
   return [a, b, c, await tools.job(n + 1)];
 `;
 
-test("a task runs like runAsync, hooks or not", async (t) => {
-  for (const [pk, p] of await packagings()) {
-    await t.test(pk, async () => {
-      const h = host(p);
-      const sb = new Sandbox(h.opts);
-      const task = sb.start(CODE, { n: 1 });
-      assert.equal(task.sandbox, sb);
-      await h.answer("job 1", "A");
-      await h.answer("again x", "B");
-      await h.answer("plain y", "C");
-      await h.answer("job 2", "D");
-      assert.deepEqual(await task.result, ["A", "B", "C", "D"]);
-      assert.deepEqual(h.lines, ["start 1", "got A B C"]);
-      assert.deepEqual(h.seen.calls.map((c) => [c.fn, c.args, c.state]), [
-        ["tools.job", [1], { n: 1, step: "started" }],
-        ["tools.job", [2], { n: 2, step: "started" }],
-      ]);
-      assert.equal(task.calls.length, 0);
-      // The sandbox is free again.
-      assert.equal(sb.run("return 1 + 1"), 2);
-      sb.dispose();
-    });
-  }
+test("a task runs like runAsync, hooks or not", async () => {
+  const p = await setup();
+  const h = host(p);
+  const sb = new Sandbox(h.opts);
+  const task = sb.start(CODE, { n: 1 });
+  assert.equal(task.sandbox, sb);
+  await h.answer("job 1", "A");
+  await h.answer("again x", "B");
+  await h.answer("plain y", "C");
+  await h.answer("job 2", "D");
+  assert.deepEqual(await task.result, ["A", "B", "C", "D"]);
+  assert.deepEqual(h.lines, ["start 1", "got A B C"]);
+  assert.deepEqual(h.seen.calls.map((c) => [c.fn, c.args, c.state]), [
+    ["tools.job", [1], { n: 1, step: "started" }],
+    ["tools.job", [2], { n: 2, step: "started" }],
+  ]);
+  assert.equal(task.calls.length, 0);
+  // The sandbox is free again.
+  assert.equal(sb.run("return 1 + 1"), 2);
+  sb.dispose();
 });
 
-test("suspend dumps the call states; resume continues every call by its hooks", async (t) => {
-  for (const [pk, p] of await packagings()) {
-    await t.test(pk, async () => {
-      const h = host(p);
-      const sb = new Sandbox(h.opts);
-      const task = sb.start(CODE, { n: 1 });
-      const dump = await task.suspend();
-      assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\)/);
-      assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\)/);
-      assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\)/);
-      await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
-      assert.ok(h.seen.calls[0].signal.aborted, "the suspended task stops waiting for its calls");
-      assert.equal(h.seen.saved.length, 1);
-      await assert.rejects(task.suspend(), /the task has ended/);
-      // A late result of the old sandbox goes nowhere.
-      await h.answer("job 1", "late");
-      sb.dispose();
+test("suspend dumps the call states; resume continues every call by its hooks", async () => {
+  const p = await setup();
+  const h = host(p);
+  const sb = new Sandbox(h.opts);
+  const task = sb.start(CODE, { n: 1 });
+  const dump = await task.suspend();
+  assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\)/);
+  assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\)/);
+  assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\)/);
+  await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
+  assert.ok(h.seen.calls[0].signal.aborted, "the suspended task stops waiting for its calls");
+  assert.equal(h.seen.saved.length, 1);
+  await assert.rejects(task.suspend(), /the task has ended/);
+  // A late result of the old sandbox goes nowhere.
+  await h.answer("job 1", "late");
+  sb.dispose();
 
-      // (The plain function's call is rejected at once.)
-      const again = await Sandbox.resume(dump, h.opts);
-      assert.deepEqual(again.calls.map((c) => [c.fn, c.args, c.state]), [
-        ["tools.job", [1], { n: 1, step: "started, saved" }],
-        ["tools.again", ["x"], undefined],
-      ]);
-      assert.deepEqual(h.seen.resumed.map(([s, c]) => [s, c.fn, c.state]), [[{ n: 1, step: "started, saved" }, "tools.job", { n: 1, step: "started, saved" }]]);
-      await h.answer("resumed 1", "A2");
-      await h.answer("again x", "B2");
-      // Dumped again while waiting on job(2): a fresh call's state, saved.
-      const second = await again.suspend();
-      assert.match(second, /\$djs\.resume\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\)/);
-      again.sandbox.dispose();
-      const third = await Sandbox.resume(second, h.opts);
-      await h.answer("resumed 2", "D3");
-      assert.deepEqual(await third.result, [
-        "A2",
-        "B2",
-        "caught tools.plain: the call was open when the run was dumped, and the host function has no hooks to continue it",
-        "D3",
-      ]);
-      assert.deepEqual(h.lines, ["start 1", "got A2 B2 caught tools.plain: the call was open when the run was dumped, and the host function has no hooks to continue it"]);
-      third.sandbox.dispose();
-    });
-  }
+  // (The plain function's call is rejected at once.)
+  const again = await Sandbox.resume(dump, h.opts);
+  assert.deepEqual(again.calls.map((c) => [c.fn, c.args, c.state]), [
+    ["tools.job", [1], { n: 1, step: "started, saved" }],
+    ["tools.again", ["x"], undefined],
+  ]);
+  assert.deepEqual(h.seen.resumed.map(([s, c]) => [s, c.fn, c.state]), [[{ n: 1, step: "started, saved" }, "tools.job", { n: 1, step: "started, saved" }]]);
+  await h.answer("resumed 1", "A2");
+  await h.answer("again x", "B2");
+  // Dumped again while waiting on job(2): a fresh call's state, saved.
+  const second = await again.suspend();
+  assert.match(second, /\$djs\.resume\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\)/);
+  again.sandbox.dispose();
+  const third = await Sandbox.resume(second, h.opts);
+  await h.answer("resumed 2", "D3");
+  assert.deepEqual(await third.result, [
+    "A2",
+    "B2",
+    "caught tools.plain: the call was open when the run was dumped, and the host function has no hooks to continue it",
+    "D3",
+  ]);
+  assert.deepEqual(h.lines, ["start 1", "got A2 B2 caught tools.plain: the call was open when the run was dumped, and the host function has no hooks to continue it"]);
+  third.sandbox.dispose();
 });
 
 test("checkpoint dumps and goes on; a dump that fails leaves the task running", async () => {

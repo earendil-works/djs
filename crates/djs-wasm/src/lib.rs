@@ -41,7 +41,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 7;
+pub const ABI_VERSION: u32 = 8;
 
 /// `vm_run` results.
 pub mod status {
@@ -671,8 +671,8 @@ pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
             s.staging.reserve_exact(cap);
         }
         // SAFETY: the capacity is at least `len` (reserved above: `image_capacity` is at
-        // least `len`), and the host writes the `len` bytes next, before `vm_from_bytes` or
-        // `vm_replace_image` reads them: not zeroing them first saves 3% of a pi start
+        // least `len`), and the host writes the `len` bytes next, before `vm_from_bytes`
+        // reads them: not zeroing them first saves 3% of a pi start
         // (D3451). A host that does not write them leaves the stale bytes of linear memory,
         // which hold values like any other (wasm memory has no uninitialized state) and
         // fail the image's checks or break this instance only, as for the injected base
@@ -814,8 +814,8 @@ fn add_new_vm(vm: Result<Vm, &str>) -> u32 {
 }
 
 /// A VM restored from an image (`vm_arena_*` bytes of a module with the same dependency
-/// descriptor) in staging[0..len]: images made in this process only (the dump module's
-/// transport, pi's prelude images). They are not a persistence format (D2700), so only the
+/// descriptor) in staging[0..len]: images made in this process only (pi's prelude
+/// images). They are not a persistence format (D2700), so only the
 /// header and the descriptor are checked, not every cell (`Vm::from_bytes_trusted`).
 /// Returns its number, or 0 with the reason in the out buffer.
 pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
@@ -829,31 +829,6 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
             Err(e) => {
                 s.set_out(&[b"cannot restore the VM image: ", e.text().as_bytes()].concat());
                 0
-            }
-        }
-    })
-}
-
-/// Replaces VM `vm`'s state by the image in staging[0..len] (as `vm_from_bytes`, an image
-/// made in this process), keeping what the VM derived from the base on an earlier dump
-/// (`Vm::replace_image`, D2701): a host that dumps through a dump module keeps one VM
-/// there for all its dumps. Handles of the old state are gone. 0: done; 1: refused, the
-/// reason in out (the VM keeps its old state).
-pub extern "C" fn vm_replace_image(vm: u32, len: usize) -> i32 {
-    with(|s| {
-        staged(&s.staging, 0, len);
-        let mut bytes = core::mem::take(&mut s.staging);
-        bytes.truncate(len);
-        let slot = s.slot(vm);
-        match slot.vm.replace_image(bytes) {
-            Ok(()) => {
-                slot.result = 0;
-                slot.call_id = 0;
-                0
-            }
-            Err(e) => {
-                s.set_out(&[b"cannot restore the VM image: ", e.text().as_bytes()].concat());
-                1
             }
         }
     })
@@ -1927,62 +1902,61 @@ ops! {
     17 vm_frozen_builtins(a);
     #[cfg(feature = "compiled-prelude")] 18 vm_new_compiled(a);
     19 vm_from_bytes(a, b);
-    20 vm_replace_image(a, b);
-    21 vm_free(a);
-    22 vm_arena_ptr(a);
-    23 vm_arena_len(a);
-    24 vm_collect(a);
-    25 vm_seal(a);
-    26 vm_compile(a, b, c, d);
-    27 vm_compile_file(a, b, c, d, e);
-    #[cfg(feature = "dump")] 28 vm_set_dump_source_refs(a, b);
-    #[cfg(feature = "dump")] 29 vm_call_site(a, b);
-    #[cfg(feature = "dump")] 30 vm_dump_maps_export(a);
-    #[cfg(feature = "dump")] 31 vm_dump_maps_import(a, b);
-    #[cfg(feature = "dump")] 32 vm_compile_cached(a, b, c, d, e, f);
-    #[cfg(feature = "docs")] 33 djs_disasm(a, b, c);
-    34 vm_global(a);
-    35 vm_new_object(a);
-    36 vm_dump_runtime(a, b);
-    37 vm_new_host_function(a, b, c);
-    38 vm_new_async_host_function(a, b, c);
-    39 vm_define(a, b, c, d, e);
-    #[cfg(feature = "dump")] 40 vm_dump(a, b);
-    41 vm_decode_wire(a, b);
-    42 vm_parse_json(a, b);
-    43 vm_json_stringify(a, b);
-    44 vm_string_reserve(a, b);
-    45 vm_new_error(a, b, c);
-    46 vm_handle_bits(a, b);
-    47 vm_handle_free(a, b);
-    48 vm_display(a, b);
-    49 vm_call(a, b, c, d);
-    50 vm_run(a, b);
-    51 vm_fuel_used(a);
-    52 vm_set_now(a, t);
-    53 vm_canonical_hash(a);
-    54 vm_set_weak_refs(a, b);
-    55 vm_set_random_seed(a, b, c);
-    56 vm_set_math_random_seed(a, b, c);
-    57 vm_set_time_zone_offset(a, b);
-    58 vm_abort(a);
-    59 vm_result(a);
-    60 vm_outcome(a);
-    61 vm_host_call(a);
-    62 vm_host_call_info(a, b);
-    63 vm_new_host_calls(a);
-    64 vm_take_unhandled_rejections(a);
-    65 vm_promise_state(a, b);
-    66 vm_resolve_host_call(a, b, c, d);
-    67 vm_resolve_host_call_at(a, b, c, d, t);
-    68 vm_open_call(a, b, c);
-    69 vm_restore_math_random(a, b, c);
-    70 vm_set_next_call_id(a, b);
-    71 djs_elastic_stack(a);
-    72 djs_stack(a);
-    #[cfg(feature = "alloc-stats")] 73 djs_alloc_stats(a);
-    74 djs_has(a);
-    #[cfg(feature = "cold-unicode")] 75 djs_tables_ptr(a, b);
-    #[cfg(feature = "cold-unicode")] 76 djs_tables_set();
-    77 vm_tables_need(a);
+    20 vm_free(a);
+    21 vm_arena_ptr(a);
+    22 vm_arena_len(a);
+    23 vm_collect(a);
+    24 vm_seal(a);
+    25 vm_compile(a, b, c, d);
+    26 vm_compile_file(a, b, c, d, e);
+    #[cfg(feature = "dump")] 27 vm_set_dump_source_refs(a, b);
+    #[cfg(feature = "dump")] 28 vm_call_site(a, b);
+    #[cfg(feature = "dump")] 29 vm_dump_maps_export(a);
+    #[cfg(feature = "dump")] 30 vm_dump_maps_import(a, b);
+    #[cfg(feature = "dump")] 31 vm_compile_cached(a, b, c, d, e, f);
+    #[cfg(feature = "docs")] 32 djs_disasm(a, b, c);
+    33 vm_global(a);
+    34 vm_new_object(a);
+    35 vm_dump_runtime(a, b);
+    36 vm_new_host_function(a, b, c);
+    37 vm_new_async_host_function(a, b, c);
+    38 vm_define(a, b, c, d, e);
+    #[cfg(feature = "dump")] 39 vm_dump(a, b);
+    40 vm_decode_wire(a, b);
+    41 vm_parse_json(a, b);
+    42 vm_json_stringify(a, b);
+    43 vm_string_reserve(a, b);
+    44 vm_new_error(a, b, c);
+    45 vm_handle_bits(a, b);
+    46 vm_handle_free(a, b);
+    47 vm_display(a, b);
+    48 vm_call(a, b, c, d);
+    49 vm_run(a, b);
+    50 vm_fuel_used(a);
+    51 vm_set_now(a, t);
+    52 vm_canonical_hash(a);
+    53 vm_set_weak_refs(a, b);
+    54 vm_set_random_seed(a, b, c);
+    55 vm_set_math_random_seed(a, b, c);
+    56 vm_set_time_zone_offset(a, b);
+    57 vm_abort(a);
+    58 vm_result(a);
+    59 vm_outcome(a);
+    60 vm_host_call(a);
+    61 vm_host_call_info(a, b);
+    62 vm_new_host_calls(a);
+    63 vm_take_unhandled_rejections(a);
+    64 vm_promise_state(a, b);
+    65 vm_resolve_host_call(a, b, c, d);
+    66 vm_resolve_host_call_at(a, b, c, d, t);
+    67 vm_open_call(a, b, c);
+    68 vm_restore_math_random(a, b, c);
+    69 vm_set_next_call_id(a, b);
+    70 djs_elastic_stack(a);
+    71 djs_stack(a);
+    #[cfg(feature = "alloc-stats")] 72 djs_alloc_stats(a);
+    73 djs_has(a);
+    #[cfg(feature = "cold-unicode")] 74 djs_tables_ptr(a, b);
+    #[cfg(feature = "cold-unicode")] 75 djs_tables_set();
+    76 vm_tables_need(a);
 }
