@@ -14132,3 +14132,47 @@ of the dump's `$djs.host`/`$djs.resume` names: `specifier#export` and specifiers
 ES module records (the dumper knows none, and module code is off in djs-wasm); a
 compile-time import list from the engine (wasm size); read-only bindings (a const flag on
 those parameters would need the engine to read the clause names; left out).
+
+## D3600: One wasm module, with the dumper; packaging B goes
+date: 2026-11-23 · by: pone (owner's decision) · issue: 0294
+Supersedes D2635, D2701 and D2704 (packaging B) and D2564's second module. djs ships one
+wasm module, built by `scripts/build-wasm.sh` with the `dump` feature (and what it turns on:
+lazy functions, the compile cache, the prelude's names) beside the shipped build's
+`unsafe-heap` and `cold-unicode`; it is the npm package's `wasm/djs.wasm`, and p2 and pi
+use it alike: pi's code mode (the coding agent, rollups) and its durable code mode, which
+dumps before every launched call and when it parks, load the same file. The reason is one
+distribution for every host: no second module of the same build to ship, load and keep in
+step, and no image copied into another instance per dump. `--dump` is gone (not an alias):
+the default build is that module. The Sandbox loses `SandboxOptions.dumpModule`, the
+cached dump-module sandboxes and the image transport; `vm_replace_image` and
+`Vm::replace_image` had no other user and go too (ABI 7 -> 8: the operations after it are
+renumbered). `vm_from_bytes` stays for pi's prelude images. A build without the dumper (a
+debug or custom one) still runs scripts and loads dumps; dumping there throws "the djs-wasm
+module has no dump (vm_dump): it was built without the `dump` feature". The dumper now
+runs on the unchecked arena (`unsafe-heap`, amends D3100: the dump module kept the checks);
+the checked dumper stays covered by every test build and the gate's dev wasm module. The
+slim build leaves the package but keeps `--slim` and its gate legs, as a size reference and
+pi's adapter tests without the lockdown (TESTING.md "The slim build").
+
+## D3601: The size ceiling holds the module with the dumper (owner, 2026-11-23)
+date: 2026-11-23 · by: pone (owner's decision) · issue: 0294
+One module with the dumper, the size grows, owner 2026-11-23. Measured (wasm profile, gzip
+-9): without the dumper 999,705 B raw, 432,882 B gzip; with it 1,875,103 B raw, 767,573 B
+gzip (+334,691 B gzip, +77%; code 340 -> 643 KB gzip, most of it vm::dump). The old dump
+module (the dumper with the checks) was 1,893,434 / 778,007. `ceiling_gzip` in
+tests/scores/size.tsv becomes 768,597 (the measurement plus the 1 KB slack); the 1.5x budget
+(D020, D3510) no longer holds, so the ceiling is the limit and lowers by `--update` as
+before. Bringing the size down again is later work.
+
+## D3602: The npm package has one entry point (0.2.0)
+date: 2026-11-23 · by: pone (owner's decision) · issue: 0294
+Supersedes D3106's entry points per module. `@earendil-works/djs` 0.2.0 exports `.`
+(js/src/index.ts: the whole API with `defaultWasmPath()` = the package's djs.wasm,
+`$DJS_WASM` overriding it, and the dump runtime's `helpers`, `script` and `scriptFor`),
+`./wasm/*.wasm` and `./package.json`; `./dump`, `./slim` and `./dump-runtime` go with
+js/src/dump.ts and slim.ts, and the package ships only djs.wasm. D3106's mechanics stay:
+the literal `new URL("../wasm/djs.wasm", import.meta.url)` in index.ts for bundlers,
+`Sandbox.defaultModule()` as the hook, sandbox.ts defaulting to `$DJS_WASM` or the
+repository's build. `scripts/npm-pack.sh --module FILE` replaces `--modules MAIN SLIM DUMP`;
+js/pkg-test/smoke.js dumps and resumes with the package's module; npm-test's js-tests run
+on it alone (and copy golden-host's files, skip the internal helpers' tests).
