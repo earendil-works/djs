@@ -9,7 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0297 | Remove everything that exists for backwards compatibility (owner) | pcompat | .worktrees/pns |
 | 0298 | The dumper's size: same dumps, far less code (dump feature 334.6 KB gz of 767.7) | pdiet | .worktrees/pone |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0297 | missingMember's TypeError stack shows the Sandbox's Proxy trap frame | pns | .worktrees/pns |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
 ## Open (ready)
@@ -62,6 +61,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0297 | missingMember's TypeError stack showed the Sandbox's Proxy trap frame: the reader takes an error's own `stack` first | 54e4a8a5 (agent pns; D3624; no size change; follow-up: compile the helper under its own name) |
 | 0296 | Sandbox for pi, part 2: cyclic/unreadable arguments throw at the call, read-only host globals, Error name/message coercion, null-prototype namespaces | 4796e5f1 (agent pns; D3620-D3623; +63 B gz; follow-up: sync/async redefinition of a read-only global keeps the old function) |
 | 0295 | Sandbox for pi on djs: thrown errors and console values as data, frozen ordered namespaces, aliases, missingMember, run ends with its body (dropped calls), per-function JSON boundary, maxFuel across steps | 90886057 (agent pns; D3610-D3614; vm_define freeze flag +39 B gz) |
 | 0294 | One wasm module with the dumper, one package entry point, npm 0.2.0 (owner) | 00272df1 (agent pone; D3600-D3602; 432,882 -> 767,573 B gz (+77%, owner); ABI 8; packed at work/scratch/pi-pack; not tagged/published) |
