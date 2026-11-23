@@ -28,7 +28,7 @@ transform in the Rust exporter (D2831), in steps (§8).
 - **Every harvested idle point runs as a plain Script and continues identically**, in djs
   (`djs run`, no loader) and in node (`vm.Script` plus a 30-line harness that provides
   `later`/`print`): 1,161 of 1,161. Overall 1,345 of 1,408 idle points (harvested,
-  tests/dump/v2 and golden programs, a 54-await stress program) transform; every one that
+  tests/dump and golden programs, a 54-await stress program) transform; every one that
   transforms continues identically, except where the run itself differs (`Math.random`'s
   state, wall clock, engine error texts, a builtin node lacks).
 - **Re-dumps stay bounded.** A dump of a run that resumed continuations is mapped back to
@@ -165,7 +165,7 @@ closures are handed to the rest of the dump through `$dump.sN` (the factory's na
 the rest of the dump's text is unchanged). The harvested dumps hold 3,019 activations and
 2,350 factories whose variables a frame shares, all merged into continuations; none of
 their shared variables happens to be in its TDZ at an idle point, so the TDZ case is
-covered by tests/dump/v2/cells and `x-long` (56 dumps, all identical; R wrote them as
+covered by tests/dump/cells and `x-long` (56 dumps, all identical; R wrote them as
 plain `let`s).
 
 The exporter's factories are scope *groups* (one factory can hold variables of two frames
@@ -253,7 +253,7 @@ The code a dump carries is always the original's: that is what keeps it bounded.
 
 Measured over every idle point (at most 40, 60 for the stress program, per program) of
 the harvested corpus (with a one-line shim for pi's `text`/`store`/`load`), the
-tests/dump/v2 programs, the golden programs and `x-long` (nested loops, a closure over a
+tests/dump programs, the golden programs and `x-long` (nested loops, a closure over a
 per-iteration variable, a helper reading a `const` declared after the loops, 54 awaits).
 The e2e dump mode has no idle points (finished VMs) and is not applicable.
 
@@ -570,7 +570,7 @@ these, which plain dumps refuse:
   injected static methods) to make that possible. The refusal names the class and the
   private name. Classes with static private members, and private methods called on the
   class, are not affected. Instances like this that are live across an await are rare in
-  codemode; tests/dump/v2/plain-refusals.txt lists the one fixture
+  codemode; tests/dump/plain-refusals.txt lists the one fixture
   (golden/class-fields).
 - **A `for in` loop over a Proxy** (0211): the loop's remaining keys come from the
   Proxy's `ownKeys` and `getOwnPropertyDescriptor` traps, so writing them again would make

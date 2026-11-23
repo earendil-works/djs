@@ -168,7 +168,7 @@ fn explain_a_dump() {
     let generator = format!("{dir}/explain-generator-{}.js", std::process::id());
     let src = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/dump/v2/generator.src.js"
+        "/../../tests/dump/generator.src.js"
     );
     let r = djs(&["--dump-after", "1", &generator, src]);
     assert_eq!((r.0, r.2.as_str()), (0, ""));
@@ -356,7 +356,7 @@ fn dump_after_every_idle_point() {
     // A codemode body whose helper closes over the `tools` parameter (D2620).
     let n = every_idle_point(&format!("{DIR}/todos.js"), &["--body", "--tools", &answers]);
     assert!(n >= 2, "{n} idle points");
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump");
     let (mut total, mut refused) = (0, 0);
     for e in std::fs::read_dir(dir).unwrap() {
         let path = e.unwrap().path();

@@ -40,10 +40,10 @@ for what in "$@"; do
     # `$DJS_WASM` stays unread without a prompt.
     deno) deno run --allow-read=. main.js ;;
     js-tests)
-      rm -rf js examples tests && mkdir -p js/test examples tests/dump/v2
+      rm -rf js examples tests && mkdir -p js/test examples tests/dump
       cp -R "$repo/examples/sleep-dump" examples/
       # golden-host.test.ts's programs and their dumps.
-      cp -R "$repo/tests/dump/v2/golden-host" tests/dump/v2/
+      cp -R "$repo/tests/dump/golden-host" tests/dump/
       rm -rf examples/sleep-dump/out
       for f in "$repo"/js/test/*.test.ts; do
         # (imports.test.ts and nesting.test.ts test internal helpers beside the Sandbox.)

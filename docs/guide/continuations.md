@@ -336,5 +336,5 @@ eager one.
 - [`crates/djs-core/src/vm/dump_runtime.rs`](../../crates/djs-core/src/vm/dump_runtime.rs):
   the dump runtime's one definition; [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js):
   the same for hosts without djs.
-- [`tests/dump/v2/`](../../tests/dump/v2/): programs that wait, and golden dumps that
+- [`tests/dump/`](../../tests/dump/): programs that wait, and golden dumps that
   every test run loads.

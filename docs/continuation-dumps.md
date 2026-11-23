@@ -35,7 +35,7 @@ replaces heap images as the way a session is persisted (D2700).
 
 ## What a dump looks like
 
-A codemode turn (tests/dump/v2/plan.src.js, its tools answering through `later`):
+A codemode turn (tests/dump/plan.src.js, its tools answering through `later`):
 
 ```js
 async function main() {
@@ -60,7 +60,7 @@ main().then((r) => print(JSON.stringify(r)));
 stopped in the second batch: `src/c.ts` was read and counted, the read of `src/d.ts`
 (host call 5) is open. Two activations are suspended (`main`, inside `report.push(await
 …)`, and `todos("src/d.ts")`, inside `tools.read`), with a half-finished `Promise.all`
-between them. `djs run --dump-after 5 plan.js tests/dump/v2/plan.src.js` writes (the
+between them. `djs run --dump-after 5 plan.js tests/dump/plan.src.js` writes (the
 `contents`/`tools` lines of the program and `main`'s text shortened here):
 
 ```js
@@ -276,7 +276,7 @@ policy from hooks the host function declares (D2771).
 
 A dump is JavaScript that calls only `$djs`, so another djs, or node, runs it; what it
 depends on is the dump runtime and the language, not the compiler. The golden dumps
-(tests/dump/v2/golden/, run by every gate) check the runtime and the engine against
+(tests/dump/golden/, run by every gate) check the runtime and the engine against
 committed dumps (TESTING.md "Golden dumps"). Until the owner declares the format stable,
 the runtime, the hooks and the goldens change with the code (D024, D3643).
 
@@ -308,9 +308,9 @@ tool call is an idle point.
 
 | where | what |
 | --- | --- |
-| djs-core unit | the suspension-map pins (tests/smap); dumps of values and of waiting programs, the exporter's refusals and reports (vm/dump_tests.rs, vm/dump_resume_tests.rs); every idle point of the tests/dump/v2 programs plainly and in chains of re-dumps; the golden dumps |
+| djs-core unit | the suspension-map pins (tests/smap); dumps of values and of waiting programs, the exporter's refusals and reports (vm/dump_tests.rs, vm/dump_resume_tests.rs); every idle point of the tests/dump programs plainly and in chains of re-dumps; the golden dumps |
 | e2e | `DJS_E2E_MODE=dump`: every case's final state dumped, run and dumped again |
-| difftest | `--plain-dumps` over the corpus, chains of at most 50 links, and each link run in node (`scripts/plain-node.mjs`); the gate leg "plain dumps (djs and node)", with the size score (D2901) |
+| difftest | `--dumps` over the corpus, chains of at most 50 links, and each link run in node (`scripts/dump-node.mjs`); the gate leg "dumps (djs and node)", with the size score (D2901) |
 | REPL, CLI | line-mode transcripts in crates/djs-cli/tests/it/repl.rs; `djs run --dump-after K` / `djs resume` for every K of a few scripts |
 | Sandbox | js/test/dumpresume.test.ts and task.test.ts in both packagings; plain.test.ts |
 | pi | pi-vm.test.ts through the adapter; `node js/pi/pi-tests.ts --next --dump-every-idle` (a full-gate leg) |

@@ -97,7 +97,7 @@ def main():
             ("corpus", "e.js", 500, 250),
             ("corpus", "g.js", 700, 350),
             ("corpus", "h.js", 800, 400),
-            ("v2", "loops", 10, 5),
+            ("programs", "loops", 10, 5),
         ]
         write(repo, summary, "# Suspension map coverage\nsites 10\n")
         write(repo, dsz, score(base_rows))
@@ -112,7 +112,7 @@ def main():
                 ("corpus", "c.js", 310, 140),   # changed on both sides
                 ("corpus", "g.js", 700, 350),   # e.js deleted here, unchanged there
                 ("corpus", "h.js", 800, 400),   # deleted there, unchanged here
-                ("v2", "loops", 10, 5),
+                ("programs", "loops", 10, 5),
             ]),
         })
         branch(repo, "theirs", {
@@ -123,7 +123,7 @@ def main():
                 ("corpus", "d.js", 400, 200),   # added here
                 ("corpus", "e.js", 500, 250),
                 ("corpus", "g.js", 690, 340),   # changed here only
-                ("v2", "loops", 10, 5),
+                ("programs", "loops", 10, 5),
                 ("v2", "zeta", 20, 10),         # added at a suite's end
             ]),
         })
@@ -144,7 +144,7 @@ def main():
                 ("corpus", "c.js", 290, 140),
                 ("corpus", "d.js", 400, 200),
                 ("corpus", "g.js", 690, 340),
-                ("v2", "loops", 10, 5),
+                ("programs", "loops", 10, 5),
                 ("v2", "zeta", 20, 10),
             ]))
 

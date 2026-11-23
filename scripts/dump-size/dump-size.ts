@@ -9,15 +9,15 @@
 //
 // A suite is a directory of dumps (any depth, `*.js`). SRCROOT, when given, is where the
 // dumped scripts' sources are: a dump at DIR/<case>/<k>.js has its source at
-// SRCROOT/<case> (difftest's --plain-out layout), used for the provenance split.
+// SRCROOT/<case> (difftest's --dump-out layout), used for the provenance split.
 // Producers:
-//   corpus: target/debug/djs-difftest --engine djs --plain-out DIR    (SRCROOT tests/corpus)
-//   v2:     DJS_PLAIN_OUT=DIR cargo test -p djs-core --lib plain_dumps_at_every_idle_point
-//                                                                   (SRCROOT tests/dump/v2, .src.js)
+//   corpus: target/debug/djs-difftest --engine djs --dump-out DIR    (SRCROOT tests/corpus)
+//   programs: DJS_PLAIN_OUT=DIR cargo test -p djs-core --lib plain_dumps_at_every_idle_point
+//                                                                   (SRCROOT tests/dump, .src.js)
 //   sleep:  examples/sleep-dump/run.sh --restart 50 (examples/sleep-dump/out/)
 //
 //   node scripts/dump-size/dump-size.ts --show FILE    the spans of one dump
-//   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv [--update] corpus=DIR v2=DIR sleep=DIR
+//   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv [--update] corpus=DIR programs=DIR sleep=DIR
 //                                                       the gate's size score, per case (D2901, D2906)
 
 import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";

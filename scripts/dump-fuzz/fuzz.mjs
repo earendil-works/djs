@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // fuzz.mjs: the plain-dump fuzzer (0208, D2940). Generated codemode-like programs
 // (gen.mjs) run through the difftest's plain-dump variant (frozen builtins, D2836) with a
-// chain of dumps starting at every idle point (`--plain-from K`), and every link's dump
-// runs in node too (scripts/plain-node.mjs). Each failure gets a signature (what went
+// chain of dumps starting at every idle point (`--dump-from K`), and every link's dump
+// runs in node too (scripts/dump-node.mjs). Each failure gets a signature (what went
 // wrong, numbers blanked); the report lists the distinct ones with their smallest program.
 //
-//   node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
+//   node scripts/dump-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
 //                                    [--no-node] [--known FILE] [--no-statics] [--big] [--lazy]
-//   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
-//   node scripts/plain-fuzz/fuzz.mjs regress [--cases N] [--seed S]   regress/, then N seeds from
+//   node scripts/dump-fuzz/fuzz.mjs check FILE...      one program (a case body) each
+//   node scripts/dump-fuzz/fuzz.mjs regress [--cases N] [--seed S]   regress/, then N seeds from
 //                                    S (default: a random start, printed)
-//   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
+//   node scripts/dump-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
 // Seeds S, S+1, ... (default 1); stops after N programs (default 200) or SECS seconds
 // (default 300), whichever comes first, at a batch boundary. The difftest binary is built
@@ -166,11 +166,11 @@ async function check(bin, work, names) {
   fs.rmSync(path.join(work, "out"), { recursive: true, force: true });
   const unit = async (k, part, cases) => {
     const out = path.join(work, "out", `from-${k}${part}`);
-    const args = ["--engine", "djs", "--corpus", corpus, "--no-diff", "-q", "-j", "1", "--plain-out", out, "--plain-from", String(k), ...(lazy ? ["--lazy"] : [])];
+    const args = ["--engine", "djs", "--corpus", corpus, "--no-diff", "-q", "-j", "1", "--dump-out", out, "--dump-from", String(k), ...(lazy ? ["--lazy"] : [])];
     const text = await run(bin, [...args, ...(k === 1 ? ["--idle-points"] : []), ...cases]);
     const fails = parseDifftest(text).map((f) => ({ ...f, from: k }));
     if (!noNode && fs.existsSync(out)) {
-      const n = await run("node", [path.join(ROOT, "scripts/plain-node.mjs"), out, "--refusals", empty]);
+      const n = await run("node", [path.join(ROOT, "scripts/dump-node.mjs"), out, "--refusals", empty]);
       fails.push(...parseNode(n).map((f) => ({ ...f, from: k })));
     }
     return { text, fails, out };
@@ -355,7 +355,7 @@ async function fuzz(bin, failed = 0) {
     process.stderr.write(`\r[${done} programs, ${idlePoints} idle points, ${found.size} signatures]`);
   }
   process.stderr.write("\n");
-  console.log(`plain-fuzz: seeds ${seed0}..${seed0 + done - 1}, ${done} programs, ${idlePoints} idle points`);
+  console.log(`dump-fuzz: seeds ${seed0}..${seed0 + done - 1}, ${done} programs, ${idlePoints} idle points`);
   console.log(`plain runs end: ${[...ends].map(([e, n]) => `${n} ${e}`).join(", ")}`);
   const isKnown = (sig) => known.some((k) => sig.includes(k));
   const old = [...found.keys()].filter(isKnown);
@@ -396,7 +396,7 @@ if (argv[0] === "check") {
 } else if (argv[0] === "regress") {
   // The regression set (0211): the programs that found bugs (regress/, frozen as text, so
   // generator changes do not move them), then fresh seeds (--cases, default 300).
-  const rdir = path.join(ROOT, "scripts/plain-fuzz/regress");
+  const rdir = path.join(ROOT, "scripts/dump-fuzz/regress");
   const files = fs.readdirSync(rdir).filter((f) => /\.[jt]s$/.test(f)).sort().map((f) => path.join(rdir, f));
   // Deliberate refusals (docs/plain-js-dumps.md §10) are not failures here.
   const deliberate = fs

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// plain-node.mjs DIR [--list] [--refusals FILE [--update]]: runs the plain dumps `djs-difftest --plain-out DIR` wrote
+// dump-node.mjs DIR [--list] [--refusals FILE [--update]]: runs the plain dumps `djs-difftest --dump-out DIR` wrote
 // in node and checks that each continues exactly like the uninterrupted djs run (D2861).
 //
 // DIR/<case>/<k>.js is link k's dump, <k>.pre the output before it and `transcript` the
@@ -14,7 +14,7 @@
 // reason after a tab (the ratchet): another case's refusal fails, entries that no longer
 // refuse are reported as stale; --update rewrites FILE.
 //
-// A case marked `// difftest: plain-xfail <reason>` (D2941) has a `plain-xfail` file: the
+// A case marked `// difftest: dump-xfail <reason>` (D2941) has a `dump-xfail` file: the
 // reason and whether the djs run of its dumps differs. Its links may differ; once neither
 // djs nor node differs, the mark is reported as stale (not a failure).
 //
@@ -32,7 +32,7 @@ const update = process.argv.includes("--update");
 const ri = process.argv.indexOf("--refusals");
 const refusalsFile = ri > 0 ? process.argv[ri + 1] : null;
 if (!dir || (ri > 0 && !refusalsFile)) {
-  console.error("usage: plain-node.mjs DIR [--list] [--refusals FILE [--update]]");
+  console.error("usage: dump-node.mjs DIR [--list] [--refusals FILE [--update]]");
   process.exit(2);
 }
 
@@ -164,7 +164,7 @@ for (const c of walk(dir).sort()) {
     refused.set(path.relative(dir, c), fs.readFileSync(path.join(c, "refused"), "utf8").split("\n")[0]);
   }
   const want = norm(fs.readFileSync(path.join(c, "transcript"), "utf8"));
-  const xf = path.join(c, "plain-xfail");
+  const xf = path.join(c, "dump-xfail");
   const xfail = fs.existsSync(xf) ? { differs: /^djs: differs$/m.test(fs.readFileSync(xf, "utf8")), node: false } : null;
   if (xfail) xfails.push([path.relative(dir, c), xfail]);
   const ks = fs
@@ -214,7 +214,7 @@ for (const c of walk(dir).sort()) {
   }
 }
 for (const [n, x] of xfails) {
-  if (!x.differs && !x.node) console.log(`${n}: stale plain-xfail (djs and node continue identically now)`);
+  if (!x.differs && !x.node) console.log(`${n}: stale dump-xfail (djs and node continue identically now)`);
 }
 let unlisted = 0;
 if (refusalsFile) {
@@ -227,7 +227,7 @@ if (refusalsFile) {
     }
   }
   if (update) {
-    const head = "# Corpus cases whose plain dump the exporter refuses (scripts/plain-node.mjs --refusals).\n";
+    const head = "# Corpus cases whose plain dump the exporter refuses (scripts/dump-node.mjs --refusals).\n";
     const body = [...refused].map(([n, w]) => `${n}\t${w}\n`).join("");
     fs.writeFileSync(refusalsFile, head + body);
   } else {
@@ -240,5 +240,5 @@ if (refusalsFile) {
     for (const n of listed.keys()) if (!refused.has(n)) console.log(`${n}: stale entry in ${refusalsFile} (no longer refused)`);
   }
 }
-console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${xfails.length ? `; ${xfails.filter(([, x]) => x.differs || x.node).length} of ${xfails.length} plain-xfail cases differ as marked` : ""}${unlisted ? ` (${unlisted} not listed)` : ""}${tsLinks ? `; ${tsLinks} TypeScript links (not only types) not run` : ""}`);
+console.log(`dump-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${xfails.length ? `; ${xfails.filter(([, x]) => x.differs || x.node).length} of ${xfails.length} dump-xfail cases differ as marked` : ""}${unlisted ? ` (${unlisted} not listed)` : ""}${tsLinks ? `; ${tsLinks} TypeScript links (not only types) not run` : ""}`);
 process.exit(bad || unlisted ? 1 : 0);

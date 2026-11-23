@@ -412,13 +412,10 @@ fn restore_a_waiting_dump() {
              [input 1] 3\nno open calls\n"
         ),
     );
-    // `later(v)` calls are answered at once; a program of tests/dump/v2 runs to its end.
+    // `later(v)` calls are answered at once; a program of tests/dump runs to its end.
     let tmp = env!("CARGO_TARGET_TMPDIR");
     let plan = format!("{tmp}/repl-plan-{}.js", std::process::id());
-    let src = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/dump/v2/plan.src.js"
-    );
+    let src = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/plan.src.js");
     let r = Command::new(env!("CARGO_BIN_EXE_djs"))
         .args(["run", "--dump-after", "5", &plan, src])
         .output()

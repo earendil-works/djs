@@ -226,6 +226,19 @@ Sandbox.dump's doc, golden-host.test.ts's header. Guide: dumps.md ("What later b
 index.md, snapshots.md, suspension.md, pi.md. djs-cli tools.rs: only `print` names the
 printing function (console.* identities dropped, test updated). dump_runtime.rs untouched.
 
+### 2026-11-23: J6 (names without "v2"/"plain")
+tests/dump/v2/ -> tests/dump/ (dump_resume_tests.rs: the fixture_dir line only; its doc
+comments and the refusal files' generated headers still say tests/dump/v2, and the files
+stay tests/dump/plain-refusals.txt and plain-chain-refusals.txt: renaming them needs more
+lines of that file, pdiet's). difftest `--plain-dumps/--plain-out/--plain-from` ->
+`--dumps/--dump-out/--dump-from`, `// difftest: plain-xfail` -> `dump-xfail` (and the
+out dir's marker file), tests/plain-refusals.txt -> tests/dump-refusals.txt,
+scripts/plain-node.mjs -> scripts/dump-node.mjs (summary `dump-node:`),
+scripts/plain-fuzz/ -> scripts/dump-fuzz/, gate leg "dumps (djs and node)", dump-size's
+`v2` suite -> `programs`. Left: the corpus directories `*/plain-fuzz/` (their names are
+case keys of dump-size.tsv and are cited in pdiet's dump*.rs), DJS_PLAIN_OUT and the
+`plain_*` test names in dump_resume_tests.rs, and docs/plain-js-dumps.md (J9).
+
 ## Follow-ups
 
 ## Result

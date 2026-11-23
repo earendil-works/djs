@@ -62,9 +62,9 @@ pub struct Djs {
     /// The VMs have frozen builtins, which dumps need (D2836).
     pub dump_every_idle: bool,
     /// With `dump_every_idle`: the first idle point that is dumped (0 or 1: every one). The plain
-    /// fuzzer (scripts/plain-fuzz) starts a chain at every idle point, so that each site
+    /// fuzzer (scripts/dump-fuzz) starts a chain at every idle point, so that each site
     /// is also dumped from its original function, not only from a continuation (D2940).
-    pub plain_from: u32,
+    pub dump_from: u32,
     /// Lazy functions (`VmOptions::lazy_functions`, D2990).
     pub lazy: bool,
 }
@@ -73,8 +73,8 @@ pub struct Djs {
 /// dumped).
 pub const PLAIN_LINKS: u32 = 50;
 
-/// `--plain-out DIR`: every plain dump goes to `DIR/<case>/<link>.js`, with the output
-/// lines before it in `<link>.pre` (for the node check, scripts/plain-node.mjs).
+/// `--dump-out DIR`: every plain dump goes to `DIR/<case>/<link>.js`, with the output
+/// lines before it in `<link>.pre` (for the node check, scripts/dump-node.mjs).
 pub static PLAIN_OUT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
 impl Djs {
@@ -87,10 +87,10 @@ impl Djs {
             s += " --gc-stress";
         }
         if self.dump_every_idle {
-            s += " --plain-dumps";
+            s += " --dumps";
         }
-        if self.plain_from > 1 {
-            s += &format!(" --plain-from {}", self.plain_from);
+        if self.dump_from > 1 {
+            s += &format!(" --dump-from {}", self.dump_from);
         }
         if self.lazy {
             s += " --lazy";
@@ -192,10 +192,10 @@ struct Session {
     /// How many dumps were taken.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     links: u32,
-    /// [`Djs::plain_from`].
+    /// [`Djs::dump_from`].
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    plain_from: u32,
-    /// The case's name (for `--plain-out`).
+    dump_from: u32,
+    /// The case's name (for `--dump-out`).
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     name: String,
     /// The prelude's api object.
@@ -235,7 +235,7 @@ impl Djs {
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
         #[cfg(not(feature = "dump"))]
         if self.dump_every_idle {
-            return Err("--plain-dumps needs the `dump` feature".into());
+            return Err("--dumps needs the `dump` feature".into());
         }
         // The wall clock, read once per case, in UTC (D1383); the qjs engine runs with
         // TZ=UTC to match.
@@ -257,7 +257,7 @@ impl Djs {
             suspend: self.suspend_every.is_some(),
             dump: self.dump_every_idle.then_some((opts, job.now)),
             links: 0,
-            plain_from: self.plain_from,
+            dump_from: self.dump_from,
             name: job.name.to_string(),
             api: None,
             plain_ids: (None, 0),
@@ -362,7 +362,7 @@ impl Session {
     fn dump_and_load(&mut self) -> Result<(), Stop> {
         let (opts, now) = self.dump.ok_or("no dump options")?;
         use djs_core::vm::dump::DumpOptions;
-        if self.links >= PLAIN_LINKS || self.idle_points + 1 < self.plain_from {
+        if self.links >= PLAIN_LINKS || self.idle_points + 1 < self.dump_from {
             return Ok(());
         }
         self.links += 1;
@@ -386,7 +386,7 @@ impl Session {
             Ok(t) => t,
             Err(e) => {
                 // A refusal is no failure: the run goes on without dumps. The node check
-                // holds the list of cases that may refuse (tests/plain-refusals.txt).
+                // holds the list of cases that may refuse (tests/dump-refusals.txt).
                 self.links = PLAIN_LINKS;
                 if let Some(dir) = PLAIN_OUT.get() {
                     let d = dir.join(&self.name);
@@ -394,7 +394,7 @@ impl Session {
                     let why = format!("idle point {}: {msg}\n", self.idle_points + 1);
                     std::fs::create_dir_all(&d)
                         .and_then(|_| std::fs::write(d.join("refused"), why))
-                        .map_err(|e| format!("--plain-out: {e}"))?;
+                        .map_err(|e| format!("--dump-out: {e}"))?;
                 }
                 return Ok(());
             }
@@ -410,7 +410,7 @@ impl Session {
                     }
                     std::fs::write(d.join(format!("{}.pre", self.links)), pre)
                 });
-            w.map_err(|e| format!("--plain-out: {e}"))?;
+            w.map_err(|e| format!("--dump-out: {e}"))?;
         }
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
         vm.set_now(now);

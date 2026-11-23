@@ -1,10 +1,11 @@
-# The plain dump size score (0207, D2901, D2906), per case: SUITE, CASE, then the bytes of
-# its plain dumps at every idle point, raw and gzip -9 per dump, without the corpus prelude
-# and the harvest harness (scripts/dump-size `env`). Suites: corpus (difftest --plain-out),
-# v2 (the v2/golden programs, plain_dumps_at_every_idle_point with DJS_PLAIN_OUT), sleep (the
-# sleep-dump example, the_sleep_example_dumps with DJS_SLEEP_OUT). The gate leg "plain dumps
-# (djs and node)" fails when a case grows; a new case only asks for its line. Rewrite with
-#   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR v2=DIR sleep=DIR
+# The dump size score (0207, D2901, D2906), per case: SUITE, CASE, then the bytes of its
+# dumps at every idle point, raw and gzip -9 per dump, without the corpus prelude and the
+# harvest harness (scripts/dump-size `env`). Suites: corpus (difftest --dump-out), programs
+# (the tests/dump programs and golden programs, plain_dumps_at_every_idle_point with
+# DJS_PLAIN_OUT), sleep (the sleep-dump example, the_sleep_example_dumps with DJS_SLEEP_OUT).
+# The gate leg "dumps (djs and node)" fails when a case grows; a new case only asks for its
+# line. Rewrite with
+#   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR programs=DIR sleep=DIR
 corpus	codemode-harvest/h001-bash-read.js	35270	12333
 corpus	codemode-harvest/h002-bash-read.js	4000	1437
 corpus	codemode-harvest/h003-bash-read.js	3614	1370
@@ -381,48 +382,48 @@ corpus	ts/codemode-tools.ts	9916	4093
 corpus	ts/non-null-element-redump.ts	7889	2973
 corpus	ts/plain-fuzz-parameter-property.ts	2359	962
 corpus	ts/plain-parameter-properties.ts	2449	997
-v2	asyncgen	3517	1454
-v2	cells	431	253
-v2	combinators	41481	12352
-v2	cycles	4326	1803
-v2	generator	3709	1566
-v2	golden/activations	1865	971
-v2	golden/bytes	443	260
-v2	golden/class-closure	753	354
-v2	golden/class-derived	631	333
-v2	golden/combinators	9204	3844
-v2	golden/destructuring	18718	7074
-v2	golden/finally	35047	11995
-v2	golden/for-await-close	3674	1564
-v2	golden/for-in	12369	4735
-v2	golden/generators	2406	1011
-v2	golden/iterator-helpers	25642	8736
-v2	golden/iterators	845	411
-v2	golden/loop-for-await	4232	1912
-v2	golden/loop-for-of	4330	2103
-v2	golden/loop-nested	6199	2723
-v2	golden/random	712	444
-v2	golden/resolvers	464	277
-v2	golden/return-path	2031	883
-v2	golden/role-array	719	426
-v2	golden/role-assign	1755	1009
-v2	golden/role-binary	536	376
-v2	golden/role-call	419	269
-v2	golden/role-call-spread	442	269
-v2	golden/role-member	284	209
-v2	golden/role-nested	503	317
-v2	golden/role-new	1097	589
-v2	golden/role-object	803	474
-v2	golden/role-super	532	295
-v2	golden/role-template	227	176
-v2	golden/spent	339	211
-v2	golden/then-chain	1161	679
-v2	golden/using	29152	9836
-v2	golden/yield-star	24830	8463
-v2	loops	4258	1902
-v2	operands	58616	18161
-v2	plan	8689	3188
-v2	reenact	33185	12120
-v2	steps	2044	954
-v2	supers	4305	1858
+programs	asyncgen	3517	1454
+programs	cells	431	253
+programs	combinators	41481	12352
+programs	cycles	4326	1803
+programs	generator	3709	1566
+programs	golden/activations	1865	971
+programs	golden/bytes	443	260
+programs	golden/class-closure	753	354
+programs	golden/class-derived	631	333
+programs	golden/combinators	9204	3844
+programs	golden/destructuring	18718	7074
+programs	golden/finally	35047	11995
+programs	golden/for-await-close	3674	1564
+programs	golden/for-in	12369	4735
+programs	golden/generators	2406	1011
+programs	golden/iterator-helpers	25642	8736
+programs	golden/iterators	845	411
+programs	golden/loop-for-await	4232	1912
+programs	golden/loop-for-of	4330	2103
+programs	golden/loop-nested	6199	2723
+programs	golden/random	712	444
+programs	golden/resolvers	464	277
+programs	golden/return-path	2031	883
+programs	golden/role-array	719	426
+programs	golden/role-assign	1755	1009
+programs	golden/role-binary	536	376
+programs	golden/role-call	419	269
+programs	golden/role-call-spread	442	269
+programs	golden/role-member	284	209
+programs	golden/role-nested	503	317
+programs	golden/role-new	1097	589
+programs	golden/role-object	803	474
+programs	golden/role-super	532	295
+programs	golden/role-template	227	176
+programs	golden/spent	339	211
+programs	golden/then-chain	1161	679
+programs	golden/using	29152	9836
+programs	golden/yield-star	24830	8463
+programs	loops	4258	1902
+programs	operands	58616	18161
+programs	plan	8689	3188
+programs	reenact	33185	12120
+programs	steps	2044	954
+programs	supers	4305	1858
 sleep	sleep.dump.js	688	383

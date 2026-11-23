@@ -203,7 +203,7 @@ output:
 | corpus | dumps | identical | different | refused |
 | --- | --- | --- | --- | --- |
 | harvested codemode (all idle points, ≤40/case) | 1,063 | **993 (93.4%)** | **0** | 70 |
-| tests/dump/v2 programs (built to hit every role) | 177 | 95 | 0 | 82 |
+| tests/dump programs (built to hit every role) | 177 | 95 | 0 | 82 |
 
 - **Harvested refusals:** all 70 are one exporter limitation. The function and its
   frame's shared variables are in different factories, so the continuation needs

@@ -197,8 +197,7 @@ fn lazy_code_is_eager_code_corpus() {
         n += check_identity(&src, &opts);
     }
     // Plain dumps, as Scripts.
-    let golden =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/v2/golden");
+    let golden = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/golden");
     for e in std::fs::read_dir(golden).unwrap() {
         let p = e.unwrap().path();
         if p.to_string_lossy().ends_with(".dump.js") {
@@ -302,8 +301,7 @@ fn lazy_maps_are_eager_maps() {
             }
         }
     }
-    let golden =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/v2/golden");
+    let golden = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/golden");
     for e in std::fs::read_dir(golden).unwrap() {
         let p = e.unwrap().path();
         if p.to_string_lossy().ends_with(".dump.js") {

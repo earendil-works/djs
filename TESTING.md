@@ -294,36 +294,36 @@ failure too: mark such a case `no-stress` with the measured reason (D1530).
 its plain dumps leg use it (the shipped module, with the dumper, is lazy, D2993), its test262 leg runs the active
 group both lazy and eager (in parallel), the other legs (unsafe-heap) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
 (D2991).
-`--plain-dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
+`--dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
 session's globals, the prelude's state, open calls, pending promises, suspended
 activations as continuations, the prelude's `api` as the completion value), runs the dump
 in a fresh VM with the host's `$djs.seed`/`$djs.resume` and continues there, at most 50
 links per case; the transcript must equal the plain run's. The VMs have frozen builtins
 (D2836), so only cases with idle points are compared (only `codemode` and
 `codemode-harvest` have them). A refused dump ends the case's dumps and the run goes on.
-`--plain-out DIR` also writes every link's dump, the output before it and the plain run's
-transcript, and `scripts/plain-node.mjs DIR` runs each dump in node and requires the same
+`--dump-out DIR` also writes every link's dump, the output before it and the plain run's
+transcript, and `scripts/dump-node.mjs DIR` runs each dump in node and requires the same
 transcript (node's clock pinned to djs's, its wording of the common TypeErrors mapped to
-djs's). Its `--refusals tests/plain-refusals.txt` is the ratchet of cases that may refuse
-(`--update` rewrites it). The gate leg "plain dumps (djs and node)" runs both.
-`--plain-from K` starts the chain at idle point K. A case marked `// difftest:
-plain-xfail <reason>` reproduces a known plain-dump bug: its differences (djs or node) are
+djs's). Its `--refusals tests/dump-refusals.txt` is the ratchet of cases that may refuse
+(`--update` rewrites it). The gate leg "dumps (djs and node)" runs both.
+`--dump-from K` starts the chain at idle point K. A case marked `// difftest:
+dump-xfail <reason>` reproduces a known plain-dump bug: its differences (djs or node) are
 counted, not failures, and the mark is reported as stale once both continue identically
 (D2941).
-The plain-dump fuzzer (0208, D2940) finds such bugs: `node scripts/plain-fuzz/fuzz.mjs
+The plain-dump fuzzer (0208, D2940) finds such bugs: `node scripts/dump-fuzz/fuzz.mjs
 --seed S --cases N --time SECS` generates codemode-like programs from consecutive seeds
-(scripts/plain-fuzz/gen.mjs, D2942: JSON data, Maps, Sets, Dates, RegExps, typed arrays,
+(scripts/dump-fuzz/gen.mjs, D2942: JSON data, Maps, Sets, Dates, RegExps, typed arrays,
 Errors, symbol keys, classes with accessors and static members; every third seed a
 TypeScript body; `fuzz.mjs gen S` prints one) and runs each with a chain of
 plain dumps starting at every idle point, in djs and node, then lists the distinct
 failure signatures with the smallest program of each. `fuzz.mjs check FILE...` runs given
 programs (case bodies) the same way, and `fuzz.mjs reduce FILE --sig TEXT` shrinks one
 while its failure signature contains TEXT. `fuzz.mjs regress` runs the frozen programs that once found bugs
-(scripts/plain-fuzz/regress/), then 300 fresh seeds from a random, printed start (`--seed`
+(scripts/dump-fuzz/regress/), then 300 fresh seeds from a random, printed start (`--seed`
 to repeat a run); with and without `--lazy` it is the dump exporters' check before a merge. It runs at most 4 niced processes (`--jobs`) and
 starts none while the load is above 30 (`--max-load`). It is not a gate leg; a finding becomes a
-corpus case (tests/corpus/codemode/plain-fuzz/), marked `plain-xfail` or listed in
-tests/plain-refusals.txt until it is fixed.
+corpus case (tests/corpus/codemode/plain-fuzz/), marked `dump-xfail` or listed in
+tests/dump-refusals.txt until it is fixed.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash
 (the graph alone, computed by a copying collection of a copy; D1720, D1725, D2040). The e2e
@@ -542,7 +542,7 @@ that calls only the host's `$djs` (the dump runtime's helpers and the hooks `see
 build still runs it is not promised until the owner declares the dump format stable
 (D3643): until then the helpers, the hooks and the goldens change with the code (D024).
 The golden dumps check the loader and the runtime against committed dumps (every gate run,
-`vm::dump_resume_tests::golden_dumps_load_and_finish`): tests/dump/v2/golden/ has small
+`vm::dump_resume_tests::golden_dumps_load_and_finish`): tests/dump/golden/ has small
 programs (`NAME.src.js` Scripts, `NAME.body.js` codemode bodies) and the dumps the
 exporter wrote of them at every idle point, `NAME.K.dump.js` (K in the name: dumps have
 no comments). Each dump runs in the test host (`later`, `print`, `tools`, `console`), the
@@ -555,7 +555,7 @@ loops), re-enactment (then/catch/finally, held resolving functions, the combinat
 iterators, generators, activations: a returned promise, `arguments`, shared cells), class
 case (fields, static block, accessor; derived with `super`; a class from a factory) and
 the codemode body; a program whose idle points are all refused (instances with private
-names, D2878) is listed in tests/dump/v2/plain-refusals.txt. Since the dumps are
+names, D2878) is listed in tests/dump/plain-refusals.txt. Since the dumps are
 JavaScript, they hold the runtime and the engine to the format, not the exporter: a
 change to the exporter leaves them alone, and a change to the runtime or the hooks that
 breaks them shows in review. Such a change regenerates them in the same commit: delete the
@@ -563,7 +563,7 @@ programs' `NAME.*.dump.js` and run `DJS_GOLDEN_WRITE=1 cargo test -p djs-core --
 write_golden_dumps -- --ignored`, which writes the dumps of every program that has none
 (new programs get theirs the same way).
 
-tests/dump/v2/golden-host/ does the same for dumps a Sandbox writes of host-driven code
+tests/dump/golden-host/ does the same for dumps a Sandbox writes of host-driven code
 mode runs (js/test/golden-host.test.ts, in the gate's js tests, D3596):
 `NAME.body.js` bodies that run in the test's scope (namespace and bound host functions by
 identity, `values`, the JSON boundary, source references or `inlineSources`) and

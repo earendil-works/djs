@@ -160,7 +160,7 @@ fn run_value(vm: &mut Vm, src: &str) -> String {
 }
 
 fn fixture_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/v2")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump")
 }
 
 /// Runs `src` to idle point `k`, dumps it, runs the dump in a fresh VM to the end: the

@@ -1,4 +1,4 @@
-// Golden dumps of host-driven code mode runs (0291, D3596): tests/dump/v2/golden-host/ has
+// Golden dumps of host-driven code mode runs (0291, D3596): tests/dump/golden-host/ has
 // codemode bodies (`NAME.body.js`) that run in the scope below (namespace and bound host
 // functions by identity, `values`, the JSON boundary) and the dumps a Sandbox wrote of them
 // at every idle point (`NAME.K.dump.js`); some import host modules (0292). Each dump
@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadModule, type Run, Sandbox, type SandboxOptions } from "../src/sandbox.ts";
 
-const DIR = new URL("../../tests/dump/v2/golden-host/", import.meta.url);
+const DIR = new URL("../../tests/dump/golden-host/", import.meta.url);
 
 /** The programs whose dumps are written with the body's text (`inlineSources`): they load with no `sources`. */
 const INLINE = new Set(["inline", "imports-inline"]);

@@ -206,15 +206,15 @@ every stop, and under GC stress.
 A [continuation dump](dumps.md) must resume in a fresh VM and in node, which has never
 seen djs. Three kinds of tests hold it to that:
 
-- **A dump at every idle point.** The plain-dumps check dumps each codemode case of the
+- **A dump at every idle point.** The dumps check dumps each codemode case of the
   corpus at every idle point, with frozen builtins, runs the dump in a fresh VM and goes
   on from there, in chains of up to 50 links. The transcript must equal the plain
   run's, and node must produce the same transcript from the same dumps. A dump the
   writer refuses ends the chain; which cases may refuse is a ratchet of its own,
-  [`tests/plain-refusals.txt`](../../tests/plain-refusals.txt). The end-to-end tests add
+  [`tests/dump-refusals.txt`](../../tests/dump-refusals.txt). The end-to-end tests add
   a dump mode: every case dumps its final state, the dump runs in a fresh VM and is
   dumped again, and a further round must give the same dump.
-- **Golden dumps.** [`tests/dump/v2/golden/`](../../tests/dump/v2/golden/) holds small
+- **Golden dumps.** [`tests/dump/golden/`](../../tests/dump/golden/) holds small
   programs and the dumps written of them at every idle point, one program per construct
   the writer handles (operand positions, loop kinds, promise combinators, generators,
   classes). Every test run loads each dump and finishes the program with the output of
@@ -224,7 +224,7 @@ seen djs. Three kinds of tests hold it to that:
   measured, and [`tests/scores/dump-size.tsv`](../../tests/scores/dump-size.tsv) records
   each case's raw and gzip size; the gate fails when a dump grows past its score.
 
-A fuzzer looks for what these miss: [`scripts/plain-fuzz/fuzz.mjs`](../../scripts/plain-fuzz/fuzz.mjs)
+A fuzzer looks for what these miss: [`scripts/dump-fuzz/fuzz.mjs`](../../scripts/dump-fuzz/fuzz.mjs)
 generates codemode-like programs from seeds (JSON data, Maps, Sets, Dates, regular
 expressions, typed arrays, errors, symbol keys, classes with accessors, every third one
 TypeScript), runs each with a chain of dumps from every idle point in djs and in node,
@@ -343,9 +343,9 @@ machine fails at random:
 - [`crates/djs-core/tests/e2e.rs`](../../crates/djs-core/tests/e2e.rs) and
   [`tests/data/e2e/`](../../tests/data/e2e/): the end-to-end tests.
 - [`crates/djs-core/src/vm/dump_resume_tests.rs`](../../crates/djs-core/src/vm/dump_resume_tests.rs)
-  and [`tests/dump/v2/`](../../tests/dump/v2/): the golden dumps;
-  [`scripts/plain-node.mjs`](../../scripts/plain-node.mjs): dumps continued in node;
-  [`scripts/plain-fuzz/`](../../scripts/plain-fuzz/): the dump fuzzer.
+  and [`tests/dump/`](../../tests/dump/): the golden dumps;
+  [`scripts/dump-node.mjs`](../../scripts/dump-node.mjs): dumps continued in node;
+  [`scripts/dump-fuzz/`](../../scripts/dump-fuzz/): the dump fuzzer.
 - [`crates/djs-core/tests/it/verify_fuzz.rs`](../../crates/djs-core/tests/it/verify_fuzz.rs):
   the verifier against corrupt images.
 - [`scripts/gate.py`](../../scripts/gate.py) (run by
