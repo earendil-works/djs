@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0295 | Sandbox: thrown errors and console values as data; namespace objects like pi's (for pi on djs) | pns | .worktrees/pns |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
 ## Open (ready)
@@ -48,6 +47,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Bridge follow-ups (0238): Sandbox sync host call ~3 us vs ~1.7 us C embedding; Uint8Array in with one copy (like long ASCII strings); Math.max ratio 1.08 -> 1.79 vs QuickJS (noise or regression?); lazily read tool results (host buffer read on demand; ties to result buffers) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
+| - | 0295 follow-ups: vm_define on a frozen object returns 0; DOMException run error message "Error" (2 vs 3 slots); tasks don't carry fuelUsed over a dump; pi's "stalled" case left to the host | ready |
 | - | 0294 follow-ups: bring the one module's size down (dumper ~335 KB gz: vm::dump ~720 KB raw code, smap/compile_cache +93 KB); re-record stale status.tsv rows (startup, heap, bounds, pi bench, dumps, engines, bridge) on a quiet machine; retire js/pi and the slim gate legs once pi is on host-driven runs; untrack scripts/__pycache__/*.pyc; tag v0.2.0 and publish (owner) | ready / owner |
 | - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -58,6 +58,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0295 | Sandbox for pi on djs: thrown errors and console values as data, frozen ordered namespaces, aliases, missingMember, run ends with its body (dropped calls), per-function JSON boundary, maxFuel across steps | 90886057 (agent pns; D3610-D3614; vm_define freeze flag +39 B gz) |
 | 0294 | One wasm module with the dumper, one package entry point, npm 0.2.0 (owner) | 00272df1 (agent pone; D3600-D3602; 432,882 -> 767,573 B gz (+77%, owner); ABI 8; packed at work/scratch/pi-pack; not tagged/published) |
 | 0292 | Code mode bodies import host modules: named, namespace, default imports bound by a lazy resolver; dumps name them by identity | 44d44420 (agent pdurable; D3597; import() of host modules still rejects (size); +49 B gz, 17 B under the ceiling) |
 | 0291 | Host-driven runs for durable code mode: jsonBoundary, RunExit, bounded/abortable/yielding steps, host error data, `values`; dumps an exception to D024 | 035cb8cc (agent pdurable; D3592-D3596; golden host dumps; pi prototype on pi-mono-djs uses it) |
