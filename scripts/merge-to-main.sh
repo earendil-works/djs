@@ -171,9 +171,6 @@ while :; do
   rebase_and_regen
   echo "== waiting for the gate worktree"
   take "$gate_lock"
-  # A merge-to-main from before D2666 gates under the merge lock alone: wait until none
-  # is gating before taking over the worktree.
-  take "$merge_lock"; drop "$merge_lock"
   # main moved while this waited for the worktree: gate on the new main right away.
   if [ "$(git rev-parse main)" != "$base" ]; then
     echo "== main moved while waiting; rebasing again"

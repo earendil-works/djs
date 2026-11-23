@@ -139,6 +139,32 @@ codes, Date formats) is a feature, not compatibility, and is out of scope.
 difftest's unused directives `ts`/`fuel`/`timeout`/`plain-xfail` (tools); standalone
 measurement scripts without callers (merge-stats.sh, wasm-leb-padding.py, ...).
 
+### 2026-11-23: answers (coordinator, owner)
+- J1 (owner): "In the future sure, but not for formats that were made in the dev past."
+  D3596's guarantee is suspended until the owner declares the dump format stable: dumps
+  fall under D024 (helpers, hooks and goldens change with the code; goldens are
+  regenerated). Decision amending D3596/D2619 is mine; drop the CLI's console.* identities.
+- J2 yes: a BUILD_HASH word in the roots cell; descriptor machinery and its rule go.
+- J3 (a) js/pi and everything around it go (own merge); (b) (owner) the slim build goes
+  completely; dump*.rs's `full` cfgs are pdiet's (tell the coordinator when the feature is
+  gone).
+- J4 the dumper-less support goes (gate leg, js cases, the Sandbox's misuse errors); the
+  `dump` cargo features stay as build knobs.
+- J5 yes: one vm_new, no vm_compile, vm_parse_json, vm_json_stringify; ABI bumped in place.
+- J6 yes (the path constant in dump_resume_tests.rs may change).
+- J7 yes: no append-only numbering, no tombstones; path coverage stays.
+- J8 (owner) WeakRefs::Absent and the Sandbox's weakRefs option go entirely; djs-embed's
+  semver/CHANGES.md promise goes.
+- J9 yes, last and its own merge.
+- J10 yes (heap JSON, MODULES alias; console.* with J1).
+
+### 2026-11-23: merge 1 (clear-cut + J4)
+C1 (js/src feature detection), C3, C4, C5, C7, C8, C9, C10, C11 (the parts not rewritten
+by later steps), C13, and J4. Not done: C2 (js/pi goes, J3a), C6 (unused helpers, not
+compatibility: kept), C12 (compat.rs goes, J2). Guide: js-api.md (callSite), dumps.md
+(no dumper-less build). Checked: tsc, js tests on the dev module, djs-cli tests, clippy of
+the touched crates, djs-docs check.
+
 ## Follow-ups
 
 ## Result

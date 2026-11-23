@@ -23,7 +23,6 @@ use djs_core::vm::{ErrorKind, ExecOptions, Status, Vm, VmOptions};
 
 use crate::run::{CONSOLE_LOG, now_ms};
 use crate::tools::{self, MAKE_TOOL, Tools};
-use input::SCRIPT_COMPLETION_VALUES;
 use term::{Input, Terminal};
 
 const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--frozen]\n\
@@ -416,7 +415,7 @@ impl Repl {
     /// Compiles an input. `last`: no more lines come, so an incomplete input is an
     /// error. `expr`: try it as an expression first.
     fn plan(&mut self, src: &str, last: bool, expr: bool, filename: &str) -> Plan {
-        let expr_first = expr && (!SCRIPT_COMPLETION_VALUES || input::starts_with_brace(src));
+        let expr_first = expr && input::starts_with_brace(src);
         let try_expr = |r: &mut Repl| {
             let body = input::expression_body(src)?;
             r.compile(&body, true, filename).ok()
@@ -549,7 +548,6 @@ impl Repl {
             Plan::Script(f) => {
                 // Declarations complete with `undefined`: not worth a line each.
                 if let Outcome::Done(v) = self.report(f)
-                    && SCRIPT_COMPLETION_VALUES
                     && !(v.is_undefined() && input::starts_with_declaration(src))
                 {
                     println!("{}", inspect::inspect(self.vm.heap(), v));
@@ -1414,7 +1412,7 @@ impl Repl {
         self.report_rejections();
     }
 
-    /// After a restore: the calls the image still has open.
+    /// After a restore: the calls the dump's run still has open.
     fn pending_after_restore(&mut self) {
         for id in self.vm.pending_host_calls() {
             if self.tools.is_pause(&self.vm, id) {

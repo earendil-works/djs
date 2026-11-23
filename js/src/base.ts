@@ -9,9 +9,9 @@ export interface BaseExports {
   memory: WebAssembly.Memory;
   djs_base_ptr(): number;
   djs_base_len(): number;
-  djs_base_inject_ptr?(len: number): number;
-  djs_base_inject?(): number;
-  djs_base_coded_ptr?(len: number): number;
+  djs_base_inject_ptr(len: number): number;
+  djs_base_inject(): number;
+  djs_base_coded_ptr(len: number): number;
 }
 
 /** The decoded base of each module, as an earlier instance of it decoded it. */
@@ -27,7 +27,6 @@ const codedSections = new WeakMap<WebAssembly.Module, Uint8Array>();
  * instance took the bytes (false if it has its base, or the module has no such section).
  */
 export function provideCodedBase(module: WebAssembly.Module, exports: BaseExports): boolean {
-  if (exports.djs_base_coded_ptr === undefined) return false;
   let coded = codedSections.get(module);
   if (coded === undefined) {
     const [section] = WebAssembly.Module.customSections(module, "djs_base");
@@ -52,7 +51,7 @@ export function provideCodedBase(module: WebAssembly.Module, exports: BaseExport
  */
 export function provideBase(module: WebAssembly.Module, exports: BaseExports): boolean {
   const bytes = bases.get(module);
-  if (bytes !== undefined && exports.djs_base_inject_ptr !== undefined && exports.djs_base_inject !== undefined) {
+  if (bytes !== undefined) {
     const at = exports.djs_base_inject_ptr(bytes.length);
     if (at !== 0) {
       new Uint8Array(exports.memory.buffer, at, bytes.length).set(bytes);

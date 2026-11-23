@@ -8,8 +8,8 @@ Counts that follow from the repository (test262 groups, ratchets, corpus cases, 
 snapshot) are computed by djs-docs itself and need no recording.
 
 usage:
-  scripts/status.py size              build the shipped, slim and dump modules
-                                      (scripts/build-wasm.sh) and record their sizes: bytes,
+  scripts/status.py size              build the shipped and slim modules and the shipped
+                                      build without the dumper and record their sizes: bytes,
                                       gzip -9, brotli -q 11, code and data of the shipped one,
                                       its coded base section and the decoded base of slim
   scripts/status.py speed [-n N]      scripts/perf/wmeasure.py on the README workloads:
@@ -185,9 +185,6 @@ def size(rows):
     # What the dumper adds to the shipped module: the same build without it (D3600).
     nodump = len(gzip.compress(open(NODUMP, "rb").read(), compresslevel=9, mtime=0))
     new["dump/extra-gzip"] = new["wasm/gzip"] - nodump
-    # The dump module's own sizes: there is no second module any more.
-    for k in ("dump/bytes", "dump/gzip"):
-        rows.pop(k, None)
     return new
 
 

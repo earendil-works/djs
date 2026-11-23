@@ -529,8 +529,8 @@ Dumps are the subject of [their own page](dumps.md). What the options do:
   column }` of the `await` of the innermost activation waiting on it, directly or through
   `Promise.all` and the like. The file is the name the code was compiled as: the run's
   `filename` for the code it started with, `dump.js` for code a dump carried, because a
-  run continued from a dump runs the dump's text. It returns `undefined` in a module
-  without the dumper, and when nothing waits on the call.
+  run continued from a dump runs the dump's text. It returns `undefined` when nothing
+  waits on the call.
 
 `sandbox.dump(names?)` writes the sandbox's globals (or the named ones) as a dump of
 data and functions, without a run; `sandbox.load(dump)` runs such a dump in a fresh

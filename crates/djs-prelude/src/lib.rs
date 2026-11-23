@@ -99,25 +99,7 @@ fn base_sample(b: &[u8]) -> u64 {
 /// Fails only if the memory limit is smaller than the base.
 #[cfg(feature = "raw")]
 pub fn new_vm(opts: VmOptions) -> Result<Vm, HeapError> {
-    new_vm_reserved(opts, 0)
-}
-
-/// [`new_vm`] with the arena capacity of a heap of `live` bytes
-/// ([`Vm::from_base_reserved`]).
-#[cfg(feature = "raw")]
-pub fn new_vm_reserved(opts: VmOptions, live: usize) -> Result<Vm, HeapError> {
-    new_vm_from_reserved(BASE, opts, live)
-}
-
-/// A new VM from `base`, which is this build's base image ([`BASE`] or
-/// [`unpack_base`]'s).
-pub fn new_vm_from(base: &[u8], opts: VmOptions) -> Result<Vm, HeapError> {
-    new_vm_from_reserved(base, opts, 0)
-}
-
-/// [`new_vm_from`] with the arena capacity of a heap of `live` bytes.
-pub fn new_vm_from_reserved(base: &[u8], opts: VmOptions, live: usize) -> Result<Vm, HeapError> {
-    match Vm::from_base_reserved(base, opts, live) {
+    match Vm::from_base_reserved(BASE, opts, 0) {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         // Made by this build's build.rs and verified there: anything else is a build bug.

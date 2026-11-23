@@ -601,10 +601,9 @@ host-driven code mode runs (js/test/golden-host.test.ts, in the gate's js tests,
 `NAME.body.js` bodies that run in the test's scope (namespace and bound host functions by
 identity, `values`, the JSON boundary, source references or `inlineSources`) and
 `NAME.K.dump.js`, the dump at idle point K. Each loads in a fresh sandbox of that scope,
-also in a module without the dumper (loading needs none), without `sources` for an inlined one; its open calls are answered and
+without `sources` for an inlined one; its open calls are answered and
 the output up to K plus the loaded run's must equal the uninterrupted run's. New programs
-get their dumps with `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts`. (The goldens were rewritten as plain dumps when format 2 was retired, D2920; the
-two-commit check of format 2, scripts/dumps-across-builds.sh, went with it.)
+get their dumps with `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts`.
 
 ## Peak memory claims (D2048)
 
@@ -676,7 +675,7 @@ agents do not run the gate's steps by hand (AGENTS.md).
 Every cargo configuration the gate builds (a package and feature set, a profile, a
 target) has its own target directory (`target/` for the workspace, `target/gate-core`,
 `gate-difftest`, `gate-test262`, `gate-docs`, `gate-unsafe`, `slim`, `clippy`,
-`wasm-dev`, `wasm-nodump`, `size`, `size-slim`, `clippy-combos`, one `clippy-wasm-*` per
+`wasm-dev`, `size`, `size-slim`, `clippy-combos`, one `clippy-wasm-*` per
 module; the release unsafe-heap build in
 `target/` under its own profile), because cargo locks a target directory while it builds:
 so they all build at once. The commands are the ones the serial gate ran (the same

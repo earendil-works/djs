@@ -45,20 +45,11 @@ function host() {
 test("plainDump reads the header", () => {
   assert.deepEqual(plainDump(DUMP), { typescript: false });
   assert.deepEqual(plainDump(`"djs-dump typescript";\n`), { typescript: true });
-  assert.equal(plainDump(`"djs-dump 2";\n`), undefined);
   assert.equal(plainDump(`"use strict";\n"djs-dump";\n`), undefined);
 });
 
 test("Sandbox.resume continues a plain dump through the hooks", async () => {
   const module = await loadModule();
-  // A module without the dumper loads plain dumps too: they are code.
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) {
-    const h = host();
-    const task = await Sandbox.resume(DUMP, { module: await loadModule(nodump), ...h.opts });
-    assert.equal(await task.result, 120);
-    task.sandbox.dispose();
-  }
   const h = host();
   const task = await Sandbox.resume(DUMP, { module, ...h.opts });
   assert.equal(await task.result, 120);

@@ -534,8 +534,7 @@ run with frozen builtins for this reason.
 **The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->335 KB<!--/n--> more
 with gzip). djs ships one module all the same, with the dumper in it, so that every host
 uses the same file: one that persists runs dumps with the module it runs, and one that
-never does pays only the download. A build of djs-wasm without the dumper still runs
-scripts and loads dumps; writing one there throws a `misuse` error that says so.
+never does pays only the download.
 **Loading** a dump needs neither the dumper nor frozen builtins: it is running a Script.
 
 ## What cannot be dumped

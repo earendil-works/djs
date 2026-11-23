@@ -277,12 +277,8 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
 with lazy functions and the compile cache it turns on): `scripts/build-wasm.sh` builds it, and
 every host, the ones that persist runs and the ones that never do, loads the same file. It
 costs the module about 335 KB gzip (767.6 KB against 432.9 KB without the dumper, measured
-at 0294; the owner accepted the growth, D3601). A debug or custom build without the
-feature still runs and loads dumps (loading is running a Script); its `dump`, `Run.dump`
-and a task's `suspend` and `checkpoint` throw a `misuse` error that says the module was
-built without the `dump` feature. (Until 0294 the Sandbox could also pass the VM's image
-to a second module with the dumper, `dumpModule`, D2635/D2704; that went with the second
-module.)
+at 0294; the owner accepted the growth, D3601). The Sandbox needs that module: the
+feature stays a build knob for size measurements, not a configuration hosts use.
 
 **Storing dumps (D2703).** A dump is plain JavaScript text and stays that way: the
 format is a Script, not a container. Hosts compress it when they store it, with zstd at
@@ -338,10 +334,7 @@ Heap images are not a persistence format: a run that must outlive its process is
 as a continuation dump. Images remain the engine's in-process mechanism: the base image
 every VM is copied from, pi's prelude images (a start restores one instead of running
 the prelude) and the stress and determinism checks. `vm_arena_ptr`/`vm_arena_len` read an
-image, `vm_from_bytes` loads one. Snapshot containers, session images, reference compression,
-`Sandbox.bytes()`/`fromBytes()` and pi's `snapshot()`/`resumeVm()` were removed in 0177,
-and the REPL's `.image` and the `djs heap` command that read its files in 0187 (D2269):
-the REPL's `.heap` reports on the live VM's heap.
+image, `vm_from_bytes` loads one. The REPL's `.heap` reports on the live VM's heap.
 
 #### What an image depends on (D026, D2265)
 
@@ -376,16 +369,15 @@ those names. Operation 0 is `djs_abi_version` in every ABI; `djs_has(op)` tells 
 has an operation. One export because V8 makes a function object for each exported function of
 each instance: 75 exports were a quarter of `new WebAssembly.Instance`. There are no imports:
 the module needs nothing from the host, so `WebAssembly.instantiate(module, {})` works
-anywhere. `djs_abi_version()` returns `6` (since 0261: one export; 5 since 0213: `vm_dump`'s
-host roots line; 4 since 0205: `vm_dump` without its options line, `vm_load_dump` gone) and is
-bumped on any incompatible change. The Sandbox checks it.
+anywhere. `djs_abi_version()` returns the ABI version (`ABI_VERSION` in
+crates/djs-wasm/src/lib.rs), bumped on any incompatible change; the Sandbox checks it.
 
 **Buffers.** Data crosses the boundary through two buffers in linear memory.
 - `djs_staging(len) -> ptr` makes the *staging* buffer at least `len` bytes. The host writes
   into it, then calls the export that consumes it.
 - `djs_image_staging(len, memoryLimit) -> ptr` is `djs_staging` for an image about to go to
   `vm_from_bytes`: the buffer gets the capacity the restored arena reserves, so handing it
-  over grows nothing (D1942). Hosts check for it (modules before 0094 lack it).
+  over grows nothing (D1942).
 - The *out* buffer is filled by exports that return data, at `djs_out_ptr()` /
   `djs_out_len()`.
 

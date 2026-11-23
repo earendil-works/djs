@@ -2,7 +2,7 @@
 
 ```sh
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-    [--gc-stress] [--suspend-every N] [--backend bytecode|native] [--tools answers.json]
+    [--gc-stress] [--suspend-every N] [--tools answers.json]
     [--bind NAME=IDENTITY] [--dump-after K OUT] [--dump-every-idle] [--debugger OUT] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- strip-types file.ts
@@ -13,8 +13,7 @@ cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--frozen] [--t
 
 `run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`;
 `--experimental-decorators` and `--emit-decorator-metadata` (which implies it) select
-TypeScript's legacy decorators (D1651). `--backend` runs the `@native` builtins as their
-generated Rust state machines (`native`, the default) or as bytecode (D1635).
+TypeScript's legacy decorators (D1651).
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
 (TESTING.md). This file documents the REPL (with its heap report, `.heap`) and tools.
 
@@ -127,8 +126,7 @@ writes for it"), reported to the exporter.
 The REPL's `.heap [sections]` shows what is in the live VM's heap (D2264, D2340): its image
 read through djs-core's heap code (verified, walked with the layout table), compared with
 the base image every VM starts from. `.heap kinds,largest` picks sections, `.heap all`
-shows every one; the default is `summary,diff`. (The `djs heap` command, which read image
-files, and the `.image` command that wrote them are gone, D2269.)
+shows every one; the default is `summary,diff`.
 
 | section | shows |
 | --- | --- |
@@ -191,7 +189,7 @@ suspending every 300 fuel
 | `.gc` | collect; the arena size before and after |
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then the heap report's sections over the live VM against the base image (above; default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
 | `.dump [file\|-] [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name. With something in flight it also holds the open calls, the suspended activations (as continuations) and pending promises, with the waiting inputs as handles (below). Needs `djs repl --frozen` (D2836). What a dump cannot write is refused with its path. Without a file, or with `-`, it prints the dump. Without `--frozen` it says that dumps need it |
-| `.restore <file>` | replace the VM with a fresh one that ran a dump (a file starting with `"djs-dump";`, run as a Script), from any build; its waiting run and open calls come back (below): a dump's run becomes the waiting input `run`, several waiting inputs are the properties of the dump's completion value (D2895). Images are not restored (D2700) |
+| `.restore <file>` | replace the VM with a fresh one that ran a dump (a file starting with `"djs-dump";`, run as a Script), from any build; its waiting run and open calls come back (below): a dump's run becomes the waiting input `run`, several waiting inputs are the properties of the dump's completion value (D2895). |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that ran the dump (needs `--frozen`), printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
 | `.clear` | a fresh VM |
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |
@@ -227,8 +225,7 @@ creates an async host function per name and keeps it), and `console.log` calls c
 too. Answers are applied through the VM's inbox, one macrotask each, so the order of
 answers is what the script sees. With `--tools`, answered calls print as
 `[answered] #2 tools.read(...)`; `later(v)` calls are answered at once, quietly.
-`.clear` and `.restore` of an image forget the waiting inputs (the calls a restored image
-still has open are listed). `.restore` of a dump restores them (D2603): a fresh VM runs
+`.clear` forgets the waiting inputs. `.restore` of a dump restores them (D2603): a fresh VM runs
 it, its open calls keep their ids (a tool named in the dump gets the id its function has
 afterwards), and the values it names for the host (its Script's completion value: the
 run's promise as `run`, or an object of several by name, D2895) become waiting inputs
@@ -345,8 +342,6 @@ answers however the calls are ordered or split across runs.
   `{ a: 1 }`; a block that is not an expression still runs as a Script). The array keeps
   the body from adopting a promise value, so `Promise.resolve(1)` prints as a promise.
   Runtime errors in those inputs are 9 columns off on their first line.
-  `SCRIPT_COMPLETION_VALUES` in `repl/input.rs` was the switch from the interim
-  (expressions only) to completion values.
 - **Top-level `await`** (D1641). An input that is not a valid Script but contains `await`
   is rewritten into an async body whose declarations are globals:
   - `let`/`const`/`var` → `0,` padded to the keyword's width: `let {a} = await f()`

@@ -49,7 +49,7 @@ const maxLoad = Number(flag("--max-load", 30));
 const fromMax = Number(flag("--from-max", 40));
 const noNode = has("--no-node");
 // --lazy: djs compiles functions at their first call (difftest --lazy, D2990), as the
-// dump module does by default.
+// shipped module does by default.
 const lazy = has("--lazy");
 // --no-statics: classes without static fields and blocks (gen.mjs `statics`).
 const genOpts = has("--no-statics") ? { statics: false } : {};

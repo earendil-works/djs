@@ -208,14 +208,7 @@ fn meta_commands() {
         "unknown command: .nope (.help lists them)\n",
     );
     let help = repl(".help\n");
-    assert!(
-        help.contains(".heap [sections]") && !help.contains(".image"),
-        "{help}"
-    );
-    check(
-        ".image x.img\n",
-        "unknown command: .image (.help lists them)\n",
-    );
+    assert!(help.contains(".heap [sections]"), "{help}");
 }
 
 #[test]

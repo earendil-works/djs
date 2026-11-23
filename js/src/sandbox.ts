@@ -541,23 +541,21 @@ interface Exports {
   memory: WebAssembly.Memory;
   djs_abi_version(): number;
   djs_staging(len: number): number;
-  /** Since 0094 (D1942); older modules lack it. */
-  djs_image_staging?(len: number, memoryLimit: number): number;
+  djs_image_staging(len: number, memoryLimit: number): number;
   djs_out_ptr(): number;
   djs_out_len(): number;
   djs_panic_ptr(): number;
   djs_panic_len(): number;
-  __stack_pointer?: WebAssembly.Global;
+  __stack_pointer: WebAssembly.Global;
   djs_debug_panic(): void;
   vm_new(memoryLimit: number): number;
-  /** Since 0146 (D2304); older modules lack it. */
-  vm_new_with?(memoryLimit: number, live: number, flags: number): number;
-  vm_frozen_builtins?(vm: number): number;
-  vm_dump?(vm: number, len: number): number;
-  /** Since 0207 (D2882): whether dumps refer to the scripts the host ran (`$djs.source`). */
-  vm_set_dump_source_refs?(vm: number, on: number): void;
-  /** Dump builds only (D3054): `line:col:file` of the activation waiting on a call, in the out buffer. */
-  vm_call_site?(vm: number, callId: number): number;
+  vm_new_with(memoryLimit: number, live: number, flags: number): number;
+  vm_frozen_builtins(vm: number): number;
+  vm_dump(vm: number, len: number): number;
+  /** Whether dumps refer to the scripts the host ran (`$djs.source`, D2882). */
+  vm_set_dump_source_refs(vm: number, on: number): void;
+  /** `line:col:file` of the activation waiting on a call, in the out buffer (D3054). */
+  vm_call_site(vm: number, callId: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
@@ -567,23 +565,21 @@ interface Exports {
   vm_global(vm: number): number;
   /** `flags` bit 0 (ABI 8, D3623): a null prototype. */
   vm_new_object(vm: number, flags?: number): number;
-  /** Since 0207 (D2903): the plain dump runtime, `$djs`'s helpers. */
-  vm_dump_runtime?(vm: number, len: number): number;
+  /** The plain dump runtime, `$djs`'s helpers (D2903). */
+  vm_dump_runtime(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
   /** `flags` bit 0 (D3592): enumerable; bit 1 (part of ABI 8, D3611): freeze `obj` afterwards. */
   vm_define(vm: number, obj: number, nameLen: number, value: number, flags?: number): number;
   vm_decode_wire(vm: number, len: number): number;
-  /** Since 0162 (D2551); older modules lack it. */
-  vm_string_reserve?(vm: number, len: number): number;
+  vm_string_reserve(vm: number, len: number): number;
   vm_new_error(vm: number, kind: number, msgLen: number): number;
   vm_handle_bits(vm: number, h: number): void;
   vm_handle_free(vm: number, h: number): void;
   vm_display(vm: number, h: number): number;
   vm_call(vm: number, f: number, thisArg: number, argc: number): number;
   vm_run(vm: number, fuel: number): number;
-  /** Since 0176 (D2653). */
-  vm_fuel_used?(vm: number): number;
+  vm_fuel_used(vm: number): number;
   vm_result(vm: number): number;
   vm_host_call(vm: number): number;
   vm_host_call_info(vm: number, callId: number): number;
@@ -596,21 +592,24 @@ interface Exports {
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_math_random_seed(vm: number, lo: number, hi: number): void;
-  vm_restore_math_random?(vm: number, lo: number, hi: number): void;
+  vm_restore_math_random(vm: number, lo: number, hi: number): void;
   vm_outcome(vm: number): number;
-  /** Since 0204 (D2890): loading plain dumps. */
-  vm_open_call?(vm: number, parked: number, fnId: number): number;
-  vm_set_next_call_id?(vm: number, id: number): void;
+  /** Loading plain dumps (D2890). */
+  vm_open_call(vm: number, parked: number, fnId: number): number;
+  vm_set_next_call_id(vm: number, id: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
   djs_build_hash(): number;
-  /** The base snapshot (D1321); the inject exports only with the base coded (D2252). */
+  vm_tables_need(vm: number): number;
+  djs_elastic_stack(on: number): void;
+  djs_stack(len: number): number;
+  /** The base snapshot (D1321), coded in the module (D2252). */
   djs_base_ptr(): number;
   djs_base_len(): number;
-  djs_base_inject_ptr?(len: number): number;
-  djs_base_inject?(): number;
-  djs_base_coded_ptr?(len: number): number;
+  djs_base_inject_ptr(len: number): number;
+  djs_base_inject(): number;
+  djs_base_coded_ptr(len: number): number;
 }
 
 /** The modules being compiled or compiled, by location. */
@@ -1033,10 +1032,8 @@ export class Sandbox {
     provideBase(module, x);
     rememberBase(module, x);
     let vm: number;
-    if (opts.frozenBuiltins) {
-      if (!x.vm_new_with) throw new SandboxError("misuse", "the djs-wasm module has no frozenBuiltins (vm_new_with)");
-      vm = x.vm_new_with(opts.memoryLimit ?? 0, 0, VM_FROZEN_BUILTINS);
-    } else vm = x.vm_new(opts.memoryLimit ?? 0);
+    if (opts.frozenBuiltins) vm = x.vm_new_with(opts.memoryLimit ?? 0, 0, VM_FROZEN_BUILTINS);
+    else vm = x.vm_new(opts.memoryLimit ?? 0);
     if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     this.x = x;
     this.module = module;
@@ -1051,7 +1048,6 @@ export class Sandbox {
     for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
     for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
     if (opts.debugger !== undefined) {
-      if (!x.vm_dump) throw new SandboxError("misuse", "the debugger option needs a djs-wasm module with the dumper (the `dump` feature)");
       this.addFunction("debugger", opts.debugger, true, false);
     }
     const globals = { ...(opts.globals ?? this.defaultGlobals()) };
@@ -1878,12 +1874,11 @@ export class Sandbox {
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
     // Dumps need frozen builtins (D2836): the VM's mode.
-    if (this.x.vm_frozen_builtins?.(this.vm) !== 1) {
+    if (this.x.vm_frozen_builtins(this.vm) !== 1) {
       throw new SandboxError("misuse", "cannot dump: dumps need frozen builtins (SandboxOptions.frozenBuiltins, D2836)");
     }
     const x = this.x;
-    x.vm_set_dump_source_refs?.(this.vm, this.opts.inlineSources ? 0 : 1);
-    if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): it was built without the `dump` feature");
+    x.vm_set_dump_source_refs(this.vm, this.opts.inlineSources ? 0 : 1);
     const host = this.globalNames;
     const text = [
       [...host].join(","),
@@ -1897,7 +1892,7 @@ export class Sandbox {
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
-    const r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
+    const r = this.guard(() => x.vm_dump(this.vm, this.stageText(text)));
     if (r !== 0) throw new SandboxError("misuse", `cannot dump:\n${outText(x)}`);
     return outText(x);
   }
@@ -2005,9 +2000,6 @@ export class Sandbox {
   private loadPlain(dump: string, typescript: boolean): { calls: OpenCall[]; handles: Map<string, number> } {
     const x = this.x;
     const vm = this.vm;
-    if (!x.vm_open_call || !x.vm_dump_runtime) {
-      throw new SandboxError("misuse", "the djs-wasm module cannot load plain dumps (no vm_open_call or vm_dump_runtime): rebuild it");
-    }
     const dumpRuntime = x.vm_dump_runtime;
     const calls: OpenCall[] = [];
     this.guard(() => {
@@ -2036,7 +2028,7 @@ export class Sandbox {
         this.setClock();
         return x.vm_run(vm, slice);
       });
-      used += x.vm_fuel_used ? x.vm_fuel_used(vm) : st === STATUS_OUT_OF_FUEL ? slice : 0;
+      used += x.vm_fuel_used(vm);
       if (used >= maxFuel) {
         this.guard(() => x.vm_abort(vm));
         throw new SandboxError("fuel", `out of fuel after ${used} units while loading the dump`);
@@ -2055,7 +2047,7 @@ export class Sandbox {
           this.failHook(callId, new Error(`resume: unknown host function ${String(name)}`));
           continue;
         }
-        if (this.guard(() => x.vm_open_call!(vm, callId, f)) !== 0) {
+        if (this.guard(() => x.vm_open_call(vm, callId, f)) !== 0) {
           // (Out of memory may come after the parked call returned: then this is a no-op.)
           this.complete(callId, false, new Error(outText(x)), false);
           continue;
@@ -2081,7 +2073,7 @@ export class Sandbox {
         if (hi === undefined && typeof lo === "number") next = lo;
         else if (typeof lo === "number" && typeof hi === "number") {
           // (A state that ran, which the next dump writes again: `vm_restore_math_random`.)
-          this.guard(() => (x.vm_restore_math_random ?? x.vm_set_math_random_seed)(vm, lo >>> 0, hi >>> 0));
+          this.guard(() => x.vm_restore_math_random(vm, lo >>> 0, hi >>> 0));
           if (typeof n === "number") next = n;
         } else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
       } else {
@@ -2100,10 +2092,8 @@ export class Sandbox {
       this.complete(callId, ok, result, false);
     }
     // (Without `next`: one past the highest reopened call, D2837.)
-    if (x.vm_set_next_call_id) {
-      const last = Math.max(0, ...calls.map((c) => c.id));
-      this.guard(() => x.vm_set_next_call_id!(vm, Math.max(next ?? 0, last + 1)));
-    }
+    const last = Math.max(0, ...calls.map((c) => c.id));
+    this.guard(() => x.vm_set_next_call_id(vm, Math.max(next ?? 0, last + 1)));
     // Set by hooks that ran meanwhile, which the narrowing of `this.hookError` cannot see.
     const hookError = this.hookError as Error | undefined;
     this.hookError = undefined;
@@ -2241,14 +2231,12 @@ export class Sandbox {
    * combinators. `file` is the name the code was compiled as: the run's `filename` for
    * the code it started with, the dump loader's name (`dump.js`) for code a dump carried
    * (a run continued from a dump runs the dump's text). Undefined when the call is not
-   * open or nothing waits on it at a known position, and in modules without the dumper
-   * (the `dump` feature), where it is not built.
+   * open or nothing waits on it at a known position.
    */
   callSite(id: number): CallSite | undefined {
     this.alive();
     const x = this.x;
-    if (!x.vm_call_site) return undefined;
-    const n = this.guard(() => x.vm_call_site!(this.vm, id));
+    const n = this.guard(() => x.vm_call_site(this.vm, id));
     if (n === 0) return undefined;
     const m = /^(\d+):(\d+):(.*)$/s.exec(outText(x));
     return m ? { file: m[3], line: Number(m[1]), column: Number(m[2]) } : undefined;
@@ -2477,7 +2465,7 @@ export class Sandbox {
         return x.vm_run(vm, Math.max(1, Math.min(slice, left)));
       });
       // Counted across sync host calls too, which end a slice early (D2653, D2702).
-      run.used += x.vm_fuel_used ? x.vm_fuel_used(vm) : st === STATUS_OUT_OF_FUEL ? slice : 0;
+      run.used += x.vm_fuel_used(vm);
       let rejected = false;
       for (const callId of this.newHostCalls()) {
         const { fnId, args, unreadable } = this.callInfo(callId);

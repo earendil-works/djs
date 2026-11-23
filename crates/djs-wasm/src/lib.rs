@@ -1224,11 +1224,9 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flag
 /// states of open calls (D2770), `call_id:byte_len`, tab-separated; and after that line's
 /// newline the states' JSON texts one after another (`DumpOptions::call_states`, written as
 /// `$djs.resume`'s fourth argument). 0: the dump is in out; 1: refused, the reasons in out
-/// (one per line). (2, no base image, is not returned any more: the module has its base's
-/// names, 0215.)
+/// (one per line).
 #[cfg(feature = "dump")]
 pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
-    // (No base needed: the dump has the base's names from the module, 0215.)
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let text = staged_str(staging, 0, len);
@@ -1282,36 +1280,30 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 }
             }
         }
-        let r = BASE.with(|b| {
-            let b = b.borrow();
-            // The base's names are the module's own (built with it): the base itself is
-            // not needed, nor handed over by the host (0215).
-            let base = b.as_deref().unwrap_or_default();
-            let opts = djs_core::vm::dump::DumpOptions {
-                base,
-                host: &host,
-                host_roots: &roots,
-                host_fn_name: &host_fn_name,
-                handles: &handles,
-                call_states: &call_states,
-                source_refs: slot.source_refs,
-                base_names: Some(djs_core::vm::dump::BaseNames {
-                    builtins: djs_prelude::BASE_NAMES,
-                    globals: djs_prelude::BASE_GLOBALS,
-                }),
-                check: true,
-            };
-            Some(
-                slot.vm
-                    .dump(&opts, (!names.is_empty()).then_some(names.as_slice())),
-            )
-        });
-        match r {
-            Some(Ok(t)) => {
+        // The base's names are the module's own (built with it): the dumper needs no base.
+        let opts = djs_core::vm::dump::DumpOptions {
+            base: &[],
+            host: &host,
+            host_roots: &roots,
+            host_fn_name: &host_fn_name,
+            handles: &handles,
+            call_states: &call_states,
+            source_refs: slot.source_refs,
+            base_names: Some(djs_core::vm::dump::BaseNames {
+                builtins: djs_prelude::BASE_NAMES,
+                globals: djs_prelude::BASE_GLOBALS,
+            }),
+            check: true,
+        };
+        match slot
+            .vm
+            .dump(&opts, (!names.is_empty()).then_some(names.as_slice()))
+        {
+            Ok(t) => {
                 s.set_out(t.as_bytes());
                 0
             }
-            Some(Err(e)) => {
+            Err(e) => {
                 let mut lines = String::new();
                 for r in &e.0 {
                     lines.push_str(r);
@@ -1320,7 +1312,6 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 s.set_out(lines.as_bytes());
                 1
             }
-            None => 2,
         }
     })
 }

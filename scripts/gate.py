@@ -195,7 +195,6 @@ def jobs():
     size_mod = "target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
     slim_mod = "target/size-slim/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
     wasm = "target/wasm-dev/wasm32-unknown-unknown/debug/djs_wasm.wasm"
-    nodump = "target/wasm-nodump/wasm32-unknown-unknown/debug/djs_wasm.wasm"
     J = Job
     return [
         # Cheap and always run: formatting, the registry against main (which is not in
@@ -263,17 +262,13 @@ def jobs():
                               ("slim", "--no-default-features --features unsafe-heap"),
                               ("slim-dump", "--no-default-features --features dump"))],
 
-        # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023):
-        # with the dumper, as the shipped module, and without it (a debug or custom build:
-        # dumping refuses clearly, loading works, D3600).
+        # --- wasm32 dev builds: djs-core no_std, and the module the js tests load (0023),
+        # with the dumper as the shipped module (D3600).
         J("no_std/wasm build of djs-core",
           "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
           cls="rust", group="target/wasm-dev"),
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
           " --features compiled-prelude,dump --quiet", group="target/wasm-dev", build=True),
-        J("build:wasm-nodump", "CARGO_TARGET_DIR=target/wasm-nodump cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --features compiled-prelude,cold-unicode --quiet",
-          group="target/wasm-nodump", build=True),
 
         # --- The shipped module, with the dumper (D3600), and the slim one (D020, D2411): LTO,
         # one codegen unit, one core each, and unchecked arena access, as scripts/build-wasm.sh
@@ -307,8 +302,8 @@ def jobs():
         J("guide (docs/guide)", f"{G}/bin/djs-docs check", cls="all", needs=["build:docs"]),
 
         # --- The host-side JS package (0018), on the dev modules.
-        J("js tests", f"DJS_WASM=$PWD/{wasm} DJS_WASM_NODUMP=$PWD/{nodump} node --test js/test/*.test.ts",
-          cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
+        J("js tests", f"DJS_WASM=$PWD/{wasm} node --test js/test/*.test.ts",
+          cls="nodocs", needs=["build:wasm"]),
         # 0257: the nesting limits on the shipped module's 64 KiB stack (D3280): compiles
         # up to the small stack's limits fit it, deeper ones move to the larger stack.
         J("js nesting (shipped module)", f"DJS_WASM=$PWD/{size_mod} node --test js/test/nesting.test.ts",
@@ -338,8 +333,8 @@ def jobs():
           ' && node js/test/reader-cross.ts "$w" "$h"; rc=$?; rm -rf "$w" "$h"; exit $rc',
           cls="nodocs", needs=["build:core-tests"]),
 
-        # --- The corpus (0016, 0072): ratchet, suspension and GC stress, heap images; and
-        # with the @native builtins as bytecode (0063). (Dumps: the plain dumps leg.)
+        # --- The corpus (0016, 0072): ratchet, suspension and GC stress, heap images.
+        # (Dumps: the plain dumps leg.)
         # Lazy functions (D2990) here and in test262's leg; the other legs run eager.
         J("difftest", f"{G}/bin/djs-difftest --engine djs --lazy --ratchet --suspend-every 97 --gc-stress"
           f" --determinism --quiet --no-diff --times {G}/times/difftest.tsv",

@@ -24,8 +24,7 @@ case "${1:-}" in
   --keep-names) export CARGO_PROFILE_WASM_STRIP=false ;;
   --docs) features=(--features docs,dump); target=target/docs-wasm ;;
   --slim) features=(--no-default-features --features unsafe-heap); target=target/slim-wasm; copy=target/djs-slim.wasm ;;
-  # The old opt-in flag: stripping is the default now.
-  --strip | "") ;;
+  "") ;;
   *) echo "usage: scripts/build-wasm.sh [--keep-names | --docs | --slim]" >&2; exit 2 ;;
 esac
 # The shipped module's build environment (D2331, D2333).

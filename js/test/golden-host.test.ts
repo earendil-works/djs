@@ -131,10 +131,7 @@ test("write the dumps of golden host programs that have none", { skip: process.e
 
 test("golden host dumps load and finish as their programs do", async () => {
   const module = await loadModule();
-  // Loading needs no dumper (a dump is code): also in a build without it, when given.
   const modules: [string, Pick<SandboxOptions, "module">][] = [["the module", { module }]];
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) modules.push(["without the dumper", { module: await loadModule(nodump) }]);
   for (const name of programs) {
     assert.ok(dumps.some((d) => d.startsWith(`${name}.`)), `${name}: no dump`);
   }

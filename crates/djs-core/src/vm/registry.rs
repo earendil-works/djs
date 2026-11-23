@@ -655,12 +655,6 @@ struct Resolver<'h> {
     cache: BTreeMap<u32, Vec<(String, Value)>>,
 }
 
-/// The value at a builtin path as [`reachable_names`] writes it (no `%prelude:` roots),
-/// for the dump loader's `$dump.builtin` (0182); `None` if a step is missing.
-pub fn resolve_reachable(heap: &Heap, path: &str) -> Option<Value> {
-    Resolver::with_prelude(heap, Vec::new()).resolve(path)
-}
-
 impl<'h> Resolver<'h> {
     fn new(heap: &'h Heap) -> Resolver<'h> {
         Resolver::with_prelude(heap, prelude_functions(heap))

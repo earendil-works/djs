@@ -1,4 +1,4 @@
-// dump-costs (0184, 0198): format 2 dump costs on djs-wasm. For every case
+// dump-costs (0184, 0198): dump costs on djs-wasm. For every case
 // (scripts/snapshot-research/cases, the data-heavy scripts/dump-costs/cases and the
 // harvested corpus, tests/corpus/codemode-harvest) a Sandbox runs the script host-driven
 // and at every idle point measures the dump: `Run.dump()` time (the best of REPS), text
@@ -9,8 +9,6 @@
 //
 //   scripts/build-wasm.sh
 //   node scripts/dump-costs/dump-costs.ts [OUT] [--no-corpus] [--no-cases] [--reps=N]
-//
-// The tools are scripts/snapshot-research/wasm.ts's (real source files and prose).
 
 import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";

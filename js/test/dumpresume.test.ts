@@ -179,13 +179,3 @@ async function refusals(p: Setup): Promise<void> {
   assert.throws(() => thawed.dump(), (e: unknown) => e instanceof SandboxError && /dumps need frozen builtins/.test(e.message));
 }
 
-test("a module without the dumper refuses to dump with a clear error", async () => {
-  // A debug or custom build without the `dump` feature ($DJS_WASM_NODUMP, which the gate
-  // builds); the shipped module has the dumper.
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (!nodump) return;
-  const sb = new Sandbox({ module: await loadModule(nodump), frozenBuiltins: true, console: { log() {}, info() {}, warn() {}, error() {} } });
-  sb.run("globalThis.x = 1");
-  assert.throws(() => sb.dump(["x"]), (e: unknown) => e instanceof SandboxError && e.kind === "misuse" && /built without the `dump` feature/.test(e.message));
-  sb.dispose();
-});

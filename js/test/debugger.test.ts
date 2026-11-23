@@ -84,16 +84,6 @@ test("without the option, or outside async functions, debugger does nothing", as
   sb2.dispose();
 });
 
-test("the option needs a module with the dumper", async () => {
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (!nodump) return;
-  const module = await loadModule(nodump);
-  assert.throws(
-    () => new Sandbox({ module, debugger: () => {} }),
-    (e: unknown) => e instanceof SandboxError && e.kind === "misuse" && /dumper/.test(e.message),
-  );
-});
-
 test("callSite: where a pause waits, in the body, then in the dump the run continued from (D3054)", async () => {
   const h = host(await loadModule());
   let task = new Sandbox(h.opts).start(LOOP, {}, { filename: "loop.js" });
@@ -112,12 +102,4 @@ test("callSite: where a pause waits, in the body, then in the dump the run conti
   assert.equal(dump.split("\n")[at.line - 1].slice(at.column - 1), "debugger;");
   task.result.catch(() => {});
   task.sandbox.dispose();
-});
-
-test("callSite is absent without the dumper", async () => {
-  const nodump = process.env.DJS_WASM_NODUMP;
-  if (!nodump) return;
-  const sb = new Sandbox({ module: await loadModule(nodump) });
-  assert.equal(sb.callSite(1), undefined);
-  sb.dispose();
 });

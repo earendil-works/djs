@@ -4,11 +4,6 @@
 use djs_core::compiler::CompileError;
 use djs_core::lexer::{Kw, Lexer, Token, TokenKind};
 
-/// Whether a Script's `Status::Done` value is its completion value (issue 0058, D1581).
-/// While it was not, every expression input was wrapped to get its value; now only the
-/// ones a Script cannot run (`await`) and object literals are.
-pub const SCRIPT_COMPLETION_VALUES: bool = true;
-
 /// The input starts with `{`: node prints `{a: 1}` as an object, not as a block with a
 /// label, so it is tried as an expression first.
 pub fn starts_with_brace(src: &str) -> bool {

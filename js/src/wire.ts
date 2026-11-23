@@ -331,13 +331,13 @@ export function encode(value: unknown, buffer?: Uint8Array): Uint8Array {
 /** Host strings from this length on go into the heap with `stringInPlace` (D2551). */
 export const IN_PLACE_MIN = 1024;
 
-/** The exports `stringInPlace` uses (djs-wasm; optional: older modules lack them). */
+/** The exports `stringInPlace` uses (djs-wasm). */
 export interface InPlaceExports {
   memory: WebAssembly.Memory;
   djs_out_ptr(): number;
   vm_arena_ptr(vm: number): number;
   vm_handle_bits(vm: number, h: number): void;
-  vm_string_reserve?(vm: number, len: number): number;
+  vm_string_reserve(vm: number, len: number): number;
 }
 
 /** Where a one-byte string cell's code units start. */
@@ -357,13 +357,13 @@ function readVarint(buf: Uint8Array, at: number): [number, number] {
  * A handle to string `s` (`wire`, its `encode`d bytes) copied from the wire bytes straight
  * into a reserved heap string when it is ASCII (D2551): no staging copy and no transcode,
  * and the staging buffer does not grow to the string's size. 0 when it is not ASCII
- * (the UTF-8 is longer than `s`), the module lacks the exports, or the reservation
+ * (the UTF-8 is longer than `s`) or the reservation
  * failed: then stage `wire` as usual. Deciding from the encoding costs non-ASCII strings
  * nothing; encoding straight into the reservation (one copy fewer for ASCII) made them
  * pay a reservation, a second encoding and a second arena growth (D2551).
  */
 export function stringInPlace(x: InPlaceExports, vm: number, s: string, wire: Uint8Array): number {
-  if (!x.vm_string_reserve || wire[4] !== Tag.STR_UTF8) return 0;
+  if (wire[4] !== Tag.STR_UTF8) return 0;
   const n = s.length;
   const [units, lenAt] = readVarint(wire, 5);
   const [bytes, data] = readVarint(wire, lenAt);

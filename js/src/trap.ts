@@ -8,7 +8,7 @@ export interface TrapExports {
   djs_panic_ptr(): number;
   djs_panic_len(): number;
   /** The shadow stack pointer (djs-wasm exports it for this). */
-  __stack_pointer?: WebAssembly.Global;
+  __stack_pointer: WebAssembly.Global;
 }
 
 /**
@@ -20,7 +20,7 @@ export interface TrapExports {
  */
 export function trapText(x: TrapExports, e: Error): string {
   // First: with the stack pointer wrapped, calling any export would trap again.
-  const sp = x.__stack_pointer ? (x.__stack_pointer.value as number) >>> 0 : 0;
+  const sp = (x.__stack_pointer.value as number) >>> 0;
   if (sp > x.memory.buffer.byteLength) {
     return `stack overflow: the engine's wasm stack is exhausted (${e.message})`;
   }
@@ -48,14 +48,15 @@ const BIG_STACK = 128 * 1024;
 /** The exports `elasticStack` wraps and uses. */
 export interface StackExports {
   memory: WebAssembly.Memory;
-  __stack_pointer?: WebAssembly.Global;
+  __stack_pointer: WebAssembly.Global;
+  /** Modules with the cold Unicode tables only (D3350). */
   djs_tables_ptr?(family: number, len: number): number;
   djs_tables_set?(): number;
-  vm_tables_need?(vm: number): number;
-  djs_elastic_stack?(on: number): void;
-  djs_stack?(len: number): number;
+  vm_tables_need(vm: number): number;
+  djs_elastic_stack(on: number): void;
+  djs_stack(len: number): number;
   vm_run(vm: number, fuel: number): number;
-  vm_fuel_used?(vm: number): number;
+  vm_fuel_used(vm: number): number;
   vm_compile?(vm: number, goal: number, paramsLen: number, srcLen: number): number;
   vm_compile_file?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_compile_cached?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number, blobLen: number): number;
@@ -71,15 +72,13 @@ export interface StackExports {
  * of its memory (D3350): a compile or instruction that needs them (a regular expression
  * with `\p{..}`, `normalize` or `localeCompare` of non-Latin text) stops the same way, and
  * the wrappers hand the instance the module's section of that family (`djs_props`,
- * `djs_norm`; `module` is required for such a module) and call again. Modules without the exports are
- * returned as they are. Call it again after the instance's memory was reset (a pooled
+ * `djs_norm`; `module` is required for such a module) and call again. Call it again after the instance's memory was reset (a pooled
  * instance). Replaces the functions in `x` (an object of `djsExports`, which is the caller's
  * own): copying its ~70 properties into a new object cost a sandbox more than the rest of its
  * JavaScript setup.
  */
 export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.Module): X {
   const { __stack_pointer: sp, djs_stack: stack, vm_fuel_used: fuelUsed } = x;
-  if (!sp || !stack || !fuelUsed || !x.djs_elastic_stack) return x;
   x.djs_elastic_stack(1);
   // Already wrapped (a pooled instance): the static was reset with the memory, the wrappers
   // are still in place.
@@ -95,7 +94,7 @@ export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.
     return r;
   };
   const tables = (vm: number) => {
-    const need = x.vm_tables_need?.(vm) ?? 0;
+    const need = x.vm_tables_need(vm);
     for (const [family, name] of TABLE_SECTIONS) {
       if (!(need & family)) continue;
       const bytes = module && tableSection(module, name);
