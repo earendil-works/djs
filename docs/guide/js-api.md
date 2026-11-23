@@ -68,8 +68,10 @@ All options are optional:
 | `globals`, `bindings` | where scripts find them: as globals, or as parameters of every body |
 | `modules` | the host modules bodies import, resolved by specifier ([below](#host-modules)) |
 | `values` | host data bound as frozen globals, which dumps name instead of writing ([below](#host-data)) |
-| `jsonBoundary` | convert what crosses to the host as JSON would ([below](#the-json-boundary)) |
-| `console` | receives `console.log`, `info`, `warn` and `error`; default the host's `console` |
+| `jsonBoundary` | convert what crosses to the host as JSON would, for all host functions or all but some ([below](#the-json-boundary)) |
+| `missingMember` | the error a read of a member a namespace lacks throws ([below](#namespaces)) |
+| `aliases` | more member names of a namespace's functions ([below](#namespaces)) |
+| `console` | receives `console.log`, `info`, `warn`, `error` and `debug`; default the host's `console` |
 | `memoryLimit` | the heap cap in bytes; default 4 GiB ([limits](limits.md#memory)) |
 | `fuelSlice` | fuel per step: how often the host gets control back; default 1,000,000 |
 | `maxFuel` | the fuel budget of one run, after which it fails; default none |
@@ -97,6 +99,11 @@ returns what the body returns, as a host value; a returned promise is unwrapped.
 drives the VM to the end synchronously, so its host functions must return synchronously
 too. `runAsync` is the same but awaits host functions that return promises, and lets
 async host functions run concurrently while the script goes on.
+
+A run ends when the body's result settles. Async calls still running then are dropped:
+the run does not wait for them, their results are ignored, and the call's `signal` of an
+[`AsyncHostFunction`](#tasks-suspend-and-resume) aborts, so the host can cancel the work.
+A script that wants a call finished awaits it.
 
 A sandbox runs one thing at a time, and it keeps its state between runs: what a script
 puts on `globalThis` is there for the next one. `setGlobal(name, value)` defines a global
@@ -146,6 +153,41 @@ sandbox.run("return myTool('x')");                       // "tool(x)"; no global
 `defineFunction(name, f)` and `defineAsyncFunction(name, f)` add functions to a sandbox
 that exists, bound by the default rule. Or scripts import them from [host
 modules](#host-modules).
+
+### Namespaces
+
+A namespace such as `tools` or `console` is an object the sandbox makes, with its
+functions as enumerable members in the order they were defined, so
+`Object.keys(tools)` lists them. The sandbox freezes it before the first script runs: a
+script can neither add, change nor delete a member (and a codemode body is strict code,
+so trying throws a `TypeError`). `defineFunction` can add members until then; a member
+for a namespace that is frozen already is a `misuse` error.
+
+Two options shape what a script sees of them:
+
+```ts
+const sandbox = await Sandbox.create({
+  asyncFunctions: { "tools.my_tool": myTool, "tools.read": read },
+  aliases: { "tools.my_tool": ["my-tool"] },
+  missingMember: (ns, member) => `${ns}.${member} does not exist. Available: ${known(ns).join(", ")}.`,
+});
+await sandbox.runAsync(`return tools["my-tool"] === tools.my_tool`);  // true
+await sandbox.runAsync(`return tools.Read("a.txt")`);  // threw: TypeError: tools.Read does not exist. Available: ...
+```
+
+- `aliases` gives a member more names, which must not be identifiers: a tool named
+  `my-tool` that scripts also reach as `tools.my_tool`. Each alias follows its member
+  among the namespace's keys and holds the same function, which keeps its one identity:
+  calls, journals and dumps name it `tools.my_tool`.
+- `missingMember(namespace, member)` answers a read of a member the namespace does not
+  have: the read throws a `TypeError` with the returned message, where otherwise the
+  script would get `undefined` and fail later with `not a function`. Returning
+  `undefined` lets the read give `undefined`. Symbols, the members of `Object.prototype`,
+  `then` and `toJSON` are never asked about, so `await`, `JSON.stringify` and `in` behave
+  as usual. The namespaces are then proxies over their frozen member objects, made by
+  the sandbox; a dump still names each by its identity, and a loading sandbox with the
+  option gives its own. It applies to the namespaces of dotted names, `console`
+  included, not to `values` or the namespaces of host modules.
 
 **Errors with data.** An error a host function throws, or an async one rejects with,
 reaches the script as an `Error` of the same kind (`TypeError`, `RangeError`, else
@@ -248,8 +290,11 @@ ISO string, a `Map` `{}`, `undefined` and functions are left out of objects, and
 `undefined` argument stays `undefined`. A value JSON cannot carry, a cycle or a BigInt,
 fails at the call: a sync function's call throws the `TypeError`, where the script can
 catch it, an async function's call returns a promise rejected with it, and the host
-function is not called. A result that cannot be converted fails the run. `console` is
-not converted.
+function is not called. A result that cannot be converted fails the run, and a thrown
+value that is not an `Error` is converted too, to `undefined` if JSON cannot carry it.
+`console` is not converted, and neither are the functions `jsonBoundary: { except:
+[...] }` lists by identity: output and storage functions that format values themselves
+see `NaN` or a function as what it is, where JSON would make it `null` or leave it out.
 
 The conversion is done by functions the sandbox makes in the VM, one per host function,
 which scripts see in its place. They count as host values of the functions' names, so a
@@ -276,13 +321,28 @@ the VM's memory, without running any code in the VM:
 | plain objects, class instances | plain objects of their own enumerable string-keyed data properties |
 | arrays | arrays, with their holes |
 | typed arrays | copies, of the same type |
-| functions, symbols, `Map`, `Date`, errors, other objects | `Opaque` markers, with the object's class name or the symbol's description |
+| errors | host `Error`s with the VM error's `name`, `message`, `stack` and `cause`, and its own enumerable data properties |
+| `Date`, `Map`, `Set` | a `Date` of the same time; a `Map` or `Set` of the entries, each read like the rest |
+| functions, symbols, other objects | `Opaque` markers, with the object's class name or the symbol's description |
 
 The result is a tree, like JSON: an object referenced twice is read twice, and a cycle is
 a `TypeError` naming its path. A value budget turns a blow-up (a small structure
-referenced many times) into an error. To get a `Map` or a `Date` out, a script converts
-it: `Object.fromEntries(map)`, `date.toISOString()`, or the host converts everything
-that crosses with [the JSON boundary](#the-json-boundary).
+referenced many times) into an error. An error's `name` and `message` are read as the
+data properties the error or its prototypes hold (an accessor is not run: then the name
+is `Error`), and its `stack` is the VM's trace, frames only, as scripts see `e.stack`:
+
+```ts
+try {
+  sandbox.run("function f() { throw new TypeError('boom'); }\nf()");
+} catch (e) {
+  const v = (e as SandboxError).value as Error;          // v.name "TypeError", v.message "boom"
+  console.log(`${v.name}: ${v.message}\n${v.stack}`);   // TypeError: boom\n    at f (sandbox.js:1:35)\n    at <eval> ...
+}
+```
+
+`console`'s methods get their arguments the same way, except that a value with no host
+form arrives as the text `[Function]`, `[WeakMap]` and so on, where a result has an
+`Opaque` marker (exported by the package).
 
 > **Trade-off.** Reading the VM's memory over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
@@ -297,7 +357,7 @@ for an exception, the thrown `value`:
 
 | kind | when | the sandbox afterwards |
 | --- | --- | --- |
-| `threw` | the script threw, or its promise rejected; `message` is the error's display text (`TypeError: bad`), `value` the thrown value as a host value (an `Opaque` for an `Error`) | usable |
+| `threw` | the script threw, or its promise rejected; `message` is the error's display text (`TypeError: bad`), `value` the thrown value as a host value (an `Error` with the VM's `name`, `message` and `stack`) | usable |
 | `syntax` | the code did not compile; `message` gives the position (`SyntaxError: ... at 1:11`) | usable |
 | `fuel` | the run used up `maxFuel` (`out of fuel after N units`), or a step its own budget | usable |
 | `aborted` | a step's `signal` was aborted ([host-driven runs](#host-driven-runs)) | usable |
@@ -320,8 +380,7 @@ the run; `"collect"` keeps the reasons for `takeUnhandledRejections()`.
 
 `maxFuel` bounds a run's work, `memoryLimit` its heap, and the VM's stack is bounded by
 itself; [limits](limits.md) explains each. `fuelSlice` sets how often the host gets
-control back. A sandbox checks `maxFuel` between slices, so a budget is exact to the
-slice: for a small budget, use a small slice.
+control back. `maxFuel` is exact: the last slice is cut to what is left of it.
 
 ```ts
 const sandbox = await Sandbox.create({ maxFuel: 10_000_000, fuelSlice: 100_000, memoryLimit: 64 << 20 });
@@ -404,6 +463,21 @@ id, and `sandbox.loadRun(dump)` loads one into a fresh sandbox and returns the r
 its open calls and their states, for the host to settle, issue again or reject. Settling
 a call with `{ ok: false, value: new RunExit() }` ends the run as a host function's
 `RunExit` does.
+
+The run is `done` (or `threw`) as soon as the body's result settles, also while calls
+are open: `run.dropped` lists those, for the host to cancel, and settling one of them
+afterwards does nothing.
+
+```ts
+const run = sandbox.begin("tools.log('started'); return 'x'");
+run.state;                                  // "done", run.value "x"
+for (const call of run.dropped) cancel(call.id);
+```
+
+`maxFuel` bounds the run over all its steps, and `run.fuelUsed` says how much it has
+used. A dump does not carry the count: a host that keeps the budget across a dump and a
+load stores `fuelUsed` with the dump and passes it back, `sandbox.loadRun(dump, {
+fuelUsed })`; without it the loaded run starts with a fresh budget.
 
 **Bounded steps.** A step can be bounded, so that a script that computes for long does
 not hold the host:

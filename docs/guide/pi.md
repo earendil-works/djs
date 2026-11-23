@@ -130,7 +130,14 @@ of pi's sits in the VM, so none is in a dump.
   list, and the resuming process gives it again.
 - **The JSON boundary** makes what a script passes to tools, stores and returns what
   pi's prelude made of it: JSON, with a `TypeError` at the call for a cycle or a BigInt.
-  Errors of tools carry their `structuredOutput` into the script's `catch`.
+  The output and store functions are left out of it (`jsonBoundary: { except }`), so pi
+  formats `NaN`, errors and maps itself, as the prelude did. Errors of tools carry their
+  `structuredOutput` into the script's `catch`.
+- **What the model sees** of a failure comes from the run as data: a thrown error's
+  name, message and stack, and `console` arguments as host values. The `tools` namespace
+  is frozen, lists its tools, reaches a tool by its own name too (`aliases`), and a
+  misspelled tool throws pi's hint at the read (`missingMember`). A script ends when its
+  body does: calls still running then are in `run.dropped`, and pi cancels them.
 - **Saving.** Before a call leaves the VM, and before the script parks to wait for a
   person or a slow job, pi writes the idle run as a dump, with the output and store
   writes so far. A restart or a wake, maybe weeks later and with another djs, loads the

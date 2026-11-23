@@ -1140,7 +1140,7 @@ export class Sandbox {
     });
   }
 
-  /** Whether the JSON boundary converts host function `identity`'s arguments. */
+  /** Whether the JSON boundary converts host function `identity`'s arguments (D3603). */
   private converts(identity: string): boolean {
     const b = this.opts.jsonBoundary;
     return b === true || (typeof b === "object" && b !== null && !b.except.includes(identity));

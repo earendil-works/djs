@@ -14179,3 +14179,72 @@ the literal `new URL("../wasm/djs.wasm", import.meta.url)` in index.ts for bundl
 repository's build. `scripts/npm-pack.sh --module FILE` replaces `--modules MAIN SLIM DUMP`;
 js/pkg-test/smoke.js dumps and resumes with the package's module; npm-test's js-tests run
 on it alone (and copy golden-host's files, skip the internal helpers' tests).
+## D3600: Errors, Dates, Maps and Sets cross to the host as data
+date: 2026-11-23 · by: pns · issue: 0295
+The reader (js/src/reader.ts) reads a VM Error as a host `Error`: `name` and `message` as
+data properties of the error or its prototype chain (an accessor is not run: the name
+falls back to "Error", the message to ""; a DOMException's from its slots), `stack` the
+VM's trace string from the error's slot (a trace still pending for
+`Error.prepareStackTrace` reads as its default string), `cause`, and its own enumerable
+data properties, all non-enumerable but those. A Date becomes a `Date`, a Map and a Set
+a `Map` and a `Set` of their entries read like the rest. So a run's thrown Error
+(`SandboxError.value`) and `console` arguments carry what pi's prelude used to format,
+without running code in the VM; `console` is a sync host call, where the VM cannot run
+the helper anyway. The slot meanings are not in the layout table; the reader names them
+as it already did for typed arrays, and js/test/host-values.test.ts reads each. With the
+JSON boundary, a thrown value that is no Error goes through JSON as a result does (op 4
+of the helper: undefined when JSON cannot carry it); a thrown value the reader cannot
+read (a cycle) is undefined rather than an exception of the run loop. `console.debug`
+was added (`ConsoleLike.debug`, else `log`), and `Opaque` is exported. Rejected: a wasm
+export giving an error's name, message and stack (size, and the reader serves console
+arguments and nested errors too).
+
+## D3601: Namespaces are frozen, enumerable, with aliases and a missing-member hook
+date: 2026-11-23 · by: pns · issue: 0295
+The namespace objects of dotted identities (`tools`, `console`) get their members
+enumerable, in definition order, and are frozen before the first script runs (and a
+namespace made later before the next): `Sandbox.sealNamespaces` defines a member again
+with `vm_define`'s new flag bit 1, which freezes the object afterwards
+(`Vm::freeze`, the existing `set_integrity_level`; +90 bytes in the shipped module).
+Freezing in JS would compile a script per sandbox (measured +35 µs on a 125 µs
+create, the helper +108 µs). A member added to a frozen namespace is a misuse. Module
+namespaces are frozen the same way, without the helper. `aliases` (identity
+`ns.member` -> names that are not identifiers) defines more members holding the same
+function right after it; no identity of their own, so dumps and journals are unchanged.
+`missingMember(ns, member)` makes each such namespace a Proxy (helper op 5) over its
+frozen member object, whose `get` trap asks the host, through a function with the
+reserved id `HOOK_MISSING` (no identity, not journaled), about reads of absent string
+members other than `then` and `toJSON`, and throws a TypeError with the message (its
+stack starts at the script's read: `Error.captureStackTrace` below the trap). The Proxy
+is the host value of the namespace's identity, so dumps still write `$djs.host("tools")`;
+the trap returns `Reflect.get` for present members, which meets the invariants of a
+frozen target. Rejected: an engine hook for missing reads (size; a Proxy costs a trap
+call per member read, nothing next to a tool call).
+
+## D3602: A run ends when its body's result settles; open calls are dropped
+date: 2026-11-23 · by: pns · issue: 0295
+At an idle point the run loop checks the body's result (`vm_outcome`, or a loaded run's
+`run` promise): once it is settled, the run is done (or threw) even with async calls
+open, as pi's rule "calls still running when the script ends are cancelled" says. The
+VM drops its call, jobs and open calls (`vm_abort`, as `RunExit` does), and the calls
+move to `Run.dropped`; a later `settle` of one is a no-op. `runAsync` and tasks follow
+the same rule: they no longer wait for unawaited calls, their late results are ignored,
+and the `signal` of an `AsyncHostFunction`'s call aborts (runAsync now gives hook
+functions a call with a signal). Before, all three waited for every open call: a
+script's fire-and-forget call kept the run alive. A script that wants it awaits it.
+
+## D3603: The JSON boundary per function: `jsonBoundary: { except }`
+date: 2026-11-23 · by: pns · issue: 0295
+`jsonBoundary` may be `{ except: identities }`: those host functions get plain wire
+values (pi's `text`, `image`, `store`, `load`, which format `NaN`, functions and errors
+themselves), everything else as with `true`, results included. The loading sandbox
+must make the same choice: a dump names the function by its identity either way.
+
+## D3604: `maxFuel` spans a host-driven run's steps and is exact
+date: 2026-11-23 · by: pns · issue: 0295
+The run's fuel was counted across steps but checked only when a slice ran out, so a run
+whose steps each ended idle within a slice never failed. Each slice is now cut to what is
+left of `maxFuel` (and of the step's `fuel`), so the budget is exact in every run.
+`Run.fuelUsed` reports it; a dump does not carry it (the dump format stays as D3596
+fixes it, and fuel is the host's policy): `loadRun(dump, { fuelUsed })` continues the
+count, default 0 (a fresh budget). The loading Script's own fuel stays bounded apart.

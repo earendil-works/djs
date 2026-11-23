@@ -319,16 +319,20 @@ an offset into the arena (`vm_arena_ptr`), and the reader decodes cells in place
 one-byte string becomes a host string through `String.fromCharCode` over the bytes, a
 two-byte one through `TextDecoder("utf-16le")`, and objects and arrays are walked.
 
-The reader hard-codes nothing about the heap. It uses
+The reader takes the heap's layout from
 [`js/src/layout.generated.ts`](../../js/src/layout.generated.ts), which is exported from
 the same `cells!` table the collector and the image verifier use, so a change to a cell
-layout is a regeneration, not a reader rewrite. The reader checks the layout hash in the
+layout is a regeneration, not a reader rewrite. What a few classes keep in their object
+slots (a typed array's fields, an Error's stack trace, a Date's time, a Map's or Set's
+entries) the table does not describe; the reader knows those by name, and the package's
+tests read each of them. The reader checks the layout hash in the
 roots cell and refuses an arena from another build.
 
 What the host gets is a tree, like JSON ([values in and
 out](js-api.md#values-in-and-out) has the mapping): plain objects with the own enumerable
 string-keyed data properties, arrays with their holes, typed arrays as copies, BigInts as
-`bigint`, and `Opaque` markers for functions, symbols and other objects. A cycle is a
+`bigint`, errors, dates, maps and sets as the host's own, and `Opaque` markers for
+functions, symbols and other objects. A cycle is a
 `TypeError` naming its path.
 
 > **Trade-off.** Reading the arena directly over serializing in the VM. Reading a value

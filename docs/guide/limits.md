@@ -74,8 +74,9 @@ fuel and returns. In [the JavaScript interface](js-api.md#limits), `fuelSlice` s
 slice (a million units by default) and `maxFuel` the budget of one run, which fails with
 a `fuel` error when it is used up: `out of fuel after 10000000 units`. The run is
 abandoned, and the sandbox stays usable. Fuel is counted over the whole run, across host
-calls and promise jobs; the budget is checked between slices, so it is exact to the
-slice.
+calls, promise jobs and the steps of a host-driven run, and the last slice is cut to what
+is left, so the budget is exact. A host that dumps a run and loads it later carries the
+count over itself: a dump holds the run's state, not its spending.
 
 A run that waits on async host calls uses no fuel while it waits.
 
