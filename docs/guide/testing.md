@@ -259,8 +259,8 @@ tested against it:
   to the base image's cells; it is armed for every VM with frozen builtins and for the
   codemode cases of the corpus, whose scripts never change a builtin.
 - **An agent host's own tests.** The codemode test suite of [an agent
-  host](pi.md) runs on the shipped modules through its adapter, and on the slim module
-  with frozen builtins.
+  host](pi.md) runs on the shipped module through its adapter, also with a dump and a
+  resume at every idle point, and on the slim module with frozen builtins.
 
 ## The gate
 
@@ -280,8 +280,8 @@ consists of legs, each one check:
   and node with their size; the corpus again on the unchecked-heap build;
 - the active test262 group against its ratchet;
 - the slim build's tests, corpora and test262, against their own ratchets;
-- the size budget of the shipped modules;
-- an agent host's codemode tests on the shipped modules.
+- the size ceilings of the shipped module and the slim one;
+- an agent host's codemode tests on the shipped module and the slim one.
 
 Nothing reaches `main` without passing it.
 [`scripts/merge-to-main.sh`](../../scripts/merge-to-main.sh) rebases the branch onto
@@ -333,7 +333,7 @@ machine fails at random:
   `--compare` flags changes beyond the noise; numbers compare only within one machine,
   recorded when it is quiet. The gate runs the same scenarios once, untimed, so the
   harness keeps working.
-- **Size.** The size-budget leg builds the shipped modules and compares their gzip size
+- **Size.** The size-budget leg builds the shipped module and the slim one and compares their gzip size
   with a ceiling in [`tests/scores/size.tsv`](../../tests/scores/size.tsv); a change
   that would cross it has to make room elsewhere, or raise it as a deliberate trade.
 

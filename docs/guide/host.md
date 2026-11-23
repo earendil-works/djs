@@ -126,7 +126,7 @@ incompatible change to the operations, and the `Sandbox` checks it.
 
 ## The operations
 
-The shipped module has <!--n wasm/ops-->69<!--/n--> operations. By area:
+The shipped module has <!--n wasm/ops-->74<!--/n--> operations. By area:
 
 | area | operations |
 | --- | --- |
@@ -349,8 +349,8 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip |
-| slim | none | not shipped: what the module weighs without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)), and the build the agent host's adapter tests also run on: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->365 KB<!--/n--> with gzip |
+| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
+| slim | none | not shipped: what the module weighs without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)), and the build the agent host's adapter tests also run on: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->366 KB<!--/n--> with gzip |
 | docs module | the shipped features and `docs` | this site's live examples: the shipped module plus `djs_disasm`, the bytecode listing an edited example shows |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording
@@ -366,7 +366,7 @@ in; a dump leaves the VM as it was, so the run goes on there or in whichever san
 loads the dump.
 
 > **Trade-off.** One module with the dumper. The dumper and what serves it nearly double
-> the module (<!--n dump/extra-gzip kb-->345 KB<!--/n--> more with gzip), and hosts that never persist a
+> the module (<!--n dump/extra-gzip kb-->335 KB<!--/n--> more with gzip), and hosts that never persist a
 > run do not need them. djs ships them in its one module anyway: every host gets the same
 > file, a host that persists runs dumps in the VM it runs, with no image copied into a
 > second instance, and no two modules of one build have to be kept together. The cost is

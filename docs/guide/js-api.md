@@ -19,9 +19,9 @@ npm install @earendil-works/djs
 ```
 
 The package has no dependencies and carries the wasm module itself: one module,
-<!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip, which every host uses, the
+<!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip, which every host uses, the
 ones that persist runs and the ones that never do, because it has the
-[dumper](dumps.md#the-dumper). It runs in node 20 or newer, Bun, Deno, browsers and web
+[dumper](dumps.md#what-a-dump-needs). It runs in node 20 or newer, Bun, Deno, browsers and web
 workers: the module has no imports, so it runs in any wasm runtime. The package has one
 entry point, `@earendil-works/djs`, which exports the whole API and the dump runtime's
 `helpers`, `script` and `scriptFor`, for a host that continues a

@@ -46,7 +46,8 @@ host runs many.
 **How:** the initialized realm ships as a prebuilt image, so creating a VM is a copy
 ([images and the base snapshot](snapshots.md#the-base-snapshot)); the compiler works in
 one pass (next goal); and most builtins are compact bytecode rather than Rust
-([builtins](builtins.md)), with a slim build for hosts that count every kilobyte
+([builtins](builtins.md)), with a slim build, which the package does not ship, for
+hosts that build djs themselves and count every kilobyte
 ([the language](language.md#the-slim-build)).
 
 **The cost:** the base image is about a quarter of the module, so every builtin added

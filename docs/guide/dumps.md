@@ -531,7 +531,7 @@ already read (`pages.push` above) as a second read of it. Without frozen builtin
 writing a dump throws a `misuse` error that says so. The live examples with `debugger;`
 run with frozen builtins for this reason.
 
-**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->345 KB<!--/n--> more
+**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->335 KB<!--/n--> more
 with gzip). djs ships one module all the same, with the dumper in it, so that every host
 uses the same file: one that persists runs dumps with the module it runs, and one that
 never does pays only the download. A build of djs-wasm without the dumper still runs

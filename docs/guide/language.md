@@ -260,7 +260,8 @@ them. [Status in numbers](status.md) gives the conformance figures.
 
 ## The slim build
 
-djs also comes in a *slim* build, for hosts that count every kilobyte. It leaves out the
+djs also builds as a *slim* module, for hosts that build djs themselves and count every
+kilobyte; the package does not ship it. It leaves out the
 families that codemode scripts don't use and that cost real size: typed arrays with
 `ArrayBuffer` and `DataView`, `BigInt`, the `Iterator` helpers, `WeakRef` and
 `FinalizationRegistry`, `DisposableStack` and the `using` declarations, and decorators.
