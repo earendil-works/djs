@@ -1656,7 +1656,7 @@ impl Parser<'_, '_> {
         let pos = self.tok.start;
         self.next()?;
         if self.eat(TokenKind::Dot)? {
-            if crate::MODULES
+            if crate::EMBED
                 && self.tok.is_contextual(Kw::Meta)
                 && self.module.is_some()
                 && !self.tok.has_escape()
@@ -1687,7 +1687,7 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::RParen, ")")?;
         self.syn_close();
         self.mark(pos);
-        if crate::MODULES {
+        if crate::EMBED {
             // `%ModuleOp(specifier, options, referrer)`: the import goes to the host's
             // loader, which resolves the specifier against this unit's module key or
             // script name (builtins/module.ts ImportCall).

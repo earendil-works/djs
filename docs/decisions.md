@@ -14420,3 +14420,11 @@ builtin and intrinsic has an entry that resolves. Removed: scripts/registry.py (
 update's REASON argument, the union merge driver (the file is `djs-generated` now: a merge
 keeps one side and scripts/regen.sh runs the update on the merged tree), and the test that
 an id is never reused.
+
+## D3645: djs-embed has no version promise of its own
+date: 2026-11-23 · by: pcompat · issue: 0297
+Amends D3170 and D3247 (owner, 2026-11-23: no backwards compatibility). djs-embed is not
+published; its 0.x semver and crates/djs-embed/CHANGES.md, the list of incompatible
+changes for hosts that pin a git revision, were a compatibility promise. CHANGES.md goes,
+the crate takes the workspace version, and its API changes with djs like every other
+crate's: a host that moves its pin reads the commits.

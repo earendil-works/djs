@@ -24,7 +24,7 @@ use djs_core::json;
 use djs_core::value::Value;
 use djs_core::vm::{ErrorKind, Status, Vm};
 
-use crate::heap::json::J;
+use crate::json::J;
 
 /// The sync host function behind `tools`'s Proxy: `make(name)` returns a new tool.
 pub const MAKE_TOOL: u32 = 2;

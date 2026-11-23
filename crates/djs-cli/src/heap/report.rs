@@ -1,5 +1,4 @@
-//! The sections of the `.heap` report: each one computed once, as text and as a JSON
-//! value (the structured form the tests check).
+//! The sections of the `.heap` report: each one computed once, as text.
 
 use std::collections::HashMap;
 
@@ -17,18 +16,11 @@ use djs_core::value::Value;
 
 use super::diff::{Diff, Status};
 use super::graph::Graph;
-use super::json::J;
 
-/// One section of the report: `key` names it in `.heap`'s section list.
+/// One section of the report.
 pub struct Section {
-    // `key` and `json`, the section's structured form, are what the tests check; `.heap`
-    // prints the text (the command that printed the JSON is gone, D2269).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub key: String,
     pub title: String,
     pub text: String,
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub json: J,
 }
 
 pub struct Options {
@@ -102,30 +94,12 @@ impl Scope {
             String::new()
         }
     }
-
-    /// `scope` and, in the session view, `reference_part` for a section's JSON.
-    fn json(&self, mut fields: Vec<(&'static str, J)>, rest: J) -> J {
-        fields.insert(
-            0,
-            (
-                "scope",
-                if self.is_session() { "session" } else { "all" }.into(),
-            ),
-        );
-        fields.push((
-            "reference_part",
-            if self.is_session() { rest } else { J::Null },
-        ));
-        J::obj(fields)
-    }
 }
 
-fn section(key: &str, title: impl Into<String>, text: String, json: J) -> Section {
+fn section(title: impl Into<String>, text: String) -> Section {
     Section {
-        key: key.into(),
         title: title.into(),
         text,
-        json,
     }
 }
 
@@ -208,21 +182,6 @@ impl Tally {
         v.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)));
         v
     }
-
-    fn json(&self) -> J {
-        J::Arr(
-            self.sorted()
-                .into_iter()
-                .map(|(k, n, b)| {
-                    J::obj(vec![
-                        ("name", k.into()),
-                        ("cells", n.into()),
-                        ("bytes", b.into()),
-                    ])
-                })
-                .collect(),
-        )
-    }
 }
 
 // ---- Sections ---------------------------------------------------------------------------
@@ -273,20 +232,7 @@ pub fn overview(g: &Graph, collected: Option<u32>, prefix_words: Option<usize>) 
             kbu(len - base_end as u64)
         ));
     }
-    let json = J::obj(vec![
-        ("image_bytes", len.into()),
-        ("cells", g.cells.len().into()),
-        ("live_bytes", live.into()),
-        ("garbage_bytes", (len - live).into()),
-        ("collected_bytes", collected.into()),
-        ("old_end", old_end.into()),
-        ("old_cells", old_cells.into()),
-        ("old_bytes", old_bytes.into()),
-        ("base_end", base_end.into()),
-        ("own_bytes", (len - base_end as u64).into()),
-        ("prefix_words", prefix_words.into()),
-    ]);
-    section("summary", "summary", t, json)
+    section("summary", t)
 }
 
 pub fn kinds(g: &Graph) -> Section {
@@ -334,27 +280,7 @@ pub fn kinds(g: &Graph) -> Section {
         .map(|(k, n, b)| vec![k, n.to_string(), kbu(b)])
         .collect();
     t.push_str(&table(&["object class", "objects", "KB"], &crow));
-    let json = J::obj(vec![
-        (
-            "kinds",
-            J::Arr(
-                kinds
-                    .iter()
-                    .map(|(k, v)| {
-                        J::obj(vec![
-                            ("kind", k.layout().name.into()),
-                            ("cells", v[0].into()),
-                            ("bytes", v[1].into()),
-                            ("garbage_bytes", v[2].into()),
-                            ("old_bytes", v[3].into()),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-        ("classes", classes.json()),
-    ]);
-    section("kinds", "cells by kind and class", t, json)
+    section("cells by kind and class", t)
 }
 
 pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) -> Section {
@@ -422,14 +348,13 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
         kb(d.aligned_prefix as usize),
         pct(d.aligned_prefix as u64, len),
     ));
-    let first = d.first_misaligned.map(|r| {
+    if let Some(r) = d.first_misaligned {
         let (size, kind, path) = (rg.cell(r).size, rg.kind_name(r), rg.path(r));
         t.push_str(&format!(
             "  the first cell out of line is the reference's {kind} of {} KB at {path}: what follows sits elsewhere\n",
             kb(size as usize)
         ));
-        J::obj(vec![("kind", kind.into()), ("size", size.into()), ("path", path.into())])
-    });
+    }
     let moved_refs: u64 = d.moved_words.iter().map(|&w| w as u64 * 8).sum();
     let rows = vec![
         vec![
@@ -503,77 +428,7 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
             .collect();
         t.push_str(&table(&["kind", "cells", "KB"], &rrows));
     }
-    let status_json = |s: (u64, u64, u64)| {
-        J::obj(vec![
-            ("cells", s.0.into()),
-            ("bytes", s.1.into()),
-            ("differing_bytes", (s.2 * 8).into()),
-        ])
-    };
-    let json = J::obj(vec![
-        ("reference", name.into()),
-        ("reference_bytes", ref_len.into()),
-        ("same_words", d.same_words.into()),
-        ("words", (len / 8).into()),
-        ("aligned_prefix", d.aligned_prefix.into()),
-        ("first_misaligned", first.unwrap_or(J::Null)),
-        ("moved_reference_bytes", moved_refs.into()),
-        ("in_place", status_json(ip)),
-        ("moved", status_json(mv)),
-        ("changed", status_json(ch)),
-        ("new", status_json(nw)),
-        (
-            "gone",
-            J::obj(vec![
-                ("cells", d.removed.len().into()),
-                (
-                    "bytes",
-                    d.removed
-                        .iter()
-                        .map(|&r| rg.cell(r).size as u64)
-                        .sum::<u64>()
-                        .into(),
-                ),
-                ("by_kind", removed.json()),
-            ]),
-        ),
-        ("new_and_changed_by_kind", by_kind.json()),
-        (
-            "new_subtrees",
-            J::Arr(
-                subtrees
-                    .iter()
-                    .take(o.top)
-                    .map(|&i| {
-                        J::obj(vec![
-                            ("bytes", new_ret[i as usize].into()),
-                            ("cells", new_cells[i as usize].into()),
-                            ("kind", g.kind_name(i).into()),
-                            ("path", g.path(i).into()),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-        (
-            "most_changed",
-            J::Arr(
-                changed
-                    .iter()
-                    .take(o.top)
-                    .map(|&i| {
-                        J::obj(vec![
-                            ("differing_bytes", (d.changed_words[i as usize] * 8).into()),
-                            ("size", g.cell(i).size.into()),
-                            ("kind", g.kind_name(i).into()),
-                            ("path", g.path(i).into()),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-    ]);
-    section("diff", format!("diff against {name}"), t, json)
+    section(format!("diff against {name}"), t)
 }
 
 pub fn largest(g: &Graph, o: &Options, scope: &Scope) -> Section {
@@ -647,31 +502,7 @@ pub fn largest(g: &Graph, o: &Options, scope: &Scope) -> Section {
         })
         .collect();
     t.push_str(&table(&["retained KB", "own KB", "kind", "path"], &rows));
-    let item = |i: u32| {
-        J::obj(vec![
-            ("size", g.cell(i).size.into()),
-            ("retained", retained[i as usize].into()),
-            ("kind", g.kind_name(i).into()),
-            ("path", g.path(i).into()),
-        ])
-    };
-    let json = scope.json(
-        vec![
-            (
-                "largest",
-                J::Arr(by_size.iter().take(o.top).map(|&i| item(i)).collect()),
-            ),
-            (
-                "retained",
-                J::Arr(by_retained.iter().take(o.top).map(|&i| item(i)).collect()),
-            ),
-        ],
-        J::obj(vec![
-            ("cells", rest_cells.into()),
-            ("bytes", rest_bytes.into()),
-        ]),
-    );
-    section("largest", "largest cells and retained sizes", t, json)
+    section("largest cells and retained sizes", t)
 }
 
 pub fn strings(g: &Graph, o: &Options, scope: &Scope) -> Section {
@@ -781,63 +612,7 @@ pub fn strings(g: &Graph, o: &Options, scope: &Scope) -> Section {
         })
         .collect();
     t.push_str(&table(&["KB", "where"], &rows));
-    let full = |i: u32| -> J {
-        g.heap
-            .str_to_string(super::graph::str_at(g.cell(i).offset))
-            .chars()
-            .take(200)
-            .collect::<String>()
-            .into()
-    };
-    let json = scope.json(
-        vec![
-            ("flat", flat.into()),
-            ("two_byte", two.into()),
-            ("flat_bytes", flat_bytes.into()),
-            ("code_units", units.into()),
-            ("ropes", ropes.into()),
-            ("rope_bytes", rope_bytes.into()),
-            ("duplicated_contents", dups.len().into()),
-            ("duplicate_bytes", wasted.into()),
-            (
-                "duplicates",
-                J::Arr(
-                    dups.iter()
-                        .take(o.top)
-                        .map(|&(n, extra, size, i)| {
-                            J::obj(vec![
-                                ("copies", n.into()),
-                                ("extra_copies", extra.into()),
-                                ("size", size.into()),
-                                ("string", full(i)),
-                            ])
-                        })
-                        .collect(),
-                ),
-            ),
-            (
-                "largest",
-                J::Arr(
-                    flats
-                        .iter()
-                        .take(o.top)
-                        .map(|&i| {
-                            J::obj(vec![
-                                ("size", g.cell(i).size.into()),
-                                ("preview", full(i)),
-                                ("path", g.path(i).into()),
-                            ])
-                        })
-                        .collect(),
-                ),
-            ),
-        ],
-        J::obj(vec![
-            ("flat", rest.into()),
-            ("flat_bytes", rest_bytes.into()),
-        ]),
-    );
-    section("strings", "strings", t, json)
+    section("strings", t)
 }
 
 pub fn shapes(g: &Graph, o: &Options, scope: &Scope) -> Section {
@@ -918,49 +693,7 @@ pub fn shapes(g: &Graph, o: &Options, scope: &Scope) -> Section {
         .map(|&(s, n)| vec![n.to_string(), keys(s)])
         .collect();
     t.push_str(&table(&["objects", "keys"], &rows));
-    let json = scope.json(
-        vec![
-            ("shapes", shapes.into()),
-            ("shape_bytes", shape_bytes.into()),
-            ("shared_shapes", shared.into()),
-            ("objects_with_shape", shaped.into()),
-            ("objects_in_dictionary_mode", dict.into()),
-            ("objects_without_properties", bare.into()),
-            (
-                "common",
-                J::Arr(
-                    common
-                        .iter()
-                        .take(o.top)
-                        .map(|&(s, n)| {
-                            J::obj(vec![
-                                ("objects", n.into()),
-                                (
-                                    "keys",
-                                    J::Arr(
-                                        g.shape_keys(s)
-                                            .into_iter()
-                                            .map(|k| {
-                                                g.heap
-                                                    .atom_name(djs_core::heap::Atom::from_id(k))
-                                                    .into()
-                                            })
-                                            .collect(),
-                                    ),
-                                ),
-                            ])
-                        })
-                        .collect(),
-                ),
-            ),
-        ],
-        J::obj(vec![
-            ("shapes", rest_shapes.into()),
-            ("shape_bytes", rest_bytes.into()),
-            ("objects", rest_objects.into()),
-        ]),
-    );
-    section("shapes", "shapes", t, json)
+    section("shapes", t)
 }
 
 pub fn functions(g: &Graph, o: &Options, scope: &Scope) -> Section {
@@ -1097,39 +830,7 @@ pub fn functions(g: &Graph, o: &Options, scope: &Scope) -> Section {
             .collect();
         t.push_str(&table(&["intrinsic", "closures"], &brows));
     }
-    let json = scope.json(
-        vec![
-            ("templates", total[0].into()),
-            ("template_bytes", total[1].into()),
-            ("bytecode_bytes", total[2].into()),
-            ("closures", total[3].into()),
-            ("boxes", boxes.into()),
-            ("host_functions", hosts.into()),
-            (
-                "scripts",
-                J::Arr(
-                    rows.iter()
-                        .map(|(s, v)| {
-                            J::obj(vec![
-                                ("script", s.clone().into()),
-                                ("templates", v[0].into()),
-                                ("bytes", v[1].into()),
-                                ("bytecode_bytes", v[2].into()),
-                                ("closures", v[3].into()),
-                            ])
-                        })
-                        .collect(),
-                ),
-            ),
-            ("builtin_closures", builtins.json()),
-        ],
-        J::obj(vec![
-            ("templates", r[0].into()),
-            ("template_bytes", r[1].into()),
-            ("closures", rest_closures.into()),
-        ]),
-    );
-    section("functions", "functions and bytecode", t, json)
+    section("functions and bytecode", t)
 }
 
 /// What a waiting VM holds: its run state, queued work, pending host calls, promises and
@@ -1139,10 +840,8 @@ pub fn session(g: &Graph, o: &Options) -> Section {
     let interp: Ref = a.get(0, Roots::INTERP);
     let Some(it) = interp.get() else {
         return section(
-            "session",
             "session: what the VM holds while it waits",
             "  no interpreter state\n".into(),
-            J::Null,
         );
     };
     let state = RunState::from_u32(a.get(it, Interp::STATE));
@@ -1295,73 +994,7 @@ pub fn session(g: &Graph, o: &Options) -> Section {
             }
         }
     }
-    let json = J::obj(vec![
-        ("run_state", format!("{state:?}").into()),
-        ("stack_slots", sp.into()),
-        ("handles", handles.into()),
-        ("jobs", jobs.into()),
-        ("inbox", inbox.into()),
-        ("unhandled_rejections", rejections.into()),
-        ("weak_entries", weak.into()),
-        (
-            "host_calls",
-            J::Arr(
-                calls
-                    .iter()
-                    .map(|&(id, f, asy, n)| {
-                        J::obj(vec![
-                            ("id", id.into()),
-                            ("fn", f.into()),
-                            ("async", asy.into()),
-                            ("arguments", n.into()),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-        (
-            "promises",
-            J::obj(vec![
-                ("pending", promises[0].into()),
-                ("fulfilled", promises[1].into()),
-                ("rejected", promises[2].into()),
-                ("reactions", reactions.into()),
-            ]),
-        ),
-        (
-            "activations",
-            J::Arr(
-                activations
-                    .iter()
-                    .map(|(k, s, n, at, slots, p, locals)| {
-                        J::obj(vec![
-                            ("kind", (*k).into()),
-                            ("state", (*s).into()),
-                            ("function", n.clone().into()),
-                            ("at", at.clone().into()),
-                            ("frame_slots", (*slots).into()),
-                            ("path", p.clone().into()),
-                            (
-                                "locals",
-                                J::Obj(
-                                    locals
-                                        .iter()
-                                        .map(|(k, v)| (k.clone(), v.clone().into()))
-                                        .collect(),
-                                ),
-                            ),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-    ]);
-    section(
-        "session",
-        "session: what the VM holds while it waits",
-        t,
-        json,
-    )
+    section("session: what the VM holds while it waits", t)
 }
 
 /// The words of the builtin prefix this image changes against its base (D2066): which
@@ -1412,22 +1045,5 @@ pub fn prefix(g: &Graph, diff: &[(u32, u64)], o: &Options) -> Section {
             text.push_str(&format!("  ... and {} more cells\n", rows.len() - o.top));
         }
     }
-    let json = J::obj(vec![
-        ("words", (diff.len() as u64).into()),
-        (
-            "cells",
-            J::Arr(
-                rows.iter()
-                    .map(|(k, p, n)| {
-                        J::obj(vec![
-                            ("kind", k.as_str().into()),
-                            ("path", p.as_str().into()),
-                            ("words", (*n as u64).into()),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-    ]);
-    section("prefix", "the builtin prefix against the base", text, json)
+    section("the builtin prefix against the base", text)
 }

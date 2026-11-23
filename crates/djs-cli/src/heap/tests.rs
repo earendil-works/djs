@@ -5,7 +5,6 @@ use djs_core::compiler::CompileOptions;
 use djs_core::value::Value;
 use djs_core::vm::{Status, Vm, VmOptions};
 
-use super::json::J;
 use super::{Options, Section, analyze};
 
 fn vm() -> Vm {
@@ -46,33 +45,85 @@ fn report(vm: &mut Vm) -> Vec<Section> {
     .unwrap()
 }
 
-fn json<'a>(sections: &'a [Section], key: &str) -> &'a J {
-    &sections.iter().find(|s| s.key == key).unwrap().json
+/// The text of the section whose title starts with `title`.
+fn text<'a>(sections: &'a [Section], title: &str) -> &'a str {
+    &sections
+        .iter()
+        .find(|s| s.title.starts_with(title))
+        .unwrap_or_else(|| panic!("no section {title}"))
+        .text
+}
+
+/// The first line of `text` that contains `what`.
+fn line<'a>(text: &'a str, what: &str) -> &'a str {
+    text.lines()
+        .find(|l| l.contains(what))
+        .unwrap_or_else(|| panic!("no line with {what:?} in\n{text}"))
+}
+
+/// The number right after `before` in `line` (`1.5` in `"image: 1.5 KB"` for `"image: "`).
+fn num_after(line: &str, before: &str) -> f64 {
+    let rest = &line[line
+        .find(before)
+        .unwrap_or_else(|| panic!("{before:?} in {line:?}"))
+        + before.len()..];
+    let n: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    n.parse()
+        .unwrap_or_else(|_| panic!("a number after {before:?} in {line:?}"))
+}
+
+/// The whitespace-separated columns of a table row.
+fn cols(line: &str) -> Vec<&str> {
+    line.split_whitespace().collect()
+}
+
+/// The rows of a table, up to the next blank line: `heading` is its header line, or a
+/// caption (ending in `:`) above the header.
+fn rows<'a>(text: &'a str, heading: &str) -> Vec<&'a str> {
+    let mut lines = text.lines().skip_while(|l| !l.contains(heading));
+    let caption = lines.next().is_some_and(|l| l.ends_with(':'));
+    lines
+        .skip(usize::from(caption))
+        .take_while(|l| !l.trim().is_empty())
+        .collect()
+}
+
+/// The leading number of the first line that contains `what` and starts with a number
+/// (`8` of `"  8 flat strings (0 two-byte), ..."`).
+fn count(text: &str, what: &str) -> f64 {
+    let l = text
+        .lines()
+        .find(|l| l.contains(what) && l.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+        .unwrap_or_else(|| panic!("no count line with {what:?} in\n{text}"));
+    num_after(l, "  ")
 }
 
 #[test]
 fn a_sandbox_is_the_base_plus_its_console() {
     let mut vm = sandbox();
     let r = report(&mut vm);
-    let s = json(&r, "summary");
-    assert_eq!(s.at(&["garbage_bytes"]).num(), 0.0);
-    assert_eq!(
-        s.at(&["image_bytes"]).num(),
-        s.at(&["collected_bytes"]).num()
-    );
-    let d = json(&r, "diff");
-    let new = d.at(&["new", "bytes"]).num();
-    assert!(new > 0.0 && new < 4096.0, "{new} new bytes");
-    assert_eq!(
-        d.at(&["new_subtrees", "0", "path"]).str(),
-        "globalThis.console"
-    );
+    let s = text(&r, "summary");
+    let image = num_after(line(s, "image: "), "image: ");
+    let live = line(s, "live: ");
+    assert_eq!(num_after(live, "garbage: "), 0.0);
+    assert_eq!(num_after(live, "a collection leaves "), image);
+    let d = text(&r, "diff against");
+    let new = cols(line(d, "  new  "));
+    let new_kb: f64 = new[2].parse().unwrap();
+    assert!(new_kb > 0.0 && new_kb < 4.0, "{new_kb} KB new");
+    let subtrees = rows(d, "largest new subtrees");
+    assert_eq!(*cols(subtrees[0]).last().unwrap(), "globalThis.console");
     // Most of the image is the base's own cells.
-    let base_own = d.at(&["in_place", "bytes"]).num() + d.at(&["moved", "bytes"]).num();
-    assert!(base_own > 0.8 * s.at(&["image_bytes"]).num(), "{base_own}");
-    assert_eq!(json(&r, "functions").at(&["host_functions"]).num(), 4.0);
+    let kb_of = |what: &str| -> f64 { cols(line(d, what))[3].parse().unwrap() };
+    let base_own = kb_of("unchanged, in place") + kb_of("unchanged, moved");
+    assert!(base_own > 0.8 * image, "{base_own}");
+    assert!(text(&r, "functions").contains("; 4 host functions"));
     // Nothing of the builtin prefix changed.
-    assert_eq!(json(&r, "prefix").at(&["words"]).num(), 0.0);
+    assert!(text(&r, "the builtin prefix").contains("no builtin was changed"));
+    assert!(s.contains("; 0 words of the builtin prefix changed"));
 }
 
 #[test]
@@ -85,29 +136,23 @@ fn data_shows_up_with_its_path_strings_and_shape() {
     );
     assert!(matches!(st, Status::Done(_)), "{st:?}");
     let r = report(&mut vm);
-    let d = json(&r, "diff");
-    assert_eq!(
-        d.at(&["new_subtrees", "0", "path"]).str(),
-        "globalThis.cache"
+    let subtrees = rows(text(&r, "diff against"), "largest new subtrees");
+    let first = cols(subtrees[0]);
+    assert_eq!(*first.last().unwrap(), "globalThis.cache");
+    assert!(first[1].parse::<u32>().unwrap() >= 600, "{first:?}");
+    let common = rows(text(&r, "shapes"), "objects  keys");
+    assert_eq!(cols(common[0])[1..], ["id,", "body"]);
+    let strings = text(&r, "strings");
+    let wasted = line(strings, "contents stored more than once");
+    assert!(num_after(wasted, "once, ") > 0.0, "{wasted}");
+    let dups = rows(strings, "most wasteful duplicates");
+    assert!(
+        dups[0].contains(&format!("\"{}…\"", "abc".repeat(20))),
+        "{}",
+        dups[0]
     );
-    assert!(d.at(&["new_subtrees", "0", "cells"]).num() >= 600.0);
-    assert_eq!(
-        json(&r, "shapes")
-            .at(&["common", "0", "keys"])
-            .at(&["0"])
-            .str(),
-        "id"
-    );
-    let strings = json(&r, "strings");
-    assert!(strings.at(&["duplicate_bytes"]).num() > 0.0);
-    assert_eq!(
-        strings.at(&["duplicates", "0", "string"]).str(),
-        "abc".repeat(300).chars().take(200).collect::<String>()
-    );
-    assert_eq!(
-        strings.at(&["largest", "0", "path"]).str(),
-        "globalThis.big"
-    );
+    let largest = rows(strings, "largest strings");
+    assert!(largest[0].ends_with(" globalThis.big"), "{}", largest[0]);
 }
 
 #[test]
@@ -122,16 +167,13 @@ fn a_waiting_vm_shows_its_suspended_function_and_pending_call() {
     );
     assert_eq!(st, Status::Idle);
     let r = report(&mut vm);
-    let s = json(&r, "session");
-    assert_eq!(s.at(&["host_calls", "0", "async"]), &J::Bool(true));
-    assert_eq!(s.at(&["activations", "0", "kind"]).str(), "async function");
-    assert_eq!(s.at(&["activations", "0", "state"]).str(), "at an await");
-    assert_eq!(s.at(&["activations", "0", "at"]).str(), "case.js:2:11");
-    assert!(s.at(&["promises", "pending"]).num() >= 1.0);
-    assert_eq!(
-        s.at(&["activations", "0", "locals", "notes"]).str(),
-        "Array"
-    );
+    let s = text(&r, "session");
+    assert_eq!(cols(rows(s, "host call  function id")[0])[2], "async");
+    let act = rows(s, "suspended activations:")[0];
+    assert!(act.starts_with("  async function  at an await"), "{act}");
+    assert!(act.contains(" case.js:2:11 "), "{act}");
+    assert!(num_after(line(s, "promises: "), "promises: ") >= 1.0);
+    assert!(s.contains("holds: notes = Array"), "{s}");
 }
 
 #[test]
@@ -143,8 +185,8 @@ fn the_prefix_section_names_the_changed_builtins() {
     );
     vm.collect().unwrap();
     let r = report(&mut vm);
-    let p = json(&r, "prefix");
-    assert!(p.at(&["words"]).num() > 0.0);
+    let p = text(&r, "the builtin prefix");
+    assert!(count(p, " of the builtin prefix ") > 0.0, "{p}");
     let text = super::to_text(&r);
     for name in ["%Array.prototype%", "%Math%", "%JSON%"] {
         assert!(
@@ -169,31 +211,29 @@ fn sections_show_the_session_part_against_a_reference() {
     let base = Some(("the base image", djs_prelude::BASE));
     let own = analyze(vm.bytes(), base, &Options::default()).unwrap();
     let all = analyze(vm.bytes(), None, &Options::default()).unwrap();
-    let (s, a) = (json(&own, "strings"), json(&all, "strings"));
-    assert_eq!(s.at(&["scope"]).str(), "session");
-    assert_eq!(a.at(&["scope"]).str(), "all");
+    let (s, a) = (text(&own, "strings"), text(&all, "strings"));
+    assert!(s.contains("the session's own part"));
+    assert!(!a.contains("the session's own part"));
     let (n, rest, total) = (
-        s.at(&["flat"]).num(),
-        s.at(&["reference_part", "flat"]).num(),
-        a.at(&["flat"]).num(),
+        count(s, " flat strings ("),
+        num_after(line(s, "unchanged from the reference: "), "reference: "),
+        count(a, " flat strings ("),
     );
     assert!(n > 0.0 && n < 40.0, "{n} session strings");
     assert_eq!(n + rest, total);
     assert!(
-        json(&own, "strings")
-            .at(&["largest"])
-            .arr()
+        rows(s, "largest strings")
             .iter()
-            .any(|x| x.at(&["preview"]).str() == "only here")
+            .any(|l| l.contains("\"only here\""))
     );
     // The base's templates are the reference's part; the session has none of its own
     // closures but the body's.
-    let f = json(&own, "functions");
-    assert!(f.at(&["templates"]).num() < 5.0);
-    assert!(f.at(&["reference_part", "templates"]).num() > 500.0);
-    assert!(json(&all, "functions").at(&["templates"]).num() > 500.0);
-    let l = json(&own, "largest");
-    assert!(l.at(&["largest", "0", "size"]).num() < 8192.0);
+    let f = text(&own, "functions");
+    assert!(count(f, " templates, ") < 5.0, "{f}");
+    assert!(num_after(line(f, "unchanged from the reference: "), "reference: ") > 500.0);
+    assert!(count(text(&all, "functions"), " templates, ") > 500.0);
+    let l = rows(text(&own, "largest cells"), "largest cells:");
+    assert!(cols(l[0])[0].parse::<f64>().unwrap() < 8.0, "{}", l[0]);
 }
 
 /// D2431, D2432: a session's atoms go to the tail's own entries; one that adds more than
@@ -207,14 +247,12 @@ fn a_regrown_atom_table_differs_only_where_it_changed() {
     );
     assert!(matches!(st, Status::Done(_)), "{st:?}");
     let r = report(&mut vm);
-    let changed = json(&r, "diff").at(&["most_changed"]).arr();
+    let changed = rows(text(&r, "diff against"), "most changed cells");
     let entries = changed
         .iter()
-        .find(|c| c.at(&["path"]).str() == "<atoms><entries>")
+        .map(|l| cols(l))
+        .find(|c| c.last() == Some(&"<atoms><entries>"))
         .expect("the session's atom entries changed");
-    let (differing, size) = (
-        entries.at(&["differing_bytes"]).num(),
-        entries.at(&["size"]).num(),
-    );
+    let (differing, size): (u32, u32) = (entries[0].parse().unwrap(), entries[1].parse().unwrap());
     assert!(differing < size, "{differing} of {size} bytes");
 }

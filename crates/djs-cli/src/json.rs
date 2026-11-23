@@ -1,5 +1,4 @@
-//! A small JSON value, parser and writer (djs-cli has no serde): the heap report's structured
-//! sections and the tools' answers.
+//! A small JSON value, parser and writer (djs-cli has no serde): the tools' answers.
 
 use std::fmt::Write;
 
@@ -14,15 +13,6 @@ pub enum J {
 }
 
 impl J {
-    pub fn obj(fields: Vec<(&str, J)>) -> J {
-        J::Obj(
-            fields
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
-        )
-    }
-
     pub fn render(&self) -> String {
         let mut out = String::new();
         self.write(&mut out, 0);
@@ -88,90 +78,4 @@ fn quote(out: &mut String, s: &str) {
         }
     }
     out.push('"');
-}
-
-impl From<&str> for J {
-    fn from(s: &str) -> J {
-        J::Str(s.to_string())
-    }
-}
-impl From<String> for J {
-    fn from(s: String) -> J {
-        J::Str(s)
-    }
-}
-impl From<u64> for J {
-    fn from(n: u64) -> J {
-        J::Num(n as f64)
-    }
-}
-impl From<u32> for J {
-    fn from(n: u32) -> J {
-        J::Num(n as f64)
-    }
-}
-impl From<usize> for J {
-    fn from(n: usize) -> J {
-        J::Num(n as f64)
-    }
-}
-impl From<f64> for J {
-    fn from(n: f64) -> J {
-        J::Num(n)
-    }
-}
-impl From<bool> for J {
-    fn from(b: bool) -> J {
-        J::Bool(b)
-    }
-}
-impl<T: Into<J>> From<Option<T>> for J {
-    fn from(o: Option<T>) -> J {
-        o.map_or(J::Null, Into::into)
-    }
-}
-
-#[cfg(test)]
-impl J {
-    /// The value at a path of object keys and array indexes (tests).
-    pub fn at(&self, path: &[&str]) -> &J {
-        let mut cur = self;
-        for p in path {
-            cur = match cur {
-                J::Obj(fields) => fields
-                    .iter()
-                    .find(|(k, _)| k == p)
-                    .map(|(_, v)| v)
-                    .unwrap_or(&J::Null),
-                J::Arr(items) => p
-                    .parse::<usize>()
-                    .ok()
-                    .and_then(|i| items.get(i))
-                    .unwrap_or(&J::Null),
-                _ => &J::Null,
-            };
-        }
-        cur
-    }
-
-    pub fn num(&self) -> f64 {
-        match self {
-            J::Num(n) => *n,
-            _ => f64::NAN,
-        }
-    }
-
-    pub fn str(&self) -> &str {
-        match self {
-            J::Str(s) => s,
-            _ => "",
-        }
-    }
-
-    pub fn arr(&self) -> &[J] {
-        match self {
-            J::Arr(a) => a,
-            _ => &[],
-        }
-    }
 }

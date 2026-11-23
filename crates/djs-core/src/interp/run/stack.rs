@@ -142,7 +142,7 @@ impl Exec<'_> {
                 let kind = func_flags::kind(u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)));
                 // A module body has no name (`<anonymous>`, as qjs prints it); a Script's
                 // top level and a codemode body are `<eval>`.
-                let module = crate::MODULES
+                let module = crate::EMBED
                     && kind == func_flags::KIND_SCRIPT
                     && script
                         .get()

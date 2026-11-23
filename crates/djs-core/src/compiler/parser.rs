@@ -408,7 +408,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             test_swap_call: false,
         };
         p.f.src_end = src.len() as u32;
-        if crate::MODULES && kind == FuncKind::Module {
+        if crate::EMBED && kind == FuncKind::Module {
             p.module = super::module::ModuleSlot::new(super::module::ModuleBuild::new(p.heap)?);
         }
         if kind == FuncKind::AsyncBody {
@@ -518,7 +518,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         // (an async function's) and a module (strip-types).
         let using = self.begin_using_list(
             self.f.kind == FuncKind::AsyncBody
-                || (crate::MODULES && self.f.kind == FuncKind::Module)
+                || (crate::EMBED && self.f.kind == FuncKind::Module)
                 || self.strip,
         );
         if self.f.kind == FuncKind::AsyncBody && !self.strip {
@@ -1410,7 +1410,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         if self.f.is_async {
             return true;
         }
-        if crate::MODULES && self.f.kind == FuncKind::Module {
+        if crate::EMBED && self.f.kind == FuncKind::Module {
             self.module_await.set(true);
         }
         false
@@ -1423,7 +1423,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         // Module code reserves `await` everywhere (ECMA-262 13.1.1).
         if self.f.is_async
             || self.f.kind == FuncKind::StaticBlock
-            || (crate::MODULES && self.module.is_some())
+            || (crate::EMBED && self.module.is_some())
         {
             return true;
         }

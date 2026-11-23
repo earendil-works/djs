@@ -413,7 +413,7 @@ fn well_formed(units: &[u16]) -> bool {
 impl Parser<'_, '_> {
     /// In the top-level function of module code (not in a nested function).
     pub(super) fn at_module_top(&self) -> bool {
-        crate::MODULES && self.module.is_some() && self.stack.is_empty()
+        crate::EMBED && self.module.is_some() && self.stack.is_empty()
     }
 
     fn mb(&mut self) -> &mut ModuleBuild {

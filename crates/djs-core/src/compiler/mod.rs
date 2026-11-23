@@ -442,7 +442,7 @@ pub fn compile(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
-    if crate::MODULES && opts.goal == Goal::Module {
+    if crate::EMBED && opts.goal == Goal::Module {
         return Err(not_a_module_entry(src));
     }
     let result = parse(heap, src, opts, |p| p.compile());
@@ -461,7 +461,7 @@ pub fn compile_module(
         goal: Goal::Module,
         ..*opts
     };
-    if !crate::MODULES {
+    if !crate::EMBED {
         return Err(error_at(
             src,
             PErr::syntax(0, Cow::Borrowed("modules are not available in this build")),
@@ -496,7 +496,7 @@ pub fn compile_lazy_unit(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
-    if crate::MODULES && opts.goal == Goal::Module {
+    if crate::EMBED && opts.goal == Goal::Module {
         return Err(not_a_module_entry(src));
     }
     let result = parse(heap, src, opts, |mut p| {

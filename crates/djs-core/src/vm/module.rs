@@ -100,7 +100,7 @@ impl Vm {
         ty: Option<&str>,
         loader: &mut dyn ModuleLoader,
     ) -> Result<String, Value> {
-        if !crate::MODULES {
+        if !crate::EMBED {
             return Err(self.error_value(
                 ErrorKind::SyntaxError,
                 "modules are not available in this build",
@@ -260,7 +260,7 @@ impl Vm {
         key: &str,
         exports: &[(&str, Value)],
     ) -> Result<(), Value> {
-        if !crate::MODULES {
+        if !crate::EMBED {
             return Err(self.error_value(
                 ErrorKind::SyntaxError,
                 "modules are not available in this build",
@@ -309,7 +309,7 @@ impl Vm {
     /// and fulfills the promise with its namespace. Off (the default), `import()` rejects
     /// as in a build without modules. Kept in the heap: images carry it.
     pub fn set_dynamic_import(&mut self, on: bool) -> Result<(), VmError> {
-        if !crate::MODULES {
+        if !crate::EMBED {
             return Ok(());
         }
         let f = if on {

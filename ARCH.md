@@ -113,7 +113,7 @@ djs/
     djs-docs/       the guide's generator and checker (docs/guide, D2100).
     djs-embed/      the native embedding crate for Rust hosts (D3170, D3184): snapshots,
                     instances, typed host functions, plain data in and out, budgets, ES
-                    modules; its own semver, no djs-core type in its API.
+                    modules; no djs-core type in its API.
     djs-libm/       libm 0.2.16's functions djs-core uses, copied (D3174, D3215).
   builtins/         builtin sources in the strict TS subset (*.ts), intrinsics.d.ts,
                     tsconfig.json (so tsc and editors type-check them); gen/ holds the

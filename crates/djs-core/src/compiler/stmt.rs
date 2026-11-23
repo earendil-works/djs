@@ -77,7 +77,7 @@ impl Parser<'_, '_> {
                 return self.strip_module_item();
             }
             TokenKind::Import | TokenKind::Export
-                if crate::MODULES
+                if crate::EMBED
                     && self.at_module_top()
                     && self.scope == super::func::BODY_SCOPE
                     && self.strip_at_module_item() =>
@@ -811,7 +811,7 @@ impl Parser<'_, '_> {
     fn parse_return(&mut self) -> PResult<()> {
         let pos = self.tok.start;
         if matches!(self.f.kind, FuncKind::Script | FuncKind::Eval)
-            || (crate::MODULES && self.f.kind == FuncKind::Module)
+            || (crate::EMBED && self.f.kind == FuncKind::Module)
             || self.f.ns.is_some()
         {
             return syntax(pos, "return not in a function");

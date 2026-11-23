@@ -13,13 +13,11 @@
 extern crate alloc;
 
 /// Whether this build has what Rust hosts get beyond the wasm modules (the `embed` feature,
-/// D3175, D3180). A constant rather than `#[cfg]` where code is cut, so that every build
-/// type-checks the same code and the optimizer drops what this one can't reach.
+/// D3175, D3180), ES modules among them (D3171, D3193: without `embed` the module goal is a
+/// SyntaxError and the module API fails). A constant rather than `#[cfg]` where code is
+/// cut, so that every build type-checks the same code and the optimizer drops what this
+/// one can't reach.
 pub const EMBED: bool = cfg!(feature = "embed");
-
-/// Whether this build has ES modules (D3171), which come with `embed` (D3175): without them
-/// the module goal is a SyntaxError and the module API fails. Names what the gated code is.
-pub const MODULES: bool = EMBED;
 
 /// Whether this build has the Unicode tables (`\p{..}` in regular expressions and full
 /// normalization: the `unicode` feature, D2411).

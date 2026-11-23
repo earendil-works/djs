@@ -100,13 +100,13 @@ pub(super) enum VarKind {
 
 impl VarKind {
     pub fn is_lexical(self) -> bool {
-        matches!(self, VarKind::Let | VarKind::Const) || (crate::MODULES && self == VarKind::Import)
+        matches!(self, VarKind::Let | VarKind::Const) || (crate::EMBED && self == VarKind::Import)
     }
 
     /// Assignment throws a TypeError.
     pub fn is_immutable(self) -> bool {
         matches!(self, VarKind::Const | VarKind::FuncName)
-            || (crate::MODULES && self == VarKind::Import)
+            || (crate::EMBED && self == VarKind::Import)
     }
 
     /// Set up by the prologue from `special_object` (docs/compiler.md 5.7); no storage
@@ -128,7 +128,7 @@ impl Var {
     /// A module's top-level binding: its index in the module environment.
     #[inline(always)]
     pub fn env(&self) -> Option<u16> {
-        (crate::MODULES && self.kind != VarKind::Param && self.param != 0).then(|| self.param - 1)
+        (crate::EMBED && self.kind != VarKind::Param && self.param != 0).then(|| self.param - 1)
     }
 }
 
@@ -225,7 +225,7 @@ impl FuncKind {
         matches!(
             self,
             FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval
-        ) || (crate::MODULES && self == FuncKind::Module)
+        ) || (crate::EMBED && self == FuncKind::Module)
     }
 }
 
@@ -526,7 +526,7 @@ impl FuncState {
     pub fn add_var(&mut self, name: Atom, kind: VarKind, scope: ScopeId) -> VarId {
         let id = self.vars.len() as VarId;
         let immediate = !(matches!(kind, VarKind::Let | VarKind::Const | VarKind::Param)
-            || (crate::MODULES && kind == VarKind::Import));
+            || (crate::EMBED && kind == VarKind::Import));
         self.vars.push_out(Var {
             name,
             kind,

@@ -1890,7 +1890,7 @@ impl Exec<'_> {
                     Value::object(r)
                 }
                 // (Without modules, the intrinsic falls to the unknown ones.)
-                MODULE_NAMESPACE if crate::MODULES => {
+                MODULE_NAMESPACE if crate::EMBED => {
                     let op = a0.as_int().unwrap_or(-1);
                     crate::interp::module::namespace_op(self.heap, op, a1, a2, a3)?
                 }

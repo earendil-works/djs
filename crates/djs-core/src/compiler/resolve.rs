@@ -1088,7 +1088,7 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
         Storage::Global => out.put_global(atom, 0),
         Storage::None => out.drop(),
         Storage::Builtin { idx, len } => out.put_builtin(idx, len),
-        Storage::Env(c) if crate::MODULES => out.put_cap(c),
+        Storage::Env(c) if crate::EMBED => out.put_cap(c),
         Storage::Env(_) => {}
     }
 }
@@ -1460,7 +1460,7 @@ fn emit_function(
                 // Hoisted function declarations (docs/compiler.md 5.5); a module's
                 // top-level ones exist from linking on.
                 for &(v, child) in &scope.funcs {
-                    if crate::MODULES && matches!(storage[v as usize], Storage::Env(_)) {
+                    if crate::EMBED && matches!(storage[v as usize], Storage::Env(_)) {
                         continue;
                     }
                     out.fclosure(child);
@@ -1766,7 +1766,7 @@ fn emit_name(
             Storage::Box(s) => At::Box(s),
             Storage::Arg(a) => At::Arg(a),
             Storage::Builtin { idx, .. } => At::Builtin(idx),
-            Storage::Env(c) if crate::MODULES => At::Cap(c),
+            Storage::Env(c) if crate::EMBED => At::Cap(c),
             Storage::Global | Storage::None | Storage::Env(_) => At::Global,
         },
         Target::Capture(c) => At::Cap(c),

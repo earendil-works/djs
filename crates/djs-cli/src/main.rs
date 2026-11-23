@@ -1,6 +1,7 @@
 mod disasm;
 mod dumps;
 mod heap;
+mod json;
 mod repl;
 mod run;
 mod strip;

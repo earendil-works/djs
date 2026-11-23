@@ -248,6 +248,15 @@ scripts/registry.py and the gate's `registry` leg are gone; registry.tsv merges 
 list and the always-run list; guide builtins.md ("Builtins by name: the builtin registry")
 and testing.md.
 
+### 2026-11-23: J8, J10
+J8 (D3645): crates/djs-embed/CHANGES.md deleted, djs-embed takes the workspace version (no
+0.x semver promise); ARCH.md's "its own semver" goes. J10a: the heap report builds text
+only: `Section` lost `key` and `json`, every section's J value and the helpers only it used
+(`Tally::json`, `Scope::json`) went; heap/tests.rs checks the report's text (small table
+and line helpers). heap/json.rs moved to src/json.rs (the tools' answers use it) without
+`J::obj`, the `From` impls and the test accessors. J10b: `crate::MODULES` -> `crate::EMBED`
+(27 sites); lib.rs's EMBED doc says it carries ES modules.
+
 ## Follow-ups
 
 ## Result
