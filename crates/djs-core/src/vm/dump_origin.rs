@@ -438,7 +438,7 @@ impl Dumper<'_> {
                 .filter(|x| matches!(x.holds, Holds::Binding) && base(x) == name)
                 .cloned()
                 .collect();
-            crate::sort::sort_by(&mut v, |p, q| scope_of(p) < scope_of(q));
+            crate::sort::sort_cold(&mut v, |p, q| scope_of(p) < scope_of(q));
             v
         };
         let fnamed = fsite.named_slots();

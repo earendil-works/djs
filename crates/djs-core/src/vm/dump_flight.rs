@@ -1999,7 +1999,7 @@ impl Dumper<'_> {
         let h = self.h;
         let before = self.fns_read.get();
         let mut elements = self.fl.combos[c].elements.clone();
-        crate::sort::sort_by(&mut elements, |a, b| a.0 < b.0);
+        crate::sort::sort_cold(&mut elements, |a, b| a.0 < b.0);
         let values = self.fl.combos[c].values.as_object();
         let len = values.map_or(0, |v| h.array_length(v));
         let kind = self.fl.combos[c].kind;
@@ -2755,7 +2755,7 @@ impl LazyIndex {
                 }
             }
         }
-        crate::sort::sort_by(&mut parents, |a, b| a.0 < b.0);
+        crate::sort::sort_cold(&mut parents, |a, b| a.0 < b.0);
         let mut index = LazyIndex { lazy, parents };
         // A compiled template's parent is its lazy template's.
         let more: Vec<(u32, u32)> = compiled
@@ -2764,7 +2764,7 @@ impl LazyIndex {
             .collect();
         if !more.is_empty() {
             index.parents.extend(more);
-            crate::sort::sort_by(&mut index.parents, |a, b| a.0 < b.0);
+            crate::sort::sort_cold(&mut index.parents, |a, b| a.0 < b.0);
         }
         index
     }

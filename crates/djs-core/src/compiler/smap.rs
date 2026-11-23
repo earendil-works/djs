@@ -447,7 +447,7 @@ mod maps {
         // ties, as for the three sites of an async generator's `yield`).
         // (Sites in dead code are not emitted: they get no number.)
         let mut order: Vec<usize> = (0..rec.sites.len()).filter(|&k| at[k].is_some()).collect();
-        crate::sort::sort_by(&mut order, |&a, &b| rec.sites[a].pos < rec.sites[b].pos);
+        crate::sort::sort_cold(&mut order, |&a, &b| rec.sites[a].pos < rec.sites[b].pos);
         let mut number = alloc::vec![0u32; rec.sites.len()];
         let mut counts: Vec<(&'static str, u32)> = Vec::new();
         for &k in &order {

@@ -832,7 +832,7 @@ struct W<'x> {
     kkeys: Vec<String>,
     /// The dump's top-level names (roots, functions, classes), and as a set.
     globals: Vec<String>,
-    global_set: alloc::collections::BTreeSet<String>,
+    global_set: super::StrSet,
     /// The globals' first bytes (a bit each) and longest length: a filter before the set.
     global_first: [u64; 4],
     global_max: usize,
@@ -841,7 +841,7 @@ struct W<'x> {
     global_hashes: inline::Counts,
     /// Factories by name, and the item of each activation (0215: linear searches made
     /// writing a data-heavy dump quadratic).
-    fac_by_name: alloc::collections::BTreeMap<String, usize>,
+    fac_by_name: super::StrMap<usize>,
     act_items: Vec<usize>,
     write_k: &'x dyn Fn(&Act, &mut dyn Ctx) -> Result<KText, String>,
     /// Single-use values written in place (D3001).
@@ -851,7 +851,7 @@ struct W<'x> {
     kline: Option<usize>,
     k_effects: bool,
     /// Slot values of continuations with values written in place, by activation and slot.
-    vcache: alloc::collections::BTreeMap<(usize, String), String>,
+    vcache: Vec<super::StrMap<String>>,
     /// [`W::dep_items`]'s marks: the call that last listed each item.
     dep_mark: Vec<u32>,
     dep_stamp: u32,
@@ -860,7 +860,7 @@ struct W<'x> {
     /// Continuations of merged scopes written where they are called instead (D3003).
     taken_k: Vec<usize>,
     /// Per activation, the names its continuation may bind ([`W::k_scope`]).
-    kscopes: Vec<alloc::sync::Arc<alloc::collections::BTreeSet<String>>>,
+    kscopes: Vec<alloc::sync::Arc<super::StrSet>>,
 }
 
 type R<T> = Result<T, String>;
@@ -965,13 +965,16 @@ pub(super) fn write(
         global_first: [0; 4],
         global_max: 0,
         global_hashes: Default::default(),
-        fac_by_name: ir
-            .factories
-            .iter()
-            .enumerate()
-            .rev()
-            .map(|(i, f)| (f.name.clone(), i))
-            .collect(),
+        fac_by_name: {
+            // (The first of a name.)
+            let mut m = super::StrMap::default();
+            for (i, f) in ir.factories.iter().enumerate() {
+                if !m.contains_key(&f.name) {
+                    m.insert(&f.name, i);
+                }
+            }
+            m
+        },
         act_items: Vec::new(),
         // A continuation's key in its factory: `$K<act>`, unless a member has that name
         // already (a continuation of an earlier dump, named by its key there).
@@ -994,7 +997,7 @@ pub(super) fn write(
         inl: Default::default(),
         kline: None,
         k_effects: false,
-        vcache: Default::default(),
+        vcache: (0..ir.acts.len()).map(|_| Default::default()).collect(),
         dep_mark: Vec::new(),
         dep_stamp: 0,
         taken: Vec::new(),
@@ -1003,7 +1006,7 @@ pub(super) fn write(
             .acts
             .iter()
             .map(|act| {
-                let mut scope = alloc::collections::BTreeSet::new();
+                let mut scope = super::StrSet::default();
                 for nd in &act.syntax.nodes {
                     scope.extend(nd.decls.iter().map(|d| d.name.clone()));
                 }
@@ -1022,7 +1025,7 @@ pub(super) fn write(
         }
     }
     w.read_items(lines)?;
-    for n in &w.global_set {
+    for n in w.global_set.iter() {
         if let Some(&c) = n.as_bytes().first() {
             w.global_first[usize::from(c >> 6)] |= 1u64 << (c & 63);
             w.global_max = w.global_max.max(n.len());
@@ -1060,12 +1063,15 @@ impl W<'_> {
     // ------------------------------------------------------------ items
 
     fn read_items(&mut self, lines: &[String]) -> R<()> {
-        let mut recs: alloc::collections::BTreeMap<usize, Rec> = Default::default();
+        // (The first record of a line.)
+        let mut recs: Vec<Option<Rec>> = alloc::vec![None; lines.len()];
         for x in self.ir.lines.iter().rev() {
-            recs.insert(x.0, x.1);
+            if let Some(r) = recs.get_mut(x.0) {
+                *r = Some(x.1);
+            }
         }
         for (i, l) in lines.iter().enumerate() {
-            let rec = recs.get(&i).copied();
+            let rec = recs[i];
             let kind = match rec {
                 Some(Rec::Factory(f)) => IK::Factory(f),
                 Some(Rec::Act(a)) => IK::Act(a),
@@ -1247,7 +1253,7 @@ struct C<'w, 'x> {
 
 impl Ctx for C<'_, '_> {
     fn slot(&mut self, name: &str) -> Option<String> {
-        if !self.dry && !self.w.vcache.contains_key(&(self.a, String::from(name))) {
+        if !self.dry && !self.w.vcache[self.a].contains_key(name) {
             self.w.kept_temp(self.a, name);
         }
         self.w.slot_value(self.a, name, !self.dry)
@@ -1338,13 +1344,11 @@ impl Ctx for C<'_, '_> {
         if self.dry {
             return aw;
         }
-        if let Some(v) = self.w.vcache.get(&(self.a, String::from("<awaiting>"))) {
+        if let Some(v) = self.w.vcache[self.a].get("<awaiting>") {
             return v.clone();
         }
         if let Some(v) = self.w.acts[self.a].site_val.clone() {
-            self.w
-                .vcache
-                .insert((self.a, String::from("<awaiting>")), v.clone());
+            self.w.vcache[self.a].insert("<awaiting>", v.clone());
             return v;
         }
         // The site's operand is the first thing K's line evaluates where K is called on
@@ -1358,9 +1362,7 @@ impl Ctx for C<'_, '_> {
             && self.w.acts[a].go.iter().all(String::is_empty))
         .then_some(0);
         let v = self.w.inline_site(&aw, first, scope);
-        self.w
-            .vcache
-            .insert((a, String::from("<awaiting>")), v.clone());
+        self.w.vcache[a].insert("<awaiting>", v.clone());
         v
     }
 }
@@ -1706,11 +1708,11 @@ impl W<'_> {
                 }
                 // And no higher than a class statement whose local it reads (a subclass's
                 // base, `$c25` in `((C27) => class D28 extends C27 {…})($c25)`), 0215.
-                let by_name: alloc::collections::BTreeMap<&str, usize> = lines
-                    .iter()
-                    .enumerate()
-                    .map(|(b, x)| (x.0.as_str(), b))
-                    .collect();
+                // (The last of a name, as a map collected from them keeps.)
+                let mut by_name = super::StrMap::default();
+                for (b, x) in lines.iter().enumerate() {
+                    by_name.insert(&x.0, b);
+                }
                 let reads: Vec<Vec<usize>> = lines
                     .iter()
                     .enumerate()
@@ -1899,11 +1901,22 @@ impl Providers {
 }
 
 /// A dependency key: `$dump.name`, a key of a merged factory (`name.key`), a global.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq)]
 enum Key {
     Loc(String),
     Factory(String, String),
     Global(String),
+}
+
+impl Key {
+    /// The key as one string (for a [`super::StrSet`]).
+    fn text(&self) -> String {
+        match self {
+            Key::Loc(n) => cat!("L", n),
+            Key::Factory(f, k) => cat!("F", f, "\u{0}", k),
+            Key::Global(n) => cat!("G", n),
+        }
+    }
 }
 
 impl W<'_> {
@@ -2219,16 +2232,16 @@ impl W<'_> {
                     // in order, then globals.)
                     let rest = self.keys_of(&text);
                     let mut keys: Vec<Key> = Vec::new();
-                    let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
+                    let mut seen = super::StrSet::default();
                     for global in [false, true] {
                         for k in slot_keys.iter().flat_map(|x| x.1.iter()).chain(&rest) {
-                            if matches!(k, Key::Global(_)) == global && seen.insert(k.clone()) {
+                            if matches!(k, Key::Global(_)) == global && seen.insert(k.text()) {
                                 keys.push_out(k.clone());
                             }
                         }
                     }
                     for k in self.keys_in(&lazy, false) {
-                        if seen.insert(k.clone()) {
+                        if seen.insert(k.text()) {
                             keys.push_out(k);
                         }
                     }
@@ -3245,7 +3258,9 @@ impl W<'_> {
         // Class statements first, each with the members that name it.
         let mut done: Vec<(Sc, usize)> = Vec::new();
         let mut here = here;
-        here.sort_by_key(|p| !matches!(p, Put::Other(..)));
+        crate::sort::sort_cold(&mut here, |a, b| {
+            matches!(a, Put::Other(..)) && !matches!(b, Put::Other(..))
+        });
         for put in here {
             match put {
                 Put::Other(sc, i) => {

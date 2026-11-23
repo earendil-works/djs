@@ -24,8 +24,9 @@
 //!
 //! The output follows the order the graph is walked in (roots in order, keys in property
 //! order), so it is deterministic without sorting. Text is built with `crate::text`
-//! (D2339) and lookups go through one small hash index of cells and atoms: the dumper
-//! adds no ordered maps, sorts or `core::fmt` to the module.
+//! (D2339) and lookups go through one small hash index (`Index`; `StrSet`/`StrMap` for
+//! strings): the dumper adds no ordered maps, no `core` sorts (`crate::sort::sort_cold`)
+//! and no `core::fmt` to the module (0298: each instance of those is kilobytes).
 
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -40,23 +41,11 @@ use crate::heap::{Atom, Heap, ObjectClass, PropFlags, Property, Ref, atoms};
 use crate::interp::realm::{Intrinsic, intrinsic};
 use crate::value::{Kind, Obj, Value};
 
-/// `crate::text::cat!`, with the string sized up front: dumps concatenate large pieces
-/// (a quoted megabyte string, a function's text), and growing by doubling copied them
-/// again and again (0198). Each piece is evaluated once; the work is out of line, so a
-/// site costs an array of pieces and a call.
+/// `crate::text::cat!` (the dump's modules use it by this name).
 macro_rules! cat {
     ($($piece:expr),+ $(,)?) => {
-        $crate::vm::dump::cat_sized(&[$(&$piece as &dyn $crate::text::Piece),+])
+        $crate::text::cat!($($piece),+)
     };
-}
-
-#[inline(never)]
-pub(crate) fn cat_sized(pieces: &[&dyn crate::text::Piece]) -> String {
-    let mut out = String::with_capacity(pieces.iter().map(|p| p.size_hint()).sum());
-    for p in pieces {
-        p.put(&mut out);
-    }
-    out
 }
 
 /// How the checker compiles a dump: a Script, TypeScript when it holds functions of
@@ -498,6 +487,138 @@ impl Index {
     }
 }
 
+/// A set of strings, in insertion order: a hash [`Index`] over the names (one probe for
+/// most lookups), the dumper's only set of strings (no ordered maps: their sorts and
+/// tree code are kilobytes per instance).
+#[derive(Default, Clone)]
+pub(super) struct StrSet {
+    keys: Vec<String>,
+    /// Per key: whether it is in the set (a removed key keeps its slot).
+    live: Vec<bool>,
+    len: usize,
+    /// FNV-1a of a key to its first slot; slots whose hash an earlier key has are in `more`.
+    index: Index,
+    more: Vec<u32>,
+}
+
+fn str_hash(n: &str) -> u64 {
+    n.bytes()
+        .fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+        })
+        .max(1)
+}
+
+impl StrSet {
+    /// The slot of `k`, live or removed.
+    #[inline(never)]
+    pub(super) fn slot(&self, k: &str) -> Option<usize> {
+        let i = self.index.get(str_hash(k))? as usize;
+        if self.keys[i] == k {
+            return Some(i);
+        }
+        self.more
+            .iter()
+            .map(|&j| j as usize)
+            .find(|&j| self.keys[j] == k)
+    }
+
+    pub(super) fn contains(&self, k: &str) -> bool {
+        self.slot(k).is_some_and(|i| self.live[i])
+    }
+
+    /// Adds `k`: its slot, and whether it was not in the set.
+    #[inline(never)]
+    pub(super) fn add(&mut self, k: &str) -> (usize, bool) {
+        if let Some(i) = self.slot(k) {
+            let new = !self.live[i];
+            self.live[i] = true;
+            self.len += usize::from(new);
+            return (i, new);
+        }
+        let i = self.keys.len();
+        let h = str_hash(k);
+        if self.index.get(h).is_some() {
+            self.more.push_out(i as u32);
+        } else {
+            self.index.insert(h, i as u32);
+        }
+        self.keys.push_out(String::from(k));
+        self.live.push_out(true);
+        self.len += 1;
+        (i, true)
+    }
+
+    pub(super) fn insert(&mut self, k: impl AsRef<str>) -> bool {
+        self.add(k.as_ref()).1
+    }
+
+    pub(super) fn remove(&mut self, k: &str) -> bool {
+        match self.slot(k) {
+            Some(i) if self.live[i] => {
+                self.live[i] = false;
+                self.len -= 1;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.len
+    }
+
+    /// The keys in the set, in the order they were first added.
+    pub(super) fn iter(&self) -> impl Iterator<Item = &String> + '_ {
+        self.keys
+            .iter()
+            .zip(&self.live)
+            .filter(|k| *k.1)
+            .map(|k| k.0)
+    }
+
+    pub(super) fn extend<S: AsRef<str>>(&mut self, ks: impl IntoIterator<Item = S>) {
+        for k in ks {
+            self.add(k.as_ref());
+        }
+    }
+}
+
+/// A map from strings ([`StrSet`]'s slots) to `V`.
+pub(super) struct StrMap<V> {
+    keys: StrSet,
+    vals: Vec<Option<V>>,
+}
+
+impl<V> Default for StrMap<V> {
+    fn default() -> Self {
+        StrMap {
+            keys: StrSet::default(),
+            vals: Vec::new(),
+        }
+    }
+}
+
+impl<V> StrMap<V> {
+    pub(super) fn get(&self, k: &str) -> Option<&V> {
+        self.vals[self.keys.slot(k)?].as_ref()
+    }
+
+    pub(super) fn contains_key(&self, k: &str) -> bool {
+        self.get(k).is_some()
+    }
+
+    /// Sets `k` to `v`, replacing an earlier value.
+    pub(super) fn insert(&mut self, k: &str, v: V) {
+        let (i, _) = self.keys.add(k);
+        if i == self.vals.len() {
+            self.vals.push_out(Some(v));
+        } else {
+            self.vals[i] = Some(v);
+        }
+    }
+}
+
 /// A node that is not in flight (`Node::fl`).
 const NO_FLIGHT: usize = usize::MAX;
 
@@ -856,7 +977,9 @@ struct Dumper<'a> {
     scratch: Option<Heap>,
     /// Lazy templates that never ran (D2993): the globals of each, and the heap they
     /// compile into.
-    lazy_globals: alloc::collections::BTreeMap<u32, Arc<Vec<String>>>,
+    lazy_globals: Vec<Arc<Vec<String>>>,
+    /// `lazy_globals` by template.
+    lazy_at: Index,
     #[cfg_attr(not(feature = "lazy"), allow(dead_code))]
     lazy_heap: Option<Heap>,
     /// Plain dumps: the text written for a class whose static code is blanked
@@ -943,7 +1066,8 @@ impl<'a> Dumper<'a> {
             ts: core::cell::Cell::new(false),
             ts_scripts: core::cell::RefCell::new(Vec::new()),
             scratch: None,
-            lazy_globals: Default::default(),
+            lazy_globals: Vec::new(),
+            lazy_at: Index::default(),
             lazy_heap: None,
             class_texts: Vec::new(),
             fn_protos: Index::default(),
@@ -1192,8 +1316,15 @@ impl<'a> Dumper<'a> {
         });
     }
 
-    /// Records a reference to `v`; its node, if it is one the dump writes.
+    /// Records a reference to `v`; its node, if it is one the dump writes. (`path` is
+    /// called at most once; one copy of the body for every caller's closure.)
     fn note(&mut self, v: Value, path: impl FnOnce() -> String) -> Option<usize> {
+        let mut path = Some(path);
+        self.note_dyn(v, &mut || path.take().map(|p| p()).unwrap_or_default())
+    }
+
+    #[inline(never)]
+    fn note_dyn(&mut self, v: Value, path: &mut dyn FnMut() -> String) -> Option<usize> {
         match v.kind() {
             Kind::Object | Kind::Symbol | Kind::Internal => {}
             Kind::BigInt
@@ -1266,7 +1397,20 @@ impl<'a> Dumper<'a> {
     }
 
     fn edge(&mut self, from: usize, v: Value, path: impl FnOnce() -> String) -> Option<usize> {
-        let n = self.note(v, path)?;
+        let mut path = Some(path);
+        self.edge_dyn(from, v, &mut || {
+            path.take().map(|p| p()).unwrap_or_default()
+        })
+    }
+
+    #[inline(never)]
+    fn edge_dyn(
+        &mut self,
+        from: usize,
+        v: Value,
+        path: &mut dyn FnMut() -> String,
+    ) -> Option<usize> {
+        let n = self.note_dyn(v, path)?;
         self.nodes[from].edges.push_out(n);
         Some(n)
     }
@@ -2005,11 +2149,12 @@ impl<'a> Dumper<'a> {
     /// or writes, in the order its code would (D2993): it compiled on its own, with the
     /// functions inside it, in a heap of its own.
     fn lazy_globals(&mut self, t: u32) -> Arc<Vec<String>> {
-        if let Some(g) = self.lazy_globals.get(&t) {
-            return g.clone();
+        if let Some(i) = self.lazy_at.get(key(t)) {
+            return self.lazy_globals[i as usize].clone();
         }
         let g = Arc::new(self.lazy_globals_of(t));
-        self.lazy_globals.insert(t, g.clone());
+        self.lazy_at.insert(key(t), self.lazy_globals.len() as u32);
+        self.lazy_globals.push_out(g.clone());
         g
     }
 
@@ -2272,16 +2417,14 @@ impl<'a> Dumper<'a> {
         self.pl.next_call = (next != self.fl.last_call_id() + 1).then_some(next);
         // The lines that write no function: the checker leaves them out of the text it
         // compiles (their data cannot change what a name resolves to).
-        let data_lines: alloc::collections::BTreeSet<String> = if self.check_on {
-            self.out
-                .iter()
-                .zip(&self.skeleton)
-                .filter(|(l, sk)| sk.is_some() && !l.contains('\n'))
-                .map(|(l, _)| l.clone())
-                .collect()
-        } else {
-            Default::default()
-        };
+        let mut data_lines = StrSet::default();
+        if self.check_on {
+            for (l, sk) in self.out.iter().zip(&self.skeleton) {
+                if sk.is_some() && !l.contains('\n') {
+                    data_lines.add(l);
+                }
+            }
+        }
         let ir = core::mem::take(&mut self.pl);
         let mut lines = core::mem::take(&mut self.out);
         lines.extend(core::mem::take(&mut self.patches));
@@ -3436,7 +3579,7 @@ impl<'a> Dumper<'a> {
         // The scopes, innermost first: each is the body of a factory of its own whose
         // returned object its parent spreads into its own.
         let mut order: Vec<usize> = (0..sets.len()).collect();
-        crate::sort::sort_by(&mut order, |&a, &b| depth(a) > depth(b));
+        crate::sort::sort_cold(&mut order, |&a, &b| depth(a) > depth(b));
         let mut bodies: Vec<String> = alloc::vec![String::new(); sets.len()];
         let mut set_fns: Vec<(String, Vec<(usize, Value)>)> = Vec::new();
         for &s in &order {

@@ -791,7 +791,7 @@ impl G<'_, '_> {
                     _ => kept.push_out(p),
                 }
             }
-            crate::sort::sort_by(&mut all, |a, b| a.0 < b.0);
+            crate::sort::sort_cold(&mut all, |a, b| a.0 < b.0);
             early = kept;
             late = Vec::new();
             late_names = Vec::new();

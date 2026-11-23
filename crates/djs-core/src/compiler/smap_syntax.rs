@@ -618,7 +618,7 @@ mod recording {
                 None if i == 0 => {
                     // The body: the parts left over.
                     let mut parts = rec.parts.clone();
-                    crate::sort::sort_by(&mut parts, |a, b| a.start < b.start);
+                    crate::sort::sort_cold(&mut parts, |a, b| a.start < b.start);
                     let node = Node {
                         kind: NodeKind::Body,
                         start: base,
@@ -733,10 +733,10 @@ mod recording {
             .collect();
         let mut special: Vec<(Special, u32)> =
             rec.special.iter().map(|&(s, p)| (s, rel(p))).collect();
-        crate::sort::sort_by(&mut special, |a, b| a.1 < b.1);
+        crate::sort::sort_cold(&mut special, |a, b| a.1 < b.1);
         let mut erased: Vec<(u32, u32)> =
             rec.erased.iter().map(|&(s, e)| (rel(s), rel(e))).collect();
-        crate::sort::sort_by(&mut erased, |a, b| a.0 < b.0);
+        crate::sort::sort_cold(&mut erased, |a, b| a.0 < b.0);
         (
             Syntax {
                 nodes,
@@ -896,7 +896,7 @@ mod recording {
             };
             if let Some(i) = o.index {
                 let mut parts = r.parts[mark..].to_vec();
-                crate::sort::sort_by(&mut parts, |a, b| a.start < b.start);
+                crate::sort::sort_cold(&mut parts, |a, b| a.start < b.start);
                 r.nodes[i as usize] = Some(Kept {
                     node: Node {
                         kind: o.kind,

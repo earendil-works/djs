@@ -17,7 +17,6 @@
 //! handles) before it writes: a value counted more often than it is written stays named,
 //! and a value read again after it was written in place is a refusal (a bug).
 
-use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -60,7 +59,7 @@ pub(super) struct Inline {
     /// Per list, the indexes of its effectful lines (those written in place left out).
     pub effects: Vec<Vec<usize>>,
     /// The values written in place.
-    pub done: BTreeSet<String>,
+    pub done: super::super::StrSet,
     /// The names of `pend` (0215: a data-heavy dump has thousands).
     pub pend_names: NameSet,
     /// Reopened host calls used once whose lines wait for the line that reads them, in
@@ -486,8 +485,8 @@ impl W<'_> {
     /// The value `v` of binding slot `sname` (`<cell>sname` for a shared one) of activation
     /// `a`'s continuation, with closures written in place ([`W::props_in_place`]), once.
     pub(super) fn props_in_binding(&mut self, a: usize, sname: &str, v: &str) -> String {
-        let key = (a, cat!("<k>", sname));
-        if let Some(s) = self.vcache.get(&key) {
+        let key = cat!("<k>", sname);
+        if let Some(s) = self.vcache[a].get(&key) {
             return s.clone();
         }
         let slot = sname.strip_prefix("<cell>").unwrap_or(sname);
@@ -495,7 +494,7 @@ impl W<'_> {
             Some(block) => self.props_in_place(a, block, v),
             None => String::from(v),
         };
-        self.vcache.insert(key, s.clone());
+        self.vcache[a].insert(&key, s.clone());
         s
     }
 
@@ -689,7 +688,7 @@ impl W<'_> {
         // (By the names' hashes, 0215: integer keys. A collision only adds uses, which
         // keeps a line; a name in place seen where it is not only asks `scan` again.)
         let mut done = Counts::with_capacity(self.inl.done.len());
-        for n in &self.inl.done {
+        for n in self.inl.done.iter() {
             done.add(name_hash(n));
         }
         // The definitions by name (the line's index), and the lines to look at.
@@ -726,7 +725,7 @@ impl W<'_> {
                 && let Some(name) = scan_spans(t)
                     .into_iter()
                     .map(|(s, e)| &t[s + 6..e])
-                    .find(|n| self.inl.done.contains(*n))
+                    .find(|n| self.inl.done.contains(n))
             {
                 return Err(cat!(
                     "plain dumps: $dump.",
@@ -741,7 +740,7 @@ impl W<'_> {
             .keys()
             .filter(|h| uses.get(h).copied() == Some(1))
             .collect();
-        crate::sort::sort_by(&mut work, |a, b| a < b);
+        crate::sort::sort_cold(&mut work, |a, b| a < b);
         while let Some(h) = work.pop() {
             let Some(&i) = defs.get(&h) else { continue };
             let i = i as usize;
@@ -1198,7 +1197,7 @@ impl W<'_> {
 
     /// The names activation `a`'s continuation may bind anywhere: any declaration of its
     /// function, any slot's name (and its own `$djs_` helpers).
-    pub(super) fn k_scope(&self, a: usize) -> &BTreeSet<String> {
+    pub(super) fn k_scope(&self, a: usize) -> &super::super::StrSet {
         &self.kscopes[a]
     }
 
@@ -1237,8 +1236,7 @@ impl W<'_> {
     /// Slot `name`'s value `v` of activation `a`, with the values that wait for their use
     /// written in place (once per slot: K's generator may ask again).
     pub(super) fn inlined_slot(&mut self, a: usize, name: &str, v: &str) -> String {
-        let key = (a, String::from(name));
-        if let Some(s) = self.vcache.get(&key) {
+        if let Some(s) = self.vcache[a].get(name) {
             return s.clone();
         }
         // (A value that reads a name K binds would be read before the continuation,
@@ -1246,7 +1244,7 @@ impl W<'_> {
         let scope = self.kscopes[a].clone();
         let bound = |n: &str| scope.contains(n);
         let s = self.inline_with(v, None, Reads::Scope(&bound));
-        self.vcache.insert(key, s.clone());
+        self.vcache[a].insert(name, s.clone());
         s
     }
 }
@@ -1313,7 +1311,7 @@ impl Counts {
 /// (One count per name in the set: exact, a hash two of them share only goes to the tree.)
 #[derive(Default)]
 pub(super) struct NameSet {
-    set: BTreeSet<String>,
+    set: super::super::StrSet,
     hashes: Counts,
 }
 
