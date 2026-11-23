@@ -284,8 +284,8 @@ cite the deleted plain-js-dumps.md / functions-as-code.md.
   DJS_PLAIN_OUT and the `plain_*` test names keep "plain" (renaming needs that file).
 - The corpus directories `tests/corpus/*/plain-fuzz/` keep their names (they are case keys
   of tests/scores/dump-size.tsv and the smap pins, and pdiet's files cite them).
-- Kept although unused by the wasm hosts: `Vm::set_math_random_seed` and `wire::encode`
-  (djs-embed uses the encoder; check the seed setter's callers again).
+- Kept although nothing calls them: `Vm::set_math_random_seed` and `Vm::encode_wire`
+  (vm/mod.rs; no caller in the workspace): remove them, or give them a test and a user.
 - docs/host.md's measured tables were taken with exports that are gone (vm_compile,
   vm_seal, ...): re-measure them when someone touches that page.
 - TESTING.md "Size budget" still quotes 767.6 KB / 2.68x (the D3601 numbers); the module is
@@ -313,7 +313,7 @@ and the sweep; D3641-D3645 the larger pieces). Merges into main, from d481d1fe:
 7. 6533b035: J7, J8 and J10: the registry without tombstones or the append-only check
    (D3644), djs-embed without a version promise (D3645), the heap report's test-only JSON,
    `MODULES` -> `EMBED`.
-8. (this merge) J9: the docs of retired designs, scripts/snapshot-research, ARCH.md's
+8. 479d619a: J9: the docs of retired designs, scripts/snapshot-research, ARCH.md's
    superseded history; the dump-size score rewritten.
 
 Size of the shipped module (gzip -9): 767,573 B at the start -> 750,859 B after merge 3
