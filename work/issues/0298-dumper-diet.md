@@ -227,6 +227,20 @@ references through every text the Dumper and cont::G compose; the factory's form
 is read in two places only (emit_items' `$djs.resume(` test, split_callback's keys_in).
 Estimated net ~5-10 KB at high risk; recommended to the coordinator not to do it.
 
+### 2026-11-23 pdiet: 0297's leftovers (coordinator)
+
+Doc comments of dump.rs, dump_cont.rs, dump_origin.rs, dump_plain.rs, dump_harvest.rs and
+dump_runtime.rs's module header (js/src/dump-runtime.js regenerated) point at
+docs/guide/dumps.md and continuations.md instead of the deleted docs/plain-js-dumps.md and
+functions-as-code.md; `tests/dump/v2` -> `tests/dump` in dump_resume_tests.rs;
+tests/dump/plain-refusals.txt -> refusals.txt, plain-chain-refusals.txt ->
+chain-refusals.txt; DJS_PLAIN_OUT -> DJS_DUMP_OUT; the dump tests and their helpers lose
+`plain_` (dumps_at_every_idle_point, dump_chains_continue_like_the_run, dumps_of_*,
+run_dump, dump_text, dump_text_at, load_dump, frozen_vm, idle_step, ...); gate.py,
+TESTING.md, scripts/dump-size/dump-size.ts and tests/scores/dump-size.tsv follow. The
+corpus's plain-fuzz directories and the difftest's own `--plain-*` flags and
+tests/plain-refusals.txt stay.
+
 ## Follow-ups
 
 ## Result
