@@ -134,6 +134,33 @@ fn host_calls_and_fuel() {
 }
 
 #[test]
+fn define_flags_enumerable_and_freeze() {
+    let vm = vm_new(0);
+    let ns = vm_new_object(vm);
+    let one = vm_new_object(vm);
+    stage(b"a");
+    assert_eq!(vm_define(vm, ns, 1, one, 1), 0);
+    // Bit 1 freezes the object after the define (0295, D3601).
+    stage(b"b");
+    assert_eq!(vm_define(vm, ns, 1, one, 3), 0);
+    stage(b"c");
+    // A frozen object takes no new property (the define does nothing; the Sandbox never
+    // asks for one).
+    vm_define(vm, ns, 1, one, 1);
+    let f = compile_body(
+        vm,
+        "ns",
+        "return [Object.keys(ns).join(), Object.isFrozen(ns), Object.isFrozen(ns.a)].join(' ')",
+    );
+    call(vm, f, &[ns]);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    let (ok, r) = outcome(vm, status::DONE);
+    assert!(ok);
+    assert_eq!(display(vm, r), "a,b true false");
+    vm_free(vm);
+}
+
+#[test]
 fn host_errors_are_thrown() {
     let vm = vm_new(0);
     stage(b"f");
