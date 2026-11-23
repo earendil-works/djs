@@ -181,12 +181,14 @@ test("async host functions run concurrently", async () => {
 test("async results land at the same point for any fuel slice (D1670)", async () => {
   // A result the host passes back between two fuel slices waits in the VM's inbox until
   // the job queue is empty, so the slice size does not change the order.
+  // (The body awaits the call at the end: a run ends when its body's result settles, D3602.)
   const code = `
-    tool(1).then((v) => console.log("a", v));
+    const a = tool(1).then((v) => console.log("a", v));
     let x = 0;
     for (let i = 0; i < 20000; i++) x += i;
     Promise.resolve().then(() => { console.log("b1"); Promise.resolve().then(() => console.log("b2")); });
     await null; await null; await null;
+    await a;
   `;
   for (const fuelSlice of [1_000_000, 1000, 50]) {
     for (const tool of [(x: unknown) => (x as number) * 2, async (x: unknown) => (x as number) * 2]) {

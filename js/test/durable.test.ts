@@ -201,13 +201,12 @@ test("converting functions are host values: one per identity, named in dumps, ==
 });
 
 test("console is not converted by the JSON boundary", async () => {
-  const lines: string[] = [];
-  const log = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
+  const lines: unknown[][] = [];
+  const log = (...a: unknown[]) => void lines.push(a);
   const sb = new Sandbox({ module: await loadModule(), console: { log, info: log, warn: log, error: log }, jsonBoundary: true });
-  const cyclic: Record<string, unknown> = {};
-  cyclic.self = cyclic;
-  sb.run("const c = {}; c.self = c; console.log('x', new Date(0), 1n)");
-  assert.deepEqual(lines, ["x [Date] 1"]);
+  sb.run("const c = {}; c.self = c; console.log('x', new Date(0), 1n, () => 1)");
+  // (A Date arrives as a Date, D3600; a function, which has no host form, as its class.)
+  assert.deepEqual(lines, [["x", new Date(0), 1n, "[Function]"]]);
   sb.dispose();
 });
 

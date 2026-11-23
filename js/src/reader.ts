@@ -66,6 +66,24 @@ const C_ORDINARY = LAYOUT.objectClasses.Ordinary;
 const C_ARRAY = LAYOUT.objectClasses.Array;
 const C_ARRAY_BUFFER = LAYOUT.objectClasses.ArrayBuffer;
 const C_TYPED_ARRAY = LAYOUT.objectClasses.TypedArray;
+const C_ERROR = LAYOUT.objectClasses.Error;
+const C_DATE = LAYOUT.objectClasses.Date;
+const C_MAP = LAYOUT.objectClasses.Map;
+const C_SET = LAYOUT.objectClasses.Set;
+const C_RECORD = LAYOUT.objectClasses.Record;
+const OBJ_PROTO = cells.Object.fields.PROTO.offset;
+const HDR_SIZE = LAYOUT.header.SIZE;
+// Slots the layout table does not describe (as the typed array's below):
+// an Error's slot 0 is its stack trace (interp/realm.rs `set_error_stack`), a string or a
+// record of 4 slots waiting for Error.prepareStackTrace whose slot 1 is the default
+// string (interp/run/stack.rs `PENDING_DEFAULT`); a DOMException has its name and message
+// in slots 1 and 2. A Date's slot 0 is its time value. A Map's or Set's slot 0 is its
+// entries, `[forward, removed, k0, v0, ...]`, a deleted key a hole (heap/collection.rs).
+const PENDING_STACK_SLOTS = 4;
+const PENDING_STACK_DEFAULT = 1;
+const COLLECTION_BASE = 2;
+/** How far a property lookup follows the prototype chain. */
+const PROTO_DEPTH = 64;
 const BYTES_LEN = cells.Bytes.fields.LEN.offset;
 const BYTES_DATA = cells.Bytes.tail.offset;
 // Typed array kinds (heap/typed.rs `Kind`) as host constructors. Float16Array needs a
@@ -199,7 +217,10 @@ export function checkHeap(memory: Uint8Array): void {
  * Primitives map to themselves; strings (flat or ropes) to strings; arrays to arrays (holes
  * stay holes); ordinary objects to plain objects with their own enumerable string-keyed data
  * properties in property order. Accessors, non-enumerable and symbol-keyed properties are
- * left out. Everything else becomes an {@link Opaque}. The result is a tree, as with JSON:
+ * left out. An Error becomes a host `Error` with the VM error's `name`, `message` and
+ * `stack` (the VM's trace, frames only), its `cause` and its own enumerable data
+ * properties; a Date a `Date`; a Map a `Map` and a Set a `Set` of their entries, read
+ * like the rest. Everything else becomes an {@link Opaque}. The result is a tree, as with JSON:
  * a shared object is read once per reference, and a cycle is a TypeError naming its path.
  */
 export function readValue(
@@ -426,7 +447,11 @@ class Reader {
     const cls = this.view.getUint32(off + OBJ_CLASS, true);
     if (cls === C_TYPED_ARRAY) return this.typedArray(off);
     if (cls === C_ARRAY_BUFFER) return this.arrayBuffer(off);
-    if (cls !== C_ARRAY && cls !== C_ORDINARY) {
+    if (cls === C_DATE) {
+      this.spend(1);
+      return new Date(this.slot(off + OBJ_SLOTS) as number);
+    }
+    if (cls !== C_ARRAY && cls !== C_ORDINARY && cls !== C_ERROR && cls !== C_MAP && cls !== C_SET) {
       return new Opaque("object", off, classNames[cls] ?? `class ${cls}`);
     }
     // A cycle reaches any depth, so only deep nesting needs the (linear) check.
@@ -439,7 +464,7 @@ class Reader {
     }
     this.stack[depth] = off;
     this.depth = depth + 1;
-    const v = cls === C_ARRAY ? this.array(off) : this.plain(off);
+    const v = cls === C_ARRAY ? this.array(off) : cls === C_ORDINARY ? this.plain(off) : cls === C_ERROR ? this.error(off) : this.collection(off, cls === C_MAP);
     this.depth = depth;
     return v;
   }
@@ -534,6 +559,110 @@ class Reader {
       throw e;
     }
     return o;
+  }
+
+  /** The number of slots of object `off`. */
+  slotCount(off: number): number {
+    return Math.max(0, (this.view.getUint32(off + HDR_SIZE, true) - OBJ_SLOTS) >> 3);
+  }
+
+  /**
+   * Where the value of the data property `name` of `off` or its prototype chain is: the
+   * arena offset of its slot, or -1 when it is not found or is an accessor (reading it
+   * would run code).
+   */
+  lookup(off: number, name: string, own = false): number {
+    const view = this.view;
+    for (let depth = 0; off !== 0 && depth < PROTO_DEPTH; depth++) {
+      const t = view.getUint32(off + OBJ_PROPS, true);
+      if (t !== 0) {
+        const dict = (view.getUint16(off + HDR_FLAGS, true) & OBJ_DICTIONARY) !== 0;
+        const count = view.getUint32(t + (dict ? TAB_COUNT : PV_LEN), true);
+        const descs = dict ? 0 : view.getUint32(view.getUint32(t + PV_SHAPE, true) + SHAPE_DESCS, true) + U32_DATA + 4;
+        for (let i = 0; i < count; i++) {
+          const e = dict ? t + TAB_ENTRIES + ENTRY_SIZE * i : descs + 8 * i;
+          const atom = view.getUint32(e + (dict ? ENTRY_KEY : 0), true);
+          if (atom === 0 || this.key(atom) !== name) continue;
+          if (view.getUint32(e + (dict ? ENTRY_FLAGS : 4), true) & P_ACCESSOR) return -1;
+          return dict ? e + ENTRY_VALUE : t + PV_VALUES + 8 * i;
+        }
+      }
+      if (own) return -1;
+      off = view.getUint32(off + OBJ_PROTO, true);
+    }
+    return -1;
+  }
+
+  /** The string data property `name` of `off` (or its prototype chain), else undefined. */
+  stringProperty(off: number, name: string, own = false): string | undefined {
+    const at = this.lookup(off, name, own);
+    return at < 0 ? undefined : this.slotIfString(at);
+  }
+
+  /**
+   * An Error as a host Error, read without running code: `name` and `message` as data
+   * properties of the error or its prototypes (else "Error" and ""), the VM's stack trace
+   * and `cause`, and its own enumerable data properties.
+   */
+  error(off: number): Error {
+    const dom = this.slotCount(off) >= 3;
+    const name = (dom ? this.slotIfString(off + OBJ_SLOTS + 8) : this.stringProperty(off, "name")) ?? "Error";
+    const message = (dom ? this.slotIfString(off + OBJ_SLOTS + 16) : this.stringProperty(off, "message")) ?? "";
+    let stack: string | undefined = undefined;
+    if (this.slotCount(off) > 0) {
+      const at = off + OBJ_SLOTS;
+      stack = this.slotIfString(at);
+      const hi = this.view.getUint32(at + 4, true);
+      if (stack === undefined && hi === ((TAG_PREFIX << 16) | tags.OBJECT) >>> 0) {
+        // A stack waiting for Error.prepareStackTrace: its default string.
+        const r = this.view.getUint32(at, true);
+        if (this.view.getUint32(r + OBJ_CLASS, true) === C_RECORD && this.slotCount(r) === PENDING_STACK_SLOTS) {
+          stack = this.slotIfString(r + OBJ_SLOTS + 8 * PENDING_STACK_DEFAULT);
+        }
+      }
+    }
+    const e = new Error(message);
+    const hidden = (key: string, value: unknown) =>
+      Object.defineProperty(e, key, { value, writable: true, enumerable: false, configurable: true });
+    hidden("name", name);
+    if (stack === undefined) delete (e as { stack?: string }).stack;
+    else hidden("stack", stack);
+    const cause = this.lookup(off, "cause", true);
+    if (cause >= 0) {
+      try {
+        hidden("cause", this.slot(cause));
+      } catch (err) {
+        if (err instanceof ReadError) err.segments.unshift("cause");
+        throw err;
+      }
+    }
+    for (const [k, v] of Object.entries(this.plain(off))) {
+      if (k !== "name" && k !== "message" && k !== "stack") Object.defineProperty(e, k, { value: v, writable: true, enumerable: true, configurable: true });
+    }
+    return e;
+  }
+
+  /** A Map's or Set's live entries, in insertion order, as a host Map or Set. */
+  collection(off: number, isMap: boolean): Map<unknown, unknown> | Set<unknown> {
+    const view = this.view;
+    const out = isMap ? new Map<unknown, unknown>() : new Set<unknown>();
+    const el = view.getUint32(off + OBJ_SLOTS, true);
+    const n = view.getUint32(el + VA_LEN, true);
+    this.spend(n);
+    let i = COLLECTION_BASE;
+    try {
+      for (; i + 1 < n; i += 2) {
+        const at = el + VA_VALUES + 8 * i;
+        if (view.getUint32(at + 4, true) === HI_HOLE) continue;
+        const k = this.slot(at);
+        if (isMap) (out as Map<unknown, unknown>).set(k, this.slot(at + 8));
+        else (out as Set<unknown>).add(k);
+      }
+    } catch (e) {
+      if (e instanceof ReadError) e.segments.unshift((i - COLLECTION_BASE) >> 1);
+      throw e;
+    }
+    return out;
   }
 
   array(off: number): unknown[] {

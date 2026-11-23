@@ -760,6 +760,15 @@ impl Vm {
         Ok(())
     }
 
+    /// Freezes an ordinary object as `Object.freeze` does (no proxies): the host's
+    /// namespace objects once the sandbox made them (0295). False if it cannot be frozen.
+    pub fn freeze(&mut self, o: Obj) -> bool {
+        matches!(
+            crate::builtins::object::set_integrity_level(&mut self.heap, o, true),
+            Ok(true)
+        )
+    }
+
     /// Defines a global binding (a property of the global object).
     pub fn define_global(&mut self, name: &str, v: Value) -> Result<(), HeapError> {
         let g = self.global();
