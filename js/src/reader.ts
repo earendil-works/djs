@@ -612,15 +612,18 @@ class Reader {
   /**
    * An Error as a host Error, read without running code: `name` and `message` as data
    * properties of the error or its prototypes, primitives as `String()` makes them (else
-   * "Error" and ""), the VM's stack trace
+   * "Error" and ""), its `stack` as the VM reads it (an own string, else the recorded trace)
    * and `cause`, and its own enumerable data properties.
    */
   error(off: number): Error {
     const dom = this.slotCount(off) >= 3;
     const name = (dom ? this.slotIfString(off + OBJ_SLOTS + 8) : this.textProperty(off, "name")) ?? "Error";
     const message = (dom ? this.slotIfString(off + OBJ_SLOTS + 16) : this.textProperty(off, "message")) ?? "";
-    let stack: string | undefined = undefined;
-    if (this.slotCount(off) > 0) {
+    // An own data property `stack` (set through Error.prototype.stack's setter, or by
+    // Error.captureStackTrace) shadows the recorded trace, as `e.stack` in the VM reads it.
+    const own = this.lookup(off, "stack", true);
+    let stack: string | undefined = own < 0 ? undefined : this.slotIfString(own);
+    if (stack === undefined && this.slotCount(off) > 0) {
       const at = off + OBJ_SLOTS;
       stack = this.slotIfString(at);
       const hi = this.view.getUint32(at + 4, true);

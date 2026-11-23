@@ -14284,3 +14284,12 @@ still lets the names of `Object.prototype`'s members through without asking the 
 pi's guard did, so a read of `toString` or `hasOwnProperty` gives undefined, not the hint. Cost of D3621 and
 D3623 together: +83 bytes raw, +63 gzip in the shipped module (767,666 gzip, ceiling
 768,597).
+
+## D3624: The reader takes an Error's own `stack` before its recorded trace
+date: 2026-11-23 · by: pns · issue: 0297
+D3611's missing-member TypeError reached the host with the helper's trap frame first: its
+`Error.captureStackTrace` (and `e.stack = ...` through the prototype's setter) defines an
+own data property `stack`, which the VM's `e.stack` reads, while the reader read the
+error's slot, the trace recorded at construction. The reader now takes an own string
+`stack` first, so the host and `console` see what the script sees, and the trap frame is
+gone everywhere. Supersedes D3610's "stack from the error's slot".

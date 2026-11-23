@@ -164,3 +164,38 @@ test("namespaces have a null prototype; missingMember is not asked about Object.
   assert.deepEqual(plain.run("return [Object.getPrototypeOf(tools) === null, tools.toString === undefined, tools.f()]"), [true, true, 1]);
   plain.dispose();
 });
+
+// ---- 0297: the missing-member error's stack starts at the script ----------------------
+
+test("missingMember's TypeError has the script's frames only, in the VM and at the host", async () => {
+  const module = await loadModule();
+  for (const jsonBoundary of [false, true]) {
+    const lines: unknown[][] = [];
+    const sb = new Sandbox({
+      module,
+      console: { ...quiet, log: (...a) => void lines.push(a) },
+      frozenBuiltins: true,
+      jsonBoundary,
+      missingMember: (ns, m) => `${ns}.${m} does not exist`,
+      functions: { "tools.echo": (x) => x },
+    });
+    const stack = "    at f (codemode.js:1:28)\n    at <eval> (codemode.js:2:";
+    // The thrown error as the host gets it.
+    const run = sb.begin("function f() { return tools.Echo(1) }\nreturn f()", {}, { filename: "codemode.js" });
+    assert.equal(run.state, "threw");
+    const e = run.error!.value as Error;
+    assert.deepEqual([e.name, e.message, e.stack], ["TypeError", "tools.Echo does not exist", `${stack}9)\n`]);
+    // As the script reads it, and as console gets it.
+    const inVm = sb.begin("function f() { return tools.Echo(1) }\ntry { f() } catch (e) { console.log(e); return e.stack }", {}, { filename: "codemode.js" });
+    assert.equal(inVm.value, `${stack}8)\n`);
+    assert.equal((lines[0][0] as Error).stack, `${stack}8)\n`);
+    sb.dispose();
+  }
+});
+
+test("a stack the script set is the stack the host reads", async () => {
+  const sb = new Sandbox({ module: await loadModule(), console: quiet });
+  const run = sb.begin("const e = new Error('x'); e.stack = 'custom'; throw e");
+  assert.equal((run.error!.value as Error).stack, "custom");
+  sb.dispose();
+});

@@ -338,8 +338,8 @@ a `TypeError` naming its path. A value budget turns a blow-up (a small structure
 referenced many times) into an error. An error's `name` and `message` are read as the
 data properties the error or its prototypes hold, a number or another primitive as
 `String()` makes it text; an accessor or an object would have to run code, so the name is
-then `Error` and the message empty. Its `stack` is the VM's trace, frames only, as
-scripts see `e.stack`:
+then `Error` and the message empty. Its `stack` is what scripts see as `e.stack`: the
+VM's trace, frames only, or the string a script set:
 
 ```ts
 try {
