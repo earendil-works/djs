@@ -1,6 +1,6 @@
 # 0295: Sandbox: thrown errors and console values as data; namespace objects like pi's
 
-status: open
+status: in-progress
 agent: pns
 branch: issue/0295-sandbox-host-values
 depends-on: - (0294 runs in parallel and also edits js/src/sandbox.ts: rebase on it when it lands)
@@ -33,9 +33,17 @@ e. **Aliases.** pi offers `tools["my-tool"]` next to `tools.my_tool` (the tool's
    name). Identities are `ns.member` of identifiers. Let a namespace member have extra
    names that are not identifiers, bound to the same function (no new identity: dumps
    name the namespace, not its members).
+f. **A host-driven run ends when the body's result settles**, not when every open async
+   call is settled (pi: "Calls still running when the script ends are cancelled").
+   `begin("tools.echo(1); return 'x'")` is idle with call 1 open today; wanted: `done`,
+   value "x", the still-open calls reported so the host cancels them, and a later settle
+   of such a call a no-op. runAsync and tasks consistent with it.
+g. **The JSON boundary per function**: tools want it, pi's output and store functions
+   (`text`, `image`, `store`, `load`) want plain values (`text(0/0)` arrives as null,
+   `text(() => 1)` as undefined). A per-function opt-out (the 0291 follow-up).
 
 ## Acceptance criteria
-- [ ] a-e, each with tests in js/test (host-driven runs and `run`), with and without
+- [ ] a-g, each with tests in js/test (host-driven runs and `run`), with and without
       `jsonBoundary`, and through a dump and load where it applies (c, d, e)
 - [ ] docs/guide/js-api.md describes them; decisions appended
 - [ ] the shipped module's size: no change, or say what it costs
