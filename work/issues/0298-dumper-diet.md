@@ -134,6 +134,10 @@ steps 1-3 show how much of the size is that style rather than the logic.
 
 ### 2026-11-23 pdiet: merge 1 (steps 0-2, mechanical), 767,666 -> 734,118 B gzip (-33.5 KB)
 
+Rebased onto 0297's ABI 9 (6d558410, 750,859 B, which took the compile cache and the dump
+maps' export): **750,859 -> 717,284 B gzip (-33.6 KB)**; dumps still byte-identical. The
+table below was measured before that rebase.
+
 Every commit's dumps are byte-identical to d481d1fe's over the corpus (3,777 dump files of
 `difftest --plain-out`, the clock's value normalized), the v2 programs' 196 and the sleep
 example's (work/scratch/0298/compare.sh, cmp.py).
