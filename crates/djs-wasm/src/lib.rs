@@ -1070,7 +1070,7 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flag
 }
 
 /// Writes the idle VM as a dump (`Vm::dump`, 0167, 0172, a plain Script, D2830;
-/// docs/plain-js-dumps.md) to the out buffer: its global bindings, and what is in flight
+/// docs/continuation-dumps.md) to the out buffer: its global bindings, and what is in flight
 /// (suspended activations, open host calls, pending promises). The VM needs frozen
 /// builtins (D2836). staging[0..len] is UTF-8, six lines (0179, 0213): the globals the host defines (re-bound by name, never
 /// written) and the names to dump (none: all of the VM's own), each comma-separated; the

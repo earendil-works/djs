@@ -1,4 +1,4 @@
-// Dumps (0167, docs/functions-as-code.md, D2830): `sandbox.dump()` writes the VM's
+// Dumps (0167, D2830): `sandbox.dump()` writes the VM's
 // bindings as a Script, `load()` runs it in another sandbox; host functions are re-bound by
 // name. Dumps need frozen builtins (D2836).
 

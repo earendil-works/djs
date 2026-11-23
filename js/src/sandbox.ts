@@ -779,7 +779,7 @@ export class Run {
   }
 
   /**
-   * The waiting run as a dump (a plain Script, D2830; docs/plain-js-dumps.md): its
+   * The waiting run as a dump (a plain Script, D2830; docs/continuation-dumps.md): its
    * suspended activations, open calls and data as JavaScript, for `loadRun` in another
    * sandbox or process. Only while idle, and only with `frozenBuiltins` (D2836). `states` are the host's states of open calls, by id (JSON
    * data, D2770): the dump writes each with its call, and the load gives it back
@@ -1840,7 +1840,7 @@ export class Sandbox {
 
   /**
    * The VM's global bindings (or the ones in `names`) as JavaScript that recreates them
-   * when `load`ed into another sandbox (docs/functions-as-code.md; a later djs only once
+   * when `load`ed into another sandbox (docs/continuation-dumps.md; a later djs only once
    * the dump format is declared stable, D3643):
    * functions as their source text, closures and data as code, builtins by name. The
    * host's functions and `console` are not written: the loading sandbox provides them

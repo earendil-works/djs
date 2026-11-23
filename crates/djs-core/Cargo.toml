@@ -15,7 +15,7 @@ djs-libm = { path = "../djs-libm" }
 
 [features]
 default = ["unicode", "dump", "lazy", "embed"]
-# `Vm::dump` (0167, docs/functions-as-code.md): a VM's bindings written as JavaScript.
+# `Vm::dump` (0167, docs/continuation-dumps.md): a VM's bindings written as JavaScript.
 # Code only: images and the base do not depend on it.
 dump = []
 # Lazy function compilation (0218, D2990): with `VmOptions::lazy_functions`, a function

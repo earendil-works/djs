@@ -257,6 +257,23 @@ and line helpers). heap/json.rs moved to src/json.rs (the tools' answers use it)
 `J::obj`, the `From` impls and the test accessors. J10b: `crate::MODULES` -> `crate::EMBED`
 (27 sites); lib.rs's EMBED doc says it carries ES modules.
 
+### 2026-11-23: J9 (retired designs)
+Deleted docs/snapshot-versioning.md, portable-snapshots.md, goldilocks-snapshots.md,
+shared-segment.md, empty-heap.md, plain-js-dumps.md, functions-as-code.md (and
+slim-codemode.md in merge 5); scripts/snapshot-research/ except its cases, which moved to
+scripts/dump-costs/cases (dump-costs.ts reads one directory now; status.py, native/records.js).
+docs/continuation-dumps.md: status line, short answer (one module, images in process only),
+no "pi's shape" section, no pi test row, no History table, no format-2 asides.
+ARCH.md: no "Superseded" (the status paragraph, the vm_snapshot plan sentence, the deltas
+and containers bullet, P4's mention, D3600's "superseding"). References fixed in
+djs-core/Cargo.toml, djs-wasm lib.rs, djs-prelude base-families.rs, sandbox.ts, js tests,
+dump-fuzz, size/patches/touch.py, docs/cli.md, frozen-builtins.md (also its stale "nothing
+is built" status), lessons-from-pico.md §2.6 (status note: built and removed again),
+architecture-bloat-audit.md. Left for pdiet (their files): the doc comments of vm/dump.rs,
+dump_cont.rs, dump_harvest.rs, dump_origin.rs and dump_plain.rs, and dump_runtime.rs's
+module_text header (generated into js/src/dump-runtime.js, so that one stays too), which
+cite the deleted plain-js-dumps.md / functions-as-code.md.
+
 ## Follow-ups
 
 ## Result

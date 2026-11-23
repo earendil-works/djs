@@ -1,5 +1,5 @@
 // dump-costs (0184, 0198): dump costs on djs-wasm. For every case
-// (scripts/snapshot-research/cases, the data-heavy scripts/dump-costs/cases and the
+// (scripts/dump-costs/cases: codemode-like scripts and data-heavy ones, and the
 // harvested corpus, tests/corpus/codemode-harvest) a Sandbox runs the script host-driven
 // and at every idle point measures the dump: `Run.dump()` time (the best of REPS), text
 // size raw and zstd (levels 3 and 19), `Sandbox.resume()` time (the best of REPS; a new
@@ -273,10 +273,7 @@ let report = `djs-wasm: ${relative(root, mainPath)}; node ${process.version}\n`;
   report += `\nA new Sandbox (20 times): ${ms((performance.now() - t) / 20)} ms; Sandbox.resume includes one.\n`;
 }
 
-const caseFiles = [
-  ...readdirSync(join(root, "scripts/snapshot-research/cases")).sort().map((f) => join(root, "scripts/snapshot-research/cases", f)),
-  ...readdirSync(join(here, "cases")).sort().map((f) => join(here, "cases", f)),
-];
+const caseFiles = readdirSync(join(here, "cases")).sort().map((f) => join(here, "cases", f));
 const head = "| case | idle (refused) | dump raw KB med / max | zstd-3 KB med / max | zstd-19 KB max | dump ms med / max | resume ms med / max |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n";
 const row = (name: string, ps: Point[], refused: number) => {
   if (ps.length === 0) return `| ${name} | 0 (${refused}) |\n`;

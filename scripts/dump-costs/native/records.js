@@ -1,4 +1,4 @@
-// scripts/snapshot-research/cases/records.js: 1500 issue records, a class and Maps.
+// scripts/dump-costs/cases/records.js: 1500 issue records, a class and Maps.
 class Bucket {
   constructor(label) { this.label = label; this.issues = []; this.points = 0; }
   add(issue) { this.issues.push(issue); this.points += issue.points ?? 1; }

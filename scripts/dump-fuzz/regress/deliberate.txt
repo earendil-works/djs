@@ -1,4 +1,4 @@
-# Signature substrings of refusals that are deliberate (docs/plain-js-dumps.md §10):
+# Signature substrings of refusals that are deliberate (docs/continuation-dumps.md, "The exporter"):
 # `fuzz.mjs regress` does not count them as failures.
 a for-in loop over a Proxy
 a site in an assignment's target

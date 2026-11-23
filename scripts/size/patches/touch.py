@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Instrumentation patch for a scratch copy (0143, docs/empty-heap.md; never merged):
+"""Instrumentation patch for a scratch copy (0143; never merged):
 records which base cells a run touches. Marks the holder and value of every property
 read (`Heap::prop_read`) and every template entered (`Exec::enter_template`), and makes
 djs-difftest write the marked arena offsets to $DJS_TOUCH_OUT at exit. Run it in the

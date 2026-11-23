@@ -1,10 +1,7 @@
 # Continuation dumps: persisting a waiting session as code
 
-Status: as built. The format is the plain dump of docs/plain-js-dumps.md (D2830–D2836,
-issues 0199–0207); format 2, a Script that only `Vm::load_dump` could run with
-privileged `$dump` primitives (D2560–D2565, D2580, D2581, issues 0169–0178), was retired
-in 0205 (D2920). Builds on dumps of values (docs/functions-as-code.md, D2353) and
-replaces heap images as the way a session is persisted (D2700).
+Status: as built (D2830–D2836, D2920, D3600). Dumps are the way a session is persisted
+(D2700); docs/decisions.md has how the format got here.
 
 ## The short answer
 
@@ -27,11 +24,10 @@ replaces heap images as the way a session is persisted (D2700).
 - A dump of a run that resumed a dump writes the *original* functions again, not the
   continuations (**origin tracking**, D2833, D2870): re-dumps stay the size of a dump of
   the uninterrupted run.
-- **One dumper, in Rust** (D2564, D2831). Wasm hosts get it in a second module of the same
-  build (packaging B, D2704); loading a dump needs no dumper at all, since it is code.
-- Heap images stay, but only **inside a process**: the base image, pi's prelude image as a
-  startup cache, the stress and determinism checks, and the transport between the two
-  modules.
+- **One dumper, in Rust** (D2564, D2831), in the one wasm module djs ships (D3600);
+  loading a dump needs no dumper at all, since it is code.
+- Heap images stay, but only **inside a process** and only for the build that made them
+  (D3641): the base image, djs-embed's snapshots, the stress and determinism checks.
 
 ## What a dump looks like
 
@@ -175,8 +171,8 @@ The host defines one global object while a dump loads, and deletes it, with the 
 - `resume(id, name, args, state)` per open call; a djs host reopens call `id` of its
   function `name` under that id (`Vm::open_host_call`) and returns its promise. An unknown
   name throws and the load fails;
-- the runtime: `R`, `L`, `advance`, `fromSync`, `keep`, … (docs/plain-js-dumps.md §4 has
-  the table), defined once in crates/djs-core/src/vm/dump_runtime.rs. A djs host gets the
+- the runtime: `R`, `L`, `advance`, `fromSync`, `keep`, …, defined once in
+  crates/djs-core/src/vm/dump_runtime.rs. A djs host gets the
   object from `Vm::dump_runtime()`, a host without djs imports js/src/dump-runtime.js. A
   continuation captures the helpers it calls (`const $djs_L = $djs.L`).
 
@@ -188,7 +184,7 @@ The host defines one global object while a dump loads, and deletes it, with the 
 
 Hosts
 run dumps themselves (D2891): the CLI (crates/djs-cli/src/dumps.rs), the Sandbox
-(js/src/sandbox.ts `loadPlain`), pi's adapter (js/pi/vm.ts), the difftest. Sync host
+(js/src/sandbox.ts `loadPlain`), the difftest. Sync host
 functions the dump's code calls while it loads are served as in a run.
 
 ### The exporter (D2610–D2614, D2860, D2870)
@@ -202,7 +198,7 @@ Script's completion value: the value itself for one named `run`, else a null-pro
 object of all, D2895) and its state of each open call (`call_states`, JSON text written as
 `resume`'s fourth argument after a check that it is JSON data, D2770).
 
-The exporter reads the heap as format 2's did (vm/dump.rs, vm/dump_flight.rs) and writes
+The exporter reads the heap (vm/dump.rs, vm/dump_flight.rs) and writes
 its lines plus an IR of factories and activations, which the plain writer
 (vm/dump_plain.rs) and the continuation generator (vm/dump_cont*.rs) turn into the Script
 (D2860):
@@ -230,7 +226,7 @@ its lines plus an IR of factories and activations, which the plain writer
   D2870, D2873).
 - **Codemode bodies:** a run compiled as an async body has no function text of its own;
   its continuation is `async function (tools, console) {…}` over the body's text, and
-  what only its activation holds is pruned (docs/plain-js-dumps.md §5).
+  what only its activation holds is pruned.
 - **Refused, with their path:** instances that carry private names (D2878), sites the
   maps call unsupported (inside a class definition), a for-in loop over a Proxy, revoked
   Proxies, weak collections, keyed combinators, then-reactions on promises of other
@@ -249,10 +245,8 @@ bindings live there, the temporaries the frame keeps, each by slot name (`call.c
 function's text, D2721, D2730, D2731), and the syntax around the site (D2850–D2853). The
 pin test commits the maps of every await in the corpus (tests/smap).
 
-With format 2 the maps were a contract between builds: a dump named slots, and a later
-build loaded it only if its compiler kept the same slots at the same site. A plain dump
-names no slot, so the maps are only the exporter's way of reading a frame of this build;
-the pins are a regression test of the compiler, not a format promise.
+A dump names no slot, so the maps are only the exporter's way of reading a frame of this
+build; the pins are a regression test of the compiler, not a format promise.
 
 ### Classes
 
@@ -283,20 +277,10 @@ the runtime, the hooks and the goldens change with the code (D024, D3643).
 ### One dumper, in the one module (D2564, D3600)
 
 The exporter is Rust in djs-core (feature `dump`). Wasm hosts get it in the one module djs
-ships, `djs.wasm`, which has the dumper (D3600; until 0294 it was a second module of the
-same build that the host copied the VM's image into, D2704). To resume, the host runs the
+ships, `djs.wasm`, which has the dumper (D3600). To resume, the host runs the
 dump, which needs only `vm_open_call`, `vm_dump_runtime` and `vm_set_next_call_id` (D2892),
 so a build without the dumper loads dumps too. Hosts store dumps
 zstd-compressed (D2703).
-
-### pi's shape (D2565)
-
-pi's prelude keeps in-flight state of its own (the pending call table, `finished`, the
-store's writes). The shape pi should move to, which djs's adapter builds with
-tests/pi/prelude-next.ts: tools are engine async host functions, so an open call is a
-`$djs.resume`; the body's promise is a host handle; `finished` and the store live in the
-adapter; the prelude holds no in-flight state and is rerun on load. docs/host.md
-"pi's next mode" has the API.
 
 ## Testing
 
@@ -312,20 +296,9 @@ tool call is an idle point.
 | e2e | `DJS_E2E_MODE=dump`: every case's final state dumped, run and dumped again |
 | difftest | `--dumps` over the corpus, chains of at most 50 links, and each link run in node (`scripts/dump-node.mjs`); the gate leg "dumps (djs and node)", with the size score (D2901) |
 | REPL, CLI | line-mode transcripts in crates/djs-cli/tests/it/repl.rs; `djs run --dump-after K` / `djs resume` for every K of a few scripts |
-| Sandbox | js/test/dumpresume.test.ts and task.test.ts in both packagings; plain.test.ts |
-| pi | pi-vm.test.ts through the adapter; `node js/pi/pi-tests.ts --next --dump-every-idle` (a full-gate leg) |
+| Sandbox | js/test/dumpresume.test.ts, task.test.ts and plain.test.ts |
 
 The REPL (`djs repl --frozen`: `.dump`, `.restore`, `.dump-every`, `.pending`, `.bt`) and
 the CLI (`run --dump-after`, `--dump-every-idle`, `resume`, `resume --explain`) are in
 docs/cli.md; the Sandbox's `begin`/`settle`/`advance`/`dump`/`loadRun` and tasks in
 docs/host.md.
-
-## History
-
-| issues | what |
-| --- | --- |
-| 0169–0178 | format 2: suspension maps, classes, the loader and its primitives, the exporter, idle points in the corpus, REPL and CLI, the Sandbox run API and packagings, pi's next mode, images retired as persistence, golden dumps |
-| 0191–0196 | slot names, construct temporaries in locals, one compile per load |
-| 0199 | plain-JavaScript dumps: research and prototype (docs/plain-js-dumps.md) |
-| 0200–0207 | site syntax in the maps, the plain exporter, origin tracking, the remaining constructs, host hooks, the dump runtime and size |
-| 0205 | format 2 retired: the loader, `$dump.resume` and the primitives, the recording compile at load and the `jump_if_loading` opcode deleted; goldens rewritten as plain dumps (D2920) |

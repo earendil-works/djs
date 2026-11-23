@@ -3,8 +3,9 @@
 Status: this started as the proposal written before any code. It now describes djs as
 built (November 2026, after issue 0095's review). The original reasoning is kept; where the
 implementation went another way, the text says what is and cites the decision
-(`Dnnnn` in docs/decisions.md, by topic in docs/decisions-index.md). Plans that were
-dropped or are not built yet are marked **Superseded** or **Not built**. README.md has the
+(`Dnnnn` in docs/decisions.md, by topic in docs/decisions-index.md). Plans not built
+yet are marked **Not built**; dropped plans are gone from this text (docs/decisions.md has
+them). README.md has the
 measured status and how to build and test.
 
 djs is a small JavaScript + TypeScript interpreter written in `no_std` Rust (with `alloc`).
@@ -568,10 +569,7 @@ the protocol (D1503, D1560).
 
 ### Execution API
 
-The plan was a handful of exports (`vm_new`, `vm_compile`, `vm_call`, `vm_run`,
-`vm_resolve_host_call`, `vm_snapshot(vm, base?)`, `vm_restore`; snapshots were later
-replaced by continuation dumps, D2560, D2700). What exists is the
-integer ABI of djs-wasm (D1230): numbered VMs and handles, a staging buffer for bytes in
+The host interface is the integer ABI of djs-wasm (D1230): numbered VMs and handles, a staging buffer for bytes in
 and an out buffer for bytes back, and about 45 exports, documented in docs/host.md "The
 ABI". In outline:
 
@@ -690,21 +688,12 @@ images are the in-process mechanism (D2700).
   loader against committed dumps (D2619, D2920). Until the owner declares the dump format
   stable, a later build is not promised to load it: the runtime, the hooks and the goldens
   change with the code (D024, D3643). Hosts store dumps zstd-compressed (D2703).
-- **Packaging:** djs ships one wasm module, and it has the dumper (D3600, superseding the
-  second dump module of D2564/D2704): every host, the ones that persist runs and the ones
+- **Packaging:** djs ships one wasm module, and it has the dumper (D3600): every host, the ones that persist runs and the ones
   that never do, loads the same file. Loading a dump is running it and needs no dumper.
 - **Determinism:** the GC threshold is in the image (D1601) and collection points do not
   depend on fuel slices (D1710), so the same inputs give the same image; the gate
   compares images across schedules and between native and wasm (D1720, D1725).
   `vm_canonical_hash` hashes the graph independently of collection points (D1730).
-- **Deltas and containers: Superseded.** The proposal planned page-level deltas against
-  the base (a non-moving old generation, collected only on a full snapshot). 0088's
-  research recommended raw images compressed against a reference image instead, which
-  was built as the snapshot container (D2260, D2066, D2400): a waiting pi session took 2
-  to 8 KB, but restored only into builds of the same descriptor. Continuation dumps
-  replaced it for persistence (D2560) and the containers, session images and reference
-  compression were removed (D2700). (The GC's old region of D2041 is a collector
-  feature, not a format.)
 - **Restore of an image:** check, copy the bytes, re-bind host functions by id and native
   builtins by index. There are no fixups because there are no pointers.
 
@@ -781,8 +770,7 @@ The original phases, with their status:
   decorators).
 - **P4, durability:** done, in a different form than planned: deterministic images,
   journals and canonical hashes, and continuation dumps as the persistence format (D2560,
-  0169-0178), with images kept inside a process (D2700). Deltas and the snapshot
-  containers are **Superseded** (see "Images and dumps").
+  0169-0178), with images kept inside a process (D2700).
 - **P5, long tail:** done for the listed areas (regex, generators, collections, symbols,
   iterators, typed arrays, BigInt, Proxy, Reflect, stack traces, WeakRef, disposables);
   the test262 active group passes 99.8%.

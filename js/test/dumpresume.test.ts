@@ -1,4 +1,4 @@
-// Continuation dumps through the Sandbox (0175, D2830, docs/plain-js-dumps.md): at every idle
+// Continuation dumps through the Sandbox (0175, D2830, docs/continuation-dumps.md): at every idle
 // point of a run, dump it, resume the dump in a fresh sandbox and continue there. The
 // transcript (console output, the open calls with their ids at each idle point, the
 // result) must equal the uninterrupted run's. Dumps need frozen builtins (D2836).

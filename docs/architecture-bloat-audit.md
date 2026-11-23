@@ -315,7 +315,7 @@ Cheap memory changes, then:
    Use a passive segment dropped after the decode, or a custom section the host hands
    over.
 
-Together that is ~11 pages (0.69 MiB). The lazy realm of `docs/empty-heap.md` would take
+Together that is ~11 pages (0.69 MiB). The lazy realm of 0143's research would take
 the base's 5 pages down to ~1. The headroom only counts against wasm memory, not RSS.
 Resident memory is already on par with quickjs-wasi.
 
@@ -367,7 +367,7 @@ recommended:
 - dropping the second collector (−1.3) or unifying the JSON widths (−3.5): their speed
   is worth more.
 
-The lazy realm (`docs/empty-heap.md`) is the memory step after 5; it doesn't change
+The lazy realm (0143's research) is the memory step after 5; it doesn't change
 the module.
 
 ## 9. Re-checking earlier conclusions

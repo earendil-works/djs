@@ -398,7 +398,7 @@ if (argv[0] === "check") {
   // generator changes do not move them), then fresh seeds (--cases, default 300).
   const rdir = path.join(ROOT, "scripts/dump-fuzz/regress");
   const files = fs.readdirSync(rdir).filter((f) => /\.[jt]s$/.test(f)).sort().map((f) => path.join(rdir, f));
-  // Deliberate refusals (docs/plain-js-dumps.md §10) are not failures here.
+  // Deliberate refusals (docs/continuation-dumps.md, "The exporter": refused) are not failures here.
   const deliberate = fs
     .readFileSync(path.join(rdir, "deliberate.txt"), "utf8")
     .split("\n")

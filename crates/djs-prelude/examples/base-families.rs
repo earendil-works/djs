@@ -1,4 +1,4 @@
-//! The base image by builtin family and by part (0143, docs/empty-heap.md):
+//! The base image by builtin family and by part (0143):
 //! `cargo run -p djs-prelude --example base-families [-- --tsv] [--touched DIR]`.
 //!
 //! `--touched DIR`: files of base offsets a run touched, one per case (written by the

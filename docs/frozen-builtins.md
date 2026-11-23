@@ -1,8 +1,8 @@
 # Frozen builtins and a session-only heap (0144)
 
-Status: design and prototype, for the owner. Nothing is built on main. The prototypes are
-patches in work/scratch/0144 (see "Reproducing"). This replaces docs/empty-heap.md's
-steps 2–4 and docs/shared-segment.md (0138).
+Status: design and prototype (0144), since built as the `frozen_builtins` VM option (D022,
+D2304); the prototypes are patches in work/scratch/0144 (see "Reproducing"). This replaces 0143's plan for a lazy realm
+(its steps 2–4) and 0138's study of a shared read-only segment.
 
 The owner's direction:
 - "We want to bring down the overall cost of heap snapshots. Putting all builtins eagerly

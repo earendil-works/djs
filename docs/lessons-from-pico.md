@@ -444,10 +444,13 @@ that depend on the VM.
 
 ### 2.6 Image compatibility by what the image depends on (snapshots)
 
+(Status: built as the dependency descriptor, D026, and removed again by D3641: no image
+crosses builds any more, so an image loads only into the build that made it.)
+
 pico refuses an image only for a different ISA version, image format or base id. djs
 refuses any other build (D1320/D1330: the build hash includes a hash of djs-core's
-sources), so a fix in a leaf intrinsic invalidates every stored session. In
-docs/goldilocks-snapshots.md section 4, the build hash breaks images in 70% of issues
+sources), so a fix in a leaf intrinsic invalidates every stored session. In 0142's
+measurement (its snapshot tiers), the build hash breaks images in 70% of issues
 (43% of the last 30).
 
 A key made of what images actually depend on would let images survive Rust-only changes:

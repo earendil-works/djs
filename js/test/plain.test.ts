@@ -2,7 +2,7 @@
 // running it with `$djs`: the dump runtime's helpers (D2903) and the hooks
 // `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi)`, which reopen the dump's
 // open calls under their ids and set Math.random's state. These dumps are written by hand
-// in the exporter's shape (docs/plain-js-dumps.md section 2).
+// in the exporter's shape (docs/continuation-dumps.md, "The exporter").
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
