@@ -16,7 +16,7 @@ dump-every-idle, golden dumps). Compatibility with today's dump text, the format
 intermediate or anything older is **not** needed (0297, D024): change the dumper's
 internals and, where it helps, its output.
 
-## Accounting (coordinator, main 706c0923; /Users/mitsuhiko/Development/djs//Users/mitsuhiko/Development/djs/work/scratch/size-audit/NOTES.md)
+## Accounting (coordinator, main 706c0923; /Users/mitsuhiko/Development/djs/work/scratch/size-audit/NOTES.md)
 Raw code from a names build (~6% LEB padding over the stripped module):
 - `vm::dump`: 635 KB raw, ~225 KB gzip marginal: `Dumper` (heap walk, activations,
   finish, emit_*, render, flight) 283 KB; `cont::G` (continuation generator) 184 KB;
