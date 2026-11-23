@@ -1,8 +1,8 @@
 # 0297: Remove everything that exists for backwards compatibility
 
-status: open
+status: done
 agent: pcompat
-branch: issue/0297-no-compat
+branch: issue/0297-missing-member-stack (the worktree's; merges 1-8 came from it)
 depends-on: -
 touches: anything outside crates/djs-core/src/vm/dump*.rs and crates/djs-core/src/compiler/smap*.rs (0298 owns those): crates/, js/, scripts/, tests/, docs/, builtins/, TESTING.md, ARCH.md
 guide: any page that describes a removed option, format, export or module (skim docs/guide/SUMMARY.md)
@@ -19,10 +19,10 @@ that pays for compatibility should go (scripts/size/budget.py `--update` lowers 
 ceiling).
 
 ## Acceptance criteria
-- [ ] An inventory in the Log: every compatibility path found (file, what it keeps
+- [x] An inventory in the Log: every compatibility path found (file, what it keeps
       working, for whom), and what was done with it (removed / kept because ... / asked).
-- [ ] Every clear-cut item removed, with its tests, fixtures, gate legs, docs and guide text.
-- [ ] Judgment calls (things that look like compatibility but may be load-bearing) listed
+- [x] Every clear-cut item removed, with its tests, fixtures, gate legs, docs and guide text.
+- [x] Judgment calls (things that look like compatibility but may be load-bearing) listed
       and sent to the coordinator before removing them, not removed silently. Known ones:
       - the image dependency descriptor and `vm::COMPAT_VERSION` (D2265, vm/compat.rs): is it
         compatibility, or a safety check that an image is loaded only by the build that can
@@ -31,11 +31,11 @@ ceiling).
         lockdown)", the slim ratchet) and js/pi: 0294 left them as "retire once pi is on
         host-driven runs". Find out whether anything still needs them.
       - the build:wasm-nodump module and the js tests' no-dumper cases (0294 notes).
-- [ ] Format-2 remnants *outside* the dumper's sources (fixtures under tests/dump/v2/,
+- [x] Format-2 remnants *outside* the dumper's sources (fixtures under tests/dump/v2/,
       `plainDumps: false` style options, CLI flags, difftest modes, docs) removed; the ones
       inside crates/djs-core/src/vm/dump*.rs are 0298's: list them for 0298 instead.
-- [ ] Module size before/after (gzip), ceilings lowered on the branch.
-- [ ] Decision entry recording the sweep (what kinds of things went, and that the rule is
+- [x] Module size before/after (gzip), ceilings lowered on the branch.
+- [x] Decision entry recording the sweep (what kinds of things went, and that the rule is
       D024: no compatibility code, ever).
 
 ## Notes
@@ -275,5 +275,48 @@ module_text header (generated into js/src/dump-runtime.js, so that one stays too
 cite the deleted plain-js-dumps.md / functions-as-code.md.
 
 ## Follow-ups
+- For 0298 (pdiet's files): the doc comments of vm/dump.rs, dump_cont.rs, dump_harvest.rs,
+  dump_origin.rs, dump_plain.rs and dump_runtime.rs's `module_text` header (and so the
+  generated js/src/dump-runtime.js) cite the deleted docs/plain-js-dumps.md and
+  docs/functions-as-code.md; dump.rs's base64 comment still says "which the slim build does
+  not have"; dump_resume_tests.rs's doc comments and the refusal files' generated headers
+  say tests/dump/v2, and tests/dump/plain-refusals.txt / plain-chain-refusals.txt,
+  DJS_PLAIN_OUT and the `plain_*` test names keep "plain" (renaming needs that file).
+- The corpus directories `tests/corpus/*/plain-fuzz/` keep their names (they are case keys
+  of tests/scores/dump-size.tsv and the smap pins, and pdiet's files cite them).
+- Kept although unused by the wasm hosts: `Vm::set_math_random_seed` and `wire::encode`
+  (djs-embed uses the encoder; check the seed setter's callers again).
+- docs/host.md's measured tables were taken with exports that are gone (vm_compile,
+  vm_seal, ...): re-measure them when someone touches that page.
+- TESTING.md "Size budget" still quotes 767.6 KB / 2.68x (the D3601 numbers); the module is
+  701.7 KB gzip now.
+- docs/decisions-index.md does not list D3640-D3645 yet (the coordinator's index).
+- The full gate (`scripts/gate.sh --full`) was due (65 h since the last).
 
 ## Result
+Everything that existed only for backwards compatibility is gone (D3640 records the rule
+and the sweep; D3641-D3645 the larger pieces). Merges into main, from d481d1fe:
+1. b141172f: clear-cut items and J4 (the feature detection in js/src, vm_dump's result 2,
+   registry::resolve_reachable, new_vm_from/new_vm_reserved, the REPL's completion values,
+   build-wasm --strip, the old merge lock, status.py's migration; the nodump module, its
+   js cases and the Sandbox's no-dumper misuse errors).
+2. 61bd6898: J3a: js/pi, tests/pi, the pi tests, benches and gate legs.
+3. 6d558410: J5/J8 and the compile cache: ABI 9 (one vm_new), the unused exports, the
+   compile-cache feature, smap_codec, WeakRefs::Absent (D3640).
+4. e7f66413: J2: the image dependency descriptor; images load only into their build
+   (D3641).
+5. d2440ddd: J3b: the slim build and djs-core's `full` feature, with every guard, test,
+   ratchet, gate leg and doc (D3642).
+6. ac77f7cc: J1 and J6: dumps under D024 until the format is declared stable (D3643);
+   tests/dump/v2 -> tests/dump, difftest's `--dumps/--dump-out/--dump-from`, `dump-xfail`,
+   tests/dump-refusals.txt, scripts/dump-node.mjs, scripts/dump-fuzz.
+7. 6533b035: J7, J8 and J10: the registry without tombstones or the append-only check
+   (D3644), djs-embed without a version promise (D3645), the heap report's test-only JSON,
+   `MODULES` -> `EMBED`.
+8. (this merge) J9: the docs of retired designs, scripts/snapshot-research, ARCH.md's
+   superseded history; the dump-size score rewritten.
+
+Size of the shipped module (gzip -9): 767,573 B at the start -> 750,859 B after merge 3
+(1,875,103 -> 1,827,977 raw); 0298 then took it to 701,709 B, and the slim removal on top
+measured 701,738 B (1,661,727 raw, 2 B smaller; gzip noise), so the ceiling stays 702,733.
+codemode-memory: OK, re-recorded in merge 3.

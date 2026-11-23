@@ -6,6 +6,7 @@
 # The gate leg "dumps (djs and node)" fails when a case grows; a new case only asks for its
 # line. Rewrite with
 #   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR programs=DIR sleep=DIR
+corpus	builtins/known-await.js	67455	26548
 corpus	codemode-harvest/h001-bash-read.js	35270	12333
 corpus	codemode-harvest/h002-bash-read.js	4000	1437
 corpus	codemode-harvest/h003-bash-read.js	3614	1370
@@ -174,7 +175,7 @@ corpus	codemode-harvest/h171-load-structured.js	3108	1209
 corpus	codemode-harvest/h172-bash-structured-structured.js	30166	9974
 corpus	codemode-harvest/h173-structured.js	16481	5196
 corpus	codemode-harvest/h174-structured.js	17883	6010
-corpus	codemode-harvest/h175-models.js	10790	3777
+corpus	codemode-harvest/h175-models.js	10790	3778
 corpus	codemode-harvest/h176-bash-structured-edit-read-write.js	25730	9184
 corpus	codemode-harvest/h177-edit-read.js	18100	5692
 corpus	codemode-harvest/h178-transcribe_file.js	13299	5076
@@ -201,7 +202,7 @@ corpus	codemode-harvest/h199-load-models-read.js	201231	61963
 corpus	codemode-harvest/h200-bash-read-structured.js	18581	7120
 corpus	codemode-harvest/h201-edit.js	8220	3366
 corpus	codemode-harvest/h202-bash-structured-models.js	7587	2437
-corpus	codemode-harvest/h203-bash-structured-models-write.js	99358	29903
+corpus	codemode-harvest/h203-bash-structured-models-write.js	99358	29885
 corpus	codemode-harvest/h204-image-models.js	11609	3700
 corpus	codemode-harvest/h205-read-write.js	7497	2695
 corpus	codemode-harvest/h206-structured.js	3079	1167
@@ -211,7 +212,7 @@ corpus	codemode-harvest/h209-bash-edit.js	12723	4809
 corpus	codemode-harvest/h210-models-read.js	38942	12203
 corpus	codemode-harvest/h211-structured.js	10354	3558
 corpus	codemode-harvest/h212-transcribe_file.js	9903	3839
-corpus	codemode-harvest/h213-bash-structured-models.js	44582	14004
+corpus	codemode-harvest/h213-bash-structured-models.js	44582	13999
 corpus	codemode-harvest/h214-bash-structured-read-write.js	13442	4722
 corpus	codemode-harvest/h215-structured.js	3156	1213
 corpus	codemode-harvest/h216-bash-structured-structured.js	4304	1541
@@ -229,7 +230,7 @@ corpus	codemode-harvest/h228-edit-read.js	6690	2667
 corpus	codemode-harvest/h229-structured.js	5785	2295
 corpus	codemode-harvest/h230-image-models.js	11836	3803
 corpus	codemode-harvest/h231-bash-structured-structured-write.js	98869	30062
-corpus	codemode-harvest/h232-bash-structured-models.js	103295	29619
+corpus	codemode-harvest/h232-bash-structured-models.js	103295	29613
 corpus	codemode-harvest/h233-bash-edit.js	20105	6917
 corpus	codemode-harvest/h234-bash-structured-read.js	24849	9226
 corpus	codemode-harvest/h235-bash-structured-edit-read-write.js	39175	12250
@@ -241,7 +242,7 @@ corpus	codemode-harvest/h241-bash-structured-structured.js	4335	1529
 corpus	codemode-harvest/h242-transcribe_file.js	12042	3479
 corpus	codemode-harvest/h243-load-models-read.js	216446	64646
 corpus	codemode-harvest/h244-structured.js	2501	1011
-corpus	codemode-harvest/h246-bash-structured-models.js	35719	11403
+corpus	codemode-harvest/h246-bash-structured-models.js	35719	11402
 corpus	codemode-harvest/h247-structured.js	40705	12243
 corpus	codemode-harvest/h248-image-models.js	14166	4600
 corpus	codemode-harvest/h249-bash-load-write.js	12987	4767
@@ -256,7 +257,7 @@ corpus	codemode-harvest/h257-no-tools.js	10308	3302
 corpus	codemode-harvest/h258-bash-structured-image-read.js	18676	7470
 corpus	codemode-harvest/h259-edit.js	3485	1384
 corpus	codemode-harvest/h260-image-read.js	9252	3578
-corpus	codemode-harvest/h261-bash-structured-models.js	61859	18897
+corpus	codemode-harvest/h261-bash-structured-models.js	61859	18893
 corpus	codemode-harvest/h262-structured.js	11359	3782
 corpus	codemode-harvest/h263-transcribe_file.js	10325	4048
 corpus	codemode-harvest/h264-structured.js	7330	2994
@@ -295,7 +296,7 @@ corpus	codemode-harvest/h298-image-read.js	16911	6712
 corpus	codemode-harvest/h299-transcribe_file.js	9209	3754
 corpus	codemode-harvest/h300-edit.js	5987	2357
 corpus	codemode/arrows-share-this-arguments.js	20756	7847
-corpus	codemode/async-helpers.js	47154	17913
+corpus	codemode/async-helpers.js	47154	17912
 corpus	codemode/class-method-suspended.js	5249	2070
 corpus	codemode/classes-in-body.js	7813	3037
 corpus	codemode/classes-self.js	6639	2416
@@ -327,6 +328,7 @@ corpus	codemode/plain-fuzz/class-static-in-promise-all.js	5244	2078
 corpus	codemode/plain-fuzz/class-with-async-method-in-loop.js	5010	1938
 corpus	codemode/plain-fuzz/class-with-async-method-nested-loop.js	3226	1184
 corpus	codemode/plain-fuzz/continue-through-finally-await.js	5297	2152
+corpus	codemode/plain-fuzz/date-nan-iso-string.js	4649	1863
 corpus	codemode/plain-fuzz/finally-await-in-loop.js	4903	1943
 corpus	codemode/plain-fuzz/finally-dead-end.js	7698	3054
 corpus	codemode/plain-fuzz/for-await-break.js	8549	3318
@@ -354,7 +356,7 @@ corpus	codemode/redump-copied-loops.js	78097	29471
 corpus	codemode/redump-from-async.js	72742	28034
 corpus	codemode/redump-jumps-through-finally.js	21980	8502
 corpus	codemode/redump-lone-surrogate-key.js	2426	994
-corpus	codemode/redump-loops.js	10406	4055
+corpus	codemode/redump-loops.js	10406	4058
 corpus	codemode/redump-operands.js	34006	13431
 corpus	codemode/redump-stale-locals.js	15453	5590
 corpus	codemode/redump-super-late-class.js	17209	6341
@@ -366,13 +368,13 @@ corpus	codemode/tools.js	11862	4739
 corpus	codemode/yield-star-return.js	26543	9329
 corpus	language/dead-code-patterns.js	8623	3465
 corpus	language/generator-prototype.js	3468	1239
-corpus	language/plain-fuzz/await-using-continue-after-catch.js	10488	3974
+corpus	language/plain-fuzz/await-using-continue-after-catch.js	10488	3973
 corpus	language/plain-fuzz/await-using-hoisted-function.js	2805	1091
 corpus	language/plain-fuzz/await-using-redump.js	7216	2834
-corpus	language/plain-fuzz/crossing-callbacks.js	7438	2681
-corpus	language/plain-fuzz/redump-placed-function-name.js	111922	37873
-corpus	language/plain-fuzz/redump-subclass-class-local.js	39154	14725
-corpus	language/plain-fuzz/redump-subclass-in-loop-block.js	74523	28270
+corpus	language/plain-fuzz/crossing-callbacks.js	7438	2682
+corpus	language/plain-fuzz/redump-placed-function-name.js	111922	37882
+corpus	language/plain-fuzz/redump-subclass-class-local.js	39154	14729
+corpus	language/plain-fuzz/redump-subclass-in-loop-block.js	74523	28282
 corpus	language/redump-using-jumps.js	66073	24721
 corpus	language/redump-using.js	5080	1993
 corpus	language/using-site.js	30974	9762
@@ -418,7 +420,7 @@ programs	golden/role-super	532	295
 programs	golden/role-template	227	176
 programs	golden/spent	339	211
 programs	golden/then-chain	1161	679
-programs	golden/using	29152	9836
+programs	golden/using	29162	9831
 programs	golden/yield-star	24830	8463
 programs	loops	4258	1902
 programs	operands	58616	18161
