@@ -1,7 +1,7 @@
 // wasm-compile.ts [--qjs] [--reps N] [--wasm X.wasm]... files...: compile-only throughput in
 // wasm (0092; wcompile.py counts its instructions).
-// djs: vm_compile (Script goal, or AsyncBody for *.body.js) on a fresh Sandbox per rep,
-// timing only the vm_compile call. qjs: quickjs-wasi evalCode(COMPILE_ONLY).
+// djs: vm_compile_file (Script goal, or AsyncBody for *.body.js) on a fresh Sandbox per rep,
+// timing only the vm_compile_file call. qjs: quickjs-wasi evalCode(COMPILE_ONLY).
 // ONCE=1: one compile per file and engine. SAME=1: every compile in one Sandbox (steady
 // state, for node --cpu-prof).
 import { readFileSync } from "node:fs";
@@ -34,7 +34,7 @@ async function djs(wasm: string, code: string, body: boolean): number {
     const at = x.djs_staging(src.length);
     new Uint8Array(x.memory.buffer).set(src, at);
     const t = performance.now();
-    const f = x.vm_compile(sb.vm, body ? 1 : 0, 0, src.length);
+    const f = x.vm_compile_file(sb.vm, body ? 1 : 0, 0, 0, src.length);
     const dt = performance.now() - t;
     if (f === 0) {
       const p = x.djs_out_ptr(), n = x.djs_out_len();

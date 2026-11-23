@@ -130,15 +130,15 @@ The shipped module has <!--n wasm/ops-->74<!--/n--> operations. By area:
 
 | area | operations |
 | --- | --- |
-| buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack`; the Unicode tables: `djs_tables_ptr`, `djs_tables_set`, `vm_tables_need` ([above](#a-module-that-needs-nothing)) |
+| buffers and build | `djs_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack`; the Unicode tables: `djs_tables_ptr`, `djs_tables_set`, `vm_tables_need` ([above](#a-module-that-needs-nothing)) |
 | the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
-| VMs | `vm_new`, `vm_new_reserved`, `vm_new_with` (flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; images: `vm_arena_ptr`, `vm_arena_len`, `vm_from_bytes`, `vm_collect`, `vm_seal` |
-| code | `vm_compile` (a Script, or a codemode body with parameter names; option bits for TypeScript and decorators), `vm_compile_file` (the same, with the file name stack traces show) |
-| values in | `vm_decode_wire`, `vm_string_reserve`, `vm_parse_json`, `vm_global`, `vm_new_object`, `vm_define`, `vm_new_error` |
-| values out | `vm_handle_bits` (a value's 64 bits, for the reader), `vm_display`, `vm_json_stringify`, `vm_promise_state`, `vm_handle_free` |
+| VMs | `vm_new` (a heap cap, the heap size to reserve room for, flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; the arena: `vm_arena_ptr`, `vm_arena_len`, `vm_collect` |
+| code | `vm_compile_file` (a Script, or a codemode body with parameter names, under the file name stack traces show; option bits for TypeScript and decorators) |
+| values in | `vm_decode_wire`, `vm_string_reserve`, `vm_global`, `vm_new_object`, `vm_define`, `vm_new_error` |
+| values out | `vm_handle_bits` (a value's 64 bits, for the reader), `vm_display`, `vm_promise_state`, `vm_handle_free` |
 | running | `vm_call`, `vm_run`, `vm_fuel_used`, `vm_abort`, `vm_result`, `vm_outcome`, `vm_take_unhandled_rejections` |
 | host functions and calls | `vm_new_host_function`, `vm_new_async_host_function`, `vm_host_call`, `vm_host_call_info`, `vm_new_host_calls`, `vm_resolve_host_call`, `vm_resolve_host_call_at` |
-| the environment | `vm_set_now`, `vm_set_time_zone_offset`, `vm_set_random_seed`, `vm_set_math_random_seed`, `vm_set_weak_refs`, `vm_canonical_hash` ([determinism](determinism.md)) |
+| the environment | `vm_set_now`, `vm_set_time_zone_offset`, `vm_set_random_seed`, `vm_set_weak_refs`, `vm_canonical_hash` ([determinism](determinism.md)) |
 | loading a dump | `vm_dump_runtime`, `vm_open_call`, `vm_restore_math_random`, `vm_set_next_call_id` |
 
 The dump build adds the dumper and what serves it:
@@ -148,7 +148,6 @@ The dump build adds the dumper and what serves it:
 | `vm_dump` | writes the idle VM as a dump into the out buffer, or the reasons it refuses, one per line. Staging names the host's globals, its function names by id, the values it wants back, its namespace objects and its state of each open call |
 | `vm_set_dump_source_refs` | whether a dump names the script the run started with by reference (the default) or carries its text |
 | `vm_call_site` | where the run waits on open call `id`: `line:col:file` in the out buffer, the position of the `await` of the innermost activation waiting on it, directly or through `Promise.all` and the like; 0 when nothing waits on it at a known position. The `Sandbox` offers it as `callSite(id)`, and the live examples of this site use it to say where a run paused |
-| `vm_compile_cached`, `vm_dump_maps_export`, `vm_dump_maps_import` | the compile cache and the suspension maps across VMs ([the dumper's caches](continuations.md#the-dumpers-caches)) |
 
 Loading a dump needs no operation of its own: it is running a Script with `$djs` defined.
 The four "loading a dump" operations serve the hooks while it runs: `vm_dump_runtime`
@@ -159,7 +158,7 @@ call under its old id from inside the `$djs.resume` hook, and the other two rest
 ## Driving a run
 
 A run is a loop on the host side. The host compiles the script as a codemode function
-body (`vm_compile`; leading import declarations compile to nothing, and the host passes
+body (`vm_compile_file`; leading import declarations compile to nothing, and the host passes
 the values they import as parameters named by them), starts the call (`vm_call`, the
 argument handles in staging) and
 then calls `vm_run` with a fuel slice. `vm_run` returns a status, the host acts on it and
@@ -283,8 +282,7 @@ written with `TextEncoder.encodeInto`, arrays with their holes, objects whose re
 keys are interned in a key table, and `Uint8Array`s as raw bytes. The VM's decoder
 (`vm_decode_wire`) allocates every cell at its final size in one pass and transcodes
 UTF-8 to the VM's one-byte or two-byte strings natively. The format is validated as it
-is decoded: malformed input is an error, never a corrupt heap. A host that holds JSON
-text already can pass it to `vm_parse_json` instead. A Rust host writes the same
+is decoded: malformed input is an error, never a corrupt heap. A Rust host writes the same
 format with its own encoder (the [Rust interface](rust-api.md) uses it), whose strings
 may leave out the UTF-16 length: Rust strings are UTF-8, and the decoder counts the
 units from the lead bytes instead of the encoder counting them in a pass of its own.

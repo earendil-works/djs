@@ -39,7 +39,7 @@ const fnv = (b) => {
   return (h >>> 0).toString(16).padStart(8, "0");
 };
 
-const vm = x.vm_new(0);
+const vm = x.vm_new(0, 0, 0);
 x.vm_set_now(vm, 1_700_000_000_000);
 x.vm_set_time_zone_offset(vm, 90);
 const g = x.vm_global(vm);
@@ -55,7 +55,7 @@ const tool = x.vm_new_async_host_function(vm, 2, 4);
 stage(enc.encode("tool"));
 x.vm_define(vm, g, 4, tool);
 stage(src);
-const f = x.vm_compile(vm, 1, 0, src.length);
+const f = x.vm_compile_file(vm, 1, 0, 0, src.length);
 if (f === 0) throw new Error("compile: " + dec.decode(out()));
 stage(new Uint8Array(0));
 x.vm_call(vm, f, 0, 0);

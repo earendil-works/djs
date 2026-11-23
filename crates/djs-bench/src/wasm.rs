@@ -1,8 +1,8 @@
 //! The wasm group: the boundary in djs-wasm, measured in node (0023's
 //! `js/bench/wasm.bench.ts`). It builds djs-wasm with the `wasm` profile, writes the
 //! boundary datasets as JSON and reads the script's TSV output:
-//! - `wasm/decode` and `wasm/parse_json`: wire and JSON into a fresh VM;
-//! - `wasm/readValue` and `wasm/json_stringify`: the two ways out;
+//! - `wasm/decode` and `wasm/parse_json`: wire, and JSON text through the VM's `JSON.parse`, into a fresh VM;
+//! - `wasm/readValue` and `wasm/json_stringify` (the VM's `JSON.stringify`): the two ways out;
 //! - `wasm/instantiate`, `wasm/vm_new` (from the base snapshot) and `wasm/vm_new compiling
 //!   the prelude`: startup. This module is built with `compiled-prelude`, whose data
 //!   segment (what building the realm needs) dominates its instantiation;

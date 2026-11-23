@@ -1,9 +1,9 @@
 // The boundary in wasm, both directions, on the djs-wasm `wasm` profile build:
 //
 // - inbound: `encode` into linear memory + `vm_decode_wire`, against `JSON.stringify` +
-//   `encodeInto` + `vm_parse_json` (each decode into a fresh VM);
-// - outbound: `readValue` on the arena, against `vm_json_stringify` + reading the JSON
-//   string out of the heap + `JSON.parse`.
+//   its text as a wire string + `JSON.parse` in the VM (each decode into a fresh VM);
+// - outbound: `readValue` on the arena, against `JSON.stringify` in the VM + reading the
+//   JSON string out of the heap + `JSON.parse`.
 //
 //   node js/bench/wire.bench.ts <dir>      (writes the datasets)
 //   scripts/build-wasm.sh
@@ -25,14 +25,16 @@ interface X {
   memory: WebAssembly.Memory;
   djs_staging(len: number): number;
   djs_out_ptr(): number;
-  vm_new(limit: number): number;
+  vm_new(limit: number, live?: number, flags?: number): number;
   vm_new_compiled?: (limit: number) => number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
   vm_decode_wire(vm: number, len: number): number;
-  vm_parse_json(vm: number, len: number): number;
-  vm_json_stringify(vm: number, h: number): number;
+  vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
+  vm_call(vm: number, f: number, thisArg: number, argc: number): number;
+  vm_run(vm: number, fuel: number): number;
+  vm_result(vm: number): number;
   vm_handle_bits(vm: number, h: number): void;
   vm_handle_free(vm: number, h: number): void;
 }
@@ -66,7 +68,7 @@ rememberBase(module, x as never);
 const vmNew = x.vm_new;
 x.vm_new = (limit: number) => {
   provideBase(module, x as never);
-  return vmNew(limit);
+  return vmNew(limit, 0, 0);
 };
 const textEncoder = new TextEncoder();
 const CAP = 16 << 20;
@@ -87,7 +89,24 @@ function encodeIn(value: unknown): number {
   return out.length;
 }
 function jsonIn(value: unknown): number {
-  return textEncoder.encodeInto(JSON.stringify(value), stagingView()).written;
+  return encodeIn(JSON.stringify(value));
+}
+
+/** Calls `f` with the argument handles `args` and returns the result's handle. */
+function callIn(vm: number, f: number, args: number[]): number {
+  new Uint32Array(x.memory.buffer, staging, args.length).set(args);
+  if (x.vm_call(vm, f, 0, args.length) !== 0 || x.vm_run(vm, 1e9) !== 0) throw new Error("call failed");
+  return x.vm_result(vm);
+}
+
+/** A function of the VM: the completion value of the Script `src`. */
+function fnIn(vm: number, src: string): number {
+  const n = textEncoder.encodeInto(src, stagingView()).written;
+  const script = x.vm_compile_file(vm, 0, 0, 0, n);
+  if (script === 0) throw new Error("compile failed");
+  const f = callIn(vm, script, []);
+  x.vm_handle_free(vm, script);
+  return f;
 }
 
 const names = ["10k-objects", "1mib-string", "1mib-text-unicode", "tool-results", "500k-numbers"];
@@ -121,7 +140,7 @@ const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(
   }
   // Batches of 100: one copy of the base is close to the timer's resolution.
   const vmNewNs = ns(() => {
-    for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0));
+    for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0, 0, 0));
   }) / 100;
   rows.push(`wasm/vm_new\t${vmNewNs.toFixed(0)}\tns/op`);
   if (x.vm_new_compiled !== undefined) {
@@ -151,7 +170,7 @@ for (const name of names) {
   const jsonLen = jsonIn(value);
 
   // Inbound.
-  const fresh = () => x.vm_new(0);
+  const fresh = () => x.vm_new(0, 0, 0);
   const free = (vm: number) => x.vm_free(vm);
   const tEncode = time(() => 0, () => void encodeIn(value));
   const tStringify = time(() => 0, () => void jsonIn(value));
@@ -159,10 +178,16 @@ for (const name of names) {
   const tDecode = time(fresh, (vm) => {
     if (x.vm_decode_wire(vm, wireLen) === 0) throw new Error("decode failed");
   }, free);
-  jsonIn(value);
-  const tParse = time(fresh, (vm) => {
-    if (x.vm_parse_json(vm, jsonLen) === 0) throw new Error("parse failed");
-  }, free);
+  // JSON.parse in the VM, of the JSON text (a wire string).
+  const tParse = time(() => {
+    const vm = fresh();
+    const parse = fnIn(vm, "(s) => JSON.parse(s)");
+    jsonIn(value);
+    return [vm, parse];
+  }, ([vm, parse]) => {
+    const s = x.vm_decode_wire(vm, jsonLen);
+    if (s === 0 || callIn(vm, parse, [s]) === 0) throw new Error("parse failed");
+  }, ([vm]) => free(vm));
   row(`decode ${name}`, tDecode);
   row(`parse_json ${name}`, tParse);
   inbound.push(
@@ -171,17 +196,18 @@ for (const name of names) {
   );
 
   // Outbound: the value lives in a VM.
-  const vm = x.vm_new(0);
+  const vm = x.vm_new(0, 0, 0);
+  const stringify = fnIn(vm, "(v) => JSON.stringify(v)");
   encodeIn(value);
   const h = x.vm_decode_wire(vm, wireLen);
   const vb = bits(vm, h);
   const tRead = time(() => 0, () => void readValue(arena(vm), vb));
   const tStr = time(() => 0, () => {
-    const s = x.vm_json_stringify(vm, h);
+    const s = callIn(vm, stringify, [h]);
     if (s === 0) throw new Error("stringify failed");
     x.vm_handle_free(vm, s);
   });
-  const sh = x.vm_json_stringify(vm, h);
+  const sh = callIn(vm, stringify, [h]);
   const sb = bits(vm, sh);
   const tJson = time(() => 0, () => void JSON.parse(readValue(arena(vm), sb) as string));
   row(`readValue ${name}`, tRead);
@@ -204,10 +230,10 @@ const imageRows: string[] = [];
 for (const [name, value] of images) {
   const tEnc = time(() => 0, () => void encodeIn(value));
   const len = encodeIn(value);
-  const tDecode = time(() => x.vm_new(0), (vm) => {
+  const tDecode = time(() => x.vm_new(0, 0, 0), (vm) => {
     if (x.vm_decode_wire(vm, len) === 0) throw new Error("decode failed");
   }, (vm) => x.vm_free(vm));
-  const vm = x.vm_new(0);
+  const vm = x.vm_new(0, 0, 0);
   encodeIn(value);
   const vb = bits(vm, x.vm_decode_wire(vm, len));
   const tRead = time(() => 0, () => void readValue(arena(vm), vb));
@@ -221,11 +247,11 @@ if (tsv) {
   console.log(rows.join("\n"));
   process.exit(0);
 }
-console.log("| dataset | encode | stringify + encodeInto | decode | parse_json | wire total | JSON total |");
+console.log("| dataset | encode | stringify + encode | decode | JSON.parse in the VM | wire total | JSON total |");
 console.log("| --- | ---: | ---: | ---: | ---: | ---: | ---: |");
 console.log(inbound.join("\n"));
 console.log();
-console.log("| dataset | readValue | vm_json_stringify | read JSON + JSON.parse | JSON total |");
+console.log("| dataset | readValue | JSON.stringify in the VM | read JSON + JSON.parse | JSON total |");
 console.log("| --- | ---: | ---: | ---: | ---: |");
 console.log(outbound.join("\n"));
 console.log();

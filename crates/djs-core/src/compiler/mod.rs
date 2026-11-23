@@ -34,8 +34,6 @@ mod peephole;
 mod resolve;
 mod scan;
 mod smap;
-#[cfg(all(feature = "dump", feature = "compile-cache"))]
-pub(crate) mod smap_codec;
 mod smap_syntax;
 mod stmt;
 mod temps;

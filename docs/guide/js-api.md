@@ -78,7 +78,6 @@ All options are optional:
 | `now` | the clock `Date` reads: a fixed time or a function; default `Date.now` |
 | `timeZoneOffset` | the local time zone in minutes east of UTC; default the host's |
 | `randomSeed` | the seed of `Math.random`; default from `crypto.getRandomValues` |
-| `weakRefs` | `"collected"` (default), `"strong"` or `"absent"`: what `WeakRef` and `FinalizationRegistry` do |
 | `deterministic` | `{ startedAt, seed }`: repeatable runs ([below](#deterministic-runs-and-journals)) |
 | `unhandledRejections` | `"warn"` (default), `"throw"` or `"collect"` |
 | `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)); dumps need it |

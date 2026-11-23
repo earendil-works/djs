@@ -178,6 +178,20 @@ pi.md rewritten around the durable code mode (the adapter, next mode and pi's te
 sections went). docs/host.md: its "pi codemode" section went. vm_from_bytes,
 djs_image_staging and vm_seal go with the ABI change (J5).
 
+### 2026-11-23: merge 3 (J5, J8, compile cache)
+ABI 9 in place: one vm_new(limit, live, flags); vm_compile, vm_parse_json,
+vm_json_stringify, vm_from_bytes, djs_image_staging, vm_seal, vm_set_math_random_seed,
+vm_compile_cached, vm_dump_maps_export/import gone (coordinator: remove the compile cache
+too). djs-core: the `compile-cache` feature, vm/compile_cache.rs and its tests, the
+heap's intern log, compiler/smap_codec.rs and the cfg(feature = "compile-cache") items of
+vm/dump.rs (pure deletion, agreed with the coordinator; hunks in
+work/scratch/0297/dump-compile-cache.diff), difftest's cache check. WeakRefs::Absent and
+the Sandbox's `weakRefs` option gone (owner). The wasm bench's JSON baseline calls the VM's
+JSON.parse/JSON.stringify. Size: 767,573 -> 750,859 B gzip; ceiling 751,883;
+codemode-memory.tsv re-recorded. Guide: host.md (operations table), snapshots.md,
+builtins.md, gc.md, determinism.md, js-api.md, continuations.md (the dumper's caches).
+D3640 records the sweep.
+
 ## Follow-ups
 
 ## Result

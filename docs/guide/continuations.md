@@ -307,22 +307,6 @@ among it) for its next dumps, so a host that dumps a run at every idle point pay
 maps once. The table of the base's builtins and their paths is built with the base and
 part of the module, so no dump walks the base to find them.
 
-A host that resumes each dump in a new instance, and dumps it again at the next idle
-point, compiles the same texts in every instance: the script the run started with (the
-answer to `$djs.source`) and its own fixed snippets. The dumper keeps two caches for it,
-as bytes the host holds per module:
-
-- **The compile cache.** A compile only appends cells to the arena and interns atoms. A
-  compile done through `vm_compile_cached` records both, in order: the cells it appended
-  and every atom it interned between them. The next VM imports that record instead of
-  compiling: it copies the cells, rebases the references inside them, and interns the
-  same names at the same points, renumbering atom ids where it numbered them otherwise.
-  It ends up byte for byte as if it had compiled the text itself, which the determinism
-  checks compare.
-- **Suspension maps.** After a dump that compiled maps, `vm_dump_maps_export` gives them
-  as bytes, and `vm_dump_maps_import` hands them to the next VM before its dump. The maps
-  are data of the text and its options alone, so the dump is the same text either way.
-
 The module also compiles functions lazily, at their first call, and the writer reads
 a function that never ran from its text: a dump of a lazy VM is the same text as of an
 eager one.
@@ -348,13 +332,9 @@ eager one.
   origin tracking.
 - [`crates/djs-core/src/compiler/smap.rs`](../../crates/djs-core/src/compiler/smap.rs)
   and [`crates/djs-core/src/compiler/smap_syntax.rs`](../../crates/djs-core/src/compiler/smap_syntax.rs):
-  suspension maps and the syntax around a site;
-  [`crates/djs-core/src/compiler/smap_codec.rs`](../../crates/djs-core/src/compiler/smap_codec.rs):
-  the maps as bytes.
+  suspension maps and the syntax around a site.
 - [`crates/djs-core/src/vm/dump_runtime.rs`](../../crates/djs-core/src/vm/dump_runtime.rs):
   the dump runtime's one definition; [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js):
   the same for hosts without djs.
-- [`crates/djs-core/src/vm/compile_cache.rs`](../../crates/djs-core/src/vm/compile_cache.rs):
-  the compile cache.
 - [`tests/dump/v2/`](../../tests/dump/v2/): programs that wait, and golden dumps that
   every later djs must still load.

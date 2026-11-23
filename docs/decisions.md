@@ -14293,3 +14293,36 @@ own data property `stack`, which the VM's `e.stack` reads, while the reader read
 error's slot, the trace recorded at construction. The reader now takes an own string
 `stack` first, so the host and `console` see what the script sees, and the trap frame is
 gone everywhere. Supersedes D3610's "stack from the error's slot".
+
+## D3640: No compatibility code (D024, owner 2026-11-23); what 0297 removed
+date: 2026-11-23 · by: pcompat · issue: 0297
+Owner, 2026-11-23: "we actually don't need any backwards compatibility in DJS." The rule is
+D024 without exceptions: djs keeps no code, export, option, alias, fallback, test, fixture
+or gate leg for an older format, host, module or caller. A change of a format or the ABI
+changes it in place (the ABI number still changes, so a mismatch fails clearly). 0297's
+sweep removed, by kind:
+- **Feature detection of ABI operations every module has** (the Sandbox, trap, wire and
+  base helpers; "older modules lack it" fallbacks), and the module without the dumper as a
+  supported host configuration: the gate's `build:wasm-nodump`, `DJS_WASM_NODUMP` js cases
+  and the Sandbox's misuse errors for it (amends D3600; djs-wasm's `dump` feature stays a
+  build knob for size measurements).
+- **Dead paths of retired modes**: vm_dump's result 2, `registry::resolve_reachable`
+  (format 2's loader), djs-prelude's unused constructors, the REPL's
+  `SCRIPT_COMPLETION_VALUES`, `build-wasm.sh --strip`, merge-to-main's lock step for
+  pre-D2666 scripts, status.py's row migration.
+- **js/pi and tests/pi** (pi's QuickJS prelude on djs, a test harness only: pi runs
+  quickjs-wasi), their gate legs and scripts; `fuel/slice-us` is measured by the sandbox
+  bench now.
+- **ABI 9** (from 8, in place): one `vm_new(limit, live, flags)` for vm_new, vm_new_reserved
+  and vm_new_with; `vm_compile_file` alone (vm_compile went); no vm_parse_json,
+  vm_json_stringify (the wasm bench's JSON baseline runs the VM's JSON.parse and
+  JSON.stringify instead), vm_from_bytes, djs_image_staging, vm_seal,
+  vm_set_math_random_seed, vm_compile_cached, vm_dump_maps_export, vm_dump_maps_import:
+  their only caller was js/pi. With vm_compile_cached went the compile cache (D3040: the
+  `compile-cache` feature, vm/compile_cache.rs, difftest's `--determinism` cache check)
+  and with the maps' exports the maps' byte codec (D3041, compiler/smap_codec.rs and its
+  cfg'd half of vm/dump.rs). `WeakRefs::Absent` and the Sandbox's `weakRefs` option went
+  (owner): deterministic runs make weak references strong, other runs collect them.
+- The shipped module: 767,573 -> 750,859 B gzip (1,875,103 -> 1,827,977 raw); the ceiling
+  is lowered to 751,883, tests/scores/codemode-memory.tsv re-recorded (-64 KiB per row:
+  smaller static data).

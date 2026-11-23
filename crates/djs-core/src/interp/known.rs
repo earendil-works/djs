@@ -6,8 +6,7 @@
 //! the realm's prelude function table (`Intrinsic::PreludeFunctions`, D2440), then one
 //! word per value in the list's order, a global's name atom with [`GLOBAL`] set followed
 //! by its members' atoms. Names and atom ids are the same in every VM of a build, so what
-//! the compiler emits for a name depends on nothing a script can change, and a
-//! compile-cache replay gives the code a compile would. A heap without a realm (the
+//! the compiler emits for a name depends on nothing a script can change. A heap without a realm (the
 //! dumper's recompile for a text's suspension sites, the compiler's tests) goes by the
 //! list itself and numbers the values from 0: the code has the same shape, which is all
 //! such a compile is for.

@@ -52,7 +52,6 @@ const sb = await Sandbox.create({
   timeZoneOffset: 0,             // minutes east of UTC; default: the host's current offset
   unhandledRejections: "warn",   // or "throw", or "collect" (sb.takeUnhandledRejections())
   randomSeed: 42n,               // Math.random's 64-bit seed; default: from crypto.getRandomValues
-  weakRefs: "collected",         // or "strong", or "absent" (D1680)
   frozenBuiltins: false,         // builtins behave as frozen, with the override fix (D2304)
   deterministic: { startedAt, seed }, // repeatable runs (D1680): see below
 });
@@ -111,12 +110,11 @@ sb.dispose();
   DST; default the host's offset at that time). Without a host clock `Date.now()` is 0.
 - Deterministic mode (`deterministic: { startedAt, seed }`, D1680): the same code,
   parameters and results in the same order do the same thing on every run. `Math.random`
-  is seeded from `seed`, the time zone is UTC, weak references are strong (`weakRefs`
-  overrides it), and the clock starts at `startedAt`. It moves only when an async
+  is seeded from `seed`, the time zone is UTC, weak references are strong, and the clock starts at `startedAt`. It moves only when an async
   function's result is delivered: to `opts.now` at that moment (never backwards), applied
   when the VM takes the result from its inbox (D1670). Fuel slices and sync host
   functions do not move it. With a fixed `now` the clock is fully reproducible. Without `deterministic`, `randomSeed` (default: entropy) seeds a new
-  sandbox and `weakRefs` defaults to `"collected"`.
+  sandbox and weak references are collected.
 - Unhandled rejections (D1423): promises rejected with no handler once the VM's job queue
   is empty (after the run, after each async result, and whenever it waits on async host
   calls), as qjs reports them. `unhandledRejections: "warn"` (default) calls `console.warn("Possibly unhandled
@@ -324,8 +322,9 @@ the hash does not depend on fuel slices or when the VM last collected.
 
 Heap images are not a persistence format: a run that must outlive its process is written
 as a continuation dump. Images remain the engine's in-process mechanism: the base image
-every VM is copied from and the stress and determinism checks. `vm_arena_ptr`/`vm_arena_len` read an
-image, `vm_from_bytes` loads one. The REPL's `.heap` reports on the live VM's heap.
+every VM is copied from, a native host's snapshots and the stress and determinism checks.
+`vm_arena_ptr`/`vm_arena_len` read an image; a wasm host loads none. The REPL's `.heap`
+reports on the live VM's heap.
 
 #### What an image depends on (D026, D2265)
 
@@ -364,9 +363,6 @@ crates/djs-wasm/src/lib.rs), bumped on any incompatible change; the Sandbox chec
 **Buffers.** Data crosses the boundary through two buffers in linear memory.
 - `djs_staging(len) -> ptr` makes the *staging* buffer at least `len` bytes. The host writes
   into it, then calls the export that consumes it.
-- `djs_image_staging(len, memoryLimit) -> ptr` is `djs_staging` for an image about to go to
-  `vm_from_bytes`: the buffer gets the capacity the restored arena reserves, so handing it
-  over grows nothing (D1942).
 - The *out* buffer is filled by exports that return data, at `djs_out_ptr()` /
   `djs_out_len()`.
 
@@ -381,24 +377,19 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 
 | export | does |
 | --- | --- |
-| `vm_new(limit) -> vm` | a new VM: a copy of the base snapshot (D1321); `limit` = heap cap in bytes, 0 = default |
-| `vm_new_with(limit, live, flags) -> vm` | `vm_new` with creation flags; `live` = the heap size to reserve room for (0: none, as `vm_new_reserved`). Flags: 1 = frozen builtins (D2304); 0 with a message for an unknown flag |
+| `vm_new(limit, live, flags) -> vm` | a new VM: a copy of the base snapshot (D1321); `limit` = heap cap in bytes, 0 = default; `live` = the heap size to reserve room for (0: none). Flags: 1 = frozen builtins (D2304); 0 with a message for an unknown flag |
 | `vm_frozen_builtins(vm) -> 0/1` | whether the VM's builtins are frozen (part of the image) |
 | `vm_new_compiled(limit) -> vm` | builds the realm and compiles the prelude instead (only with the `compiled-prelude` feature; tests) |
-| `vm_from_bytes(len, limit) -> vm` | restore the image in staging (takes the staging buffer over) |
 | `vm_free(vm)` | drop the VM |
 | `vm_arena_ptr(vm)`, `vm_arena_len(vm)` | the arena (the image, and the reader's view) |
 | `vm_collect(vm) -> 0/-1` | run the GC |
-| `vm_compile(vm, goal, params_len, src_len) -> h` | compile staging: `params_len` bytes of `\n`-separated parameter names (goal 1, async body) then the source; goal 0 is a Script; `goal \| 2` parses TypeScript (0048), `\| 4` with legacy `experimentalDecorators`, `\| 8` also with `emitDecoratorMetadata` (D1651) |
-| `vm_compile_file(vm, goal, name_len, params_len, src_len) -> h` | `vm_compile` with the file name stack traces show (staging: name, parameters, source; 0049) |
+| `vm_compile_file(vm, goal, name_len, params_len, src_len) -> h` | compile staging: `name_len` bytes of the file name stack traces show (none: `sandbox.js`; 0049), `params_len` bytes of `\n`-separated parameter names (goal 1, async body), then the source; goal 0 is a Script; `goal \| 2` parses TypeScript (0048), `\| 4` with legacy `experimentalDecorators`, `\| 8` also with `emitDecoratorMetadata` (D1651) |
 | `vm_global(vm) -> h`, `vm_new_object(vm) -> h` | objects |
 | `vm_new_host_function(vm, fn_id, name_len) -> h` | a function that parks the VM with `fn_id` |
 | `vm_new_async_host_function(vm, fn_id, name_len) -> h` | a function that returns a promise and adds a pending call (D1374) |
 | `vm_define(vm, obj, name_len, value, flags) -> 0/-1` | define a property (name in staging): non-enumerable, enumerable with `flags` bit 0 |
 | `vm_decode_wire(vm, len) -> h` | decode wire data from staging (docs/wire.md) |
 | `vm_string_reserve(vm, len) -> h` | a new one-byte string of `len` zero units, whose `len` data bytes (at `vm_arena_ptr` + the value's offset from `vm_handle_bits` + 16) the host fills, one Latin-1 unit per byte (ASCII UTF-8 as is), before anything allocates (D2551) |
-| `vm_parse_json(vm, len) -> h` | parse UTF-8 JSON text from staging (`JSON.parse`) |
-| `vm_json_stringify(vm, h) -> h` | `JSON.stringify` of plain data as a heap string |
 | `vm_new_error(vm, kind, msg_len) -> h` | kind 0 Error, 1 TypeError, 2 RangeError, 3 ReferenceError, 4 SyntaxError, 5 InternalError |
 | `vm_handle_bits(vm, h)` | out = the value's 64 bits as u32 lo, hi (for `readValue`) |
 | `vm_handle_free(vm, h)` | release a handle |
@@ -409,7 +400,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
 | `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
 | `vm_canonical_hash(vm) -> 0/-1` | out = the canonical hash (u32 lo, hi) of the VM's state, computed on a collected copy (D1730) |
-| `vm_set_weak_refs(vm, mode) -> 0/-1` | WeakRef and FinalizationRegistry (D1680): 0 collected (weak), 1 strong (no collection is observable), 2 absent (the globals are deleted); set it on a new VM |
+| `vm_set_weak_refs(vm, mode) -> 0/-1` | WeakRef and FinalizationRegistry (D1680): 0 collected (weak), 1 strong (no collection is observable); set it on a new VM |
 | `vm_set_random_seed(vm, lo, hi)` | reseed `Math.random` (xorshift64*, as QuickJS) with `hi << 32 \| lo`; a new VM has a fixed default seed (0049) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
@@ -544,7 +535,9 @@ about 20 µs faster (no copy).
 `wire.bench.ts`; ms). This is the measurement docs/wire.md deferred to djs-wasm.
 
 Inbound: encode into linear memory and decode into a fresh VM, against `JSON.stringify` +
-`encodeInto` + `vm_parse_json`:
+`encodeInto` + a native JSON parse in the VM (these numbers were taken with an export
+that parsed staged JSON text; the bench now runs the VM's `JSON.parse` on the text as a
+wire string):
 
 | dataset | encode | stringify + encodeInto | decode | parse_json | wire total | JSON total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -554,10 +547,10 @@ Inbound: encode into linear memory and decode into a fresh VM, against `JSON.str
 | tool results | 0.67 | 0.66 | 1.14 | 2.10 | **1.81** | 2.76 |
 | 500k numbers | 2.84 | 5.27 | 2.15 | 13.23 | **5.0** | 18.5 |
 
-Outbound: `readValue` on the arena, against `vm_json_stringify` + reading the string +
-`JSON.parse`:
+Outbound: `readValue` on the arena, against `JSON.stringify` in the VM + reading the string
++ `JSON.parse`:
 
-| dataset | readValue | vm_json_stringify | read JSON + JSON.parse | JSON total |
+| dataset | readValue | stringify in the VM | read JSON + JSON.parse | JSON total |
 | --- | ---: | ---: | ---: | ---: |
 | 10k similar objects | **3.25** | 6.12 | 3.41 | 9.5 |
 | one 1 MiB ASCII string | **0.06** | 0.13 | 0.34 | 0.48 |

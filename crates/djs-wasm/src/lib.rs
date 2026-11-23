@@ -35,13 +35,12 @@ mod allocator;
 use djs_core::compiler::{CompileOptions, Goal};
 use djs_core::heap::{Handle, PropFlags};
 use djs_core::interp::{ErrorKind, Intrinsic, intrinsic};
-use djs_core::json;
 use djs_core::value::Value;
 use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 8;
+pub const ABI_VERSION: u32 = 9;
 
 /// `vm_run` results.
 pub mod status {
@@ -66,11 +65,11 @@ pub mod status {
     pub const NEED_TABLES: u32 = 7;
 }
 
-/// What `vm_compile` returns for a compile that needs a larger stack (D3280): compile
+/// What `vm_compile_file` returns for a compile that needs a larger stack (D3280): compile
 /// again on one.
 pub const COMPILE_NEED_STACK: u32 = u32::MAX;
 
-/// What `vm_compile` returns for a compile that needs Unicode tables (D3350): hand over
+/// What `vm_compile_file` returns for a compile that needs Unicode tables (D3350): hand over
 /// the families `vm_tables_need` names and compile again.
 pub const COMPILE_NEED_TABLES: u32 = u32::MAX - 1;
 
@@ -658,30 +657,6 @@ pub extern "C" fn djs_base_len() -> usize {
     djs_prelude::base_len()
 }
 
-/// Like `djs_staging`, for a VM image about to be restored with `vm_from_bytes` with a heap
-/// cap of `memory_limit`: the buffer gets the capacity the restored arena will reserve, so
-/// handing it over grows nothing. Restoring through `djs_staging` copies the arena once
-/// more and leaves the staging block behind as a hole (D1942).
-pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
-    let cap = djs_core::heap::Heap::image_capacity(len, options(memory_limit).memory_limit);
-    with(|s| {
-        if s.staging.capacity() < cap {
-            // Free the old buffer first, so the new one can take its place.
-            s.staging = Vec::new();
-            s.staging.reserve_exact(cap);
-        }
-        // SAFETY: the capacity is at least `len` (reserved above: `image_capacity` is at
-        // least `len`), and the host writes the `len` bytes next, before `vm_from_bytes`
-        // reads them: not zeroing them first saves 3% of a pi start
-        // (D3451). A host that does not write them leaves the stale bytes of linear memory,
-        // which hold values like any other (wasm memory has no uninitialized state) and
-        // fail the image's checks or break this instance only, as for the injected base
-        // (D3271).
-        unsafe { s.staging.set_len(len) };
-        s.staging.as_mut_ptr() as usize
-    })
-}
-
 /// Makes the staging buffer at least `len` bytes and returns its address. Valid until the
 /// next call.
 pub extern "C" fn djs_staging(len: usize) -> usize {
@@ -750,30 +725,20 @@ fn options(memory_limit: u32) -> VmOptions {
     }
 }
 
-/// A new VM with a heap cap of `memory_limit` bytes (0: the default): a copy of the base
-/// snapshot (djs-prelude, D1321). Returns its number, or 0 if the cap is too small for
-/// the realm.
-pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
-    add_new_vm(new_from_base(options(memory_limit), 0))
-}
-
-/// Like `vm_new`, with the arena capacity a heap of `live` bytes gets (its next GC
-/// threshold and slack) from the start: for a host that knows how big the heap will be
-/// after its setup (pi's cold start runs its prelude next). Growing later would move the
-/// arena and leave its old block behind as a hole in wasm memory.
-pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
-    add_new_vm(new_from_base(options(memory_limit), live))
-}
-
-/// `vm_new_with`'s flag: frozen builtins (`VmOptions::frozen_builtins`, D2304).
+/// `vm_new`'s flag: frozen builtins (`VmOptions::frozen_builtins`, D2304).
 pub const VM_FROZEN_BUILTINS: u32 = 1;
 
-/// Like `vm_new_reserved`, with creation options in `flags`: [`VM_FROZEN_BUILTINS`].
-/// Returns 0 with the reason in the out buffer for an unknown flag.
-pub extern "C" fn vm_new_with(memory_limit: u32, live: u32, flags: u32) -> u32 {
+/// A new VM with a heap cap of `memory_limit` bytes (0: the default): a copy of the base
+/// snapshot (djs-prelude, D1321). `live` gives the arena the capacity a heap of `live`
+/// bytes gets (its next GC threshold and slack) from the start, for a host that knows how
+/// big the heap will be after its setup (0: none): growing later would move the arena and
+/// leave its old block behind as a hole in wasm memory. `flags`: [`VM_FROZEN_BUILTINS`].
+/// Returns its number, or 0 if the cap is too small for the realm or a flag is unknown
+/// (the reason in the out buffer).
+pub extern "C" fn vm_new(memory_limit: u32, live: u32, flags: u32) -> u32 {
     if flags & !VM_FROZEN_BUILTINS != 0 {
         return with(|s| {
-            s.set_out(b"unknown vm_new_with flags");
+            s.set_out(b"unknown vm_new flags");
             0
         });
     }
@@ -784,7 +749,7 @@ pub extern "C" fn vm_new_with(memory_limit: u32, live: u32, flags: u32) -> u32 {
     add_new_vm(new_from_base(opts, live))
 }
 
-/// Whether the builtins of `vm` are frozen (`vm_new_with`, D2304): 1 or 0.
+/// Whether the builtins of `vm` are frozen (`vm_new`'s flag, D2304): 1 or 0.
 pub extern "C" fn vm_frozen_builtins(vm: u32) -> u32 {
     with(|s| s.slot(vm).vm.frozen_builtins() as u32)
 }
@@ -809,27 +774,6 @@ fn add_new_vm(vm: Result<Vm, &str>) -> u32 {
         Err(e) => {
             s.set_out(&[b"cannot create a VM: ", e.as_bytes()].concat());
             0
-        }
-    })
-}
-
-/// A VM restored from an image (`vm_arena_*` bytes of a module with the same dependency
-/// descriptor) in staging[0..len]: images made in this process only (pi's prelude
-/// images). They are not a persistence format (D2700), so only the
-/// header and the descriptor are checked, not every cell (`Vm::from_bytes_trusted`).
-/// Returns its number, or 0 with the reason in the out buffer.
-pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
-    with(|s| {
-        staged(&s.staging, 0, len);
-        // The image becomes the arena: hand over the staging buffer instead of copying.
-        let mut bytes = core::mem::take(&mut s.staging);
-        bytes.truncate(len);
-        match Vm::from_bytes_trusted(bytes, options(memory_limit)) {
-            Ok(vm) => s.add_vm(vm),
-            Err(e) => {
-                s.set_out(&[b"cannot restore the VM image: ", e.text().as_bytes()].concat());
-                0
-            }
         }
     })
 }
@@ -865,30 +809,17 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
     })
 }
 
-/// Collects garbage and makes everything live old (D2041): later collections while
-/// scripts run neither trace nor move it. For the end of the embedder's setup (pi's
-/// prelude). Returns 0, or -1 if the heap could not reserve the side tables.
-pub extern "C" fn vm_seal(vm: u32) -> i32 {
-    with(|s| if s.slot(vm).vm.seal().is_ok() { 0 } else { -1 })
-}
-
 // ---- Code ----------------------------------------------------------------------------
 
-/// Compiles staging[params_len..params_len + src_len] (UTF-8 source). `goal` 0 is a
-/// Script; 1 is a codemode async function body whose parameter names are
-/// staging[0..params_len], separated by `\n`. `goal | 2` parses TypeScript (0048), `| 4`
-/// with legacy `experimentalDecorators`, `| 8` also with `emitDecoratorMetadata` (0065),
-/// `| 16` compiles `debugger;` in async functions as an await of the global `debugger`
-/// (D3050; the dump module only: elsewhere the bit is ignored). Returns a handle to the closure, or 0 with the error (`SyntaxError: ... at
-/// line:col`) in the out buffer. Stack traces name the code `sandbox.js`;
-/// `vm_compile_file` names it.
-pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usize) -> u32 {
-    compile(vm, goal, 0, params_len, src_len)
-}
-
-/// `vm_compile` with a file name for stack traces (0049: pi's codemode reports
-/// `codemode.js:2`): staging holds the name (`name_len` bytes, UTF-8), then the parameter
-/// names, then the source.
+/// Compiles staging: the file name stack traces show (`name_len` bytes, UTF-8; none:
+/// `sandbox.js`; 0049: pi's codemode reports `codemode.js:2`), then the parameter names
+/// (`params_len` bytes, separated by `\n`), then the source (`src_len` bytes, UTF-8).
+/// `goal` 0 is a Script; 1 is a codemode async function body with those parameters.
+/// `goal | 2` parses TypeScript (0048), `| 4` with legacy `experimentalDecorators`, `| 8`
+/// also with `emitDecoratorMetadata` (0065), `| 16` compiles `debugger;` in async
+/// functions as an await of the global `debugger` (D3050; builds with the dumper only:
+/// elsewhere the bit is ignored). Returns a handle to the closure, or 0 with the error
+/// (`SyntaxError: ... at line:col`) in the out buffer.
 pub extern "C" fn vm_compile_file(
     vm: u32,
     goal: u32,
@@ -925,58 +856,7 @@ pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
     })
 }
 
-/// The suspension maps `vm` compiled for its dumps (D3041), as bytes in the out buffer for
-/// the host to give the next VM of this module (`vm_dump_maps_import`). Returns their
-/// length.
-#[cfg(feature = "dump")]
-pub extern "C" fn vm_dump_maps_export(vm: u32) -> usize {
-    with(|s| {
-        let bytes = s.slot(vm).vm.export_dump_maps();
-        s.set_out(&bytes);
-        bytes.len()
-    })
-}
-
-/// Gives `vm` the suspension maps of `vm_dump_maps_export` in staging (`len` bytes): its
-/// dumps take them instead of compiling those scripts again. 1, or 0 for bytes of another
-/// build.
-#[cfg(feature = "dump")]
-pub extern "C" fn vm_dump_maps_import(vm: u32, len: usize) -> u32 {
-    with(|s| {
-        let (slot, staging) = s.vm_and_staging(vm);
-        u32::from(slot.vm.import_dump_maps(staged(staging, 0, len)))
-    })
-}
-
-/// `vm_compile_file` through the compile cache (D3040, the dump module): staging holds
-/// the name, the parameter names and the source as for `vm_compile_file`, then a blob of an
-/// earlier compile of the same text and options (`blob_len` bytes, 0 for none). Returns the
-/// closure's handle; the out buffer then holds this compile's blob for the host to keep
-/// (empty when the blob was taken, or for a plain dump), or the error as for `vm_compile`.
-#[cfg(feature = "dump")]
-pub extern "C" fn vm_compile_cached(
-    vm: u32,
-    goal: u32,
-    name_len: usize,
-    params_len: usize,
-    src_len: usize,
-    blob_len: usize,
-) -> u32 {
-    compile_with(vm, goal, name_len, params_len, src_len, Some(blob_len))
-}
-
 fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usize) -> u32 {
-    compile_with(vm, goal, name_len, params_len, src_len, None)
-}
-
-fn compile_with(
-    vm: u32,
-    goal: u32,
-    name_len: usize,
-    params_len: usize,
-    src_len: usize,
-    #[cfg_attr(not(feature = "dump"), allow(unused_variables))] blob_len: Option<usize>,
-) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         // Borrowed from staging, which the compile leaves alone.
@@ -1007,25 +887,9 @@ fn compile_with(
             debugger_awaits: goal & 16 != 0,
             ..CompileOptions::script("")
         };
-        #[cfg(feature = "dump")]
-        let result = match blob_len {
-            Some(n) => {
-                let at = name_len + params_len + src_len;
-                let blob = (n > 0).then(|| staged(staging, at, n));
-                elastic(&mut slot.vm, |vm| vm.compile_cached(src, &opts, blob))
-                    .map_err(|e| e.text())
-            }
-            None => elastic(&mut slot.vm, |vm| {
-                allocator::with_zone(|| vm.compile(src, &opts))
-            })
-            .map(|f| (f, None))
-            .map_err(|e| e.text()),
-        };
-        #[cfg(not(feature = "dump"))]
         let result = elastic(&mut slot.vm, |vm| {
             allocator::with_zone(|| vm.compile(src, &opts))
         })
-        .map(|f| (f, None::<Vec<u8>>))
         .map_err(|e| e.text());
         match result {
             Err(msg) if slot.vm.needs_tables() != 0 => {
@@ -1036,13 +900,9 @@ fn compile_with(
                 s.set_out(msg.as_bytes());
                 COMPILE_NEED_STACK
             }
-            Ok((f, blob)) => {
+            Ok(f) => {
                 let h = slot.handle(f);
-                if h == 0 {
-                    s.set_out(b"out of memory");
-                } else {
-                    s.set_out(blob.as_deref().unwrap_or_default());
-                }
+                s.set_out(if h == 0 { b"out of memory" } else { b"" });
                 h
             }
             Err(msg) => {
@@ -1055,7 +915,7 @@ fn compile_with(
 
 /// The bytecode listing of a script, as `djs disasm` prints it, for the docs site's live
 /// examples (0113). Staging holds the parameter names (`\n`-separated, `params_len`
-/// bytes), then the source; `goal` as for `vm_compile`. Compiles into a scratch heap, not a
+/// bytes), then the source; `goal` as for `vm_compile_file`. Compiles into a scratch heap, not a
 /// VM. Returns 1 with the listing in the out buffer, or 0 with the compile error. Only
 /// with the `docs` feature, so the shipping module does not carry the disassembler.
 #[cfg(feature = "docs")]
@@ -1115,7 +975,7 @@ pub extern "C" fn vm_global(vm: u32) -> u32 {
     })
 }
 
-/// A handle to a new ordinary object (0 if out of memory); `flags` bit 0 (ABI 8, D3623): with
+/// A handle to a new ordinary object (0 if out of memory); `flags` bit 0 (D3623): with
 /// a null prototype.
 pub extern "C" fn vm_new_object(vm: u32, flags: u32) -> u32 {
     with(|s| {
@@ -1176,8 +1036,8 @@ pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usiz
 /// Defines property staging[0..name_len] of object `obj` (a handle) as `value` (a handle),
 /// writable and configurable, and not enumerable, like builtins, unless bit 0 of `flags`
 /// is set (data, as an assignment makes it, D3592; a host that leaves `flags` out passes
-/// 0). Bit 1 (part of ABI 8, D3611) freezes `obj` afterwards, as `Object.freeze` (a
-/// namespace object once the host made it). Bit 2 (ABI 8, D3621) makes the property
+/// 0). Bit 1 (D3611) freezes `obj` afterwards, as `Object.freeze` (a
+/// namespace object once the host made it). Bit 2 (D3621) makes the property
 /// non-writable and non-configurable (a global the host binds). Returns 0, or -1 if `obj` is not an object, the heap is full or
 /// `obj` cannot be frozen.
 pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flags: u32) -> i32 {
@@ -1335,53 +1195,6 @@ pub extern "C" fn vm_decode_wire(vm: u32, len: usize) -> u32 {
                 h => return h,
             },
             Err(e) => e.text(),
-        };
-        s.set_out(msg.as_bytes());
-        0
-    })
-}
-
-/// A handle to the value of the JSON text (UTF-8) in staging[0..len], parsed like
-/// `JSON.parse` (objects and arrays get the realm's prototypes); 0 on failure (the
-/// SyntaxError or "out of memory" in `out`). For hosts that already hold JSON text.
-pub extern "C" fn vm_parse_json(vm: u32, len: usize) -> u32 {
-    with(|s| {
-        let (slot, staging) = s.vm_and_staging(vm);
-        let input = staged(staging, 0, len);
-        let heap = slot.vm.heap_mut();
-        let opts = json::ParseOptions {
-            object_proto: intrinsic(heap, Intrinsic::ObjectProto).as_object(),
-            array_proto: intrinsic(heap, Intrinsic::ArrayProto).as_object(),
-            ..json::ParseOptions::default()
-        };
-        let msg = match json::parse_utf8(heap, input, &opts) {
-            Ok(v) => match slot.handle(v) {
-                0 => String::from("out of memory"),
-                h => return h,
-            },
-            Err(json::ParseError::Syntax(e)) => e.text(),
-            Err(json::ParseError::Heap(_)) => String::from("out of memory"),
-        };
-        s.set_out(msg.as_bytes());
-        0
-    })
-}
-
-/// A handle to `JSON.stringify(value)` as a heap string, for plain data (objects, arrays,
-/// primitives without getters, proxies or toJSON); 0 on failure with the reason in `out`
-/// ("not plain data" for anything else, "undefined" when the result is undefined).
-pub extern "C" fn vm_json_stringify(vm: u32, h: u32) -> u32 {
-    with(|s| {
-        let slot = s.slot(vm);
-        let v = slot.value(h);
-        let msg = match json::stringify_fast(slot.vm.heap_mut(), v, &[]) {
-            Ok(Some(str)) => match slot.handle(Value::string(str)) {
-                0 => "out of memory",
-                h => return h,
-            },
-            Ok(None) => "undefined",
-            Err(json::StringifyError::Slow) => "not plain data",
-            Err(e) => e.js_error().map_or("error", |(_, m)| m),
         };
         s.set_out(msg.as_bytes());
         0
@@ -1586,24 +1399,17 @@ pub extern "C" fn vm_canonical_hash(vm: u32) -> i32 {
 }
 
 /// What WeakRef and FinalizationRegistry do (`Vm::set_weak_refs`, D1680): 0 collected
-/// (weak, the default), 1 strong (no collection is observable), 2 absent (the globals are
-/// deleted). Set it on a new VM, before running code. Returns 0, or -1 for a bad mode or
-/// a full heap.
+/// (weak, the default), 1 strong (no collection is observable). Set it on a new VM, before
+/// running code. Returns 0, or -1 for a bad mode.
 pub extern "C" fn vm_set_weak_refs(vm: u32, mode: u32) -> i32 {
     use djs_core::vm::WeakRefs;
     let mode = match mode {
         0 => WeakRefs::Collected,
         1 => WeakRefs::Strong,
-        2 => WeakRefs::Absent,
         _ => return -1,
     };
-    with(|s| {
-        if s.slot(vm).vm.set_weak_refs(mode).is_ok() {
-            0
-        } else {
-            -1
-        }
-    })
+    with(|s| s.slot(vm).vm.set_weak_refs(mode));
+    0
 }
 
 /// Reseeds `Math.random` with the 64-bit seed `hi << 32 | lo` (`Vm::set_random_seed`; 0
@@ -1614,21 +1420,6 @@ pub extern "C" fn vm_set_random_seed(vm: u32, lo: u32, hi: u32) {
         s.slot(vm)
             .vm
             .set_random_seed((u64::from(hi) << 32) | u64::from(lo))
-    })
-}
-
-/// Reseeds `Math.random` alone with `hi << 32 | lo`, keeping the hash key
-/// (`Vm::set_math_random_seed`, D2433).
-pub extern "C" fn vm_set_math_random_seed(vm: u32, lo: u32, hi: u32) {
-    math_random(vm, lo, hi, false)
-}
-
-/// `Math.random`'s state: a seed, or a dumped run's state (one that ran, D2837).
-fn math_random(vm: u32, lo: u32, hi: u32, restore: bool) {
-    with(|s| {
-        s.slot(vm)
-            .vm
-            .set_math_random((u64::from(hi) << 32) | u64::from(lo), restore)
     })
 }
 
@@ -1774,7 +1565,11 @@ pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
 /// `$djs.seed(lo, hi)`, `Vm::restore_math_random`): as a state that ran, which the next
 /// dump writes again (D2837).
 pub extern "C" fn vm_restore_math_random(vm: u32, lo: u32, hi: u32) {
-    math_random(vm, lo, hi, true)
+    with(|s| {
+        s.slot(vm)
+            .vm
+            .restore_math_random((u64::from(hi) << 32) | u64::from(lo))
+    })
 }
 
 /// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's
@@ -1902,74 +1697,62 @@ ops! {
     4 djs_base_inject();
     5 djs_base_coded_ptr(a);
     6 djs_base_len();
-    7 djs_image_staging(a, b);
-    8 djs_staging(a);
-    9 djs_out_ptr();
-    10 djs_out_len();
-    11 djs_panic_ptr();
-    12 djs_panic_len();
-    13 djs_debug_panic();
-    14 vm_new(a);
-    15 vm_new_reserved(a, b);
-    16 vm_new_with(a, b, c);
-    17 vm_frozen_builtins(a);
-    #[cfg(feature = "compiled-prelude")] 18 vm_new_compiled(a);
-    19 vm_from_bytes(a, b);
-    20 vm_free(a);
-    21 vm_arena_ptr(a);
-    22 vm_arena_len(a);
-    23 vm_collect(a);
-    24 vm_seal(a);
-    25 vm_compile(a, b, c, d);
-    26 vm_compile_file(a, b, c, d, e);
-    #[cfg(feature = "dump")] 27 vm_set_dump_source_refs(a, b);
-    #[cfg(feature = "dump")] 28 vm_call_site(a, b);
-    #[cfg(feature = "dump")] 29 vm_dump_maps_export(a);
-    #[cfg(feature = "dump")] 30 vm_dump_maps_import(a, b);
-    #[cfg(feature = "dump")] 31 vm_compile_cached(a, b, c, d, e, f);
-    #[cfg(feature = "docs")] 32 djs_disasm(a, b, c);
-    33 vm_global(a);
-    34 vm_new_object(a, b);
-    35 vm_dump_runtime(a, b);
-    36 vm_new_host_function(a, b, c);
-    37 vm_new_async_host_function(a, b, c);
-    38 vm_define(a, b, c, d, e);
-    #[cfg(feature = "dump")] 39 vm_dump(a, b);
-    40 vm_decode_wire(a, b);
-    41 vm_parse_json(a, b);
-    42 vm_json_stringify(a, b);
-    43 vm_string_reserve(a, b);
-    44 vm_new_error(a, b, c);
-    45 vm_handle_bits(a, b);
-    46 vm_handle_free(a, b);
-    47 vm_display(a, b);
-    48 vm_call(a, b, c, d);
-    49 vm_run(a, b);
-    50 vm_fuel_used(a);
-    51 vm_set_now(a, t);
-    52 vm_canonical_hash(a);
-    53 vm_set_weak_refs(a, b);
-    54 vm_set_random_seed(a, b, c);
-    55 vm_set_math_random_seed(a, b, c);
-    56 vm_set_time_zone_offset(a, b);
-    57 vm_abort(a);
-    58 vm_result(a);
-    59 vm_outcome(a);
-    60 vm_host_call(a);
-    61 vm_host_call_info(a, b);
-    62 vm_new_host_calls(a);
-    63 vm_take_unhandled_rejections(a);
-    64 vm_promise_state(a, b);
-    65 vm_resolve_host_call(a, b, c, d);
-    66 vm_resolve_host_call_at(a, b, c, d, t);
-    67 vm_open_call(a, b, c);
-    68 vm_restore_math_random(a, b, c);
-    69 vm_set_next_call_id(a, b);
-    70 djs_elastic_stack(a);
-    71 djs_stack(a);
-    #[cfg(feature = "alloc-stats")] 72 djs_alloc_stats(a);
-    73 djs_has(a);
-    #[cfg(feature = "cold-unicode")] 74 djs_tables_ptr(a, b);
-    #[cfg(feature = "cold-unicode")] 75 djs_tables_set();
-    76 vm_tables_need(a);
+    7 djs_staging(a);
+    8 djs_out_ptr();
+    9 djs_out_len();
+    10 djs_panic_ptr();
+    11 djs_panic_len();
+    12 djs_debug_panic();
+    13 vm_new(a, b, c);
+    14 vm_frozen_builtins(a);
+    #[cfg(feature = "compiled-prelude")] 15 vm_new_compiled(a);
+    16 vm_free(a);
+    17 vm_arena_ptr(a);
+    18 vm_arena_len(a);
+    19 vm_collect(a);
+    20 vm_compile_file(a, b, c, d, e);
+    #[cfg(feature = "dump")] 21 vm_set_dump_source_refs(a, b);
+    #[cfg(feature = "dump")] 22 vm_call_site(a, b);
+    #[cfg(feature = "docs")] 23 djs_disasm(a, b, c);
+    24 vm_global(a);
+    25 vm_new_object(a, b);
+    26 vm_dump_runtime(a, b);
+    27 vm_new_host_function(a, b, c);
+    28 vm_new_async_host_function(a, b, c);
+    29 vm_define(a, b, c, d, e);
+    #[cfg(feature = "dump")] 30 vm_dump(a, b);
+    31 vm_decode_wire(a, b);
+    32 vm_string_reserve(a, b);
+    33 vm_new_error(a, b, c);
+    34 vm_handle_bits(a, b);
+    35 vm_handle_free(a, b);
+    36 vm_display(a, b);
+    37 vm_call(a, b, c, d);
+    38 vm_run(a, b);
+    39 vm_fuel_used(a);
+    40 vm_set_now(a, t);
+    41 vm_canonical_hash(a);
+    42 vm_set_weak_refs(a, b);
+    43 vm_set_random_seed(a, b, c);
+    44 vm_set_time_zone_offset(a, b);
+    45 vm_abort(a);
+    46 vm_result(a);
+    47 vm_outcome(a);
+    48 vm_host_call(a);
+    49 vm_host_call_info(a, b);
+    50 vm_new_host_calls(a);
+    51 vm_take_unhandled_rejections(a);
+    52 vm_promise_state(a, b);
+    53 vm_resolve_host_call(a, b, c, d);
+    54 vm_resolve_host_call_at(a, b, c, d, t);
+    55 vm_open_call(a, b, c);
+    56 vm_restore_math_random(a, b, c);
+    57 vm_set_next_call_id(a, b);
+    58 djs_elastic_stack(a);
+    59 djs_stack(a);
+    #[cfg(feature = "alloc-stats")] 60 djs_alloc_stats(a);
+    61 djs_has(a);
+    #[cfg(feature = "cold-unicode")] 62 djs_tables_ptr(a, b);
+    #[cfg(feature = "cold-unicode")] 63 djs_tables_set();
+    64 vm_tables_need(a);
 }

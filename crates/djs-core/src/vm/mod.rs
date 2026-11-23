@@ -18,8 +18,6 @@
 #[cfg(feature = "dump")]
 mod call_site;
 pub mod compat;
-#[cfg(feature = "compile-cache")]
-pub(crate) mod compile_cache;
 #[cfg(feature = "dump")]
 pub mod dump;
 #[cfg(feature = "dump")]
@@ -94,9 +92,6 @@ pub enum WeakRefs {
     /// collections run (the spec allows an engine that never collects). Applies to the
     /// WeakRefs and registry cells created afterwards.
     Strong,
-    /// The globals `WeakRef` and `FinalizationRegistry` are deleted (as pi's quickjs VM
-    /// leaves them out in deterministic runs). Not reversible.
-    Absent,
 }
 
 /// VM configuration.
@@ -224,7 +219,7 @@ impl Vm {
                 "this build cannot run the prelude: Vm::new needs djs-core's `prelude` feature in wasm"
             );
         }
-        vm.set_weak_refs(opts.weak_refs)?;
+        vm.set_weak_refs(opts.weak_refs);
         if opts.frozen_builtins {
             // Without a base image, the realm is made into one: the builtin prefix with
             // the per-VM cells above it (D2063).
@@ -400,7 +395,7 @@ impl Vm {
     fn after_copy(&mut self) -> Result<(), HeapError> {
         let seed = self.opts.random_seed;
         crate::builtins::number::set_seed(&mut self.heap, seed);
-        self.set_weak_refs(self.opts.weak_refs)?;
+        self.set_weak_refs(self.opts.weak_refs);
         self.heap.set_frozen_builtins(self.opts.frozen_builtins);
         self.heap.force_prefix_barrier(self.opts.prefix_barrier);
         Ok(())
@@ -412,19 +407,9 @@ impl Vm {
     }
 
     /// Sets what WeakRef and FinalizationRegistry do (D1680); set it before running code.
-    /// `Strong` affects the weak references created afterwards, `Absent` deletes the two
-    /// globals, `Collected` makes new ones weak again (it cannot bring back deleted
-    /// globals).
-    pub fn set_weak_refs(&mut self, mode: WeakRefs) -> Result<(), HeapError> {
+    /// It applies to the weak references created afterwards.
+    pub fn set_weak_refs(&mut self, mode: WeakRefs) {
         self.heap.set_weak_refs_strong(mode == WeakRefs::Strong);
-        if mode == WeakRefs::Absent {
-            let g = self.global();
-            for name in ["WeakRef", "FinalizationRegistry"] {
-                let key = self.heap.atom_str(name)?;
-                self.heap.delete_own_property(g, key)?;
-            }
-        }
-        Ok(())
     }
 
     /// The dependency descriptor (D2265), before anything else: an image this build

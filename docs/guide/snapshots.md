@@ -199,14 +199,13 @@ wasm32, which a test checks, so nothing in it depends on the platform.
 Images are the engine's in-process mechanism:
 
 - **The base** is copied into every new VM (above).
-- **A host's own setup.** A host that runs setup code of its own before every script
-  (helpers, a frozen realm) can seal the heap after it (`vm_seal`: a full collection that
-  makes everything live old) and keep that image, then start each later script from a
-  copy instead of running the setup again ([how an agent host does it](pi.md)). The image
-  is a function of the setup's inputs only if the setup is deterministic, so such a host
-  runs it with a fixed clock and seed. A start that does run the setup can create its VM
-  with room for the heap it will reach (`vm_new_reserved`), because growing the arena
-  while the setup runs would move it, and in wasm its old block stays behind as a hole.
+- **A native host's own setup.** A Rust host that runs setup code of its own before
+  every script (helpers, a frozen realm) seals the heap after it (`Vm::seal`: a full
+  collection that makes everything live old) and keeps that image as a snapshot, then
+  starts each later script from a copy instead of running the setup again ([the Rust
+  interface](rust-api.md)). A wasm host that knows how big its heap will get can create
+  its VM with room for it (`vm_new`'s second argument), because growing the arena moves
+  it, and in wasm its old block stays behind as a hole.
 - **The stress tests and the determinism checks** stop a run every few instructions,
   restore it from its image and compare images byte for byte
   ([determinism](determinism.md)).

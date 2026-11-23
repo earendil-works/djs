@@ -61,7 +61,7 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// a build with it, and images move freely between the two. Nor `dump` (0167), which only
 /// adds `Vm::dump`, a reader of the heap: a run never calls it. Nor `lazy` (D2990): the base
 /// holds no lazy template (the prelude is privileged), and lazy compilation is a VM option.
-/// Nor `compile-cache` (D3040): an import makes what the compile makes. Nor `prelude`
+/// Nor `prelude`
 /// (D3094): it only decides whether a wasm build can run the prelude source. Nor
 /// `intrinsic-names` (D3340): names in messages and listings. Nor `cold-unicode` (D3350):
 /// where the property tables come from. `embed` counts (D3175): its
@@ -77,7 +77,6 @@ fn features() -> Vec<String> {
                 && f != "unsafe-heap"
                 && f != "dump"
                 && f != "lazy"
-                && f != "compile-cache"
                 && f != "prelude"
                 && f != "intrinsic-names"
                 && f != "cold-unicode"

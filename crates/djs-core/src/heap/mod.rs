@@ -221,10 +221,6 @@ pub struct Heap {
     #[cfg(feature = "unicode-normalization")]
     pub(crate) norm: Option<&'static [u8]>,
     pub(crate) tables_need: u8,
-    /// While a compile is recorded for the compile cache (D3040): every interning, in
-    /// order (`compile_cache::Intern`).
-    #[cfg(feature = "compile-cache")]
-    pub(crate) intern_log: Option<alloc::vec::Vec<crate::vm::compile_cache::Intern>>,
     /// Fuel owed for the work of leaf primitives, which the interpreter takes into its
     /// fuel (`work.rs`, 0289): a little-endian u32, saturating. Zero between runs: not
     /// part of the image. A `Cell`, so that the primitives that only read the heap
@@ -372,8 +368,6 @@ impl Heap {
             norm: crate::unicode::builtin_norm(),
             tables_need: 0,
             work: core::cell::Cell::new([0; 4]),
-            #[cfg(feature = "compile-cache")]
-            intern_log: None,
             #[cfg(test)]
             fail_next_gc_reserve: false,
             #[cfg(test)]

@@ -1150,32 +1150,6 @@ fn strong_weak_refs(stress_registrations: u32) {
 }
 
 #[test]
-fn absent_weak_refs() {
-    let vm = vm_with(VmOptions {
-        weak_refs: WeakRefs::Absent,
-        ..Default::default()
-    });
-    let (vm, out) = run_script(
-        vm,
-        "console.log(typeof WeakRef, typeof FinalizationRegistry, typeof WeakMap);\n",
-    );
-    assert_eq!(out.log, ["undefined undefined function"]);
-    // From a base image too (after_copy), as embedders create VMs.
-    let base = Vm::new(VmOptions::default()).unwrap().bytes().to_vec();
-    let mut b = Vm::from_base(
-        &base,
-        VmOptions {
-            weak_refs: WeakRefs::Absent,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let w = b.heap_mut().atom_str("WeakRef").unwrap();
-    assert!(b.heap().find_property(b.global(), w).is_none());
-    drop(vm);
-}
-
-#[test]
 fn finalization_cleanup_can_wait_for_the_host() {
     let vm = vm_with(VmOptions {
         exec: ExecOptions {

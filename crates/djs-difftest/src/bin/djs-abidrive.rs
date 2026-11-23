@@ -56,7 +56,7 @@ fn main() {
     let src = std::fs::read(&a[1]).unwrap();
     let slice: u32 = a[2].parse().unwrap();
     let trace: u64 = a.get(3).map_or(0, |s| s.parse().unwrap());
-    let vm = vm_new(0);
+    let vm = vm_new(0, 0, 0);
     vm_set_now(vm, 1_700_000_000_000.0);
     vm_set_time_zone_offset(vm, 90);
     let g = vm_global(vm);
@@ -72,7 +72,7 @@ fn main() {
     stage(b"tool");
     vm_define(vm, g, 4, tool, 0);
     stage(&src);
-    let f = vm_compile(vm, 1, 0, src.len());
+    let f = vm_compile_file(vm, 1, 0, 0, src.len());
     assert!(f != 0, "compile: {}", String::from_utf8_lossy(&out()));
     stage(&[]);
     vm_call(vm, f, 0, 0);

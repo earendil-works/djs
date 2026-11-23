@@ -43,7 +43,7 @@ console.log(`WebAssembly.compile: ${(performance.now() - t).toFixed(2)} ms (once
 await loadModule();
 
 const inst = await WebAssembly.instantiate(module, {});
-const x = djsExports(module, inst) as unknown as { vm_new(n: number): number; vm_free(vm: number): void };
+const x = djsExports(module, inst) as unknown as { vm_new(n: number, live: number, flags: number): number; vm_free(vm: number): void };
 // The decoded base kept, as hosts keep it for their later instances.
 rememberBase(module, x as never);
 console.log(`instantiate: ${(await medianAsync(async () => void (await WebAssembly.instantiate(module, {})))).toFixed(1)} us`);
@@ -52,7 +52,7 @@ console.log(`instantiate: ${(await medianAsync(async () => void (await WebAssemb
 console.log(
   `vm_new: ${median(() => {
     provideBase(module, x as never);
-    x.vm_free(x.vm_new(0));
+    x.vm_free(x.vm_new(0, 0, 0));
   }).toFixed(1)} us (the decoded base injected and taken as the arena, D1321, D3360)`,
 );
 console.log(`Sandbox.create: ${(await medianAsync(async () => (await Sandbox.create({ module })).dispose())).toFixed(1)} us`);

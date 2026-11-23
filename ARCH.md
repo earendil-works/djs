@@ -196,8 +196,8 @@ scaled by the 8-byte alignment.
     **minor** collections, which neither mark nor move them. A linear walk over the old
     cells finds every reference to a young cell (no write barrier); those slots are the
     roots of the young cells and the only old slots the update pass rewrites. The old end
-    is the base image's length after `vm_new`, and `Vm::seal` (pi calls it after its
-    prelude) sets it to the arena size after a full collection. Full collections shrink
+    is the base image's length after `vm_new`, and `Vm::seal` (an embedder calls it after
+    its setup) sets it to the arena size after a full collection. Full collections shrink
     the old region to its live cells but never extend it (D2042). The safepoints'
     collections are minor, and every 16th is full, as is the first one after a canonical
     image (D2045); the schedule is image state, like the
@@ -576,16 +576,15 @@ and an out buffer for bytes back, and about 45 exports, documented in docs/host.
 ABI". In outline:
 
 ```
-vm_new(memory_limit) -> vm                       // a copy of the base image (D1321)
-vm_from_bytes(len, memory_limit) -> vm           // an image of this process, from staging (D2700)
+vm_new(memory_limit, live, flags) -> vm          // a copy of the base image (D1321)
 vm_arena_ptr / vm_arena_len                      // the image: the arena bytes
 vm_dump                                          // continuation dumps (D3600)
-vm_compile(vm, goal, params_len, src_len) -> h   // goal: async body, Script, TS, ...
+vm_compile_file(vm, goal, name, params, src) -> h // goal: async body, Script, TS, ...
 vm_call(vm, f, this, argc)                       // pushes a frame, does not run it
 vm_run(vm, fuel) -> status                       // Done | Threw | OutOfFuel | HostCall |
                                                  // Idle | HostOutOfMemory
 vm_host_call_info / vm_resolve_host_call(_at)    // sync and async host calls
-vm_decode_wire, vm_parse_json, vm_json_stringify // data in and out (with the reader)
+vm_decode_wire                                   // data in (out: the reader)
 vm_set_now, vm_set_time_zone_offset, vm_set_random_seed, vm_set_weak_refs
 vm_collect, vm_canonical_hash, vm_abort, vm_take_unhandled_rejections, ...
 ```

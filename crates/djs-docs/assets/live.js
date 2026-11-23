@@ -54,7 +54,7 @@ function disasm(module, src, ts) {
   const mem = new Uint8Array(x.memory.buffer);
   mem.set(params, at);
   mem.set(body, at + params.length);
-  // Goal bits as for vm_compile: 1 a codemode body, 2 TypeScript.
+  // Goal bits as for vm_compile_file: 1 a codemode body, 2 TypeScript.
   x.djs_disasm(ts ? 3 : 1, params.length, body.length);
   return new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
 }

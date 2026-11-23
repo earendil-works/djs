@@ -36,11 +36,11 @@ export function trapText(x: TrapExports, e: Error): string {
 
 /** `vm_run`'s status for an instruction that compiles something deeper than the stack allows. */
 const NEED_STACK = 6;
-/** `vm_compile*`'s result for such a compile (`u32::MAX` as an i32). */
+/** `vm_compile_file`'s result for such a compile (`u32::MAX` as an i32). */
 const COMPILE_NEED_STACK = -1;
 /** `vm_run`'s status for an instruction that needs Unicode tables the module leaves out (D3350). */
 const NEED_TABLES = 7;
-/** `vm_compile*`'s result for a compile that needs them (`u32::MAX - 1` as an i32). */
+/** `vm_compile_file`'s result for a compile that needs them (`u32::MAX - 1` as an i32). */
 const COMPILE_NEED_TABLES = -2;
 /** The larger stack: the parser's deepest accepted nesting needs at most ~115 KiB (D2540). */
 const BIG_STACK = 128 * 1024;
@@ -57,15 +57,13 @@ export interface StackExports {
   djs_stack(len: number): number;
   vm_run(vm: number, fuel: number): number;
   vm_fuel_used(vm: number): number;
-  vm_compile?(vm: number, goal: number, paramsLen: number, srcLen: number): number;
-  vm_compile_file?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
-  vm_compile_cached?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number, blobLen: number): number;
+  vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
 }
 
 /**
  * The exports of a djs-wasm instance with an elastic stack (D3280): the module links a small
  * shadow stack, enough for any script short of deep nesting. A compile that nests deeper (in
- * `vm_compile*`, or at run time: `eval`, `Function`, `new RegExp`, a lazy function's first
+ * `vm_compile_file`, or at run time: `eval`, `Function`, `new RegExp`, a lazy function's first
  * call) stops before it has any effect; the wrappers then move the stack pointer to a larger
  * block for one more call and back. What compiles and its errors are the same as with a large
  * stack. The shipped module also leaves its Unicode property and normalization tables out
@@ -136,18 +134,15 @@ export function elasticStack<X extends StackExports>(x: X, module?: WebAssembly.
     }
   };
   y.vm_fuel_used = (vm) => fuelUsed(vm) + (vm === carryVm ? carry : 0);
-  for (const name of ["vm_compile", "vm_compile_file", "vm_compile_cached"] as const) {
-    const f = x[name] as ((...a: number[]) => number) | undefined;
-    if (!f) continue;
-    (y as Record<string, unknown>)[name] = (...a: number[]) => {
-      let h = f(...a);
-      if (h === COMPILE_NEED_TABLES) {
-        tables(a[0]);
-        h = f(...a);
-      }
-      return h === COMPILE_NEED_STACK ? big(() => f(...a)) : h;
-    };
-  }
+  const compile = x.vm_compile_file;
+  y.vm_compile_file = (...a) => {
+    let h = compile(...a);
+    if (h === COMPILE_NEED_TABLES) {
+      tables(a[0]);
+      h = compile(...a);
+    }
+    return h === COMPILE_NEED_STACK ? big(() => compile(...a)) : h;
+  };
   wrapped.add(y);
   return y;
 }

@@ -114,7 +114,7 @@ field this way is several times cheaper than tracing it, so a minor collection o
 heap that holds just the base costs less than half of a full one.
 
 **Where B comes from.** A VM made from the base image starts with B at the image's end.
-An embedder can **seal** a heap with `Vm::seal` (`vm_seal` in wasm): a full collection,
+An embedder can **seal** a heap with `Vm::seal`: a full collection,
 after which everything live is old. A host that runs a prelude of its own (a lockdown,
 helpers its scripts use) seals after it, so that prelude becomes old too. Nothing else
 moves B up. Before that collection, `seal` copies the cells a session replaces first to
@@ -206,9 +206,8 @@ these objects need:
 
 The tables are processed in a fixed order, so which pairs die depends only on the object
 graph. But weak references make *when* collections run observable to a script, so a
-host can make them strong (the tables become ordinary arrays, and nothing they hold ever
-dies) or absent ([determinism](determinism.md), the `weakRefs` option in [the JavaScript
-interface](js-api.md#creating-a-sandbox)).
+host can make them strong: the tables become ordinary arrays, and nothing they hold ever
+dies ([determinism](determinism.md)).
 
 ## Slices and the strings they keep
 

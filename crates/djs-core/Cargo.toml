@@ -14,7 +14,7 @@ doctest = false
 djs-libm = { path = "../djs-libm" }
 
 [features]
-default = ["full", "unicode", "dump", "lazy", "compile-cache", "embed"]
+default = ["full", "unicode", "dump", "lazy", "embed"]
 # Everything djs implements. Off, the build is slim (D2411, docs/slim-codemode.md): no typed
 # arrays/ArrayBuffer/DataView, Iterator helpers or `Iterator`, BigInt, WeakRef/
 # FinalizationRegistry, DisposableStack/AsyncDisposableStack/SuppressedError, and no
@@ -29,9 +29,6 @@ dump = []
 # build without it treats a lazy template as corrupt bytecode, and `Vm::seal` compiles
 # them all first. Off in the shipped main and slim modules (D2990), on in the dump module.
 lazy = []
-# The compile cache (0219, D3040): `Vm::compile_cached` exports a compile's cells as a
-# blob that another VM imports instead of compiling again. Code only.
-compile-cache = []
 # What Rust hosts (djs-embed) use beyond the wasm modules' needs (D3175, D3180): the
 # outbound wire encoder (`wire::encode`), the wire format's uncounted UTF-8 strings,
 # `ExecOptions::fatal_out_of_memory`, and ES modules (D3171: the module goal, the loader,

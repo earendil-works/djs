@@ -242,10 +242,6 @@ test("deterministic mode and random seeds (D1680)", async () => {
   };
   assert.deepEqual(await random({ randomSeed: 7n }), await random({ randomSeed: 7 }));
   assert.notDeepEqual(await random({}), await random({}));
-  // Weak refs can also be absent.
-  const sb = await Sandbox.create({ weakRefs: "absent" });
-  assert.equal(sb.run("return typeof WeakRef + typeof FinalizationRegistry"), "undefinedundefined");
-  sb.dispose();
 });
 
 test("frozenBuiltins (D2304): builtins behave as frozen, with the override fix", async () => {

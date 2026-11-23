@@ -490,7 +490,7 @@ milliseconds per VM, where a start without it takes tens of microseconds.
 
 djs offers the same result as an option at VM creation: `frozen_builtins` in
 [`VmOptions`](../../crates/djs-core/src/vm/mod.rs), `frozenBuiltins` in the
-[Sandbox](js-api.md#creating-a-sandbox), flag 1 of `vm_new_with` in wasm. Nothing is
+[Sandbox](js-api.md#creating-a-sandbox), flag 1 of `vm_new` in wasm. Nothing is
 frozen. Every VM's arena starts with a copy of the base image, so the builtins sit below
 a known offset, the end of the builtin prefix. With the option on, the property
 operations treat every object below it as frozen: it is not extensible, its properties

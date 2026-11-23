@@ -225,13 +225,6 @@ export interface SandboxOptions {
    */
   randomSeed?: number | bigint;
   /**
-   * What `WeakRef` and `FinalizationRegistry` do (D1680): `"collected"` (weak, as the
-   * spec intends), `"strong"` (targets never die and cleanup callbacks never run, so no
-   * collection is observable) or `"absent"` (the globals are deleted). Default
-   * `"collected"`, with `deterministic` `"strong"`.
-   */
-  weakRefs?: "collected" | "strong" | "absent";
-  /**
    * Frozen builtins (D2304): the builtin objects (prototypes, constructors, `Math`, ...)
    * behave as frozen: writes to them fail (a TypeError in strict code), their properties
    * read as non-writable and non-configurable, and `Object.isFrozen` is true. Assigning
@@ -258,7 +251,8 @@ export interface SandboxOptions {
   /**
    * Run deterministically (D1680): with the same code, parameters and results in the same
    * order, a run does the same thing every time. `Math.random` is seeded from `seed`, the
-   * time zone is UTC, weak references are strong (unless `weakRefs` says otherwise), and
+   * time zone is UTC, weak references are strong (targets never die and cleanup callbacks
+   * never run, so no collection is observable), and
    * the clock starts at `startedAt` and moves only when an async host function's result
    * is delivered: to `now` at that moment (never backwards). Sync host functions and
    * fuel slices do not move it. A fixed `now` makes the clock fully reproducible.
@@ -431,8 +425,8 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 8;
-/** `vm_new_with`'s flag: frozen builtins (D2304). */
+const ABI_VERSION = 9;
+/** `vm_new`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
 /**
@@ -541,15 +535,13 @@ interface Exports {
   memory: WebAssembly.Memory;
   djs_abi_version(): number;
   djs_staging(len: number): number;
-  djs_image_staging(len: number, memoryLimit: number): number;
   djs_out_ptr(): number;
   djs_out_len(): number;
   djs_panic_ptr(): number;
   djs_panic_len(): number;
   __stack_pointer: WebAssembly.Global;
   djs_debug_panic(): void;
-  vm_new(memoryLimit: number): number;
-  vm_new_with(memoryLimit: number, live: number, flags: number): number;
+  vm_new(memoryLimit: number, live: number, flags: number): number;
   vm_frozen_builtins(vm: number): number;
   vm_dump(vm: number, len: number): number;
   /** Whether dumps refer to the scripts the host ran (`$djs.source`, D2882). */
@@ -560,16 +552,15 @@ interface Exports {
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
   vm_collect(vm: number): number;
-  vm_compile(vm: number, goal: number, paramsLen: number, srcLen: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_global(vm: number): number;
-  /** `flags` bit 0 (ABI 8, D3623): a null prototype. */
+  /** `flags` bit 0 (D3623): a null prototype. */
   vm_new_object(vm: number, flags?: number): number;
   /** The plain dump runtime, `$djs`'s helpers (D2903). */
   vm_dump_runtime(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
-  /** `flags` bit 0 (D3592): enumerable; bit 1 (part of ABI 8, D3611): freeze `obj` afterwards. */
+  /** `flags` bit 0 (D3592): enumerable; bit 1 (D3611): freeze `obj` afterwards. */
   vm_define(vm: number, obj: number, nameLen: number, value: number, flags?: number): number;
   vm_decode_wire(vm: number, len: number): number;
   vm_string_reserve(vm: number, len: number): number;
@@ -591,7 +582,6 @@ interface Exports {
   vm_set_now(vm: number, ms: number): void;
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
-  vm_set_math_random_seed(vm: number, lo: number, hi: number): void;
   vm_restore_math_random(vm: number, lo: number, hi: number): void;
   vm_outcome(vm: number): number;
   /** Loading plain dumps (D2890). */
@@ -1031,9 +1021,7 @@ export class Sandbox {
     // (D2060).
     provideBase(module, x);
     rememberBase(module, x);
-    let vm: number;
-    if (opts.frozenBuiltins) vm = x.vm_new_with(opts.memoryLimit ?? 0, 0, VM_FROZEN_BUILTINS);
-    else vm = x.vm_new(opts.memoryLimit ?? 0);
+    const vm = x.vm_new(opts.memoryLimit ?? 0, 0, opts.frozenBuiltins ? VM_FROZEN_BUILTINS : 0);
     if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     this.x = x;
     this.module = module;
@@ -1077,11 +1065,9 @@ export class Sandbox {
     const det = opts.deterministic;
     const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
     x.vm_set_random_seed(vm, lo, hi);
-    const weak = opts.weakRefs ?? (det ? "strong" : "collected");
-    if (this.guard(() => x.vm_set_weak_refs(vm, WEAK_REF_MODES[weak])) !== 0) {
-      throw new SandboxError("misuse", `bad weakRefs mode ${String(weak)}`);
-    }
     if (det) {
+      // Strong weak references: no collection is observable.
+      x.vm_set_weak_refs(vm, 1);
       this.clock = det.startedAt;
       x.vm_set_now(vm, det.startedAt);
       x.vm_set_time_zone_offset(vm, 0);
@@ -2753,8 +2739,6 @@ export class Sandbox {
     });
   }
 }
-
-const WEAK_REF_MODES = { collected: 0, strong: 1, absent: 2 } as const;
 
 /** A macrotask: `setImmediate` where there is one (node, Bun), else a zero timeout. */
 function macrotask(): Promise<void> {

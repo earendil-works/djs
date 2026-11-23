@@ -196,7 +196,7 @@ buffers are 20-35% smaller than JSON for structured data.
 
 In wasm the decode columns are slower than native (1.8x on objects to 2.7x on one string),
 and the wire format still wins, by more: docs/host.md "The boundary in wasm" has the numbers
-from `node js/bench/wasm.bench.ts <dir>` (`vm_decode_wire` against `vm_parse_json` on the
+from `node js/bench/wasm.bench.ts <dir>` (`vm_decode_wire` against the VM's `JSON.parse` on the
 same datasets, which `node js/bench/wire.bench.ts <dir>` writes). The decoder validates
 UTF-8 while transcoding (D1781).
 

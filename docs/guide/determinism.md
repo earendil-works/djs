@@ -45,7 +45,7 @@ image carries it along:
 | The local time zone | A fixed offset the host sets (`vm_set_time_zone_offset`), UTC by default, no daylight-saving rules. |
 | `Math.random()` | xorshift64*, as in QuickJS, seeded by the host (`vm_set_random_seed`). The state is in the heap, so a restored VM continues the sequence. |
 | The string hash's key | Derived from the same seed (one-way), and kept in the image. It decides where the VM's own atoms and Map and Set keys sit in their tables, never what a script sees: iteration follows insertion order. |
-| `WeakRef`, `FinalizationRegistry` | By default they work as specified, and collection timing is observable. The host can make them strong (nothing ever dies) or absent (the globals are deleted). |
+| `WeakRef`, `FinalizationRegistry` | By default they work as specified, and collection timing is observable. Deterministic mode makes them strong (nothing ever dies). |
 | Tool results | Applied in delivery order, as macrotasks (below). |
 
 The examples in this guide run with the clock at 0 and the default seed, so their output
@@ -138,7 +138,7 @@ interface](js-api.md#deterministic-runs-and-journals) has the options). With
 
 - `Math.random` is seeded from `seed`, and so is the key of the string hash, so the same
   seed lays the heap out the same way; the time zone is UTC;
-- weak references are strong, unless the host asks for them to be absent;
+- weak references are strong;
 - the clock starts at `startedAt` and moves only when an async result is delivered: to
   the host's clock at that moment, never backwards. Fuel slices and sync calls do not
   move it.
@@ -205,7 +205,7 @@ Some things are deliberately outside the guarantee:
   at most).
 - **Weak references in the default mode.** When a `WeakRef`'s target dies depends on
   when collections run, and collections the host requests or a smaller heap cap change
-  that. Deterministic mode makes them strong or absent for this reason.
+  that. Deterministic mode makes them strong for this reason.
 - **Fuel of builtins in Rust.** A builtin compiled to Rust charges fuel per loop
   iteration and call, and for the work of its heap operations, where bytecode charges
   per instruction.

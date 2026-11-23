@@ -24,7 +24,6 @@ pub const IMAGE_FEATURES: &[&str] = &[
 /// build, so that each new one is classified.
 pub const IMAGE_NEUTRAL_FEATURES: &[&str] = &[
     "cold-unicode",
-    "compile-cache",
     "default",
     "dump",
     "intrinsic-names",
