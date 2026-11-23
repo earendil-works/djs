@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0296 | Sandbox for pi, part 2: cyclic plain values throw at the call, read-only host globals, Error message coercion, null-prototype namespaces | pns | .worktrees/pns |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
 ## Open (ready)
@@ -59,6 +58,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0296 | Sandbox for pi, part 2: cyclic/unreadable arguments throw at the call, read-only host globals, Error name/message coercion, null-prototype namespaces | 4796e5f1 (agent pns; D3620-D3623; +63 B gz; follow-up: sync/async redefinition of a read-only global keeps the old function) |
 | 0295 | Sandbox for pi on djs: thrown errors and console values as data, frozen ordered namespaces, aliases, missingMember, run ends with its body (dropped calls), per-function JSON boundary, maxFuel across steps | 90886057 (agent pns; D3610-D3614; vm_define freeze flag +39 B gz) |
 | 0294 | One wasm module with the dumper, one package entry point, npm 0.2.0 (owner) | 00272df1 (agent pone; D3600-D3602; 432,882 -> 767,573 B gz (+77%, owner); ABI 8; packed at work/scratch/pi-pack; not tagged/published) |
 | 0292 | Code mode bodies import host modules: named, namespace, default imports bound by a lazy resolver; dumps name them by identity | 44d44420 (agent pdurable; D3597; import() of host modules still rejects (size); +49 B gz, 17 B under the ceiling) |
