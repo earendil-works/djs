@@ -1,6 +1,6 @@
 # 0298: The dumper's size: same dumps, far less code
 
-status: open
+status: in-progress
 agent: pdiet
 branch: issue/0298-dumper-diet
 depends-on: -
@@ -68,6 +68,69 @@ Raw code from a names build (~6% LEB padding over the stripped module):
   `CARGO_PROFILE_WASM_STRIP=false` (see scripts/size/README.md).
 
 ## Log
+
+### 2026-11-23 pdiet: where the code goes, and the plan
+
+Measured on d481d1fe: shipped module 1,875,273 raw / **767,666 gzip**. A names+DWARF build
+(work/scratch/0298/dbg) with every code byte charged to the djs source line that caused
+it (std glue inlined into a function charged to the last djs-core row before it;
+work/scratch/0298/attr.py): the dump-only sources are 724 KB raw with their glue:
+
+| file | raw with glue | lines | B/line |
+| --- | ---: | ---: | ---: |
+| vm/dump.rs (Dumper: walk, data, classes, check) | 236 K | 5,160 | 46 |
+| vm/dump_cont.rs (cont::G) | 104 K | 3,257 | 32 |
+| vm/dump_plain.rs (the writer) | 96 K | ~3,370 | 28 |
+| vm/dump_flight.rs | 51 K | 2,785 | 18 |
+| vm/dump_plain_inline.rs | 36 K | 1,522 | 24 |
+| djs-wasm vm_dump & co | 26 K | | |
+| compiler/smap_syntax.rs + smap.rs + smap_codec.rs | 52 K | | |
+| dump_origin + cont_canon + cont_heads + cont_pattern + cont_using + reread | 75 K | | |
+| compile_cache, registry, lazy, statics, state, classes, flight_* | 38 K | | |
+
+Std glue inside vm::dump functions (by its own rows): raw_vec 68 K (String/Vec drops and
+with_capacity), vec 39 K, ptr (drop/moves) 36 K, slice iterators 28 K, `&str ==` 20 K,
+Result/Option `?` 35 K. Single biggest line: **dump.rs:49, the `cat!` macro: 90.8 K with
+glue at 577 sites** (~157 B per site: the `&[&dyn Piece]` array, the call, and the drops
+of the temporary Strings the pieces are). Next: `Dumper::note`, generic over its path
+closure and inlined into each of its ~60 callers (dump.rs:1320-1393, ~30 K); generic std
+instances: 32 sorts (most from `BTreeMap/BTreeSet: FromIterator`), 35 btree instances, 136
+drop_glue instances; the plain writer's text scanning (scan/refs/keys_in/eager_*,
+dump_plain_inline's text substitution, dump_reread's operand parsing, the LATER marks):
+~30 K in their own functions, ~60 K with the glue of their callers.
+
+Plan, in landing order; every step keeps the dump text **byte-identical** over the corpus
+(difftest --plain-out, v2 and sleep outputs of d481d1fe in work/scratch/0298/base,
+compared with diff -r), except where a step says it changes the output:
+
+1. **Text building** (mechanical): `cat!` sites that cost less (pieces put straight into
+   one String, no `dyn` array; String-returning helpers that a caller only concatenates
+   become `*_to(&mut String)` writers), `note`/`edge` with a `&dyn` path (one copy), the
+   `Arc<str>`/`String` caches borrowed where they can be. Expected ~50-70 K raw, ~20-25 KB
+   gzip.
+2. **Generic glue** (mechanical): one sort (crate::sort, already in the module) instead of
+   32 instances; no BTreeMap/BTreeSet in dump-only code (sorted Vecs, the dumper's
+   `Index`); fewer drop-glue instances (fewer distinct owned aggregates: `Vec<String>`
+   pairs become indices or `&str`). Expected ~30-40 K raw, ~12-15 KB.
+3. **Structured references** (structural, may change the output's `$dump` numbering, not
+   what it does): the exporter records with each line what it references and defines
+   (the nodes, factories, activations, globals it names) when it writes them, so the
+   writer stops scanning its own text (`scan`, `refs`, `keys_in`, `eager_*`,
+   `classify`, `split_def`, `resolve_later`'s LATER marks) and inlines single-use values
+   by node, not by text search; dump_reread takes the operand's value from the frame
+   instead of parsing its text back. Expected ~60-80 K raw, ~20-30 KB, the size of the
+   scanners and their glue less what recording costs.
+4. **`#[optimize(size)]`** on the dump-only functions (cfg'd: only under the shipped
+   build's RUSTC_BOOTSTRAP, off with DJS_STABLE_ONLY=1), if it still pays after 1-3
+   (measured before them: -17.3 KB), with the dump-time cost measured. A decision.
+
+1+2+4 are ~50-60 KB gzip by these estimates; with 3, ~75-90 KB. A third (111 KB) or a half
+(167 KB) needs the large functions themselves to shrink: the Dumper's emit_* / render /
+visit_activation (~150 K raw) and cont::G (~100 K raw) are written as String-returning
+expression builders with many small Vec<String> collections; a half would mean rewriting
+them to append into one output buffer with borrowed slices throughout (a rewrite of
+~10 K lines, the writer's scheduling and placement included), which I will scope after
+steps 1-3 show how much of the size is that style rather than the logic.
 
 ## Follow-ups
 
