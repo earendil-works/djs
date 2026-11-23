@@ -17,7 +17,6 @@
 
 #[cfg(feature = "dump")]
 mod call_site;
-pub mod compat;
 #[cfg(feature = "dump")]
 pub mod dump;
 #[cfg(feature = "dump")]
@@ -44,7 +43,6 @@ pub use crate::interp::{ErrorKind, ExecOptions, RunState, Status};
 use crate::value::{Obj, Str, Value};
 #[cfg(feature = "dump")]
 pub use call_site::CallSite;
-pub use compat::{COMPAT_VERSION, FEATURES, IMAGE_DEPS, ImageDep, ImageDeps, RECORDS_HASH};
 pub use module::{IMPORT_FN_ID, ModuleKind, ModuleLoader, ModuleSource};
 
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
@@ -66,8 +64,8 @@ include!(concat!(env!("OUT_DIR"), "/source_hash.rs"));
 
 /// The engine build hash (D1320, D1330): the heap layout (with the well-known atoms),
 /// the instruction table, the intrinsic ids and the source hash. It identifies the build
-/// (`djs_build_hash`; Sandbox journals replay only on it). Images are not keyed on it
-/// since D026: they carry their dependency descriptor ([`ImageDeps`], D2265) instead.
+/// (`djs_build_hash`; Sandbox journals replay only on it), and a VM image loads only into
+/// the build whose hash it carries (`Roots::BUILD`, D3641).
 pub const BUILD_HASH: u32 = {
     use crate::bytecode::intrinsics::INTRINSICS_HASH;
     use crate::bytecode::{OPS_HASH, build_hash};
@@ -193,7 +191,7 @@ pub struct Vm {
 impl Vm {
     pub fn new(opts: VmOptions) -> Result<Vm, HeapError> {
         let mut heap = Heap::with_limit(opts.memory_limit)?;
-        IMAGE_DEPS.write(&mut heap);
+        heap.arena_mut().set(0, crate::heap::cells::Roots::BUILD, BUILD_HASH);
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
         let mut vm = Vm {
@@ -279,8 +277,7 @@ impl Vm {
         Ok(())
     }
 
-    /// Restores a VM from [`Vm::bytes`] of a build with the same dependency descriptor
-    /// ([`ImageDeps`], D2265), in any state (including
+    /// Restores a VM from [`Vm::bytes`] of this build (D3641), in any state (including
     /// suspended mid-call or parked on a host call). The whole image is verified: for the
     /// stress modes and tools, which check the heap at every restore.
     pub fn from_bytes(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
@@ -289,7 +286,7 @@ impl Vm {
     }
 
     /// [`Vm::from_bytes`] for an image this process made (pi's prelude images, an
-    /// embedder's snapshot): only the header and the dependency descriptor are
+    /// embedder's snapshot): only the header and the build hash are
     /// checked, not every cell. Images are not a persistence format (D2700): nothing
     /// loads one from outside the process, so nothing needs the verification there.
     pub fn from_bytes_trusted(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
@@ -328,7 +325,7 @@ impl Vm {
     /// A new VM from a base snapshot: the image of an idle VM with its prelude installed,
     /// made at build time (`djs-prelude`, D1321). Creating a VM is then a copy, with no
     /// compile. The image is trusted (its cells are not verified: it was verified when it
-    /// was built), but its header and dependency descriptor are checked.
+    /// was built), but its header and build hash are checked.
     ///
     /// What the base holds: the realm (global object, intrinsics, builtins), the atoms
     /// and the compiled prelude. Nothing per VM: no handles, no host functions, no
@@ -406,18 +403,26 @@ impl Vm {
         self.heap.set_weak_refs_strong(mode == WeakRefs::Strong);
     }
 
-    /// The dependency descriptor (D2265), before anything else: an image this build
-    /// cannot run must be rejected with the component that differs, not fail
-    /// verification somewhere in the middle.
+    /// The build hash (D3641), before anything else: an image of another build must be
+    /// rejected as that, not fail verification somewhere in the middle.
     fn check_image(bytes: &[u8]) -> Result<(), LoadError> {
-        let deps = ImageDeps::of(bytes).ok_or(LoadError::BadHeader)?;
-        match deps.first_difference(&IMAGE_DEPS) {
-            Some((dep, found, expected)) => Err(LoadError::Incompatible {
-                dep,
-                found,
-                expected,
-            }),
-            None => Ok(()),
+        let u32_at = |f: crate::heap::layout::Field<u32>| {
+            let at = f.offset as usize;
+            bytes
+                .get(at..at + 4)
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        };
+        use crate::heap::cells::{self, Roots};
+        if bytes.first() != Some(&(crate::heap::CellKind::Roots as u8))
+            || u32_at(Roots::MAGIC) != Some(cells::MAGIC)
+            || u32_at(Roots::VERSION) != Some(cells::LAYOUT_HASH)
+        {
+            return Err(LoadError::BadHeader);
+        }
+        match u32_at(Roots::BUILD) {
+            Some(BUILD_HASH) => Ok(()),
+            Some(found) => Err(LoadError::OtherBuild(found)),
+            None => Err(LoadError::BadHeader),
         }
     }
 
@@ -1551,8 +1556,6 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
-#[cfg(test)]
-mod compat_tests;
 #[cfg(all(test, feature = "dump"))]
 mod dump_debugger_tests;
 #[cfg(all(test, feature = "dump"))]

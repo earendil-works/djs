@@ -1372,43 +1372,30 @@ fn from_base_gives_independent_vms() {
 }
 
 #[test]
-fn images_carry_their_dependency_descriptor() {
-    // D2265: compat_tests checks the components; here the load paths refuse.
+fn images_load_only_into_their_build() {
+    // D3641: the roots cell carries the build hash, and the load paths refuse another.
     let vm = Vm::new(VmOptions::default()).unwrap();
-    let at = crate::heap::cells::Roots::OPS.offset as usize;
-    assert_eq!(
-        vm.bytes()[at..at + 4],
-        crate::bytecode::OPS_HASH.to_le_bytes()
-    );
+    let at = crate::heap::cells::Roots::BUILD.offset as usize;
+    assert_eq!(vm.bytes()[at..at + 4], super::BUILD_HASH.to_le_bytes());
     let mut other = vm.bytes().to_vec();
     other[at] ^= 1;
-    let expected = crate::bytecode::OPS_HASH;
-    let found = expected ^ 1;
-    let dep = ImageDep::Ops;
     for r in [
         Vm::from_bytes(other.clone(), VmOptions::default()).err(),
         Vm::from_base(&other, VmOptions::default()).err(),
     ] {
-        assert_eq!(
-            r,
-            Some(LoadError::Incompatible {
-                dep,
-                found,
-                expected
-            })
-        );
+        assert_eq!(r, Some(LoadError::OtherBuild(super::BUILD_HASH ^ 1)));
     }
     // Not an image at all.
     assert_eq!(
         Vm::from_base(b"not an image", VmOptions::default()).err(),
         Some(LoadError::BadHeader)
     );
-    // A bare heap (no VM) has the layout hash but no descriptor otherwise.
+    // A bare heap (no VM) has the layout hash but no build.
     let bare = crate::heap::Heap::new().unwrap();
-    assert!(matches!(
-        Vm::from_bytes(bare.bytes().to_vec(), VmOptions::default()),
-        Err(LoadError::Incompatible { found: 0, .. })
-    ));
+    assert_eq!(
+        Vm::from_bytes(bare.bytes().to_vec(), VmOptions::default()).err(),
+        Some(LoadError::OtherBuild(0))
+    );
 }
 
 #[test]

@@ -526,44 +526,14 @@ builtins (D2304) arm it always. Armed in the gate:
 Not armed: the rest of the corpus, e2e and test262, whose cases change builtins on purpose
 (`defineProperty` on prototypes, Proxy and BigInt tests).
 
-## Image compatibility (D026, D2265)
+## Images (D3641)
 
-Images do not persist runs (dumps do, below; D2560, D2700), but they still cross from one
-build's module to another inside a process: pi's prelude images and the base image every
-VM is copied from. A VM image restores into any build
-whose dependency descriptor matches the one in its roots cell (`vm::ImageDeps`,
-crates/djs-core/src/vm/compat.rs): the layout hash, the image feature set,
-`COMPAT_VERSION`, the opcode and intrinsic table hashes and `RECORDS_HASH` (the id tables
-and slot constants that crates/djs-core/compat_inputs.rs lists, read from the sources).
-The engine build hash is not part of it. `vm::compat_tests` (run by the
-gate) checks that each hash changes when one entry of its table does, that every region
-of compat_inputs.rs is found, and that loading names the component that differs.
-
-The hashes see numbering, not meaning. **Bump `vm::COMPAT_VERSION`** in the change itself
-when an image written before it would still load (every hash equal) but be read
-differently after it:
-- an existing slot, field or record element changes what it holds or how it is encoded
-  (the `Value` stored in a slot of a Map table, a promise record, a generator's saved
-  frame, a bound function, an iterator), or a convention of the frame and value stack
-  of a suspended function changes;
-- the builtins' JS reads an internal record differently (`%RecordGet`/`%RecordSet`
-  indexes, the meaning of an internal slot of a builtin object) while the prelude's
-  numbering stays;
-- an opcode, an intrinsic or a native builtin keeps its entry but its operands or
-  arguments mean something else (an immediate's encoding, an argument order);
-- an invariant of stored data changes: string hashes and atom table hashing, rope and
-  append-buffer rules, property table and shape hashing, inline cache words,
-  dictionary-mode or dense-element conventions, RegExp program encoding beyond its
-  opcode constants;
-- ids from outside the tables start to be stored in images.
-
-No bump for what only changes behavior (a fixed builtin, a faster path, a new
-optimization of the compiler or the collector), for additions images of older builds
-cannot contain (a new cell kind, opcode or intrinsic changes its hash anyway), or for a
-change a hash already sees. When unsure, bump: a needless bump only refuses images, a
-missed one lets an old image restore into an engine that misreads it. A new cargo
-feature of djs-core must be classified in compat_inputs.rs (D2267); the build fails
-until it is.
+Images do not persist runs (dumps do, below; D2560, D2700) and never leave the process
+that made them: the base image every VM is copied from, a native host's snapshots, the
+stress and determinism checks. A VM image carries the engine build hash (`vm::BUILD_HASH`,
+`Roots::BUILD`) and loads only into that build (`LoadError::OtherBuild`), so a change of
+what an image means needs no bump of anything. `vm::tests::images_load_only_into_their_build`
+checks the refusal.
 
 ## Dumps across builds (0178, D2560, D2619, D2920)
 

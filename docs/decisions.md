@@ -14326,3 +14326,22 @@ sweep removed, by kind:
 - The shipped module: 767,573 -> 750,859 B gzip (1,875,103 -> 1,827,977 raw); the ceiling
   is lowered to 751,883, tests/scores/codemode-memory.tsv re-recorded (-64 KiB per row:
   smaller static data).
+
+## D3641: A VM image loads only into the build that made it; the dependency descriptor goes
+date: 2026-11-23 · by: pcompat · issue: 0297
+Supersedes D026, D2265, D2266, D2267 and D2268 (and amends D2700's "kept" list). The
+descriptor let an image load into any build with the same table numbering, and the
+hand-bumped `COMPAT_VERSION` covered changes of meaning; both served images that cross
+builds, and none do any more: images never leave their process (D2700), the module
+transport went with D3600, js/pi's prelude images went with it (0297), the base is
+asserted to be the library's own build (`BUILT_BY == BUILD_HASH`), and djs-embed's
+snapshots stay in the process. So the roots cell carries the engine build hash
+(`Roots::BUILD` at 48, where `COMPAT` was; `OPS`, `INTRINSICS`, `RECORDS` and `FEATURES`
+are gone and `HASH_KEY` moved to 88, the cell is 96 bytes), `Vm::from_bytes`,
+`from_bytes_trusted` and `from_base` refuse another build's image with
+`LoadError::OtherBuild(hash)` (after `BadHeader` for a foreign layout), and vm/compat.rs,
+compat_inputs.rs (RECORDS_HASH, the feature classification that failed the build for an
+unclassified feature), compat_tests.rs and the rule to bump `COMPAT_VERSION` (AGENTS.md,
+TESTING.md "Image compatibility") are removed. The build hash leaves out the features
+that change no result (unsafe-heap, dump, lazy, prelude, intrinsic-names, cold-unicode),
+so the base built natively still loads into the shipped module.

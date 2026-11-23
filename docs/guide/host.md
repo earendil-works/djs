@@ -356,12 +356,9 @@ variants from one source, by cargo features:
 | docs module | the shipped features and `docs` | this site's live examples: the shipped module plus `djs_disasm`, the bytecode listing an edited example shows |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording
-in the compiler, the table of the base's builtin names, the compile cache, and lazy
-compilation of functions at their first call. It does not change images: a build without
-it has the same dependency descriptor
-([what an image depends on](snapshots.md#what-an-image-depends-on)). Such a build (a
-debug or custom one) runs scripts and loads dumps, which are Scripts; writing a dump there
-throws a `misuse` error that says the module was built without the feature.
+in the compiler, the table of the base's builtin names, and lazy compilation of functions
+at their first call. The Sandbox needs it; djs-wasm builds without it only to measure
+what the dumper costs.
 
 A host that persists runs calls `vm_dump` on the idle VM itself, in the module it runs
 in; a dump leaves the VM as it was, so the run goes on there or in whichever sandbox

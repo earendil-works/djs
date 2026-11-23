@@ -192,6 +192,13 @@ codemode-memory.tsv re-recorded. Guide: host.md (operations table), snapshots.md
 builtins.md, gc.md, determinism.md, js-api.md, continuations.md (the dumper's caches).
 D3640 records the sweep.
 
+### 2026-11-23: merge 4 (J2: the descriptor)
+Roots::BUILD (the build hash) replaces the descriptor; vm/compat.rs, compat_inputs.rs,
+compat_tests.rs, build.rs's RECORDS_HASH/FEATURES, LoadError::Incompatible (now
+OtherBuild), the COMPAT_VERSION rule in AGENTS.md and TESTING.md go (D3641).
+js/src/layout.generated.ts regenerated. Guide: snapshots.md ("What an image depends on"
+rewritten), arena.md, heap.md, host.md (the dump feature paragraph), testing.md.
+
 ## Follow-ups
 
 ## Result

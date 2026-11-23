@@ -44,11 +44,9 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
   builds, the dump module and every test build keep the checks.
 - Prefer plain, direct code. Comments explain *why*. Keep modules focused; no speculative
   abstraction.
-- djs is unreleased (D024): change formats and ABI in place; don't keep readers or
-  exports for older versions.
-- Images are keyed on their dependency descriptor (D2265), not the build. A change that
-  keeps every table's numbering but alters what a stored slot, record or encoding means
-  bumps `vm::COMPAT_VERSION` (TESTING.md "Image compatibility" says when).
+- No compatibility code (D024, D3640): change formats and ABI in place; don't keep
+  readers, exports, options, aliases or fallbacks for older versions, hosts or callers.
+- A VM image loads only into the build that made it (its build hash, D3641).
 - Every feature comes with tests. Unit tests sit next to the code; JS behavior tests go in
   `tests/` (see TESTING.md).
 

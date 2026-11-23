@@ -74,8 +74,8 @@ dquickts' native registry, but by construction instead of by fixup.
 Accessing the heap through bounds-checked offsets also hardens the sandbox: a VM bug or a
 corrupted image can corrupt the JS heap or cause a panic (a wasm trap), but it cannot
 cause Rust UB. The tools and stress modes verify every image they load (D1056); the wasm
-module loads only images made in its own process and checks their header and dependency
-descriptor (D2700). In wasm every access is bounds-checked against linear memory as well,
+module loads only images made in its own process and checks their header and build hash
+(D2700, D3641). In wasm every access is bounds-checked against linear memory as well,
 so the arena checks are a second check (D016). The shipped and slim wasm modules
 therefore leave them out (`unsafe-heap`, D2520, D3100): there an engine bug is UB confined
 to the instance's linear memory, which may corrupt that VM instead of trapping but cannot
@@ -669,15 +669,11 @@ A waiting run persists as a continuation dump (D2560, docs/continuation-dumps.md
 images are the in-process mechanism (D2700).
 
 - **Images:** an image is the arena bytes after a compacting GC; the roots and the
-  image's **dependency descriptor** live in the arena's root cell (D026, D2265): hashes
-  of the cell layouts, the opcode and intrinsic tables and the internal id tables
-  (D2266), the image feature set (D2267) and a hand-bumped compatibility version (D2268).
-  An image loads into any build with the same descriptor. (Until D026 an image was keyed
-  on the engine build hash of D1320/D1330/D1750, which still identifies the build for
-  journals.) Images are used for the base image every VM is copied from, pi's prelude
-  images (D1495, D1890) and the stress and determinism checks. The tools and stress modes
-  verify every image they load (D1056); the wasm module checks only the header and the
-  descriptor, since its images come from its own process (D2700). Everything is
+  engine build hash (D1320, D1330, D1750) live in the arena's root cell, and an image loads
+  only into that build (D3641). Images are used for the base image every VM is copied
+  from, native hosts' snapshots and the stress and determinism checks. The tools and
+  stress modes verify every image they load (D1056); the wasm module checks only the
+  header and the build hash, since its images come from its own process (D2700). Everything is
   little-endian, which matches wasm and the usual native targets.
 - **Base snapshot:** the initialized realm and the precompiled builtins (about 190 KB,
   compacted before it is collected, D1431). djs-prelude produces it at build time and it

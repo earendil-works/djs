@@ -326,25 +326,15 @@ every VM is copied from, a native host's snapshots and the stress and determinis
 `vm_arena_ptr`/`vm_arena_len` read an image; a wasm host loads none. The REPL's `.heap`
 reports on the live VM's heap.
 
-#### What an image depends on (D026, D2265)
+#### What an image depends on (D3641)
 
 An image holds numbers whose meaning is fixed by the engine: cell kinds and field offsets,
 opcodes in every function's bytecode, intrinsic ids in the builtins' calls, realm slots,
-object classes, native builtin indexes. The roots cell of every VM image carries a hash of
-each of those tables, and loading checks them first (`Vm::from_bytes` refuses with
-`LoadError::Incompatible`, naming the component):
-
-| component | `Roots` field | what it covers |
-| --- | --- | --- |
-| cell layout | `VERSION` | every cell kind with its fields, records and tails, and the well-known atoms (`LAYOUT_HASH`) |
-| feature set | `FEATURES` | the cargo features that change images, by bit: `full` (the builtin set), `regexp-unicode-props`, `unicode-normalization` (D2267) |
-| compatibility version | `COMPAT` | `vm::COMPAT_VERSION`, bumped by hand for a change of meaning the hashes cannot see (TESTING.md "Image compatibility") |
-| opcode table | `OPS` | the instruction table: names, immediates, stack effects, costs, flags, numbering (`OPS_HASH`) |
-| intrinsic table | `INTRINSICS` | intrinsic names, kinds, arities and numbering (`INTRINSICS_HASH`) |
-| internal id tables | `RECORDS` | the id tables and slot conventions in source: object classes, realm slots, run states, header and template flags, value tags, frame continuations, the fast and native builtin tables, and the named slot numbers of internal records (`RECORDS_HASH`, D2266) |
-
-The engine build hash (`djs_build_hash`) identifies the exact build where that matters:
-Sandbox journals replay only on it.
+object classes, native builtin indexes. The roots cell of every VM image carries the
+engine build hash (`Roots::BUILD`, `vm::BUILD_HASH`: the layout, the opcode and intrinsic
+tables, the sources and the features that change results), and loading checks it first:
+`Vm::from_bytes` refuses another build's image with `LoadError::OtherBuild`. The same hash
+(`djs_build_hash`) keys Sandbox journals.
 
 ## The ABI
 
@@ -418,7 +408,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_resolve_host_call_at(vm, call_id, ok, value, now: f64) -> 0/-1` | the same, and `Date` reads `now` (ms) from when the result is applied: a virtual clock per result (D1670) |
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
-| `djs_build_hash() -> u32` | the engine build hash: identifies the engine build (0049), including its sources, cargo features and libm version (D1750). Images are keyed on their dependency descriptor instead (D2265), which the base image's roots cell holds |
+| `djs_build_hash() -> u32` | the engine build hash: identifies the engine build (0049), including its sources, cargo features and libm version (D1750); a VM image's roots cell holds it (D3641) |
 | `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it. The pointer is valid until the next `vm_new`: the instance's first VM takes the bytes as its arena (D2060), and a later call decodes them again. 0 if there is nothing to decode (no `djs_base_coded_ptr` bytes) |
 | `djs_base_coded_ptr(len) -> ptr` | room for the coded base, the module's custom section `djs_base` (D2541: not in linear memory); the host writes the section there when it has no decoded base to inject (`provideCodedBase`, js/src/base.ts). Without either, there is no base and `vm_new` fails. 0 if the instance has its base or coded base already, or `len` is not the section's length |
 | `djs_base_inject_ptr(len) -> ptr` | room for the base snapshot that another instance of the same module decoded (its `djs_base_ptr` bytes), so that this one need not decode (D2252); 0 if the instance has its base already or `len` is not the base's length |

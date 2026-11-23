@@ -27,8 +27,8 @@ layout reads that table:
 - the garbage collector and the image verifier: a field declared as `Value` or `Ref` is
   traced, and that is the whole trace description, so a new cell kind is collected
   correctly the moment it is declared;
-- the layout hash, part of every image's dependency descriptor, so that changing a
-  layout makes old images refuse to load instead of being misread;
+- the layout hash, which every image carries, so that changing a layout makes an image
+  refuse to load instead of being misread;
 - the host's reader, through the generated `js/src/layout.generated.ts`;
 - the diagrams in this guide and in the [cell layouts reference](ref-cells.md).
 

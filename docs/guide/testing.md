@@ -252,9 +252,8 @@ tested against it:
 - **The image verifier against corrupt images.** A test flips, truncates and overwrites
   bytes of a heap image with most cell kinds in it, and loading must return an error or
   a valid heap, never panic or read outside the arena.
-- **Image compatibility.** Tests check that each hash in an image's dependency
-  descriptor changes when one entry of its table does, so a build refuses an image it
-  would misread ([what an image depends on](snapshots.md#what-an-image-depends-on)).
+- **Images of another build.** A test changes an image's build hash and expects every
+  load path to refuse it ([what an image depends on](snapshots.md#what-an-image-depends-on)).
 - **The builtin prefix.** Debug builds can arm a write barrier that panics on any write
   to the base image's cells; it is armed for every VM with frozen builtins and for the
   codemode cases of the corpus, whose scripts never change a builtin.
@@ -353,9 +352,7 @@ machine fails at random:
   [`scripts/plain-node.mjs`](../../scripts/plain-node.mjs): dumps continued in node;
   [`scripts/plain-fuzz/`](../../scripts/plain-fuzz/): the dump fuzzer.
 - [`crates/djs-core/tests/it/verify_fuzz.rs`](../../crates/djs-core/tests/it/verify_fuzz.rs):
-  the verifier against corrupt images;
-  [`crates/djs-core/src/vm/compat_tests.rs`](../../crates/djs-core/src/vm/compat_tests.rs):
-  image compatibility.
+  the verifier against corrupt images.
 - [`scripts/gate.py`](../../scripts/gate.py) (run by
   [`scripts/gate.sh`](../../scripts/gate.sh)) and
   [`scripts/merge-to-main.sh`](../../scripts/merge-to-main.sh): the gate's legs, their

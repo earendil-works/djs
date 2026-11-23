@@ -511,7 +511,6 @@ total	alloc_error	214
 2	<djs_core::vm::Vm>::new_host_calls
 2	<djs_core::vm::Vm>::over
 2	<djs_core::vm::Vm>::seal
-4	<djs_core::vm::compat::ImageDep>::show
 1	<djs_core::wire::Decoder>::string
 2	<djs_core::wire::WireError>::text
 1	<djs_wasm::State>::add_vm

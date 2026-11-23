@@ -75,7 +75,7 @@ gzip. The slim build, not shipped, is 870 KB (366 KB gzip). Module sizes measure
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 50 |
 | difftest corpus cases | 669 |
-| base snapshot, bytes | 190,928 |
+| base snapshot, bytes | 190,912 |
 <!-- /gen -->
 
 ## Every recorded measurement

@@ -2,8 +2,8 @@
 //! into its heap images: the non-test Rust sources under `src/`, those of djs-libm (Math
 //! results come from it, D3174) and the generated prelude.
 //! `vm::BUILD_HASH` includes it and so identifies the exact build (`djs_build_hash`, run
-//! journals, djs-prelude's check that the base image is this build's). Images are not keyed
-//! on it but on their dependency descriptor (below, D2265).
+//! journals, djs-prelude's check that the base image is this build's, and the build a VM
+//! image loads into, D3641).
 //!
 //! Test files (`*tests.rs`) are left out, so editing a test does not rebuild the library
 //! and the base snapshot. Line endings are normalized, so a CRLF checkout hashes the same.
@@ -11,18 +11,8 @@
 //! Behavior also depends on something outside the sources (D1750): the enabled cargo
 //! features (`\p{..}` is a SyntaxError without `regexp-unicode-props`). They are hashed
 //! too, and listed in `BUILD_INPUTS`.
-//!
-//! It also computes two components of an image's dependency descriptor (`vm::ImageDeps`,
-//! D2265), which unlike `SOURCE_HASH` key image compatibility: `RECORDS_HASH` (D2266), the
-//! id tables and slot conventions images store numbers of (the regions `compat_inputs.rs`
-//! lists, with comments and whitespace removed), and `FEATURES` (D2267), the mask of the
-//! enabled features that change images.
 
 use std::path::{Path, PathBuf};
-
-mod compat_inputs {
-    include!("compat_inputs.rs");
-}
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
     let mut entries: Vec<_> = std::fs::read_dir(dir)
@@ -84,8 +74,7 @@ fn features() -> Vec<String> {
         .collect()
 }
 
-/// Every enabled feature of this crate, sorted (umbrellas too): what `compat_inputs.rs`
-/// classifies, so that no feature escapes the classification (D2267).
+/// Every enabled feature of this crate, sorted (umbrellas too).
 fn enabled_features() -> Vec<String> {
     let mut out: Vec<String> = std::env::vars()
         .filter_map(|(k, _)| {
@@ -146,24 +135,7 @@ fn main() {
         h = fnv(h, &[0]);
     }
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=compat_inputs.rs");
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let records = compat_inputs::records_hash(&root)
-        .unwrap_or_else(|e| panic!("compat_inputs.rs: a region is missing: {e}"));
-    let mask = compat_inputs::feature_mask(&enabled_features()).unwrap_or_else(|e| panic!("{e}"));
-    std::fs::write(
-        out_dir.join("image_deps.rs"),
-        format!(
-            "/// See `build.rs` and `compat_inputs.rs` (D2266).\n\
-             pub const RECORDS_HASH: u32 = {records:#010x};\n\
-             /// The enabled `IMAGE_FEATURES`, by bit (D2267).\n\
-             pub const FEATURES: u32 = {mask:#x};\n\
-             /// `FEATURES` bit names (`compat_inputs.rs`).\n\
-             pub const FEATURE_NAMES: &[&str] = &{names:?};\n",
-            names = compat_inputs::IMAGE_FEATURES
-        ),
-    )
-    .expect("cannot write image_deps.rs");
     let out = out_dir.join("source_hash.rs");
     let list: String = inputs.iter().map(|i| format!("{i:?}, ")).collect();
     std::fs::write(

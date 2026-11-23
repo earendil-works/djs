@@ -46,10 +46,9 @@ are small pieces of VM state that must survive an image, so that a restored VM b
 exactly like the one that was saved: the GC threshold and the collector's schedule
 (`OLD_END`, `MINORS`), the inline cache epoch (`PROTO_EPOCH`), the number of shapes
 created (`SHAPES`), the end of the builtin prefix (`BASE_END`), the key of the VM's
-string hash (`HASH_KEY`) and a few flags. `VERSION`, `COMPAT`, `OPS`, `INTRINSICS`,
-`RECORDS` and `FEATURES` together are the image's dependency descriptor: hashes of the
-tables whose numbers the image holds, so that an image never loads into an engine that
-would read its bytecode or its records differently ([what an image depends
+string hash (`HASH_KEY`) and a few flags. `VERSION` (the layout hash) and `BUILD` (the
+engine build hash) say which engine the image is for, so that it never loads into one
+that would read its bytecode or its records differently ([what an image depends
 on](snapshots.md#what-an-image-depends-on)).
 
 ## Cells, back to back
@@ -99,7 +98,7 @@ Allocating a cell rounds the size up to 8, checks it against the cap, moves the 
 the used region (`len`) and writes the header:
 
 <!-- gen:excerpt crates/djs-core/src/heap/mod.rs "impl Heap" "pub fn alloc_cell(" 10 -->
-[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L600-L609), lines 600–609:
+[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L589-L598), lines 589–598:
 
 ```rust
 pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {

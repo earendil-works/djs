@@ -121,13 +121,8 @@ pub enum LoadError {
     TooLarge,
     /// The cell structure is broken (see [`walk::VerifyError`]).
     Corrupt(walk::VerifyError),
-    /// A VM image this build cannot run: a component of its dependency descriptor
-    /// (`vm::ImageDeps`, D2265) differs from this build's.
-    Incompatible {
-        dep: crate::vm::ImageDep,
-        found: u32,
-        expected: u32,
-    },
+    /// A VM image of another djs build (`Roots::BUILD`, D3641): its build hash.
+    OtherBuild(u32),
 }
 
 impl LoadError {
@@ -137,17 +132,11 @@ impl LoadError {
             LoadError::BadHeader => "not a djs heap image of this layout".into(),
             LoadError::TooLarge => "the image is larger than the memory limit".into(),
             LoadError::Corrupt(e) => crate::detail::detail("corrupt heap image", e),
-            LoadError::Incompatible {
-                dep,
-                found,
-                expected,
-            } => crate::text::cat!(
-                "the image is from a djs with another ",
-                dep.name(),
-                " (image: ",
-                dep.show(*found),
+            LoadError::OtherBuild(found) => crate::text::cat!(
+                "the image is from another djs build (",
+                crate::text::hex(*found, 8),
                 "; this build: ",
-                dep.show(*expected),
+                crate::text::hex(crate::vm::BUILD_HASH, 8),
                 ")"
             ),
         }

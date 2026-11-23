@@ -8,9 +8,8 @@ the one image every VM starts from, and how to look inside one.
 
 > **In short.** An image is the arena from offset 0 to its end. Taking one is a copy;
 > restoring one is a check of the header and a copy, with no fixups, because every
-> reference is an offset into the same bytes. An image loads into any build of djs that
-> numbers things the way the image does: its roots carry a **dependency descriptor**, a
-> hash of every table whose numbers it holds. Every VM starts as a copy of the **base
+> reference is an offset into the same bytes. An image loads only into the build that
+> made it: its roots carry that build's **build hash**. Every VM starts as a copy of the **base
 > snapshot**, an image of the initialized realm made at build time, which is why creating
 > a VM takes microseconds. Images stay inside a process; a run that must outlive it is
 > written as a [continuation dump](dumps.md) instead.
@@ -30,7 +29,7 @@ tools pending. Nothing is serialized, because nothing needs to be:
 - native code is referred to by index (builtins) or by a host-assigned id (host
   functions), and the embedder's handles are slots in a table in the arena.
 
-Restoring is `Vm::from_bytes`: check the header and the dependency descriptor, verify the
+Restoring is `Vm::from_bytes`: check the header and the build hash, verify the
 cells where the caller asks for it (below), take the bytes as the new arena, and continue.
 The host registers its host functions again under the same ids, and its handles are
 still valid, because they were slot numbers all along.
@@ -73,52 +72,26 @@ full one. A restored VM goes on collecting exactly as the original would have.
 ## What an image depends on
 
 An image contains bytecode, intrinsic ids, object class numbers, slot meanings and cell
-layouts. A build of djs that numbers any of those differently would misread it. Most
-changes to the engine number nothing differently, though: a faster interpreter loop, a
-fixed builtin, a better collector. So an image is keyed on what it depends on, not on the
-build that wrote it. The roots cell carries a **dependency descriptor**, one 32-bit word
-per component:
+layouts. A build of djs that numbers any of those differently, or reads a slot
+differently, would misread it. Images never leave the process that made them, so the
+simplest key is also the safest: the roots cell carries the engine's **build hash**
+(`djs_build_hash` in wasm), and an image loads only into the build with that hash. The
+hash covers everything that can change behavior: the cell layouts and well-known atoms,
+the opcode and intrinsic tables, djs-core's sources and generated prelude, the sources of
+its math library (djs-libm) and the enabled features that change results. It is also
+what a run journal needs to replay step by step ([determinism](determinism.md)).
 
-- `VERSION`, the **layout hash**: the cell layouts and the well-known atom names. The
-  host's reader checks this one too, since the layouts are all it reads.
-- `FEATURES`, the **feature set**: the cargo features that change images, one bit each:
-  whether the build has the full builtin set or is the slim one, and the Unicode tables.
-  Every feature of djs-core is classified as changing images or not; one that is in
-  neither list fails the build.
-- `COMPAT`, the **compatibility version**: a number bumped by hand for a change of meaning
-  that none of the hashes can see, such as what an existing slot of an internal record
-  holds, or how a suspended generator's frame is laid out.
-- `OPS`, the **opcode table** hash: names, immediates, stack effects and numbering of the
-  instructions, in which every function's bytecode is written.
-- `INTRINSICS`, the **intrinsic table** hash: the ids the builtins call the engine by.
-- `RECORDS`, the **internal id tables** hash: the build script reads the sources that
-  number things images store, with comments and whitespace removed, and hashes them. They
-  are the object classes, realm slots, run states, header and template flags, value tags
-  and frame continuations, the fast and native builtin tables, and every top-level
-  constant of the heap, interpreter, builtin and RegExp modules, which is where the slots
-  of internal records are named. Editing a comment keeps the hash; renumbering, adding an
-  entry or moving a slot changes it.
+Loading checks the layout hash first (`VERSION`, which the host's reader checks too, since
+the layouts are all it reads), then the build hash. An image of another build is a
+`LoadError::OtherBuild` with both hashes: "the image is from another djs build (1a2b3c4d;
+this build: 5e6f7a8b)".
 
-Loading compares the layout first, since the other words are read at the offsets it
-gives, then the feature set, then the others in that order. A mismatch is a
-`LoadError::Incompatible` that names the first component that differs: "the image is from
-a djs with another opcode table (image: 1a2b3c4d; this build: 5e6f7a8b)". The feature set
-shows by name, so a slim image in a full build reads as just that. Tests flip one entry of
-each table and expect its hash to change, so a hash cannot quietly stop seeing its table.
-
-The engine's **build hash** (`djs_build_hash` in wasm) covers everything that can change
-behavior: the tables above, djs-core's sources and generated prelude, the sources of its
-math library (djs-libm) and the enabled features. It identifies the exact build, which is what a run journal needs
-to replay step by step ([determinism](determinism.md)), but images are not keyed on it:
-nearly every change to the engine changes the build hash, and far fewer change the
-descriptor.
-
-After the descriptor, `from_bytes` **verifies** the image: it walks every cell, checks
+After the build hash, `from_bytes` **verifies** the image: it walks every cell, checks
 every traced field (a valid value pointing at the start of a cell of a fitting kind), the
 invariants of each kind, and that prototype chains and ropes are acyclic. The stress
 tests and the REPL's heap report load images that way, which makes every restore a check
 of the heap. The wasm module does not: the only images it loads were made in the same
-process, so it checks the header and the descriptor and leaves the verifier out of the
+process, so it checks the header and the build hash and leaves the verifier out of the
 shipped code. A bad image could still only cause a panic (a trap) or a wrong result
 inside that one instance: the shipped modules leave heap bounds checks to wasm, which
 confines every access to the instance's memory, and every other build checks each
@@ -127,11 +100,9 @@ access.
 > **Trade-off.** Raw images over a serialization format, inside a process. Images cost no
 > code to write or read, restore in a copy, and capture everything, including frames in
 > the middle of a builtin, which is what the base snapshot, the stress tests and a stop
-> between fuel slices need. The descriptor lets them survive the many engine changes that
-> number nothing differently, but what it guards is the numbering, not the meaning: a
-> change that keeps every table but reads a slot differently needs the hand-bumped
-> version. A run that has to outlive the engine build needs something that states its
-> meaning instead, which is what a dump is ([below](#continuation-dumps)).
+> between fuel slices need. Keyed on the build, they need no rule for which engine change
+> alters what an image means. A run that has to outlive the process needs something that
+> states its meaning instead, which is what a dump is ([below](#continuation-dumps)).
 
 ## The base snapshot
 
@@ -145,7 +116,7 @@ writes it out; the library embeds it, and the wasm module carries it coded in a 
 section ([the wasm boundary](host.md#the-base-in-the-module)).
 
 A new VM is a copy of the base (`Vm::from_base`), which checks the header and the
-dependency descriptor but skips the full walk, since the base was verified when it was
+build hash but skips the full walk, since the base was verified when it was
 built. That copy **is** startup: once a wasm instance has its base, `vm_new` takes a few
 microseconds. The whole base is the new VM's old region, so the collections while a
 script runs don't trace it again.
@@ -292,11 +263,7 @@ that made 50 small objects:
 
 - [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): `image`,
   `from_bytes`, `from_bytes_trusted`, `from_base`, `seal`, `prepare_base_image` and the
-  build hash.
-- [`crates/djs-core/src/vm/compat.rs`](../../crates/djs-core/src/vm/compat.rs): the
-  dependency descriptor and the compatibility version;
-  [`crates/djs-core/compat_inputs.rs`](../../crates/djs-core/compat_inputs.rs): the source
-  regions of the internal id tables hash and the feature classification.
+  build hash and the check of an image's.
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): the
   verifier; [`crates/djs-core/src/heap/compact.rs`](../../crates/djs-core/src/heap/compact.rs):
   compaction for the base image; [`crates/djs-core/src/vm/image.rs`](../../crates/djs-core/src/vm/image.rs):
