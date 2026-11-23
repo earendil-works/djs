@@ -20,7 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); TESTING.md "Size budget" quotes 767.6 KB; docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
+| - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
 | - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |

@@ -791,9 +791,9 @@ tool for work on a gap the comparison shows.
 The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) was to stay within
 1.5x quickjs-wasi's size, gzip -9, plus an allowance of 3,072 bytes the owner added to
 land speedups that had been parked for size (D3510) and the fuel fix (D3591). Since djs
-ships one module with the dumper (D3600), it is far above that (767.6 KB gzip, 2.68x): the
-owner accepted the growth (D3601), and the ceiling below is the limit until later work
-brings the size down. The gate builds it beside its other steps (in
+ships one module with the dumper (D3600), it is far above that (767.6 KB gzip, 2.68x, when it landed;
+698.4 KB, 2.44x, after 0297 and 0298): the owner accepted the growth (D3601), and the
+ceiling below is the limit, lowered by every change that brings the size down. The gate builds it beside its other steps (in
 `target/size`) and its last step runs `scripts/size/budget.py` on it, which compares its
 gzip with `tests/scores/size.tsv`:
 
