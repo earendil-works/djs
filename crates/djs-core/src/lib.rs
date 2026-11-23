@@ -12,24 +12,14 @@
 
 extern crate alloc;
 
-/// Whether this build has every builtin family; without the `full` feature it is the slim
-/// build (D2411, docs/slim-codemode.md). A constant rather than `#[cfg]` where code is
-/// cut, so that both builds type-check the same code and the optimizer drops what the
-/// slim one can't reach.
-pub const FULL: bool = cfg!(feature = "full");
-
 /// Whether this build has what Rust hosts get beyond the wasm modules (the `embed` feature,
-/// D3175, D3180). A constant like [`FULL`].
+/// D3175, D3180). A constant rather than `#[cfg]` where code is cut, so that every build
+/// type-checks the same code and the optimizer drops what this one can't reach.
 pub const EMBED: bool = cfg!(feature = "embed");
 
 /// Whether this build has ES modules (D3171), which come with `embed` (D3175): without them
 /// the module goal is a SyntaxError and the module API fails. Names what the gated code is.
 pub const MODULES: bool = EMBED;
-
-// `embed`'s base image is a full one (D3175): no prelude leaves out the slim families but
-// keeps the embed-only builtins.
-#[cfg(all(feature = "embed", not(feature = "full")))]
-compile_error!("djs-core's `embed` feature needs `full` (D3175): enable both, or neither");
 
 /// Whether this build has the Unicode tables (`\p{..}` in regular expressions and full
 /// normalization: the `unicode` feature, D2411).

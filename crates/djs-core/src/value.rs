@@ -260,8 +260,7 @@ impl Value {
             Some(tag::STRING) => Kind::String,
             Some(tag::OBJECT) => Kind::Object,
             Some(tag::SYMBOL) => Kind::Symbol,
-            // The slim build has no BigInt values (D2411): its code for them goes.
-            Some(tag::BIGINT) if crate::FULL => Kind::BigInt,
+            Some(tag::BIGINT) => Kind::BigInt,
             Some(tag::HOST_REF) => Kind::HostRef,
             Some(tag::INTERNAL) => Kind::Internal,
             Some(t) => panic!("invalid value tag {t}"),
@@ -376,7 +375,7 @@ impl Value {
     #[inline]
     pub const fn as_bigint(self) -> Option<u32> {
         match self.tag() {
-            Some(tag::BIGINT) if crate::FULL => Some(self.payload()),
+            Some(tag::BIGINT) => Some(self.payload()),
             _ => None,
         }
     }

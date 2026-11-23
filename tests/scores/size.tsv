@@ -28,7 +28,8 @@
 # 767,573 B gzip measured, the ceiling that plus the slack; the 1.5x budget no longer holds and
 # bringing the size down again is later work; lowered by 0297, D3640: the ABI's unused exports, the
 # compile cache and the dump maps' export go, 767,573 -> 750,859 B; lowered by 0298, the dumper's
-# diet: 750,859 -> 717,284 B, and D3660, the dumper optimized for size: -> 701,709 B).
+# diet: 750,859 -> 717,284 B, and D3660, the dumper optimized for size: -> 701,709 B; 0297, D3642:
+# the slim build goes, MEASURED).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 # budget_allowance_gzip: added to 1.5x by the owner (D3510, 2026-11-21) to land the speedups
 # parked for size, raised by 1,024 for the fuel fix (D3591, 2026-11-22); the ceiling below
@@ -36,5 +37,3 @@
 quickjs_wasi_gzip	286655
 budget_allowance_gzip	3072
 ceiling_gzip	702733
-# slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	366272

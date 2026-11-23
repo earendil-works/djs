@@ -292,8 +292,7 @@ get three times the case's time limit, and a stressed run that still times out i
 failure too: mark such a case `no-stress` with the measured reason (D1530).
 `--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest and
 its plain dumps leg use it (the shipped module, with the dumper, is lazy, D2993), its test262 leg runs the active
-group both lazy and eager (in parallel), the other legs (unsafe-heap,
-slim) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
+group both lazy and eager (in parallel), the other legs (unsafe-heap) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
 (D2991).
 `--plain-dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
 session's globals, the prelude's state, open calls, pending promises, suspended
@@ -613,16 +612,15 @@ to a commit that passed it, rebasing and gating again when `main` moved meanwhil
 D2666). It runs `scripts/gate.py`: a
 set of **legs**, the checks, and the **builds** they need (D2660). `scripts/gate.sh
 --list` prints them. The legs: fmt; clippy (workspace, and wasm32 release for djs-core
-and djs-wasm), and on the other feature combinations that ship (D2668: djs-core slim,
-slim with `dump`, full without `dump`; the wasm modules in release: main, slim, dump, slim
-with dump); the workspace's unit and integration tests (djs-docs's apart; djs-bgen's
+and djs-wasm), and on the other feature combinations that ship (D2668: djs-core with
+only `unicode`; the shipped wasm module in release); the workspace's unit and integration tests (djs-docs's apart; djs-bgen's
 `builtins_gen_is_fresh` is what `scripts/bgen.sh --check` checks); the no_std wasm32 build
 of djs-core; the builtin registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
 check`); the JS host package's tests on the dev modules; the npm package (below); the
 codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
-GC stress, heap-image determinism and a dump at every idle point; the unsafe-heap build, which the shipped and slim modules use (D3100;
-verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet; the slim build's legs (below);
+GC stress, heap-image determinism and a dump at every idle point; the unsafe-heap build, which the shipped module uses (D3100;
+verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet;
 the size budget (below);
 the merge drivers of derived files (below).
 The `test` and `test262` legs print the slowest tests. The always-run `targets` leg
@@ -640,9 +638,8 @@ agents do not run the gate's steps by hand (AGENTS.md).
 
 Every cargo configuration the gate builds (a package and feature set, a profile, a
 target) has its own target directory (`target/` for the workspace, `target/gate-core`,
-`gate-difftest`, `gate-test262`, `gate-docs`, `gate-unsafe`, `slim`, `clippy`,
-`wasm-dev`, `size`, `size-slim`, `clippy-combos`, one `clippy-wasm-*` per
-module; the release unsafe-heap build in
+`gate-difftest`, `gate-test262`, `gate-docs`, `gate-unsafe`, `clippy`,
+`wasm-dev`, `size`, `clippy-combos`, `clippy-wasm-main`; the release unsafe-heap build in
 `target/` under its own profile), because cargo locks a target directory while it builds:
 so they all build at once. The commands are the ones the serial gate ran (the same
 packages, features and profiles), split into a build and a run: legs run the built
@@ -761,30 +758,6 @@ registered by `scripts/setup-merge-drivers.sh`, implemented in `scripts/merge-dr
 
 `scripts/merge-driver-test.py` (the gate leg "merge drivers") runs scripted three-way
 merges through both drivers in a throwaway repository.
-
-### The slim build (D2411, D2413)
-
-djs-core's default features `full` and `unicode` make the default build; without them it
-is the slim build (`scripts/build-wasm.sh --slim`: target/djs-slim.wasm). No package ships it
-(D3600): it stays a size reference and the module of pi's adapter tests without the
-lockdown. Everything above runs the full build. The slim build, natively in `target/slim`
-(`--no-default-features`), gets:
-- `cargo test -p djs-core --no-default-features --lib -- vm::slim_tests vm::frozen_tests
-  vm::registry`, and djs-prelude's tests with `--features raw,registry` (the registry
-  against tests/builtins/registry-slim.txt). `vm::slim_tests` runs in both builds and
-  checks both sides of the boundary;
-- difftest's `codemode` and `codemode-harvest` with `--ratchet --suspend-every 97
-  --gc-stress --determinism`;
-- test262's active group: a runner built without `full` skips tests/test262-slim.toml's
-  groups and compares with tests/test262/expected-failures-slim.txt (update it with the
-  same command and `--update`). The slim build has no `embed`, so no ES modules: its
-  `no-modules` group skips the `module` and `dynamic-import` tests (D3230);
-- its size ratchet, `slim_ceiling_gzip` (`scripts/size/budget.py MODULE --slim`).
-
-A change that adds or removes a builtin in an omitted family updates
-tests/builtins/registry-slim.txt with `scripts/registry-update.sh` (merge-to-main runs it).
-A new builtin file or builtin that belongs to the slim cut gets `// @slim-omit` (file) or
-`@slim-omit` (builtin), and its globals go into `realm::ABSENT_GLOBALS`.
 
 ### The npm package (D3105–D3109)
 

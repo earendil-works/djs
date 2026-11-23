@@ -76,8 +76,8 @@ corrupted image can corrupt the JS heap or cause a panic (a wasm trap), but it c
 cause Rust UB. The tools and stress modes verify every image they load (D1056); the wasm
 module loads only images made in its own process and checks their header and build hash
 (D2700, D3641). In wasm every access is bounds-checked against linear memory as well,
-so the arena checks are a second check (D016). The shipped and slim wasm modules
-therefore leave them out (`unsafe-heap`, D2520, D3100): there an engine bug is UB confined
+so the arena checks are a second check (D016). The shipped wasm module
+therefore leaves them out (`unsafe-heap`, D2520, D3100): there an engine bug is UB confined
 to the instance's linear memory, which may corrupt that VM instead of trapping but cannot
 reach the host. Native builds, the docs module and all test builds keep the checks.
 

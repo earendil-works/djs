@@ -146,7 +146,6 @@ class Greeter {
   its type-only imports and exports are erased.
 - **JSX and `.tsx`.** `<T>expr` is always a cast.
 - **Type checking**, and everything that needs types from another file.
-- In the [slim build](language.md#the-slim-build), decorators.
 
 ## `djs strip-types`
 

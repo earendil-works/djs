@@ -161,7 +161,7 @@ function GetPrototypeFromConstructorSlow(newTarget: Value, fallback: Str): Obj {
 
 /**
  * ToNumeric ( value ), 7.1.3: a Number, or a BigInt. Here and
- * not in bigint.ts: the interpreter's numeric operators need it in every build (D2411).
+ * not in bigint.ts: the interpreter's numeric operators need it.
  * @intrinsic
  */
 function ToNumeric(v: Value): Value {

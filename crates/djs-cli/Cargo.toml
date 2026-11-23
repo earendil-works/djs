@@ -10,9 +10,8 @@ name = "djs"
 path = "src/main.rs"
 
 [features]
-default = ["full", "unicode"]
-# djs-core's features (D2411): `--no-default-features` builds against the slim engine.
-full = ["djs-prelude/full"]
+default = ["unicode"]
+# djs-core's Unicode tables.
 unicode = ["djs-prelude/unicode"]
 
 [dependencies]

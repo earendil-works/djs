@@ -310,11 +310,6 @@ impl<'a> Decoder<'a, '_> {
                     return Ok(None);
                 }
             }
-            // The slim build has no Uint8Array (D2411).
-            tag::BYTES if !crate::FULL => {
-                self.pos = at;
-                return self.invalid("bytes (Uint8Array) are not available in this build");
-            }
             tag::BYTES => {
                 let n = self.varint()? as usize;
                 let bytes = self.take(n)?;

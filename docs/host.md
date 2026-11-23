@@ -9,7 +9,6 @@ reads (docs/wire.md, both halves).
 ```sh
 scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped, with the dumper
 scripts/build-wasm.sh --keep-names # with the name section (profiling, scripts/wasm-funcs.py)
-scripts/build-wasm.sh --slim       # target/djs-slim.wasm: the slim build (D2411; not shipped)
 node --test js/test/*.test.ts    # sandbox.test.ts needs a build ($DJS_WASM overrides the path)
 scripts/npm-pack.sh                # the npm package: target/npm/earendil-works-djs-VERSION.tgz
 scripts/npm-test.sh TARBALL node   # its smoke test (also bun, deno, js-tests, browser)

@@ -21,11 +21,8 @@ use diag::Sources;
 pub struct Output {
     /// `gen/prelude.js`
     pub prelude: String,
-    /// `gen/prelude-slim.js`: the prelude without the files marked `// @slim-omit`, for the
-    /// slim build (D2411).
-    pub prelude_slim: String,
     /// `gen/prelude-noembed.js`: the prelude without the files marked `// @embed-only`,
-    /// for full builds without djs-core's `embed` (the shipped module, D3175).
+    /// for builds without djs-core's `embed` (the shipped module, D3175).
     pub prelude_noembed: String,
     /// `gen/resume-points.txt`
     pub report: String,
@@ -39,12 +36,9 @@ pub struct Output {
 }
 
 pub const PRELUDE_PATH: &str = "gen/prelude.js";
-pub const PRELUDE_SLIM_PATH: &str = "gen/prelude-slim.js";
-/// A line of a builtin file that leaves the file out of the slim build's prelude (D2411).
-pub const SLIM_OMIT: &str = "// @slim-omit";
 pub const PRELUDE_NOEMBED_PATH: &str = "gen/prelude-noembed.js";
 /// A line of a builtin file that leaves the file out of the preludes of builds without
-/// djs-core's `embed` (D3175): the slim one and `gen/prelude-noembed.js`.
+/// djs-core's `embed` (D3175): `gen/prelude-noembed.js`.
 pub const EMBED_ONLY: &str = "// @embed-only";
 pub const REPORT_PATH: &str = "gen/resume-points.txt";
 /// Relative to the builtins directory.
@@ -73,13 +67,6 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
             .collect()
     };
     let embed_only = marked(EMBED_ONLY);
-    let mut omitted = marked(SLIM_OMIT);
-    omitted.extend(
-        embed_only
-            .iter()
-            .filter(|m| !omitted.contains(m))
-            .collect::<Vec<_>>(),
-    );
     for (name, text) in modules {
         let file = sources.add(name.clone(), text.clone());
         match parser::parse_module(file, text) {
@@ -105,10 +92,9 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
     let natives = emit_rust::emit(&program, &analysis, &sources)
         .map_err(|errors| render(&errors, &sources))?;
     Ok(Output {
-        prelude: emit_js::emit(&program, &sources, &[], false, false),
-        prelude_slim: emit_js::emit(&program, &sources, &omitted, true, false),
-        prelude_noembed: emit_js::emit(&program, &sources, &embed_only, false, false),
-        prelude_bodies: emit_js::emit(&program, &sources, &[], false, true),
+        prelude: emit_js::emit(&program, &sources, &[], false),
+        prelude_noembed: emit_js::emit(&program, &sources, &embed_only, false),
+        prelude_bodies: emit_js::emit(&program, &sources, &[], true),
         report: analysis::report(&program, &analysis, &sources),
         natives,
         leaves: emit_leaf::emit(&program)?,

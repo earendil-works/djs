@@ -208,13 +208,6 @@ impl Parser<'_, '_> {
         is_await: bool,
         no_in: bool,
     ) -> PResult<()> {
-        // The slim build has no `using` (D2411).
-        if !crate::FULL {
-            return syntax(
-                self.tok.start,
-                "`using` declarations are not available in this build",
-            );
-        }
         loop {
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
                 return syntax(

@@ -55,7 +55,6 @@ fn builtins_gen_is_fresh() {
     let out = djs_bgen::compile_dir(&dir).unwrap_or_else(|e| panic!("{e}"));
     for (path, text) in [
         (djs_bgen::PRELUDE_PATH, &out.prelude),
-        (djs_bgen::PRELUDE_SLIM_PATH, &out.prelude_slim),
         (djs_bgen::REPORT_PATH, &out.report),
         (djs_bgen::NATIVES_PATH, &out.natives),
         (djs_bgen::LEAVES_PATH, &out.leaves),

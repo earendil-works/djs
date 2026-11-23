@@ -117,9 +117,6 @@ pub struct Builtin {
     /// `@fast`: has a leaf fast path in Rust (`builtins/fast.rs`, D1850), tried before the
     /// builtin runs; the prelude marks it with `%MarkFast(f)`.
     pub fast: bool,
-    /// `@slim-omit`: left out of the slim build's prelude, like every builtin of a file
-    /// marked `// @slim-omit` (D2411).
-    pub slim_omit: bool,
     /// `@frame`: keeps a frame of its own, never inlined into its callers (0230): the
     /// engine looks for it on the stack.
     pub frame: bool,
@@ -155,7 +152,6 @@ const BUILTIN_TAGS: &[&str] = &[
     "native",
     "intrinsic",
     "fast",
-    "slim-omit",
     "frame",
     "rust",
 ];
@@ -341,7 +337,6 @@ fn builtin_info(
         intrinsic: false,
         native: false,
         fast: false,
-        slim_omit: false,
         frame: false,
         rust: false,
     };
@@ -417,7 +412,6 @@ fn builtin_info(
                 b.rust = true;
                 b.fast = true;
             }
-            "slim-omit" => b.slim_omit = true,
             "frame" => b.frame = true,
             "intrinsic" => b.intrinsic = true,
             other => err(format!(

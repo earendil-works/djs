@@ -898,7 +898,6 @@ fn member(key: &str) -> String {
 }
 
 /// (Only ArrayBuffers, which the slim build does not have, are written as base64.)
-#[cfg(feature = "full")]
 #[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -1715,14 +1714,12 @@ impl<'a> Dumper<'a> {
                 }
                 self.props(n, o, &|k, _| k == atoms::NAME || k == atoms::LENGTH);
             }
-            #[cfg(feature = "full")]
             ObjectClass::ArrayBuffer => {
                 if h.object_slot(o, 1).is_number() {
                     self.refuse(path, "a resizable ArrayBuffer");
                 }
                 self.props(n, o, &|_, _| false);
             }
-            #[cfg(feature = "full")]
             ObjectClass::TypedArray | ObjectClass::DataView => {
                 let b = h.object_slot(o, 0);
                 self.edge(n, b, || cat!(path, ".buffer"));
@@ -4541,11 +4538,9 @@ impl<'a> Dumper<'a> {
                 }
                 cat!(target, ".bind(", join(&args, ", "), ")")
             }
-            #[cfg(feature = "full")]
             ObjectClass::ArrayBuffer => {
                 cat!(self.rt(), "bytes(\"", base64(h.buffer_data(o)), "\")")
             }
-            #[cfg(feature = "full")]
             ObjectClass::TypedArray | ObjectClass::DataView => {
                 if let Some(e) = self.view(o, loc) {
                     return e;
@@ -4684,7 +4679,6 @@ impl<'a> Dumper<'a> {
 
     /// A typed array or DataView: a small typed array that is its buffer's only view as
     /// its elements, else a view of its buffer.
-    #[cfg(feature = "full")]
     #[cfg_attr(djs_optsize, optimize(size))]
     fn view(&mut self, o: Obj, loc: &str) -> Option<String> {
         let h = self.h;

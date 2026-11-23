@@ -99,4 +99,4 @@ directory also holds credentials and keys.
 output with the builtin registry (tests/builtins/registry.tsv): per global, which statics
 and prototype members scripts name (prototype members by name only, so an upper bound)
 and, with --touched, how many corpus runs touched each one (0143's touch build, named by
-registry path). The results are in docs/slim-codemode.md.
+registry path).

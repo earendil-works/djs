@@ -2,8 +2,8 @@
 
 djs runs modern JavaScript: the language of the current ECMAScript specification, with
 its builtins, in strict mode. This page says what a script can rely on: how its code is
-compiled, what is left out and why, which builtins exist, and the two variations a host
-can choose, the slim build and frozen builtins.
+compiled, what is left out and why, which builtins exist, and the variation a host can
+choose, frozen builtins.
 
 > **In short.** Code is always strict. A host runs a script as the body of an async
 > function, so `await` and `return` work at the top level; Scripts in the specification's
@@ -257,25 +257,6 @@ disposed at the end of the block
 What a builtin does, and the text of the errors it throws, follows QuickJS where the
 specification leaves room, because models read those messages and the tests compare
 them. [Status in numbers](status.md) gives the conformance figures.
-
-## The slim build
-
-djs also builds as a *slim* module, for hosts that build djs themselves and count every
-kilobyte; the package does not ship it. It leaves out the
-families that codemode scripts don't use and that cost real size: typed arrays with
-`ArrayBuffer` and `DataView`, `BigInt`, the `Iterator` helpers, `WeakRef` and
-`FinalizationRegistry`, `DisposableStack` and the `using` declarations, and decorators.
-A script that reaches for one gets an error that names the build, and feature tests keep
-working:
-
-```js
-new Uint8Array(4);   // ReferenceError: 'Uint8Array' is not available in this build
-typeof BigInt;       // "undefined"
-[].values().map;     // undefined: the Iterator helpers are gone
-10n;                 // SyntaxError: BigInt literals are not available in this build
-```
-
-[Builtins](builtins.md#two-builds-full-and-slim) explains how the build is made.
 
 ## Frozen builtins
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builtin usage by global and member (0149, docs/slim-codemode.md).
+"""Builtin usage by global and member (0149).
 
 Joins features.py's per-execution features with the builtin registry
 (tests/builtins/registry.tsv, D2371): for every builtin function or accessor that a

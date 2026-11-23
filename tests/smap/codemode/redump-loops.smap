@@ -1,31 +1,31 @@
-function <anonymous> @1..582
+function <anonymous> @1..551
   arg0 argument 0, arg1 console@0
-  loc0 <state>, loc1 tools@0, loc2 x@281, loc7 g@298, loc8 h@298, loc9 x@440
-  node 0 Body @0..581: Params 6..22 Stmt 270..428 Stmt 429..558 Stmt 559..578 | Param tools@0#0 Param console@0#0
-  node 1 ForOf @270..428: Head 275..282 Iterable 286..292 Body 294..428 | Const x@281#0
-  node 2 Block @294..428: FuncDecl 298..348 FuncDecl 351..382 Stmt 385..426 | Function g@298#0 Function h@298#1
-  node 3 Expr @385..426: Operand 385..425
-  node 4 Call @385..425: Callee 385..396 Open 396..397 Arg 397..406 Arg 408..424
-  node 5 Await @397..406: Operand 403..406
-  node 6 ForOf @429..558: Head 434..441 Iterable 445..451 Body 453..558 | Const x@440#0
-  node 7 Block @453..558: Stmt 457..556
-  node 8 Try @457..556: Block 461..493 Finally 502..556
-  node 9 Block @502..556: Stmt 508..552
-  node 10 Expr @508..552: Operand 508..551
-  node 11 Call @508..551: Callee 508..519 Open 519..520 Arg 520..529 Arg 531..550
-  node 12 Await @531..550: Operand 537..550
-  await#1 @397 (7:15) pc 83: for-of.iterator@270 for-of.next@270 call.callee@385 call.this@385 (out: loc9)
+  loc0 <state>, loc1 tools@0, loc2 x@250, loc7 g@267, loc8 h@267, loc9 x@409
+  node 0 Body @0..550: Params 6..22 Stmt 239..397 Stmt 398..527 Stmt 528..547 | Param tools@0#0 Param console@0#0
+  node 1 ForOf @239..397: Head 244..251 Iterable 255..261 Body 263..397 | Const x@250#0
+  node 2 Block @263..397: FuncDecl 267..317 FuncDecl 320..351 Stmt 354..395 | Function g@267#0 Function h@267#1
+  node 3 Expr @354..395: Operand 354..394
+  node 4 Call @354..394: Callee 354..365 Open 365..366 Arg 366..375 Arg 377..393
+  node 5 Await @366..375: Operand 372..375
+  node 6 ForOf @398..527: Head 403..410 Iterable 414..420 Body 422..527 | Const x@409#0
+  node 7 Block @422..527: Stmt 426..525
+  node 8 Try @426..525: Block 430..462 Finally 471..525
+  node 9 Block @471..525: Stmt 477..521
+  node 10 Expr @477..521: Operand 477..520
+  node 11 Call @477..520: Callee 477..488 Open 488..489 Arg 489..498 Arg 500..519
+  node 12 Await @500..519: Operand 506..519
+  await#1 @366 (7:15) pc 83: for-of.iterator@239 for-of.next@239 call.callee@354 call.this@354 (out: loc9)
     path 0.1 1.2 2.2 3.0 4.2 5
-  await#2 @531 (13:28) pc 208: for-of.iterator@429 for-of.next@429 completion.kind@457 completion.value@457 call.callee@508 call.this@508 call.arg@520 (out: loc2 loc7 loc8)
+  await#2 @500 (13:28) pc 208: for-of.iterator@398 for-of.next@398 completion.kind@426 completion.value@426 call.callee@477 call.this@477 call.arg@489 (out: loc2 loc7 loc8)
     path 0.2 6.2 7.0 8.1 9.0 10.0 11.3 12
-function g @299..349
+function g @268..318
   loc0 <state>
   node 0 Body @0..50: Params 16..18 Stmt 21..48
   node 1 Return @21..48: Operand 28..47
   node 2 Await @28..47: Operand 34..47
   await#1 @28 (5:31) pc 20: -
     path 0.1 1.0 2
-function h @352..383
+function h @321..352
   loc0 <state>
   node 0 Body @0..31: Params 11..13 Stmt 16..29
   node 1 Expr @16..29: Operand 16..28

@@ -88,11 +88,9 @@ No. The analysis:
   steps, not continuously. That is fine for the elapsed-time reporting the harvested
   scripts do. A finer clock would need the host to pass a fractional time (Date must stay
   integral), and nothing asks for it.
-- **Size and slim build.** A builtin would cost an object, a function and a prelude entry,
-  roughly 0.5–1 KB of module and image. That isn't much, but every djs host would pay it
-  for a global that only pi's quickjs-wasi parity needs. The slim build's keep list
-  (docs/slim-codemode.md) doesn't change either way, because the adapter defines
-  `performance` on top of any build.
+- **Size.** A builtin would cost an object, a function and a prelude entry, roughly
+  0.5–1 KB of module and image. That isn't much, but every djs host would pay it for a
+  global that only pi's quickjs-wasi parity needs.
 - **Members.** Keep only `now`, which is what scripts use. Leave out `mark`/`measure`/
   `getEntries`. `timeOrigin` has no users. If parity is wanted, it could be a getter on
   the adapter's object that returns 0 in deterministic mode (as pi's quickjs does) and the

@@ -189,12 +189,6 @@ impl Registry {
     /// What is wrong with the registry on this realm: live entries that no longer resolve,
     /// builtins without an entry, intrinsics without an entry. Empty when it is current.
     pub fn check(&self, heap: &Heap) -> Vec<String> {
-        self.check_build(heap, &BTreeSet::new())
-    }
-
-    /// [`check`](Self::check) for a build that leaves out builtin families (the slim
-    /// build, D2411): the live value entries in `absent` must not resolve, all others must.
-    pub fn check_build(&self, heap: &Heap, absent: &BTreeSet<u32>) -> Vec<String> {
         let mut problems = Vec::new();
         let mut r = Resolver::new(heap);
         for e in self.entries.iter().filter(|e| e.removed.is_none()) {
@@ -202,14 +196,7 @@ impl Registry {
                 EntryKind::Value => r.resolve(&e.path).and_then(cell_of).is_some(),
                 EntryKind::Intrinsic => intrinsics::names().any(|i| i == e.path),
             };
-            if ok && absent.contains(&e.id) {
-                problems.push(format!(
-                    "{} {} (id {}) is absent from this build but resolves",
-                    e.kind.as_str(),
-                    e.path,
-                    e.id
-                ));
-            } else if !ok && !absent.contains(&e.id) {
+            if !ok {
                 problems.push(format!(
                     "{} {} (id {}) is gone",
                     e.kind.as_str(),
@@ -230,18 +217,6 @@ impl Registry {
             }
         }
         problems
-    }
-
-    /// The live value entries that don't resolve on this realm: what a build without some
-    /// builtin families lacks (D2411).
-    pub fn unresolved(&self, heap: &Heap) -> Vec<u32> {
-        let mut r = Resolver::new(heap);
-        self.entries
-            .iter()
-            .filter(|e| e.kind == EntryKind::Value && e.removed.is_none())
-            .filter(|e| r.resolve(&e.path).and_then(cell_of).is_none())
-            .map(|e| e.id)
-            .collect()
     }
 
     /// Brings the registry up to date with this realm: tombstones live entries that no
@@ -725,17 +700,7 @@ impl<'h> Resolver<'h> {
             None => {
                 let g = intrinsic(self.heap, Intrinsic::Global).as_object()?;
                 let seg = format!(".{root}");
-                match self.segments(g).iter().find(|s| s.0 == seg) {
-                    Some(s) => s.1,
-                    // A realm prototype whose constructor this build leaves out
-                    // (`Iterator.prototype` in the slim build, D2411) keeps its id.
-                    None if segs.first() == Some(&".prototype") => {
-                        let p = Intrinsic::prototype_of(root)?;
-                        segs.remove(0);
-                        intrinsic(self.heap, p)
-                    }
-                    None => return None,
-                }
+                self.segments(g).iter().find(|s| s.0 == seg)?.1
             }
         };
         for (n, seg) in segs.into_iter().enumerate() {

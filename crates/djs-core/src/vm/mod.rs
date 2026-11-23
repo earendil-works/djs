@@ -48,15 +48,12 @@ pub use module::{IMPORT_FN_ID, ModuleKind, ModuleLoader, ModuleSource};
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
 const HOST_CALL_REPORTED: u32 = 1;
 
-/// The generated prelude (`builtins/gen/prelude.js`, D1172); the slim build's leaves out
-/// the families it doesn't have (D2411), and full builds without `embed` leave out the
-/// builtins tagged `// @embed-only` (D3175).
-#[cfg(all(feature = "full", feature = "embed"))]
+/// The generated prelude (`builtins/gen/prelude.js`, D1172); builds without `embed` leave
+/// out the builtins tagged `// @embed-only` (D3175).
+#[cfg(feature = "embed")]
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
-#[cfg(all(feature = "full", not(feature = "embed")))]
+#[cfg(not(feature = "embed"))]
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-noembed.js");
-#[cfg(not(feature = "full"))]
-const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-slim.js");
 
 // `SOURCE_HASH`: the library's non-test sources, djs-libm's and the prelude (build.rs,
 // D1330, D3174) and the enabled cargo features (`BUILD_INPUTS`, D1750).
@@ -1583,8 +1580,6 @@ mod module_tests;
     not(feature = "cold-unicode")
 ))]
 mod props_tests;
-#[cfg(test)]
-mod slim_tests;
 #[cfg(test)]
 mod tests;
 

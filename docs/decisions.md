@@ -14358,3 +14358,27 @@ runs once per dump, never in a run's loop: the shipped module 717,284 -> 702,049
 harvested corpus, load 20-70) within the noise of the runs (total dump ms 329-413 without,
 341-402 with). Not on compiler/smap*.rs: the parser's recording hooks there are called by
 every compile (+0.7 KB more was all they gave).
+
+## D3642: The slim build goes; djs has one feature set of builtins
+date: 2026-11-23 · by: pcompat · issue: 0297
+Supersedes D025, D2411, D2412 and D2413, and D3100's "and slim" (owner, 2026-11-23: remove
+the slim build completely). No package ships the slim module since D3600, and js/pi, whose
+adapter tests were its last user, went in 0297's merge 2: it was kept only as a size
+reference. Removed: djs-core's `full` feature and the `FULL` constant with its guards
+(the leaf intrinsics' dispatch arms, `Value`'s BigInt arms, the BigInt/`using`/decorator
+syntax errors, the wire reader's bytes refusal, `realm::ABSENT_GLOBALS` and the realm
+slots the slim build cleared), the `full` forwarding in djs-wasm, djs-cli, djs-prelude,
+djs-difftest, djs-test262 and djs-embed; `@slim-omit` and builtins/gen/prelude-slim.js
+(djs-bgen emits two preludes: with and without the `// @embed-only` files); vm/slim_tests.rs;
+the registry's absent list (tests/builtins/registry-slim.txt, `registry::absent`,
+`Registry::check_build`/`unresolved`, the resolver's fallback for a prototype whose
+constructor a build lacks); tests/test262-slim.toml (its `no-unicode` and `no-modules`
+groups too: no gate leg builds the runner without `unicode` or `embed`) and
+expected-failures-slim.txt; `slim_ceiling_gzip` and `budget.py --slim`; status.py's slim
+module and the `slim/*` rows; `build-wasm.sh --slim`; the gate legs build:size-slim,
+build:slim-tests, build:slim-bins, slim tests/difftest/test262, the slim half of the size
+budget and the clippy combinations `--no-default-features`, `--no-default-features
+--features dump,lazy` and the wasm `slim` and `slim-dump` modules (the remaining combination
+is djs-core with only `unicode`, the former `full,unicode`). The `unicode` umbrella and its
+two features stay. The shipped module: 717,284 -> 717,204 B gzip (the guards were constant
+true there).

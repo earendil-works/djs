@@ -39,8 +39,8 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
   where they save real work, but still keep them minimal. Dev-dependencies for tests are
   fine.
 - No `unsafe` in `djs-core` unless a decision records why. Heap access is bounds checked,
-  except in the shipped and slim wasm modules, which build with `unsafe-heap` (D3100): the
-  wasm instance is their sandbox, and heap/layout/access.rs is the only `unsafe`. Native
+  except in the shipped wasm module, which builds with `unsafe-heap` (D3100): the wasm
+  instance is its sandbox, and heap/layout/access.rs is the only `unsafe`. Native
   builds, the dump module and every test build keep the checks.
 - Prefer plain, direct code. Comments explain *why*. Keep modules focused; no speculative
   abstraction.

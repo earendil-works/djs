@@ -190,7 +190,6 @@ def jobs():
     exe = f"python3 scripts/gate.py exe"
     tests = f"python3 scripts/gate.py tests"
     size_mod = "target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
-    slim_mod = "target/size-slim/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
     wasm = "target/wasm-dev/wasm32-unknown-unknown/debug/djs_wasm.wasm"
     J = Job
     return [
@@ -240,24 +239,16 @@ def jobs():
           cls="rust", group="target/clippy"),
 
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
-        # without `full`/`unicode` (slim), slim with the dumper (and `lazy`, as djs-wasm's
-        # `dump` turns it on, D2990), full without them; and the
-        # wasm modules in release as they ship: the shipped one (with the dumper, D3600) and
-        # slim unchecked (D3100), slim with dump. Libraries only: the
-        # tests build in the default combination (and slim's in its own legs).
-        J("clippy (djs-core feature combinations)", "for f in '--no-default-features'"
-          " '--no-default-features --features dump,lazy' '--no-default-features --features full,unicode';"
-          " do CARGO_TARGET_DIR=target/clippy-combos cargo clippy -p djs-core $f --lib --quiet -- -D warnings"
-          " || { echo \"in: cargo clippy -p djs-core $f\"; exit 1; }; done",
+        # with only `unicode` (no `dump`, `lazy` or `embed`), and the shipped wasm module in
+        # release (with the dumper, D3600, and unchecked, D3100). Libraries only: the tests
+        # build in the default combination.
+        J("clippy (djs-core feature combinations)", "CARGO_TARGET_DIR=target/clippy-combos cargo clippy"
+          " -p djs-core --no-default-features --features unicode --lib --quiet -- -D warnings",
           cls="rust", group="target/clippy-combos"),
-        *[J(f"clippy (wasm {name} module in release)",
-            f"CARGO_TARGET_DIR=target/clippy-wasm-{name} cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
-            f" --release {flags} --quiet -- -D warnings", cls="rust", group=f"target/clippy-wasm-{name}")
-          # One target directory each: the feature sets build nothing in common, and one
-          # after another they were the gate's second-longest path (0197).
-          for name, flags in (("main", "--features unsafe-heap,cold-unicode,dump"),
-                              ("slim", "--no-default-features --features unsafe-heap"),
-                              ("slim-dump", "--no-default-features --features dump"))],
+        J("clippy (wasm main module in release)",
+          "CARGO_TARGET_DIR=target/clippy-wasm-main cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
+          " --release --features unsafe-heap,cold-unicode,dump --quiet -- -D warnings",
+          cls="rust", group="target/clippy-wasm-main"),
 
         # --- wasm32 dev builds: djs-core no_std, and the module the js tests load (0023),
         # with the dumper as the shipped module (D3600).
@@ -267,27 +258,11 @@ def jobs():
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
           " --features compiled-prelude,dump --quiet", group="target/wasm-dev", build=True),
 
-        # --- The shipped module, with the dumper (D3600), and the slim one (D020, D2411): LTO,
-        # one codegen unit, one core each, and unchecked arena access, as scripts/build-wasm.sh
-        # builds them (D3100).
+        # --- The shipped module, with the dumper (D3600): LTO, one codegen unit, one core
+        # each, and unchecked arena access, as scripts/build-wasm.sh builds it (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
           " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,dump --quiet",
           group="target/size", build=True),
-        J("build:size-slim", "CARGO_TARGET_DIR=target/size-slim scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --no-default-features --features unsafe-heap --quiet",
-          group="target/size-slim", build=True),
-
-        # --- The slim build (D2411), natively in its own target directory.
-        J("build:slim-tests", "CARGO_TARGET_DIR=target/slim cargo test -p djs-core --no-default-features --lib"
-          f" --no-run --quiet {cargo_json} > {G}/slim-core-tests.json"
-          " && CARGO_TARGET_DIR=target/slim cargo test -p djs-prelude --no-default-features"
-          f" --features raw,registry --no-run --quiet {cargo_json} > {G}/slim-prelude-tests.json",
-          group="target/slim", build=True),
-        J("build:slim-bins", "CARGO_TARGET_DIR=target/slim cargo build -p djs-difftest --no-default-features"
-          f" --quiet {cargo_json} > {G}/slim-difftest.json && {exe} {G}/slim-difftest.json djs-difftest"
-          " && CARGO_TARGET_DIR=target/slim cargo build -p djs-test262 --no-default-features"
-          f" --quiet {cargo_json} > {G}/slim-test262.json && {exe} {G}/slim-test262.json djs-test262",
-          group="target/slim", build=True),
 
         # --- Unit and integration tests of the workspace (through scripts/test-runner.sh,
         # which records each test's time, 0079), djs-docs's apart: they read the guide.
@@ -368,21 +343,8 @@ def jobs():
           " [ \"$rc\" = 0 ] && [ \"$erc\" = 0 ]",
           cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s |^eager:"),
 
-        # --- Slim (D2411): the djs-core and djs-prelude tests that hold in both builds, the
-        # codemode corpora with the stress modes, test262 without the families it leaves out
-        # against its own ratchet.
-        J("slim tests", f"{tests} {G}/slim-core-tests.json -- vm::slim_tests vm::frozen_tests vm::registry"
-          f" && {tests} {G}/slim-prelude-tests.json", cls="rust", needs=["build:slim-tests"]),
-        J("slim difftest", f"{G}/bin/slim/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
-          f" --determinism --quiet --no-diff --times {G}/times/difftest-slim.tsv codemode codemode-harvest",
-          cls="rust", needs=["build:slim-bins"], summary=r"^(stress|ratchet):"),
-        J("slim test262", f"./scripts/fetch-test262.sh > /dev/null && {G}/bin/slim/djs-test262 run --engine djs"
-          " --group active --quiet --expected tests/test262/expected-failures-slim.txt",
-          cls="rust", needs=["build:slim-bins"], summary=r"^ratchet:|^\| active"),
-
-        # --- The shipped module and slim: the size budget (D020).
-        J("size budget", f"python3 scripts/size/budget.py {size_mod} && python3 scripts/size/budget.py"
-          f" {slim_mod} --slim", cls="rust", needs=["build:size", "build:size-slim"]),
+        # --- The shipped module: the size budget (D020).
+        J("size budget", f"python3 scripts/size/budget.py {size_mod}", cls="rust", needs=["build:size"]),
         # 0265: the shipped module's wasm memory per codemode workload, first and later
         # instance, against tests/scores/codemode-memory.tsv (D3367): an arena that has to
         # move (a compile outgrowing dlmalloc's room in front of it, D3366) shows here.
@@ -814,10 +776,10 @@ def artifacts(manifest):
 
 def cmd_exe(args):
     """exe MANIFEST NAME...: link the named binaries a build produced into target/gate/bin
-    (bin/release, bin/slim by the manifest's name), so that later builds that write the same
+    (bin/release by the manifest's name), so that later builds that write the same
     path (another feature set) do not change what a leg runs."""
     manifest, names = args[0], args[1:]
-    sub = {"unsafe-release.json": "release", "slim-difftest.json": "slim", "slim-test262.json": "slim"}
+    sub = {"unsafe-release.json": "release"}
     dest = Path(G, "bin", sub.get(Path(manifest).name, ""))
     dest.mkdir(parents=True, exist_ok=True)
     found = set()

@@ -7,7 +7,6 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::FULL;
 use crate::builtins::{
     array, collection, date, encoding, eval, function, number, object, string, typed, uri,
 };
@@ -1083,7 +1082,7 @@ impl Exec<'_> {
                     };
                     decline_oom(self.array_join_dense(o, len, sep), Value::UNDEFINED)?
                 }
-                TYPED_ARRAY_SET_FROM_DENSE if FULL => match (a0.as_object(), a1.as_object()) {
+                TYPED_ARRAY_SET_FROM_DENSE => match (a0.as_object(), a1.as_object()) {
                     (Some(o), Some(values)) => {
                         Value::bool(self.typed_array_set_from_dense(o, values))
                     }
@@ -1384,7 +1383,7 @@ impl Exec<'_> {
                         conv::number(0.0 - self.time_zone_offset() as f64)
                     }
                 }
-                ARRAY_BUFFER_CREATE if FULL => {
+                ARRAY_BUFFER_CREATE => {
                     let Some(proto) = a0.as_object() else {
                         break 'bad;
                     };
@@ -1397,11 +1396,11 @@ impl Exec<'_> {
                     }
                     Value::object(b)
                 }
-                BUFFER_INFO if FULL => {
+                BUFFER_INFO => {
                     let b = typed::as_buffer(self.heap, a0)?;
                     typed::buffer_info(self.heap, b, a1.as_int().unwrap_or(0))
                 }
-                BUFFER_DETACH | BUFFER_RESIZE | BUFFER_TRANSFER if FULL => {
+                BUFFER_DETACH | BUFFER_RESIZE | BUFFER_TRANSFER => {
                     let b = typed::as_buffer(self.heap, a0)?;
                     let n = a1.as_number().unwrap_or(0.0);
                     match id {
@@ -1422,7 +1421,7 @@ impl Exec<'_> {
                         )?),
                     }
                 }
-                BUFFER_COPY if FULL => {
+                BUFFER_COPY => {
                     let src = typed::as_buffer(self.heap, a0)?;
                     let dst = typed::as_buffer(self.heap, a2)?;
                     let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
@@ -1435,14 +1434,14 @@ impl Exec<'_> {
                     typed::buffer_copy(self.heap, src, from, dst, to, count);
                     Value::UNDEFINED
                 }
-                SORT_NUMBERS if FULL => match a0.as_object() {
+                SORT_NUMBERS => match a0.as_object() {
                     Some(o) => {
                         array::sort_numbers(self.heap, o)?;
                         Value::UNDEFINED
                     }
                     None => break 'bad,
                 },
-                DATA_VIEW_CREATE if FULL => {
+                DATA_VIEW_CREATE => {
                     let (Some(proto), Some(buffer)) = (a0.as_object(), a1.as_object()) else {
                         break 'bad;
                     };
@@ -1450,12 +1449,12 @@ impl Exec<'_> {
                     let len = a3.as_number().unwrap_or(-1.0);
                     Value::object(typed::data_view_create(self.heap, proto, buffer, off, len)?)
                 }
-                DATA_VIEW_FIELD if FULL => {
+                DATA_VIEW_FIELD => {
                     let o = typed::as_data_view(self.heap, a0)?;
                     let field = a1.as_int().unwrap_or(0).clamp(0, 2);
                     self.heap.object_slot(o, field as u32)
                 }
-                DATA_VIEW_GET | DATA_VIEW_SET if FULL => {
+                DATA_VIEW_GET | DATA_VIEW_SET => {
                     let o = typed::as_data_view(self.heap, a0)?;
                     let at = a1.as_number().unwrap_or(-1.0);
                     let Some(kind) = a2.as_int().and_then(crate::heap::typed::Kind::from_i32)
@@ -1478,7 +1477,7 @@ impl Exec<'_> {
                         Value::UNDEFINED
                     }
                 }
-                IS_DATA_VIEW if FULL => Value::bool(
+                IS_DATA_VIEW => Value::bool(
                     a0.as_object()
                         .is_some_and(|o| self.heap.object_class(o) == ObjectClass::DataView),
                 ),
@@ -1500,7 +1499,7 @@ impl Exec<'_> {
                 IS_TYPED_ARRAY => {
                     Value::bool(a0.as_object().is_some_and(|o| self.heap.is_typed_array(o)))
                 }
-                TYPED_ARRAY_CREATE if FULL => {
+                TYPED_ARRAY_CREATE => {
                     let (Some(proto), Some(kind), Some(buffer)) = (
                         a0.as_object(),
                         a1.as_int().and_then(crate::heap::typed::Kind::from_i32),
@@ -1518,7 +1517,7 @@ impl Exec<'_> {
                     let o = typed::as_typed_array(self.heap, a0)?;
                     typed::typed_array_field(self.heap, o, a1.as_int().unwrap_or(0))
                 }
-                TYPED_ARRAY_GET | TYPED_ARRAY_SET if FULL => {
+                TYPED_ARRAY_GET | TYPED_ARRAY_SET => {
                     let o = typed::as_typed_array(self.heap, a0)?;
                     let i = a1.as_number().unwrap_or(-1.0);
                     let index = (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i))
@@ -1546,7 +1545,7 @@ impl Exec<'_> {
                         Value::UNDEFINED
                     }
                 }
-                TYPED_ARRAY_COPY if FULL => {
+                TYPED_ARRAY_COPY => {
                     let src = typed::as_typed_array(self.heap, a0)?;
                     let dst = typed::as_typed_array(self.heap, a2)?;
                     let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
@@ -1563,14 +1562,14 @@ impl Exec<'_> {
                     typed::typed_array_copy(self.heap, src, from, dst, to, count);
                     Value::UNDEFINED
                 }
-                TYPED_ARRAY_KIND_PROTO if FULL => {
+                TYPED_ARRAY_KIND_PROTO => {
                     let Some(kind) = a0.as_int().and_then(crate::heap::typed::Kind::from_i32)
                     else {
                         break 'bad;
                     };
                     realm::intrinsic(self.heap, typed::kind_proto(kind))
                 }
-                BASE64_ENCODE | HEX_ENCODE if FULL => {
+                BASE64_ENCODE | HEX_ENCODE => {
                     let o = typed::as_typed_array(self.heap, a0)?;
                     let Some(bytes) = typed::uint8_bytes(self.heap, o) else {
                         return type_error("ArrayBuffer is detached");
@@ -1586,7 +1585,7 @@ impl Exec<'_> {
                     };
                     Value::string(self.heap.alloc_latin1(s.as_bytes())?)
                 }
-                BASE64_DECODE | HEX_DECODE if FULL => {
+                BASE64_DECODE | HEX_DECODE => {
                     let Some(s) = a0.as_string() else {
                         break 'bad;
                     };

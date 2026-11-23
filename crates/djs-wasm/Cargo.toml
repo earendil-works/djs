@@ -13,10 +13,8 @@ doctest = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["full", "unicode"]
-# djs-core's features (D2411); without `full` this is the slim module
-# (`scripts/build-wasm.sh --slim`, djs-slim.wasm).
-full = ["djs-prelude/full"]
+default = ["unicode"]
+# djs-core's Unicode tables.
 unicode = ["djs-prelude/unicode"]
 # Exports `vm_new_compiled` (Vm::new: builds the realm and compiles the prelude), for
 # checking the base snapshot in wasm. Off by default, so release modules do not carry
@@ -32,7 +30,7 @@ docs = ["djs-core/intrinsic-names"]
 # default feature (the native tools and tests pick it per crate), but the one shipped
 # module has it (scripts/build-wasm.sh, D3600), and so does the gate's debug build.
 dump = ["djs-core/dump", "djs-core/lazy", "djs-prelude/names"]
-# Unchecked arena field access in djs-core (D2520). The shipped and slim modules turn it on
+# Unchecked arena field access in djs-core (D2520). The shipped module turns it on
 # (scripts/build-wasm.sh, D3100); native builds, the docs module and the tests don't.
 unsafe-heap = ["djs-core/unsafe-heap"]
 # The Unicode property and normalization tables outside linear memory (D3350): the custom

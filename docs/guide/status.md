@@ -59,8 +59,7 @@ Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 `djs_wasm.wasm`, the one module djs ships, is 1,875 KB (768 KB gzip, 627 KB brotli):
 1,669 KB of code, 108 KB of data, and the base snapshot (the initialized realm with all
 builtins, 191 KB) coded to 45 KB in a custom section; the dumper takes 335 KB of its
-gzip. The slim build, not shipped, is 870 KB (366 KB gzip). Module sizes measured at
-4987410c0d, 2026-11-23.
+gzip. Module sizes measured at 4987410c0d, 2026-11-23.
 <!-- /gen -->
 
 ## The engine in numbers
@@ -121,9 +120,6 @@ instructions.
 | `heap/string-10mib-staged-memory` | 31981568 | 51646c9e90, 2026-11-21 |
 | `native/arrays-x` | 3.74 | 35ed5ab789, 2026-11-05 |
 | `native/foreach-x` | 2.1 | 35ed5ab789, 2026-11-05 |
-| `slim/base` | 133632 | 4987410c0d, 2026-11-23 |
-| `slim/bytes` | 870283 | 4987410c0d, 2026-11-23 |
-| `slim/gzip` | 365958 | 4987410c0d, 2026-11-23 |
 | `speed/arrays/djs-wasm` | 5228.5 | edd129067f, 2026-11-21 |
 | `speed/arrays/qjs-wasi` | 16345.8 | edd129067f, 2026-11-21 |
 | `speed/calls/djs-wasm` | 2069.1 | edd129067f, 2026-11-21 |

@@ -514,8 +514,6 @@ fn size(st: &Status) -> Result<String, String> {
         "wasm/code",
         "wasm/data",
         "wasm/base-coded",
-        "slim/bytes",
-        "slim/gzip",
         "dump/extra-gzip",
     ];
     let v: Vec<f64> = keys
@@ -532,8 +530,7 @@ fn size(st: &Status) -> Result<String, String> {
         &format!(
             "`djs_wasm.wasm`, the one module djs ships, is {} ({} gzip, {} brotli): {} of code, \
              {} of data, and the base snapshot (the initialized realm with all builtins, {}) \
-             coded to {} in a custom section; the dumper takes {} of its gzip. The slim build, \
-             not shipped, is {} ({} gzip). Module sizes {}.",
+             coded to {} in a custom section; the dumper takes {} of its gzip. Module sizes {}.",
             kb(v[0]),
             kb(v[1]),
             kb(v[2]),
@@ -541,9 +538,7 @@ fn size(st: &Status) -> Result<String, String> {
             kb(v[4]),
             kb(st.base_bytes as f64),
             kb(v[5]),
-            kb(v[8]),
             kb(v[6]),
-            kb(v[7]),
             provenance(st, &keys)
         ),
         "",

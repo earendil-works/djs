@@ -46,7 +46,7 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 }
 
 /// The enabled features of this crate, sorted, without `default` and `unicode` (which only
-/// name others, D2411) and `unsafe-heap`, which changes how the arena is accessed but no
+/// name others) and `unsafe-heap`, which changes how the arena is accessed but no
 /// result or image (D2520): the base snapshot, built by a host build without it, loads into
 /// a build with it, and images move freely between the two. Nor `dump` (0167), which only
 /// adds `Vm::dump`, a reader of the heap: a run never calls it. Nor `lazy` (D2990): the base
@@ -59,7 +59,7 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 fn features() -> Vec<String> {
     enabled_features()
         .into_iter()
-        // `default` and `unicode` only name others (D2411): a build that turns on the
+        // `default` and `unicode` only name others: a build that turns on the
         // same effective features through other names hashes the same.
         .filter(|f| {
             f != "default"
@@ -112,7 +112,6 @@ fn main() {
     // djs-libm's tests are in its tests/, which is not hashed.
     collect(&root.join("../djs-libm/src"), &mut files);
     files.push(root.join("../../builtins/gen/prelude.js"));
-    files.push(root.join("../../builtins/gen/prelude-slim.js"));
     files.push(root.join("../../builtins/gen/prelude-noembed.js"));
     let mut h: u32 = 0x811c_9dc5;
     for f in &files {

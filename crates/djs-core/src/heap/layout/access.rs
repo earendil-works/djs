@@ -9,8 +9,8 @@
 //!   trap), never undefined behavior. Native builds, the dump and docs modules and every
 //!   test build use it.
 //! - **Unchecked (`unsafe-heap`).** A plain load or store. Debug builds still assert the
-//!   bounds, so the tests catch what the checked build would. The shipped and slim wasm
-//!   modules use it (D3100). This module is the only place in djs-core that may contain
+//!   bounds, so the tests catch what the checked build would. The shipped wasm module
+//!   uses it (D3100). This module is the only place in djs-core that may contain
 //!   `unsafe` (lib.rs forbids it everywhere else).
 //!
 //! Why unchecked is acceptable there: every offset the engine uses comes from cells it

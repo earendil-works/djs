@@ -1,5 +1,4 @@
 // BigInt (ECMA-262 21.2) and the BigInt conversions (7.1.13).
-// @slim-omit: left out of the slim build (D2411).
 
 /**
  * ToBigInt ( argument ), 7.1.13.

@@ -23,7 +23,7 @@ include!(concat!(env!("OUT_DIR"), "/base_end.rs"));
 include!(concat!(env!("OUT_DIR"), "/built_by.rs"));
 // The base image loads only into the djs-core that made it. The build script's djs-core
 // is a build-dependency with features of its own: a feature that reaches the library but
-// not the build script (djs-core's `full`, `unicode`, ...) fails here instead of at the
+// not the build script (djs-core's `unicode`, `embed`, ...) fails here instead of at the
 // first `new_vm` (D2411).
 const _: () = assert!(
     BUILT_BY == djs_core::vm::BUILD_HASH,

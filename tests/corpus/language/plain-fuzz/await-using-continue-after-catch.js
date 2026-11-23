@@ -1,4 +1,3 @@
-// In language/, not codemode/: the slim build has no `using` (D2411).
 // Found by the plain-dump fuzzer (0211): in a `for await` body, a caught tool failure,
 // then a block whose `await using` disposal runs on `continue`, dumped again there.
 async function* g(k) {

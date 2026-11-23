@@ -347,8 +347,8 @@ pub(crate) fn from_base64(s: &[u16], url: bool, last: u8, max: usize) -> Decoded
     let mut chunk: Vec<u32> = crate::buf::vec_with_capacity(4);
     let mut i = 0;
     // Whole groups of four plain digits first, while they fit (the common case): the
-    // same bytes as the steps below, without their per-unit checks. Only in the dump
-    // module, which loads dumps' buffers (+250 B gzip in the slim module, 0215).
+    // same bytes as the steps below, without their per-unit checks. Only with `dump`,
+    // which loads dumps' buffers (+250 B gzip, 0215).
     #[cfg(feature = "dump")]
     d.bytes.reserve(len.min(max) / 4 * 3);
     #[cfg(feature = "dump")]

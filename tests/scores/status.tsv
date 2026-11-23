@@ -738,9 +738,6 @@ heap/string-10mib-memory	15990784	51646c9e90	2026-11-21
 heap/string-10mib-staged-memory	31981568	51646c9e90	2026-11-21
 native/arrays-x	3.74	35ed5ab789	2026-11-05
 native/foreach-x	2.1	35ed5ab789	2026-11-05
-slim/base	133632	4987410c0d	2026-11-23
-slim/bytes	870283	4987410c0d	2026-11-23
-slim/gzip	365958	4987410c0d	2026-11-23
 speed/arrays/djs-wasm	5228.5	edd129067f	2026-11-21
 speed/arrays/qjs-wasi	16345.8	edd129067f	2026-11-21
 speed/calls/djs-wasm	2069.1	edd129067f	2026-11-21

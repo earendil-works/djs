@@ -346,13 +346,12 @@ functions, symbols and other objects. A cycle is a
 
 ## The module builds
 
-[`scripts/build-wasm.sh`](../../scripts/build-wasm.sh) builds the module in three
+[`scripts/build-wasm.sh`](../../scripts/build-wasm.sh) builds the module in two
 variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
-| slim | none | not shipped: what the module weighs without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)), and the build the agent host's adapter tests also run on: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->366 KB<!--/n--> with gzip |
+| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
 | docs module | the shipped features and `docs` | this site's live examples: the shipped module plus `djs_disasm`, the bytecode listing an edited example shows |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording

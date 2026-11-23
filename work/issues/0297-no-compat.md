@@ -199,6 +199,21 @@ OtherBuild), the COMPAT_VERSION rule in AGENTS.md and TESTING.md go (D3641).
 js/src/layout.generated.ts regenerated. Guide: snapshots.md ("What an image depends on"
 rewritten), arena.md, heap.md, host.md (the dump feature paragraph), testing.md.
 
+### 2026-11-23: merge 5 (J3b: the slim build)
+The `full` feature and every `FULL` guard go, with @slim-omit, prelude-slim.js, slim_tests,
+the registry's absent list (registry-slim.txt, check_build, unresolved, the resolver's
+absent-constructor fallback), test262-slim.toml (no-unicode/no-modules groups too) and its
+ratchet, the slim size ceiling, status.py's slim rows, build-wasm.sh --slim and the slim gate
+legs; one clippy combination stays (djs-core with only `unicode`). vm/dump.rs: only its six
+`#[cfg(feature = "full")]` lines removed (without the feature they would have compiled the
+ArrayBuffer/typed-array dump arms out; told the coordinator). The corpus comments about the
+slim build go (tests/smap/codemode/redump-loops.smap re-pinned: the comment moved offsets).
+docs/slim-codemode.md deleted (J9's list). Guide: builtins.md ("Two builds" section
+removed), language.md ("The slim build" removed), goals.md, host.md (module table),
+snapshots.md, testing.md (also the agent-host test bullets left from merge 2),
+typescript.md, status.md (regenerated). TESTING.md, AGENTS.md, ARCH.md, docs/host.md,
+docs/web-globals.md updated. D3642. Size: 717,284 -> 717,204 B gzip.
+
 ## Follow-ups
 
 ## Result

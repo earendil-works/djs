@@ -4759,17 +4759,14 @@ pub(crate) fn parked(heap: &Heap) -> (Continuation, bool) {
     )
 }
 
-/// The ReferenceError for a global that doesn't exist. The slim build names the globals
-/// of the families it leaves out (D2411), and builds without `embed` those of the
-/// embed-only builtins (D3175), so that a script (or the model that wrote it) sees why,
-/// instead of a typo-like message.
+/// The ReferenceError for a global that doesn't exist. Builds without `embed` name the
+/// globals of the embed-only builtins (D3175), so that a script (or the model that wrote
+/// it) sees why, instead of a typo-like message.
 #[cold]
 #[inline(never)]
 fn undefined_global(heap: &Heap, key: Atom) -> Fault {
     let name = heap.atom_name(key);
-    if (!crate::FULL && realm::ABSENT_GLOBALS.contains(&name.as_str()))
-        || (!crate::EMBED && realm::EMBED_GLOBALS.contains(&name.as_str()))
-    {
+    if !crate::EMBED && realm::EMBED_GLOBALS.contains(&name.as_str()) {
         return Fault::error(
             ErrorKind::ReferenceError,
             crate::text::cat!("'", name, "' is not available in this build"),

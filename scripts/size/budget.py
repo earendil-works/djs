@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""budget.py MODULE.wasm [--update] [--slim]: the gate's size check (D020, 0122).
-
---slim checks the slim module (scripts/build-wasm.sh --slim, D2411) against its own
-ceiling, `slim_ceiling_gzip`: a ratchet like the default module's, with no 1.5x budget.
+"""budget.py MODULE.wasm [--update]: the gate's size check (D020, 0122).
 
 The budget is gzip -9 of the shipped module (scripts/build-wasm.sh) within 1.5x
 quickjs-wasi's plus the owner's allowance (`budget_allowance_gzip`, D3510), recorded in
@@ -52,16 +49,12 @@ def main():
         sys.exit(1)
     size = len(gzip.compress(data, 9, mtime=0))
     vals, lines = read()
-    slim = "--slim" in sys.argv
-    key = "slim_ceiling_gzip" if slim else "ceiling_gzip"
+    key = "ceiling_gzip"
     qjs, ceiling = vals["quickjs_wasi_gzip"], vals[key]
     allowance = vals.get("budget_allowance_gzip", 0)
-    full = qjs * 3 // 2 + allowance
-    # The slim module has only its ratchet: it is under the budget by design.
-    budget = ceiling if slim else full
-    what = "slim size" if slim else "size"
-    print(f"{what}: {size:,} bytes gzip ({len(data):,} raw), {size / qjs:.3f}x quickjs-wasi "
-          f"({qjs:,}); budget 1.5x + {allowance:,} = {full:,} (D020, D3510), "
+    budget = qjs * 3 // 2 + allowance
+    print(f"size: {size:,} bytes gzip ({len(data):,} raw), {size / qjs:.3f}x quickjs-wasi "
+          f"({qjs:,}); budget 1.5x + {allowance:,} = {budget:,} (D020, D3510), "
           f"ratchet ceiling {ceiling:,}")
     if "--update" in sys.argv:
         new = min(ceiling, max(size + SLACK, 0))
@@ -72,10 +65,10 @@ def main():
         return
     limit = min(ceiling, budget) if size <= budget else ceiling
     if size > limit:
-        print(f"{what}: FAIL: {size:,} > {limit:,} (D020; see TESTING.md \"Size budget\")")
+        print(f"size: FAIL: {size:,} > {limit:,} (D020; see TESTING.md \"Size budget\")")
         sys.exit(1)
     if size + SLACK < ceiling:
-        print(f"{what}: {ceiling - size:,} bytes below the ceiling: lower it with "
-              f"`scripts/size/budget.py {args[0]} --update{' --slim' if slim else ''}`")
+        print(f"size: {ceiling - size:,} bytes below the ceiling: lower it with "
+              f"`scripts/size/budget.py {args[0]} --update`")
 
 main()

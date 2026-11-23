@@ -533,55 +533,6 @@ VM with frozen builtins can write a dump ([what a dump needs](dumps.md#what-a-du
 > leave every cell below its end in place ([the garbage collector](gc.md)), and the
 > per-VM objects that must stay writable, such as the global object, live above it.
 
-## Two builds: full and slim
-
-djs builds in two variants from one source. The default build has every builtin family.
-The *slim* build leaves out the families that codemode scripts never use and that cost
-real size: typed arrays with ArrayBuffer and DataView, BigInt, the Iterator helpers and
-the `Iterator` global, WeakRef and FinalizationRegistry, DisposableStack with
-SuppressedError and the `using` declarations, and decorators. None of thousands of real
-codemode scripts uses any of them. Leaving them out makes the wasm module tens of
-kilobytes smaller in gzip and the base image, which every VM copies, about a quarter
-smaller. [The language](language.md#the-slim-build) shows what a script sees in it.
-
-The variants are cargo features, and features may only add things. So the default build
-turns on a feature called `full`, which carries those families, and a second one,
-`unicode`, which carries the Unicode property tables of `\p{…}` in regular expressions
-and full normalization. Building without the default features gives the slim build.
-
-Three mechanisms take a family out:
-
-- **Builtins.** A builtin file can be marked as left out of the slim build, and so can a
-  single builtin (SuppressedError lives with the other errors). The builtin compiler then
-  writes a second prelude without them,
-  [`builtins/gen/prelude-slim.js`](../../builtins/gen/prelude-slim.js), and the slim
-  build makes its base image from that one. Installs that a kept builtin makes onto an
-  object of a left-out family, such as `%TypedArray%.prototype.toString`, which is
-  Array's `toString`, go too.
-- **Rust.** Code is cut with a constant (`FULL` in
-  [`crates/djs-core/src/lib.rs`](../../crates/djs-core/src/lib.rs)) rather than with
-  conditional compilation, so both builds type-check the same code and the optimizer
-  drops what the slim one can't reach. The leaf intrinsics of the left-out families have
-  a `FULL` guard on their dispatch arms, and `Value` never reports a BigInt in the slim
-  build, so the BigInt arithmetic behind every numeric operator falls away.
-- **Syntax.** BigInt literals, decorators and `using` are a SyntaxError that names the
-  build.
-
-The builtin registry stays one table. Next to it a committed list,
-[`tests/builtins/registry-slim.txt`](../../tests/builtins/registry-slim.txt), names the
-entries the slim build doesn't have, and the slim build's tests check that exactly those
-don't resolve. The prototype of an absent constructor that the engine still has
-(`Iterator.prototype`, which every iterator inherits from) keeps its id. An export from a
-slim VM therefore names its builtins with the same ids as a full one.
-
-> **Trade-off.** One feature for the whole cut over one per family. Each extra
-> combination would need its own base image, test runs and size budget, and the families
-> were chosen together from the same evidence. The cost: the slim build can't run all of
-> test262 or the differential corpus, so it is tested on its own terms: its codemode
-> corpora with the stress modes, test262 without the left-out families against its own
-> list of expected failures, an [agent host's](pi.md) own codemode tests on frozen
-> builtins, and its own size ceiling.
-
 ## Where to look
 
 - [`builtins/`](../../builtins/): the builtins in the TypeScript subset;
@@ -593,7 +544,7 @@ slim VM therefore names its builtins with the same ids as a full one.
   ([`crates/djs-bgen/src/emit_js.rs`](../../crates/djs-bgen/src/emit_js.rs),
   [`crates/djs-bgen/src/emit_rust.rs`](../../crates/djs-bgen/src/emit_rust.rs),
   [`crates/djs-bgen/src/emit_leaf.rs`](../../crates/djs-bgen/src/emit_leaf.rs)).
-- [`builtins/gen/`](../../builtins/gen/): the generated preludes (full and slim) and the
+- [`builtins/gen/`](../../builtins/gen/): the generated preludes (with and without the embed-only builtins) and the
   resume-point report;
   [`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs):
   the generated state machines;

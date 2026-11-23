@@ -156,9 +156,8 @@ const CASES: &[(&str, &str, &str)] = &[
     ("matchAll", STR, "[...s.matchAll(/c/g)].length"),
 ];
 
-/// Cases of the full build's builtins (typed arrays, BigInt: D2411).
-#[cfg(feature = "full")]
-const FULL_CASES: &[(&str, &str, &str)] = &[
+/// Cases of typed arrays and BigInt.
+const TYPED_CASES: &[(&str, &str, &str)] = &[
     ("new Uint8Array(n)", "", "new Uint8Array(n).length"),
     ("Uint8Array from array", NUMS, "new Uint8Array(na).length"),
     (
@@ -250,10 +249,9 @@ fn builtin_fuel_scales_with_input() {
     check(CASES);
 }
 
-#[cfg(feature = "full")]
 #[test]
-fn full_builtin_fuel_scales_with_input() {
-    check(FULL_CASES);
+fn typed_builtin_fuel_scales_with_input() {
+    check(TYPED_CASES);
 }
 
 /// The reporter's worst case (`new Set` of a 30,000-element array: a million units of

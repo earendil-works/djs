@@ -8,10 +8,10 @@ Counts that follow from the repository (test262 groups, ratchets, corpus cases, 
 snapshot) are computed by djs-docs itself and need no recording.
 
 usage:
-  scripts/status.py size              build the shipped and slim modules and the shipped
-                                      build without the dumper and record their sizes: bytes,
-                                      gzip -9, brotli -q 11, code and data of the shipped one,
-                                      its coded base section and the decoded base of slim
+  scripts/status.py size              build the shipped module and the same build without
+                                      the dumper and record their sizes: bytes, gzip -9,
+                                      brotli -q 11, code and data of the shipped one and its
+                                      coded base section
   scripts/status.py speed [-n N]      scripts/perf/wmeasure.py on the README workloads:
                                       instructions of djs-wasm and quickjs-wasi (needs
                                       scripts/perf/setup.sh; takes minutes)
@@ -56,7 +56,6 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FILE = os.path.join(ROOT, "tests/scores/status.tsv")
 WASM = os.path.join(ROOT, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
-SLIM = os.path.join(ROOT, "target/djs-slim.wasm")
 # The shipped build without the dumper, for what the dumper adds (`dump/extra-gzip`).
 NODUMP = os.path.join(ROOT, "target/nodump-wasm/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
 HEADER = [
@@ -156,7 +155,6 @@ def build_nodump():
 
 def size(rows):
     build()
-    build("--slim")
     build_nodump()
     b = open(WASM, "rb").read()
     code, data = section_sizes(b)
@@ -172,10 +170,6 @@ def size(rows):
     if shutil.which("brotli"):
         r = subprocess.run(["brotli", "-c", "-q", "11"], input=b, capture_output=True, check=True)
         new["wasm/brotli"] = len(r.stdout)
-    m = open(SLIM, "rb").read()
-    new["slim/bytes"] = len(m)
-    new["slim/gzip"] = len(gzip.compress(m, compresslevel=9, mtime=0))
-    new["slim/base"], _, _ = base(SLIM)
     # What the dumper adds to the shipped module: the same build without it (D3600).
     nodump = len(gzip.compress(open(NODUMP, "rb").read(), compresslevel=9, mtime=0))
     new["dump/extra-gzip"] = new["wasm/gzip"] - nodump
