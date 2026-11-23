@@ -1170,8 +1170,8 @@ pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usiz
 /// Defines property staging[0..name_len] of object `obj` (a handle) as `value` (a handle),
 /// writable and configurable, and not enumerable, like builtins, unless bit 0 of `flags`
 /// is set (data, as an assignment makes it, D3592; a host that leaves `flags` out passes
-/// 0). Bit 1 freezes `obj` afterwards, as `Object.freeze` (a namespace object once the
-/// host made it, 0295). Returns 0, or -1 if `obj` is not an object, the heap is full or
+/// 0). Bit 1 (part of ABI 8, D3611) freezes `obj` afterwards, as `Object.freeze` (a
+/// namespace object once the host made it). Returns 0, or -1 if `obj` is not an object, the heap is full or
 /// `obj` cannot be frozen.
 pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flags: u32) -> i32 {
     with(|s| {

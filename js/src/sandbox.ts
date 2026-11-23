@@ -345,7 +345,7 @@ export interface Settlement {
 export interface LoadRunOptions {
   /**
    * The fuel the run had used when it was dumped (`Run.fuelUsed`): the loaded run goes on
-   * from there, so `maxFuel` bounds the run across dumps and loads (D3604). A dump does
+   * from there, so `maxFuel` bounds the run across dumps and loads (D3614). A dump does
    * not carry it; the host keeps it with the dump. Default 0: a fresh budget.
    */
   fuelUsed?: number;
@@ -564,7 +564,7 @@ interface Exports {
   vm_dump_runtime?(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
-  /** `flags` bit 0 (since 0291, D3592): enumerable; older modules ignore it. */
+  /** `flags` bit 0 (D3592): enumerable; bit 1 (part of ABI 8, D3611): freeze `obj` afterwards. */
   vm_define(vm: number, obj: number, nameLen: number, value: number, flags?: number): number;
   vm_decode_wire(vm: number, len: number): number;
   /** Since 0162 (D2551); older modules lack it. */
@@ -741,7 +741,7 @@ export class Run {
 
   /**
    * The fuel the run used so far, across its steps (and, after `loadRun`, the
-   * `fuelUsed` it was loaded with): what `maxFuel` bounds (D3604). A host that dumps the
+   * `fuelUsed` it was loaded with): what `maxFuel` bounds (D3614). A host that dumps the
    * run keeps it with the dump and gives it back to `loadRun`.
    */
   get fuelUsed(): number {
@@ -749,7 +749,7 @@ export class Run {
   }
 
   /**
-   * The calls that were still open when the run ended (D3602): its result settled while
+   * The calls that were still open when the run ended (D3612): its result settled while
    * they were running, or a host function exited it. The run no longer waits for them;
    * the host cancels them, and settling one is a no-op.
    */
@@ -1127,7 +1127,7 @@ export class Sandbox {
         if (old !== undefined) this.x.vm_handle_free(this.vm, old);
       }
       if (m) {
-        // Enumerable, in definition order, each alias right after its member (D3601).
+        // Enumerable, in definition order, each alias right after its member (D3611).
         const target = this.namespace(m[1]);
         let last = m[2];
         this.defineOn(target, m[2], h, DEFINE_ENUMERABLE);
@@ -1140,14 +1140,14 @@ export class Sandbox {
     });
   }
 
-  /** Whether the JSON boundary converts host function `identity`'s arguments (D3603). */
+  /** Whether the JSON boundary converts host function `identity`'s arguments (D3613). */
   private converts(identity: string): boolean {
     const b = this.opts.jsonBoundary;
     return b === true || (typeof b === "object" && b !== null && !b.except.includes(identity));
   }
 
   /**
-   * Freezes the namespaces of dotted names that are not frozen yet (D3601), before a
+   * Freezes the namespaces of dotted names that are not frozen yet (D3611), before a
    * script runs: a member defined again with `DEFINE_FREEZE`, so no script code runs.
    */
   private sealNamespaces(): void {
@@ -1614,7 +1614,7 @@ export class Sandbox {
         }
       },
       settle: (id, s) => {
-        if (core.dropped.has(id)) return; // the run ended without it (D3602)
+        if (core.dropped.has(id)) return; // the run ended without it (D3612)
         if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
         if (!core.open.has(id)) throw new SandboxError("misuse", `no open call ${id}`);
         core.deliver(id, s.ok, s.value);
@@ -1733,7 +1733,7 @@ export class Sandbox {
         yield Promise.race(inflight.values());
       }
     } finally {
-      // Ended (also when its result settled with calls open, D3602): stop waiting.
+      // Ended (also when its result settled with calls open, D3612): stop waiting.
       for (const c of live.values()) c.abort.abort();
     }
   }
@@ -1752,7 +1752,7 @@ export class Sandbox {
 
   /**
    * The run is over while async calls are open: the VM drops its call, jobs and open
-   * calls (`vm_abort`), and the calls move to `run.dropped` (D3602).
+   * calls (`vm_abort`), and the calls move to `run.dropped` (D3612).
    */
   private dropOpen(run: RunCore): void {
     this.guard(() => this.x.vm_abort(this.vm));
@@ -1786,7 +1786,7 @@ export class Sandbox {
    * The run's outcome from the handle `h` of its result or thrown value (freed here), or
    * undefined when the JSON boundary converts it first: a call of the helper the run loop
    * runs, whose result comes back as the run's (D3593). A thrown Error is read as data
-   * (D3600); another thrown value is converted too, to undefined if JSON cannot carry it.
+   * (D3610); another thrown value is converted too, to undefined if JSON cannot carry it.
    */
   private outcome(run: RunCore, h: number, threw: boolean): { value: unknown; message: string; threw: boolean } | undefined {
     const x = this.x;
@@ -2458,7 +2458,7 @@ export class Sandbox {
         throw new SandboxError("aborted", `the step was aborted${why === undefined ? "" : `: ${why instanceof Error ? why.message : String(why)}`}`);
       }
       // The slice ends where the step's budget or the run's `maxFuel` does: the run's
-      // budget spans its steps, which may each end idle before a full slice (D3604).
+      // budget spans its steps, which may each end idle before a full slice (D3614).
       const left = Math.min(budget - (run.used - start), maxFuel - run.used);
       const st = this.guard(() => {
         this.setClock();
@@ -2523,7 +2523,7 @@ export class Sandbox {
       if (st === STATUS_IDLE) {
         this.checkRejections();
         // The body's result settled while async calls are open: the run is over, and
-        // the calls are dropped (D3602), as when no call was open.
+        // the calls are dropped (D3612), as when no call was open.
         const settled = this.guard(() => this.settledResult(run));
         if (settled === undefined) return IDLE;
         this.dropOpen(run);

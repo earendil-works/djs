@@ -140,7 +140,7 @@ fn define_flags_enumerable_and_freeze() {
     let one = vm_new_object(vm);
     stage(b"a");
     assert_eq!(vm_define(vm, ns, 1, one, 1), 0);
-    // Bit 1 freezes the object after the define (0295, D3601).
+    // Bit 1 freezes the object after the define (0295, D3611).
     stage(b"b");
     assert_eq!(vm_define(vm, ns, 1, one, 3), 0);
     stage(b"c");

@@ -205,7 +205,7 @@ test("console is not converted by the JSON boundary", async () => {
   const log = (...a: unknown[]) => void lines.push(a);
   const sb = new Sandbox({ module: await loadModule(), console: { log, info: log, warn: log, error: log }, jsonBoundary: true });
   sb.run("const c = {}; c.self = c; console.log('x', new Date(0), 1n, () => 1)");
-  // (A Date arrives as a Date, D3600; a function, which has no host form, as its class.)
+  // (A Date arrives as a Date, D3610; a function, which has no host form, as its class.)
   assert.deepEqual(lines, [["x", new Date(0), 1n, "[Function]"]]);
   sb.dispose();
 });

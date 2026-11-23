@@ -14179,7 +14179,7 @@ the literal `new URL("../wasm/djs.wasm", import.meta.url)` in index.ts for bundl
 repository's build. `scripts/npm-pack.sh --module FILE` replaces `--modules MAIN SLIM DUMP`;
 js/pkg-test/smoke.js dumps and resumes with the package's module; npm-test's js-tests run
 on it alone (and copy golden-host's files, skip the internal helpers' tests).
-## D3600: Errors, Dates, Maps and Sets cross to the host as data
+## D3610: Errors, Dates, Maps and Sets cross to the host as data
 date: 2026-11-23 · by: pns · issue: 0295
 The reader (js/src/reader.ts) reads a VM Error as a host `Error`: `name` and `message` as
 data properties of the error or its prototype chain (an accessor is not run: the name
@@ -14199,13 +14199,13 @@ was added (`ConsoleLike.debug`, else `log`), and `Opaque` is exported. Rejected:
 export giving an error's name, message and stack (size, and the reader serves console
 arguments and nested errors too).
 
-## D3601: Namespaces are frozen, enumerable, with aliases and a missing-member hook
+## D3611: Namespaces are frozen, enumerable, with aliases and a missing-member hook
 date: 2026-11-23 · by: pns · issue: 0295
 The namespace objects of dotted identities (`tools`, `console`) get their members
 enumerable, in definition order, and are frozen before the first script runs (and a
 namespace made later before the next): `Sandbox.sealNamespaces` defines a member again
-with `vm_define`'s new flag bit 1, which freezes the object afterwards
-(`Vm::freeze`, the existing `set_integrity_level`; +90 bytes in the shipped module).
+with `vm_define`'s new flag bit 1 (part of ABI 8, D3600: no bump), which freezes the
+object afterwards (`Vm::freeze`, the existing `set_integrity_level`; +90 bytes in the shipped module).
 Freezing in JS would compile a script per sandbox (measured +35 µs on a 125 µs
 create, the helper +108 µs). A member added to a frozen namespace is a misuse. Module
 namespaces are frozen the same way, without the helper. `aliases` (identity
@@ -14221,7 +14221,7 @@ the trap returns `Reflect.get` for present members, which meets the invariants o
 frozen target. Rejected: an engine hook for missing reads (size; a Proxy costs a trap
 call per member read, nothing next to a tool call).
 
-## D3602: A run ends when its body's result settles; open calls are dropped
+## D3612: A run ends when its body's result settles; open calls are dropped
 date: 2026-11-23 · by: pns · issue: 0295
 At an idle point the run loop checks the body's result (`vm_outcome`, or a loaded run's
 `run` promise): once it is settled, the run is done (or threw) even with async calls
@@ -14233,14 +14233,14 @@ and the `signal` of an `AsyncHostFunction`'s call aborts (runAsync now gives hoo
 functions a call with a signal). Before, all three waited for every open call: a
 script's fire-and-forget call kept the run alive. A script that wants it awaits it.
 
-## D3603: The JSON boundary per function: `jsonBoundary: { except }`
+## D3613: The JSON boundary per function: `jsonBoundary: { except }`
 date: 2026-11-23 · by: pns · issue: 0295
 `jsonBoundary` may be `{ except: identities }`: those host functions get plain wire
 values (pi's `text`, `image`, `store`, `load`, which format `NaN`, functions and errors
 themselves), everything else as with `true`, results included. The loading sandbox
 must make the same choice: a dump names the function by its identity either way.
 
-## D3604: `maxFuel` spans a host-driven run's steps and is exact
+## D3614: `maxFuel` spans a host-driven run's steps and is exact
 date: 2026-11-23 · by: pns · issue: 0295
 The run's fuel was counted across steps but checked only when a slice ran out, so a run
 whose steps each ended idle within a slice never failed. Each slice is now cut to what is

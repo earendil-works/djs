@@ -1,5 +1,5 @@
 // What a host gets from a run, as pi's code mode needs it without a prelude (0295,
-// D3600-D3603): thrown errors and console arguments as data, namespaces that are frozen,
+// D3610-D3613): thrown errors and console arguments as data, namespaces that are frozen,
 // enumerable, with aliases and an answer for missing members, runs that end when their
 // result settles, and the JSON boundary per function.
 
