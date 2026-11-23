@@ -46,7 +46,7 @@ pub(crate) fn sort_by<T>(v: &mut Vec<T>, mut less: impl FnMut(&T, &T) -> bool) {
 /// [`sort_by`] for code where speed does not matter (the dumper): the merge sort is one
 /// copy behind a `dyn` comparison of indexes, only the permutation is per element type.
 #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-pub(crate) fn sort_cold<T>(v: &mut Vec<T>, mut less: impl FnMut(&T, &T) -> bool) {
+pub(crate) fn sort_cold<T>(v: &mut [T], mut less: impl FnMut(&T, &T) -> bool) {
     let idx = order(v.len(), &mut |a, b| less(&v[a], &v[b]));
     for (a, b) in swaps(idx) {
         v.swap(a as usize, b as usize);
