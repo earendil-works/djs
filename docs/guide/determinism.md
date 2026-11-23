@@ -215,8 +215,8 @@ Some things are deliberately outside the guarantee:
   sources (its math library's included) and features: a different build may run the same
   script in a different number of steps. Images are tied only to what they depend on
   ([images](snapshots.md#what-an-image-depends-on)), so a VM restored into
-  another build goes on with that build's code; that happens only inside a process (the
-  dump module), since runs persist as dumps.
+  another build goes on with that build's code; that happens only inside a process, since
+  runs persist as dumps.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
   before every fuel slice, so what `Date.now()` returns depends on timing, as it does in
   any engine.

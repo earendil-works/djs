@@ -132,7 +132,7 @@ The shipped module has <!--n wasm/ops-->69<!--/n--> operations. By area:
 | --- | --- |
 | buffers and build | `djs_staging`, `djs_image_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack`; the Unicode tables: `djs_tables_ptr`, `djs_tables_set`, `vm_tables_need` ([above](#a-module-that-needs-nothing)) |
 | the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
-| VMs | `vm_new`, `vm_new_reserved`, `vm_new_with` (flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; images: `vm_arena_ptr`, `vm_arena_len`, `vm_from_bytes`, `vm_replace_image`, `vm_collect`, `vm_seal` |
+| VMs | `vm_new`, `vm_new_reserved`, `vm_new_with` (flag 1: frozen builtins), `vm_frozen_builtins`, `vm_free`; images: `vm_arena_ptr`, `vm_arena_len`, `vm_from_bytes`, `vm_collect`, `vm_seal` |
 | code | `vm_compile` (a Script, or a codemode body with parameter names; option bits for TypeScript and decorators), `vm_compile_file` (the same, with the file name stack traces show) |
 | values in | `vm_decode_wire`, `vm_string_reserve`, `vm_parse_json`, `vm_global`, `vm_new_object`, `vm_define`, `vm_new_error` |
 | values out | `vm_handle_bits` (a value's 64 bits, for the reader), `vm_display`, `vm_json_stringify`, `vm_promise_state`, `vm_handle_free` |
@@ -344,37 +344,34 @@ string-keyed data properties, arrays with their holes, typed arrays as copies, B
 
 ## The module builds
 
-[`scripts/build-wasm.sh`](../../scripts/build-wasm.sh) builds the module in four
+[`scripts/build-wasm.sh`](../../scripts/build-wasm.sh) builds the module in three
 variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip |
-| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->365 KB<!--/n--> with gzip |
-| dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->776 KB<!--/n--> with gzip |
-| docs module | the dump module's and `docs` | this site's live examples: the dump module plus `djs_disasm`, the bytecode listing an edited example shows |
+| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip |
+| slim | none | not shipped: what the module weighs without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)), and the build the agent host's adapter tests also run on: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->365 KB<!--/n--> with gzip |
+| docs module | the shipped features and `docs` | this site's live examples: the shipped module plus `djs_disasm`, the bytecode listing an edited example shows |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording
 in the compiler, the table of the base's builtin names, the compile cache, and lazy
-compilation of functions at their first call. It does not change images: the dump module
-loads the shipped module's images, because the two have the same dependency descriptor
-([what an image depends on](snapshots.md#what-an-image-depends-on)).
+compilation of functions at their first call. It does not change images: a build without
+it has the same dependency descriptor
+([what an image depends on](snapshots.md#what-an-image-depends-on)). Such a build (a
+debug or custom one) runs scripts and loads dumps, which are Scripts; writing a dump there
+throws a `misuse` error that says the module was built without the feature.
 
-A host that persists runs loads both modules. Its sandboxes run in the shipped one. To
-dump, it copies the idle VM's image into a VM of the dump module (`djs_image_staging`,
-then `vm_from_bytes` the first time and `vm_replace_image` after that, which replaces the
-heap and keeps what the VM derived from the base) and calls `vm_dump` there; the
-`Sandbox` keeps one such instance per process and memory limit for all its dumps. The
-image never leaves the process, so neither module verifies it cell by cell, only that
-its descriptor matches. Loading a dump runs it as a Script, which the shipped module does
-alone.
+A host that persists runs calls `vm_dump` on the idle VM itself, in the module it runs
+in; a dump leaves the VM as it was, so the run goes on there or in whichever sandbox
+loads the dump.
 
-> **Trade-off.** The dumper in a second module. The dumper and what serves it nearly
-> double the module, and only hosts that persist runs need them. So the shipped module
-> leaves it out, and a host that dumps pays for it only in a module it loads once per
-> process. Keeping that instance between dumps makes a dump as fast as with the dumper in
-> one module; the cost is a second module to ship and load, and a copy of the image per
-> dump.
+> **Trade-off.** One module with the dumper. The dumper and what serves it nearly double
+> the module (<!--n dump/extra-gzip kb-->345 KB<!--/n--> more with gzip), and hosts that never persist a
+> run do not need them. djs ships them in its one module anyway: every host gets the same
+> file, a host that persists runs dumps in the VM it runs, with no image copied into a
+> second instance, and no two modules of one build have to be kept together. The cost is
+> the bigger download and compile for the hosts that never dump; bringing the size down
+> again is separate work.
 
 ## Where to look
 
@@ -390,4 +387,4 @@ alone.
 - [`js/src/base.ts`](../../js/src/base.ts): handing the base to an instance;
   [`js/src/trap.ts`](../../js/src/trap.ts): what a trap says.
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): the `Sandbox`, the client of all of
-  the above, and how it uses the dump module.
+  the above.

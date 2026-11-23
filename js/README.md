@@ -38,34 +38,28 @@ Options include `typescript: true` (scripts are TypeScript), `console` (where
 `console.log` goes), `globals`, `deterministic` (repeatable runs) and `frozenBuiltins`.
 Errors are `SandboxError`s with a `kind`: `threw`, `syntax`, `fuel`, `memory`, ...
 
-## Entry points
+## Dumps
 
-| import | module | for |
-| --- | --- | --- |
-| `@earendil-works/djs` | `wasm/djs.wasm` | every host |
-| `@earendil-works/djs/slim` | `wasm/djs-slim.wasm` | hosts that count kilobytes: no typed arrays, BigInt, iterator helpers and other families scripts rarely use |
-| `@earendil-works/djs/dump` | `wasm/djs-dump.wasm` | hosts that suspend runs into dumps: the main module plus the dumper |
-| `@earendil-works/djs/dump-runtime` | | the helpers a dump needs to continue in a JavaScript engine other than djs |
-
-Each entry point exports the same API, with its own module as the default. To dump runs
-while running them in the smaller main module, give the sandbox the dump module as its
-`dumpModule`:
+The package has one module, `wasm/djs.wasm`, and it has the dumper: a sandbox with frozen
+builtins can suspend a run that waits on the host into a dump, and any sandbox can
+continue it.
 
 ```js
-import { Sandbox } from "@earendil-works/djs";
-import { loadModule as loadDumpModule } from "@earendil-works/djs/dump";
-
-const sandbox = await Sandbox.create({ frozenBuiltins: true, dumpModule: await loadDumpModule(), asyncFunctions });
+const sandbox = await Sandbox.create({ frozenBuiltins: true, asyncFunctions });
 const task = sandbox.start(code, params);
 const dump = await task.suspend(); // later, anywhere: (await Sandbox.resume(dump, options)).result
 ```
 
+To continue a dump in a JavaScript engine other than djs, the package also exports the
+dump runtime's `helpers` (and `script`, the same as a Script; `scriptFor(dump)`, only the
+helpers a dump needs).
+
 ## Loading the module
 
-`Sandbox.create` loads its entry point's module once per process and caches it;
+`Sandbox.create` loads the package's module once per process and caches it;
 `loadModule(location)` loads another one and `new Sandbox({ module })` uses it. In node,
 Bun and Deno the module is read from the package's `wasm/` directory (`$DJS_WASM` names
-another main module). In a browser it is fetched from the URL
+another module). In a browser it is fetched from the URL
 `new URL("../wasm/djs.wasm", import.meta.url)`, a pattern that webpack and Vite recognize
 and copy into the build. In Vite's dev server, exclude the package from dependency
 pre-bundling, which would move the code away from its modules:

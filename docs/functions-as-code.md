@@ -502,7 +502,6 @@ Run: `cargo test -p djs-core --lib vm::dump_tests`; coverage
 
 - Classes (the body and its static state, private fields through the class's own code).
 - Large buffers as side blobs by hash; dumps that share data.
-- (Done differently: a module without `vm_dump` dumps through the dump module,
-  `SandboxOptions.dumpModule`, D2635.)
+- (Done differently: the shipped module has `vm_dump`, D3600.)
 - A `persist(name)` convention in pi's prelude and the host's storage of dumps and their
   metadata.

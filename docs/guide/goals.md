@@ -85,7 +85,7 @@ arena](arena.md)), but such an image is tied to how one engine build numbers its
 internals, so it is not what a run is kept in.
 
 **The cost:** a run can be persisted only while it waits, not in the middle of a
-computation; writing dumps needs frozen builtins and the dumper, a second module; and a
+computation; writing dumps needs frozen builtins and the dumper, which nearly doubles the module; and a
 few values (weak collections, objects with private fields) cannot be written.
 
 ### Suspend anywhere

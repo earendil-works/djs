@@ -222,7 +222,7 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > engine laid out itself, and those are the only ones such a module sees: it restores
 > images made in its own process, and its persistent state is JavaScript source that it
 > compiles like any script. Every other build keeps the check: native builds, which have
-> no sandbox around them, the dump module, and every test build, whose debug assertions
+> no sandbox around them, the docs site's module, and every test build, whose debug assertions
 > check the unchecked accessors too. A check is one compare, `offset + size <= length`,
 > in 64-bit arithmetic so that it cannot wrap, which lets the compiler drop the slice's
 > own checks behind it; release builds leave the offsets out of the panic message, which

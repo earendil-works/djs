@@ -79,7 +79,7 @@ descriptor (D2700). In wasm every access is bounds-checked against linear memory
 so the arena checks are a second check (D016). The shipped and slim wasm modules
 therefore leave them out (`unsafe-heap`, D2520, D3100): there an engine bug is UB confined
 to the instance's linear memory, which may corrupt that VM instead of trapping but cannot
-reach the host. Native builds, the dump module and all test builds keep the checks.
+reach the host. Native builds, the docs module and all test builds keep the checks.
 
 ### Relationship to piccolo
 
@@ -579,7 +579,7 @@ ABI". In outline:
 vm_new(memory_limit) -> vm                       // a copy of the base image (D1321)
 vm_from_bytes(len, memory_limit) -> vm           // an image of this process, from staging (D2700)
 vm_arena_ptr / vm_arena_len                      // the image: the arena bytes
-vm_dump / vm_replace_image                       // continuation dumps (the dump module, D2704)
+vm_dump                                          // continuation dumps (D3600)
 vm_compile(vm, goal, params_len, src_len) -> h   // goal: async body, Script, TS, ...
 vm_call(vm, f, this, argc)                       // pushes a frame, does not run it
 vm_run(vm, fuel) -> status                       // Done | Threw | OutOfFuel | HostCall |
@@ -591,8 +591,8 @@ vm_collect, vm_canonical_hash, vm_abort, vm_take_unhandled_rejections, ...
 ```
 
 The JS host package wraps it: `Sandbox` (js/src/sandbox.ts) runs codemode bodies with
-host functions, fuel slices, host-driven runs that persist as continuation dumps (with
-the dump module beside the shipped one, D2630, D2704), a deterministic mode and journals;
+host functions, fuel slices, host-driven runs that persist as continuation dumps (the
+shipped module has the dumper, D3600), a deterministic mode and journals;
 js/pi/vm.ts adapts it to pi's codemode contract (D1490), and in its next mode persists pi
 sessions as dumps (D2650).
 
@@ -678,8 +678,7 @@ images are the in-process mechanism (D2700).
   An image loads into any build with the same descriptor. (Until D026 an image was keyed
   on the engine build hash of D1320/D1330/D1750, which still identifies the build for
   journals.) Images are used for the base image every VM is copied from, pi's prelude
-  images (D1495, D1890), the stress and determinism checks, and the transport between
-  the shipped module and the dump module (D2635, D2701). The tools and stress modes
+  images (D1495, D1890) and the stress and determinism checks. The tools and stress modes
   verify every image they load (D1056); the wasm module checks only the header and the
   descriptor, since its images come from its own process (D2700). Everything is
   little-endian, which matches wasm and the usual native targets.
@@ -696,10 +695,9 @@ images are the in-process mechanism (D2700).
   (D2890); `$djs` also holds the dump runtime's helpers (D2903). Only VMs with frozen
   builtins dump (D2836). Any later build, or node, runs it; golden dumps hold that
   promise (D2619, D2920). Hosts store dumps zstd-compressed (D2703).
-- **Packaging:** the dumper is in a second module of the same build (packaging B,
-  D2564, D2704): the shipped module has none, and a host that persists runs loads the
-  dump module and copies the VM's image there to dump, keeping that instance between
-  dumps (D2701). Loading a dump is running it, in the shipped module.
+- **Packaging:** djs ships one wasm module, and it has the dumper (D3600, superseding the
+  second dump module of D2564/D2704): every host, the ones that persist runs and the ones
+  that never do, loads the same file. Loading a dump is running it and needs no dumper.
 - **Determinism:** the GC threshold is in the image (D1601) and collection points do not
   depend on fuel slices (D1710), so the same inputs give the same image; the gate
   compares images across schedules and between native and wasm (D1720, D1725).

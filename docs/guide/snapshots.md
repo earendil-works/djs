@@ -210,9 +210,6 @@ Images are the engine's in-process mechanism:
 - **The stress tests and the determinism checks** stop a run every few instructions,
   restore it from its image and compare images byte for byte
   ([determinism](determinism.md)).
-- **The dump module.** A host that persists runs keeps the dumper in a second wasm
-  module; the VM's image is what travels between the two instances ([the module
-  builds](host.md#the-module-builds)).
 
 ## Continuation dumps
 

@@ -111,6 +111,10 @@ a [host-driven run](js-api.md#host-driven-runs) of a plain `Sandbox`, and everyt
 can reach outside the language is a host function named by a stable identity. No code
 of pi's sits in the VM, so none is in a dump.
 
+- **One module.** pi's code mode (the coding agent's, rollups) and its durable code mode
+  load the same file, the package's one module: it has the
+  [dumper](dumps.md#the-dumper), so the durable mode writes its dumps in the VM the script
+  runs in, and the other modes carry it unused.
 - **Tools and globals are async host functions** with identities such as `tools.read`,
   `searchTools` or `@mcp/github#search_issues`, bound as the `tools` namespace, as
   globals, or as bindings of the body. The run never calls them: they show up in

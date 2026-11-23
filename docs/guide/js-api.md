@@ -18,22 +18,15 @@ one VM, so sandboxes share nothing and a fault in one cannot touch another.
 npm install @earendil-works/djs
 ```
 
-The package has no dependencies and carries the wasm modules itself. It runs in node 20
-or newer, Bun, Deno, browsers and web workers: the module has no imports, so it runs in
-any wasm runtime. Its entry points all export the same API, each with its own build of
-the module as the default:
-
-| import | module | for |
-| --- | --- | --- |
-| `@earendil-works/djs` | the shipped module: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip | every host |
-| `@earendil-works/djs/slim` | the slim module: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->365 KB<!--/n--> with gzip | hosts that can do without typed arrays, BigInt and the other families of [the slim build](language.md#the-slim-build) |
-| `@earendil-works/djs/dump` | the dump module: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->776 KB<!--/n--> with gzip | hosts that write [dumps](#continuation-dumps): the shipped module plus the dumper |
-| `@earendil-works/djs/dump-runtime` | none | the helpers a [dump](dumps.md#djs-what-the-loading-host-provides) needs in a host without djs |
-
-A host that persists runs usually imports the main entry point and gives its sandboxes
-the dump module as `dumpModule` (`loadModule()` of `@earendil-works/djs/dump`): its runs
-then go on in the smaller module, and only a dump moves into the bigger one. The wire
-encoder and the heap reader the `Sandbox` uses are internal and not exported.
+The package has no dependencies and carries the wasm module itself: one module,
+<!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip, which every host uses, the
+ones that persist runs and the ones that never do, because it has the
+[dumper](dumps.md#the-dumper). It runs in node 20 or newer, Bun, Deno, browsers and web
+workers: the module has no imports, so it runs in any wasm runtime. The package has one
+entry point, `@earendil-works/djs`, which exports the whole API and the dump runtime's
+`helpers`, `script` and `scriptFor`, for a host that continues a
+[dump](dumps.md#djs-what-the-loading-host-provides) in its own JavaScript engine. The
+wire encoder and the heap reader the `Sandbox` uses are internal and not exported.
 
 ## Loading the module
 
@@ -46,25 +39,23 @@ const sandbox = await Sandbox.create({ module });
 
 `loadModule(location?)` compiles djs-wasm once per location and caches the
 `WebAssembly.Module`; every sandbox then gets its own instance of it. Without a location
-it loads the entry point's own module, from the package's `wasm/` directory; in node, Bun
-and Deno, `$DJS_WASM` names another main module instead. `Sandbox.create` loads the
+it loads the package's module, from its `wasm/` directory; in node, Bun and Deno,
+`$DJS_WASM` names another module instead. `Sandbox.create` loads the
 default module itself when no `module` is given. The constructor, `new Sandbox(options)`,
 works synchronously once a module is loaded.
 
 A location is a path or a URL: node, Bun and Deno read a path or a `file:` URL from the
 disk (Deno needs `--allow-read` for the package's directory), anything else is fetched.
-Each entry point names its module as `new URL("../wasm/djs.wasm", import.meta.url)`, a
+The entry point names its module as `new URL("../wasm/djs.wasm", import.meta.url)`, a
 pattern that webpack and Vite recognize: they copy the module into the build and rewrite
-the URL, and an application that imports only the main entry point gets only the main
-module. Vite's development server is the exception, because it pre-bundles dependencies
+the URL. Vite's development server is the exception, because it pre-bundles dependencies
 away from their files; exclude the package there with `optimizeDeps: { exclude:
 ["@earendil-works/djs"] }`. In the browser without a bundler, the package's files work as
 they are, served with the module next to them; with a bundler that does not know the
 pattern, serve the `.wasm` file yourself and pass its URL to `loadModule`.
 
 The package's source is [`js/src/`](../../js/src/): [`sandbox.ts`](../../js/src/sandbox.ts)
-holds the `Sandbox`, and [`index.ts`](../../js/src/index.ts), [`slim.ts`](../../js/src/slim.ts) and
-[`dump.ts`](../../js/src/dump.ts) are the entry points.
+holds the `Sandbox`, and [`index.ts`](../../js/src/index.ts) is the entry point.
 
 ## Creating a sandbox
 
@@ -90,7 +81,7 @@ All options are optional:
 | `unhandledRejections` | `"warn"` (default), `"throw"` or `"collect"` |
 | `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)); dumps need it |
 | `typescript`, `experimentalDecorators`, `emitDecoratorMetadata` | compile scripts as TypeScript ([TypeScript](typescript.md)) |
-| `dumpModule`, `sources`, `inlineSources`, `debugger` | for [continuation dumps](#continuation-dumps) |
+| `sources`, `inlineSources`, `debugger` | for [continuation dumps](#continuation-dumps) |
 
 ## Running code
 
@@ -442,8 +433,9 @@ a host that persists runs goes on from the last dump it kept. `begin` takes `sig
 Dumps are the subject of [their own page](dumps.md). What the options do:
 
 - `frozenBuiltins: true` is required to write dumps.
-- `dumpModule` is the build of djs-wasm with the dumper, for a `module` without it:
-  dumping copies the VM into an instance of the dump module. Loading needs neither.
+- Writing a dump needs a module with the dumper, as the package's is; a build of
+  djs-wasm without it throws a `misuse` error that says so. Loading needs neither the
+  dumper nor frozen builtins.
 - `sources(name)` returns the code of the script a dump refers to by name, for a dump
   from another process; `inlineSources: true` writes the script into the dump instead.
 - `debugger`, a host function, makes `debugger;` in an async function a pause: the
@@ -453,8 +445,8 @@ Dumps are the subject of [their own page](dumps.md). What the options do:
   column }` of the `await` of the innermost activation waiting on it, directly or through
   `Promise.all` and the like. The file is the name the code was compiled as: the run's
   `filename` for the code it started with, `dump.js` for code a dump carried, because a
-  run continued from a dump runs the dump's text. It is part of the dump module only and
-  returns `undefined` elsewhere, and when nothing waits on the call.
+  run continued from a dump runs the dump's text. It returns `undefined` in a module
+  without the dumper, and when nothing waits on the call.
 
 `sandbox.dump(names?)` writes the sandbox's globals (or the named ones) as a dump of
 data and functions, without a run; `sandbox.load(dump)` runs such a dump in a fresh

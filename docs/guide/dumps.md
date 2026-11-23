@@ -362,7 +362,7 @@ In node:
 
 ```js
 import { Script } from "node:vm";
-import { helpers } from "@earendil-works/djs/dump-runtime";
+import { helpers } from "@earendil-works/djs";
 
 export function loadDump(text, { tools, reopen }) {
   const host = { tools, console, "console.log": console.log };
@@ -532,12 +532,11 @@ writing a dump throws a `misuse` error that says so. The live examples with `deb
 run with frozen builtins for this reason.
 
 **The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->345 KB<!--/n--> more
-with gzip), and only hosts which persist runs need it, so the module djs ships leaves it
-out. Such a host loads the same
-build with the dumper as a second module and passes it as `dumpModule`: to dump, the
-sandbox copies the VM's memory into an instance of that module and writes the dump
-there, and the process keeps that instance for the next dumps. **Loading** a dump needs
-neither the dumper nor frozen builtins: it is running a Script.
+with gzip). djs ships one module all the same, with the dumper in it, so that every host
+uses the same file: one that persists runs dumps with the module it runs, and one that
+never does pays only the download. A build of djs-wasm without the dumper still runs
+scripts and loads dumps; writing one there throws a `misuse` error that says so.
+**Loading** a dump needs neither the dumper nor frozen builtins: it is running a Script.
 
 ## What cannot be dumped
 
@@ -580,7 +579,7 @@ later idle point where the value is gone.
 ## Where to look
 
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): tasks (`start`, `suspend`,
-  `Sandbox.resume`), `begin`, `Run.dump`, `loadRun`, and the dump module.
+  `Sandbox.resume`), `begin`, `Run.dump` and `loadRun`.
 - [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js): the helpers a dump calls,
   for hosts without djs.
 - [`examples/sleep-dump/`](../../examples/sleep-dump/): a host with a tool that sleeps,

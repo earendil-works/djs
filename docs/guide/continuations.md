@@ -81,7 +81,7 @@ marked unsupported rather than misnamed.
 > and every VM stays as small and fast as without dumps, and the maps exist only for the
 > functions that are suspended when a dump is written. The cost: a dump compiles the
 > scripts of its suspended functions a second time, which is a large part of a small
-> dump's cost; the dump module's caches ([below](#the-dumpers-caches)) take most of it
+> dump's cost; the dumper's caches ([below](#the-dumpers-caches)) take most of it
 > away for a host that dumps the same scripts again and again.
 
 The dump itself names no slot. The maps are only the writer's way of reading a frame of
@@ -301,18 +301,16 @@ reasons come from the mechanism above:
 
 ## The dumper's caches
 
-The writer is in the dump module, a build of djs-wasm with the dumper that a host loads
-next to the shipped module ([the module builds](host.md#the-module-builds)). To dump, the
-host copies the VM's image into a VM of that module and writes the dump there. The host
-keeps that instance and VM between dumps, replacing only its heap with the next image,
-so what the VM derived once (its suspension maps among it) serves the next dump too. The
-table of the base's builtins and their paths is built with the base and part of the
-module, so no dump walks the base to find them.
+The writer is in the module djs ships ([the module builds](host.md#the-module-builds)), and
+a VM writes its dumps itself. It keeps what it derived for one dump (its suspension maps
+among it) for its next dumps, so a host that dumps a run at every idle point pays for the
+maps once. The table of the base's builtins and their paths is built with the base and
+part of the module, so no dump walks the base to find them.
 
 A host that resumes each dump in a new instance, and dumps it again at the next idle
 point, compiles the same texts in every instance: the script the run started with (the
-answer to `$djs.source`) and its own fixed snippets. The dump module keeps two caches for
-it, as bytes the host holds per module:
+answer to `$djs.source`) and its own fixed snippets. The dumper keeps two caches for it,
+as bytes the host holds per module:
 
 - **The compile cache.** A compile only appends cells to the arena and interns atoms. A
   compile done through `vm_compile_cached` records both, in order: the cells it appended
@@ -325,7 +323,7 @@ it, as bytes the host holds per module:
   as bytes, and `vm_dump_maps_import` hands them to the next VM before its dump. The maps
   are data of the text and its options alone, so the dump is the same text either way.
 
-The dump module also compiles functions lazily, at their first call, and the writer reads
+The module also compiles functions lazily, at their first call, and the writer reads
 a function that never ran from its text: a dump of a lazy VM is the same text as of an
 eager one.
 

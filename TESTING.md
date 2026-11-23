@@ -294,7 +294,7 @@ failure too: mark such a case `no-stress` with the measured reason (D1530).
 With `--determinism` the plain run also compiles each case through the compile cache
 (D3040): a copy of the VM compiles it and exports the blob, the VM imports it, and the two
 heaps must be the same bytes. `--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest and
-its plain dumps leg use it (the dump module is lazy, D2993), its test262 leg runs the active
+its plain dumps leg use it (the shipped module, with the dumper, is lazy, D2993), its test262 leg runs the active
 group both lazy and eager (in parallel), the other legs (unsafe-heap,
 slim) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
 (D2991).
@@ -532,8 +532,8 @@ Not armed: the rest of the corpus, e2e and test262, whose cases change builtins 
 ## Image compatibility (D026, D2265)
 
 Images do not persist runs (dumps do, below; D2560, D2700), but they still cross from one
-build's module to another inside a process: the shipped module and the dump module
-(D2704), and the base image every VM is copied from. A VM image restores into any build
+build's module to another inside a process: pi's prelude images and the base image every
+VM is copied from. A VM image restores into any build
 whose dependency descriptor matches the one in its roots cell (`vm::ImageDeps`,
 crates/djs-core/src/vm/compat.rs): the layout hash, the image feature set,
 `COMPAT_VERSION`, the opcode and intrinsic table hashes and `RECORDS_HASH` (the id tables
@@ -601,7 +601,7 @@ host-driven code mode runs (js/test/golden-host.test.ts, in the gate's js tests,
 `NAME.body.js` bodies that run in the test's scope (namespace and bound host functions by
 identity, `values`, the JSON boundary, source references or `inlineSources`) and
 `NAME.K.dump.js`, the dump at idle point K. Each loads in a fresh sandbox of that scope,
-in both packagings, without `sources` for an inlined one; its open calls are answered and
+also in a module without the dumper (loading needs none), without `sources` for an inlined one; its open calls are answered and
 the output up to K plus the loaded run's must equal the uninterrupted run's. New programs
 get their dumps with `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts`. (The goldens were rewritten as plain dumps when format 2 was retired, D2920; the
 two-commit check of format 2, scripts/dumps-across-builds.sh, went with it.)
@@ -804,8 +804,9 @@ merges through both drivers in a throwaway repository.
 ### The slim build (D2411, D2413)
 
 djs-core's default features `full` and `unicode` make the default build; without them it
-is the slim build (`scripts/build-wasm.sh --slim`: target/djs-slim.wasm). Everything above
-runs the full build. The slim build, natively in `target/slim`
+is the slim build (`scripts/build-wasm.sh --slim`: target/djs-slim.wasm). No package ships it
+(D3600): it stays a size reference and the module of pi's adapter tests without the
+lockdown. Everything above runs the full build. The slim build, natively in `target/slim`
 (`--no-default-features`), gets:
 - `cargo test -p djs-core --no-default-features --lib -- vm::slim_tests vm::frozen_tests
   vm::registry`, and djs-prelude's tests with `--features raw,registry` (the registry
@@ -829,15 +830,16 @@ A new builtin file or builtin that belongs to the slim cut gets `// @slim-omit` 
 
 ### The npm package (D3105–D3109)
 
-`js/` is published as `@earendil-works/djs`. `scripts/npm-pack.sh` builds it (the three
-release modules, tsc's JavaScript and declarations from js/src, with TypeScript pinned
-by js/package-lock.json) into target/npm/package and packs it; `scripts/npm-test.sh
-TARBALL node bun deno js-tests browser` installs the tarball in a clean directory and
-runs js/pkg-test/smoke.js (every entry point, by the package's name) in each runtime, js/test's
+`js/` is published as `@earendil-works/djs`. `scripts/npm-pack.sh` builds it (the one
+release module, with the dumper, D3600, tsc's JavaScript and declarations from js/src, with
+TypeScript pinned by js/package-lock.json) into target/npm/package and packs it;
+`scripts/npm-test.sh TARBALL node bun deno js-tests browser` installs the tarball in a clean
+directory and runs js/pkg-test/smoke.js (the package by its name: runs, a dump and a
+resume, the dump continued in the host's engine) in each runtime, js/test's
 tests and the sleep-dump example on the package, and smoke.js in headless Chromium as
 native modules and bundled by Vite and webpack. The gate's `npm package` leg packs with
-the gate's builds and runs the smoke test in node, so main stays publishable;
-.github/workflows/publish.yml runs everything on the release modules (node 20, 22 and 24,
+the gate's build of the module and runs the smoke test in node, so main stays publishable;
+.github/workflows/publish.yml runs everything on the release module (node 20, 22 and 24,
 Bun, Deno, Chromium) before it publishes.
 
 ### The engine comparison (D3110–D3114)
@@ -858,9 +860,12 @@ tool for work on a gap the comparison shows.
 
 ### Size budget (D020)
 
-The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) must stay within
+The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) was to stay within
 1.5x quickjs-wasi's size, gzip -9, plus an allowance of 3,072 bytes the owner added to
-land speedups that had been parked for size (D3510) and the fuel fix (D3591). The gate builds it beside its other steps (in
+land speedups that had been parked for size (D3510) and the fuel fix (D3591). Since djs
+ships one module with the dumper (D3600), it is far above that (767.6 KB gzip, 2.68x): the
+owner accepted the growth (D3601), and the ceiling below is the limit until later work
+brings the size down. The gate builds it beside its other steps (in
 `target/size`) and its last step runs `scripts/size/budget.py` on it, which compares its
 gzip with `tests/scores/size.tsv`:
 

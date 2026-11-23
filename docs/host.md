@@ -7,19 +7,20 @@ its TypeScript client. Values go in through the wire format and come out through
 reads (docs/wire.md, both halves).
 
 ```sh
-scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped
+scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped, with the dumper
 scripts/build-wasm.sh --keep-names # with the name section (profiling, scripts/wasm-funcs.py)
-scripts/build-wasm.sh --slim       # target/djs-slim.wasm: the slim build (D2411)
+scripts/build-wasm.sh --slim       # target/djs-slim.wasm: the slim build (D2411; not shipped)
 node --test js/test/*.test.ts    # sandbox.test.ts needs a build ($DJS_WASM overrides the path)
 scripts/npm-pack.sh                # the npm package: target/npm/earendil-works-djs-VERSION.tgz
 scripts/npm-test.sh TARBALL node   # its smoke test (also bun, deno, js-tests, browser)
 ```
 
-The npm package (D3105–D3109) has three entry points, each the whole API with its own
-module as the default: `.` (`src/index.ts`, wasm/djs.wasm, `$DJS_WASM` overrides it),
-`./slim` (wasm/djs-slim.wasm) and `./dump` (wasm/djs-dump.wasm), plus `./dump-runtime`.
-Each finds its module with `new URL("../wasm/NAME.wasm", import.meta.url)`, which bundlers
-copy as an asset; `Sandbox.defaultModule()` is the hook the entry points override.
+The npm package (D3105–D3109, D3602) has one entry point, `.` (`src/index.ts`): the whole
+API with the package's one module, wasm/djs.wasm, as the default (`$DJS_WASM` overrides
+it), and the dump runtime's `helpers`, `script` and `scriptFor`; besides it only
+`./wasm/*.wasm` and `./package.json`. It finds its module with
+`new URL("../wasm/djs.wasm", import.meta.url)`, which bundlers copy as an asset;
+`Sandbox.defaultModule()` is the hook the entry point overrides.
 `js/src/sandbox.ts` itself defaults to `$DJS_WASM`, else the repository's build when it
 runs from source. The wire encoder, the reader and the pi adapter are not exported.
 
@@ -229,7 +230,7 @@ await again.result;
   `inlineSources` option writes the text instead. Sync host
   functions the dump's code calls meanwhile are called (they must return
   synchronously). The Script's completion value is the run's promise. Loading a dump
-  needs no dumper (`dumpModule`) and no frozen builtins: it is code, and node runs it
+  needs no dumper and no frozen builtins: it is code, and node runs it
   too, given the same host functions and a `host` hook that returns them
   (examples/sleep-dump: `run.sh --node`).
 - The hooks see a `HostCall`: `id`, `fn`, `args`, `startedAt` (this sandbox's
@@ -272,32 +273,16 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
   handle, so it leaves the VM byte for byte as it was (D2633): a recorded run can be
   dumped and still replays.
 
-**Packaging (D2635, D2704).** The dumper (cargo feature `dump`) is not in the shipped
-module: hosts that persist runs pass the dump module beside it (B), built by
-`scripts/build-wasm.sh --dump` (target/djs-dump.wasm). A module built with the feature
-also works on its own as `module` (A); djs ships B.
-
-```ts
-const sb = await Sandbox.create({ module: await loadModule(), dumpModule: await loadModule("djs-dump.wasm"), asyncFunctions });
-```
-
-With `dumpModule`, `dump`, `load`, `Run.dump`, `loadRun`, the tasks' dumps and `Sandbox.resume` move the VM's image to
-an instance of the dump module and back (the feature leaves images alone, D2352, so
-either module reads the other's). The process keeps that instance and its VM between
-dumps, one per dump module and memory limit, shared by the sandboxes (`vm_replace_image`
-loads the next image into the same VM, D2701, D2802), so the instance and the dumper's
-per-VM work are paid once. Dumping copies the arena as it is (the main VM
-is untouched); loading collects in the dump module and replaces the sandbox's VM by the
-result. Images move only inside the process, so `vm_from_bytes` and `vm_replace_image`
-check their header and dependency descriptor but do not verify every cell (D2700).
-
-Measured at 0177 (`wasm` profile, node 25, load ~7; the harvested corpus: 300 scripts,
-1063 idle points; the dump-costs cases for single sessions):
-
-| | main module | dump module | corpus dump p50 / p90 / p99 | corpus resume p50 / p90 / p99 |
-| --- | ---: | ---: | ---: | ---: |
-| B (shipped) | 1,029,026 B, 440.5 KB gzip | 1,332,899 B, 548.9 KB gzip | 2.8 / 4.4 / 40.9 ms | 0.9 / 1.6 / 5.6 ms |
-| A (one module) | 1,332,899 B, 548.9 KB gzip | - | as B within noise (agent-loop 2.9 vs 2.6 ms, records 19.5 vs 19.2 ms) | as B within noise |
+**One module (D3600).** djs ships one module, and it has the dumper (cargo feature `dump`,
+with lazy functions and the compile cache it turns on): `scripts/build-wasm.sh` builds it, and
+every host, the ones that persist runs and the ones that never do, loads the same file. It
+costs the module about 335 KB gzip (767.6 KB against 432.9 KB without the dumper, measured
+at 0294; the owner accepted the growth, D3601). A debug or custom build without the
+feature still runs and loads dumps (loading is running a Script); its `dump`, `Run.dump`
+and a task's `suspend` and `checkpoint` throw a `misuse` error that says the module was
+built without the `dump` feature. (Until 0294 the Sandbox could also pass the VM's image
+to a second module with the dumper, `dumpModule`, D2635/D2704; that went with the second
+module.)
 
 **Storing dumps (D2703).** A dump is plain JavaScript text and stays that way: the
 format is a Script, not a container. Hosts compress it when they store it, with zstd at
@@ -352,9 +337,8 @@ the hash does not depend on fuel slices or when the VM last collected.
 Heap images are not a persistence format: a run that must outlive its process is written
 as a continuation dump. Images remain the engine's in-process mechanism: the base image
 every VM is copied from, pi's prelude images (a start restores one instead of running
-the prelude), the stress and determinism checks, and the image transport to and from the
-dump module. `vm_arena_ptr`/`vm_arena_len` read an image, `vm_from_bytes` and
-`vm_replace_image` load one. Snapshot containers, session images, reference compression,
+the prelude) and the stress and determinism checks. `vm_arena_ptr`/`vm_arena_len` read an
+image, `vm_from_bytes` loads one. Snapshot containers, session images, reference compression,
 `Sandbox.bytes()`/`fromBytes()` and pi's `snapshot()`/`resumeVm()` were removed in 0177,
 and the REPL's `.image` and the `djs heap` command that read its files in 0187 (D2269):
 the REPL's `.heap` reports on the live VM's heap.
@@ -376,8 +360,8 @@ each of those tables, and loading checks them first (`Vm::from_bytes` refuses wi
 | intrinsic table | `INTRINSICS` | intrinsic names, kinds, arities and numbering (`INTRINSICS_HASH`) |
 | internal id tables | `RECORDS` | the id tables and slot conventions in source: object classes, realm slots, run states, header and template flags, value tags, frame continuations, the fast and native builtin tables, and the named slot numbers of internal records (`RECORDS_HASH`, D2266) |
 
-Within a process the descriptor guards the image transport between two modules (a main
-module and the dump module must be of one build's tables). The engine build hash
+Within a process the descriptor guards the images that move between instances (pi's
+prelude images must be of one build's tables). The engine build hash
 (`djs_build_hash`) still identifies the exact build where that matters: Sandbox journals
 replay only on it, and pi's fingerprint names it.
 

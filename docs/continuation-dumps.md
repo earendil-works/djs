@@ -280,14 +280,13 @@ depends on is the dump runtime and the language, not the compiler. The golden du
 to that (TESTING.md "Dumps across builds"); djs is unreleased, so the runtime may still
 change incompatibly by a decision (D024).
 
-### One dumper; packaging B (D2564, D2704)
+### One dumper, in the one module (D2564, D3600)
 
-The exporter is Rust in djs-core (feature `dump`). Wasm hosts get it in a second module of
-the same build: `djs.wasm` without the dumper and `djs-dump.wasm` with it. To dump, the
-host takes the idle VM's image, loads it into the dump module and writes the dump there
-(images are the transport inside the process; the feature is image-neutral, D2352). To
-resume, the host runs the dump in the shipped module itself, which needs only
-`vm_open_call`, `vm_dump_runtime` and `vm_set_next_call_id` (D2892). Hosts store dumps
+The exporter is Rust in djs-core (feature `dump`). Wasm hosts get it in the one module djs
+ships, `djs.wasm`, which has the dumper (D3600; until 0294 it was a second module of the
+same build that the host copied the VM's image into, D2704). To resume, the host runs the
+dump, which needs only `vm_open_call`, `vm_dump_runtime` and `vm_set_next_call_id` (D2892),
+so a build without the dumper loads dumps too. Hosts store dumps
 zstd-compressed (D2703).
 
 ### pi's shape (D2565)
