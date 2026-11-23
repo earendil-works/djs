@@ -1,11 +1,11 @@
 # Continuation dumps
 
 A script may wait minutes for a tool, or for a person. Keeping its sandbox in memory all
-that time is wasteful, and a restart of the host or an upgrade of djs would lose it.
+that time is wasteful, and a restart of the host would lose it.
 While a run only waits for its tools, djs can write it out as a **continuation dump**: a
 JavaScript program that recreates the run, its data, its functions stopped at their
-`await`s and its open tool calls. Loading the dump, in a new sandbox, another process or
-a later djs, continues the run where it stopped. This page shows what a dump contains,
+`await`s and its open tool calls. Loading the dump, in a new sandbox or another process,
+continues the run where it stopped. This page shows what a dump contains,
 how a host writes and resumes one, and what cannot be dumped.
 
 > **In short.** A dump is taken at an **idle point**, where the run has nothing to do
@@ -136,7 +136,8 @@ dump. It holds:
 
 The Script's completion value is the run's result promise, which the host takes as the
 run. Nothing in a dump refers to djs's compiled code, its bytecode or its internal
-numbering, so any later djs runs it as it runs any script.
+numbering, so another djs runs it as it runs any script ([later
+builds](#dumps-and-later-builds) says what that covers).
 
 > **Trade-off.** JavaScript over a binary image of the heap. An image would capture any
 > stop, including one in the middle of a builtin, and restore in a copy, but it is tied
@@ -496,30 +497,31 @@ keeps a 20,000-line log across its tool calls dumps to <!--n dumps/log-raw mb-->
 
 A dump is code: a host loads only dumps it wrote or trusts, into a fresh sandbox.
 
-## What later builds keep
+## Dumps and later builds
 
-A dump may wait for weeks, for a person's answer say, and be loaded by a later djs, in a
-host whose own code and tools changed meanwhile. Every later djs loads it. What a stored
-dump relies on, and what djs therefore never changes:
+A dump may wait for weeks, for a person's answer say, in a host whose own code and tools
+change meanwhile. Since nothing in it refers to djs's compiled code, a later djs can in
+principle run it too. djs does not promise that yet: until its dump format is declared
+stable, the runtime helpers and the hooks change with the code, and a dump is certain to
+load only in the djs that wrote it. A host that upgrades djs while dumps wait must be
+ready for a load to fail. What a dump relies on, and what a stable format will keep:
 
 - the Script's shape: the `"djs-dump";` header, strict code that reads the language's
   builtins by their standard names and the host's bound globals by theirs, and calls
   nothing of the host but `$djs`;
 - the four hooks, `seed`, `resume`, `source` and `host`, with their arguments as above,
   and the definition of `source`'s hash;
-- every runtime helper, by its name, its arguments and what it does. Helpers may be added
-  for what later dumps need; one is never changed or removed, so a change of meaning is
-  a helper of a new name.
+- every runtime helper, by its name, its arguments and what it does.
 
-The writer, by contrast, may change in any way: a later djs writes different dumps of the
-same run, and loads the old ones as they are. The host keeps its side: it answers
-`$djs.host` and `$djs.resume` for the names it handed out, or refuses the load, and it
-keeps the script a dump refers to by `$djs.source`, unless it writes dumps with
-`inlineSources`, which then load with no script at all. Golden dumps in
-[`tests/dump/`](../../tests/dump/) hold djs to this: dumps of small programs at every idle
-point, and dumps a `Sandbox` wrote of code mode runs that hold host functions by
-identity, a bound host value, host data and inlined bodies. Each test run loads them and
-finishes the runs, and a golden dump is never rewritten to make a build pass.
+The writer may change in any way: two builds may write different dumps of the same run.
+The host keeps its side: it answers `$djs.host` and `$djs.resume` for the names it handed
+out, or refuses the load, and it keeps the script a dump refers to by `$djs.source`,
+unless it writes dumps with `inlineSources`, which then load with no script at all.
+Golden dumps in [`tests/dump/`](../../tests/dump/) check the loader against committed
+dumps: dumps of small programs at every idle point, and dumps a `Sandbox` wrote of code
+mode runs that hold host functions by identity, a bound host value, host data and inlined
+bodies. Each test run loads them and finishes the runs; a change to the runtime that
+breaks them writes them again.
 
 ## What a dump needs
 
@@ -586,4 +588,4 @@ later idle point where the value is gone.
 - [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the writer;
   [how continuation dumps are written](continuations.md) explains how it reads frames
   and writes continuations.
-- [`tests/dump/`](../../tests/dump/): golden dumps that every later djs must still load.
+- [`tests/dump/`](../../tests/dump/): golden dumps that every test run loads and finishes.

@@ -534,12 +534,14 @@ stress and determinism checks. A VM image carries the engine build hash (`vm::BU
 what an image means needs no bump of anything. `vm::tests::images_load_only_into_their_build`
 checks the refusal.
 
-## Dumps across builds (0178, D2560, D2619, D2920)
+## Golden dumps (0178, D2560, D2619, D2920, D3643)
 
-Images are tied to a build's tables; continuation dumps are not: a dump is a plain
-Script (D2830) that calls only the host's `$djs` (the dump runtime's helpers and the
-hooks `seed` and `resume`, D2890, D2903), so every later build, and node, runs it. The
-golden dumps hold that promise (every gate run,
+Images are tied to a build; continuation dumps are not: a dump is a plain Script (D2830)
+that calls only the host's `$djs` (the dump runtime's helpers and the hooks `seed` and
+`resume`, D2890, D2903), so another VM, another process, and node, run it. Whether a later
+build still runs it is not promised until the owner declares the dump format stable
+(D3643): until then the helpers, the hooks and the goldens change with the code (D024).
+The golden dumps check the loader and the runtime against committed dumps (every gate run,
 `vm::dump_resume_tests::golden_dumps_load_and_finish`): tests/dump/v2/golden/ has small
 programs (`NAME.src.js` Scripts, `NAME.body.js` codemode bodies) and the dumps the
 exporter wrote of them at every idle point, `NAME.K.dump.js` (K in the name: dumps have
@@ -555,21 +557,21 @@ case (fields, static block, accessor; derived with `super`; a class from a facto
 the codemode body; a program whose idle points are all refused (instances with private
 names, D2878) is listed in tests/dump/v2/plain-refusals.txt. Since the dumps are
 JavaScript, they hold the runtime and the engine to the format, not the exporter: a
-change to the exporter leaves them alone. **A golden dump is never rewritten to make a
-build pass** (D2619): plain dumps are an exception to D024 (D3596), so changing or
-deleting one needs an owner's decision; a runtime helper may be added, never changed or
-removed. New programs get their dumps with `DJS_GOLDEN_WRITE=1 cargo test -p
-djs-core --lib write_golden_dumps -- --ignored`, which writes only programs that have
-none.
+change to the exporter leaves them alone, and a change to the runtime or the hooks that
+breaks them shows in review. Such a change regenerates them in the same commit: delete the
+programs' `NAME.*.dump.js` and run `DJS_GOLDEN_WRITE=1 cargo test -p djs-core --lib
+write_golden_dumps -- --ignored`, which writes the dumps of every program that has none
+(new programs get theirs the same way).
 
-tests/dump/v2/golden-host/ holds the same promise for dumps a Sandbox writes of
-host-driven code mode runs (js/test/golden-host.test.ts, in the gate's js tests, D3596):
+tests/dump/v2/golden-host/ does the same for dumps a Sandbox writes of host-driven code
+mode runs (js/test/golden-host.test.ts, in the gate's js tests, D3596):
 `NAME.body.js` bodies that run in the test's scope (namespace and bound host functions by
 identity, `values`, the JSON boundary, source references or `inlineSources`) and
 `NAME.K.dump.js`, the dump at idle point K. Each loads in a fresh sandbox of that scope,
 without `sources` for an inlined one; its open calls are answered and
-the output up to K plus the loaded run's must equal the uninterrupted run's. New programs
-get their dumps with `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts`.
+the output up to K plus the loaded run's must equal the uninterrupted run's. Missing dumps
+(new programs, or deleted ones to regenerate) are written by `DJS_GOLDEN_WRITE=1 node
+--test js/test/golden-host.test.ts`.
 
 ## Peak memory claims (D2048)
 

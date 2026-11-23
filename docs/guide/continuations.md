@@ -1,7 +1,7 @@
 # How continuation dumps are written
 
 [Continuation dumps](dumps.md) shows what a dump is to a host: a plain Script, written
-while the run waits for its tools, that recreates the run when any later djs runs it. This
+while the run waits for its tools, that recreates the run when a djs runs it. This
 chapter is about the writer: how it gets from a heap of frames, promises and iterators to
 that Script, and how it keeps a dump of a resumed run as small as the first one.
 
@@ -85,7 +85,7 @@ marked unsupported rather than misnamed.
 > away for a host that dumps the same scripts again and again.
 
 The dump itself names no slot. The maps are only the writer's way of reading a frame of
-this build, so a later djs with a different compiler loads the dump all the same.
+this build: the dump does not depend on how the compiler laid out a frame.
 
 ## Continuations
 
@@ -337,4 +337,4 @@ eager one.
   the dump runtime's one definition; [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js):
   the same for hosts without djs.
 - [`tests/dump/v2/`](../../tests/dump/v2/): programs that wait, and golden dumps that
-  every later djs must still load.
+  every test run loads.

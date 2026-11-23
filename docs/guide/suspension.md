@@ -262,11 +262,11 @@ Suspension costs nothing inside a process, but an image is a poor way to keep a 
 beyond it: it holds the engine's own numbering (cell layouts, opcodes, internal ids),
 so it restores only into a djs that numbers everything the same way, and that numbering
 changes between builds ([images](snapshots.md#what-an-image-depends-on)). A run that
-waits minutes for a tool or a person must survive restarts and upgrades. That is
+waits minutes for a tool or a person must survive restarts. That is
 [persistence](goals.md#persistence), and it uses a different form: a **continuation
 dump**, the run written out as an ordinary JavaScript program that recreates it, in
 which every suspended function is a continuation, the rest of its code from where it
-waits. Any later djs, or node, runs it.
+waits. Another VM or process, or node, runs it.
 
 A dump is taken only at an **idle point**: `run` returned `Idle`, no job is queued and
 no frame is on the stack. There, every suspended piece of the run is an async function or

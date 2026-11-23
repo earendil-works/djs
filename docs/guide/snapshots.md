@@ -184,11 +184,10 @@ Images are the engine's in-process mechanism:
 
 An image restores only into a djs whose layouts, opcodes, intrinsics and internal ids
 number everything as the image does, and those change often as the engine develops. A run
-that waits minutes for a tool or a person must survive a restart and an upgrade of djs
+that waits minutes for a tool or a person must survive a restart of the host
 ([persistence](goals.md#persistence)). So runs are persisted as **continuation dumps**: a
 JavaScript program that recreates the run, taken while it waits for its tools. A dump
-says what the run *means* rather than how one build laid it out, so any later djs loads
-it. [Continuation dumps](dumps.md) shows what a dump contains and how a host uses one;
+says what the run *means* rather than how one build laid it out. [Continuation dumps](dumps.md) shows what a dump contains and how a host uses one;
 [how continuation dumps are written](continuations.md) explains how the writer gets there
 from the heap. Inside a process, the writer itself works on an image: the host copies the
 VM's image into the module that has the dumper.

@@ -6,7 +6,7 @@
 djs is a small JavaScript and TypeScript engine written in Rust. It runs short scripts
 that call tools, written by a language model or a person, inside a WebAssembly sandbox,
 and it can stop such a script at any moment, write it out while it waits for a tool, and
-continue it later, in another process or with a later version of djs. This page explains
+continue it later, in another process. This page explains
 what kind of script djs is built for, the parts it consists of, and how to read the rest
 of the guide.
 
@@ -50,7 +50,7 @@ particular profile, and each part of it became a design goal:
 | Receives tool results: long strings, arrays of similar objects, base64 images | Get data in and out with as little copying and conversion as possible | [cheap data passing](goals.md#cheap-data-passing) |
 | Runs for milliseconds, once, then is thrown away | Start in microseconds; compile fast; keep the wasm module small | [fast startup in wasm](goals.md#fast-startup-in-wasm) |
 | Is written fresh every time | Compile in one pass, straight to bytecode | [no syntax tree](goals.md#no-syntax-tree) |
-| Waits for tools that may take minutes | Write the run out while it waits, continue it elsewhere, also in a later djs | [persistence](goals.md#persistence) |
+| Waits for tools that may take minutes | Write the run out while it waits, continue it elsewhere | [persistence](goals.md#persistence) |
 | Must not hog the host, may loop forever, may be cancelled | Stop between any two instructions and resume later, even inside a `map` callback or a getter | [suspend anywhere](goals.md#suspend-anywhere) |
 
 These five goals are ranked; [what djs optimizes for](goals.md) explains each of them.

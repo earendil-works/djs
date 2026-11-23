@@ -1840,7 +1840,8 @@ export class Sandbox {
 
   /**
    * The VM's global bindings (or the ones in `names`) as JavaScript that recreates them
-   * when `load`ed into another sandbox, also of a later djs (docs/functions-as-code.md):
+   * when `load`ed into another sandbox (docs/functions-as-code.md; a later djs only once
+   * the dump format is declared stable, D3643):
    * functions as their source text, closures and data as code, builtins by name. The
    * host's functions and `console` are not written: the loading sandbox provides them
    * under the same names. Needs `frozenBuiltins` (D2836). Throws a "misuse" error listing

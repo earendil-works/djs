@@ -32,7 +32,7 @@ const count = await sandbox.runAsync(
   resume, also inside a getter, a `map` callback or an async function.
 - **[Persistence](goals.md#persistence)** A run that waits on its tools can be written
   out as a [continuation dump](dumps.md): a plain JavaScript program that recreates it,
-  in another process or a later djs.
+  in another process.
 - **[Cheap data passing](goals.md#cheap-data-passing)** Tool results go in through a
   compact wire format; results come out by reading the heap from the host, with no
   serialization step inside the VM.

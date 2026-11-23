@@ -686,8 +686,10 @@ images are the in-process mechanism (D2700).
   D2850), in-flight builtin state as the calls that make it (D2562, D2610), the open
   calls through the host's `$djs.resume` and `Math.random`'s state through `$djs.seed`
   (D2890); `$djs` also holds the dump runtime's helpers (D2903). Only VMs with frozen
-  builtins dump (D2836). Any later build, or node, runs it; golden dumps hold that
-  promise (D2619, D2920). Hosts store dumps zstd-compressed (D2703).
+  builtins dump (D2836). Another VM or process, or node, runs it; golden dumps check the
+  loader against committed dumps (D2619, D2920). Until the owner declares the dump format
+  stable, a later build is not promised to load it: the runtime, the hooks and the goldens
+  change with the code (D024, D3643). Hosts store dumps zstd-compressed (D2703).
 - **Packaging:** djs ships one wasm module, and it has the dumper (D3600, superseding the
   second dump module of D2564/D2704): every host, the ones that persist runs and the ones
   that never do, loads the same file. Loading a dump is running it and needs no dumper.

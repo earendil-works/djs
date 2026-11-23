@@ -3,8 +3,9 @@
 // functions by identity, `values`, the JSON boundary) and the dumps a Sandbox wrote of them
 // at every idle point (`NAME.K.dump.js`); some import host modules (0292). Each dump
 // loads in a fresh sandbox of the same scope, the open calls are answered, and the output
-// up to idle point K plus the loaded run's must equal the uninterrupted run's. A golden dump is never rewritten to make a
-// build pass; new programs get their dumps with
+// up to idle point K plus the loaded run's must equal the uninterrupted run's. The goldens
+// change with the dump runtime until its format is declared stable (D3643): a change that
+// breaks them deletes them and writes them again, as new programs get theirs, with
 // `DJS_GOLDEN_WRITE=1 node --test js/test/golden-host.test.ts` (only programs with none).
 
 import { test } from "node:test";

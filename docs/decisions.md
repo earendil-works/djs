@@ -14383,3 +14383,23 @@ is djs-core with only `unicode`, the former `full,unicode`). The `unicode` umbre
 two features stay. The shipped module, where the guards were constant: 1,661,729 ->
 1,661,727 B raw, 701,709 -> 701,738 B gzip, once `Intrinsic::prototype_of` is kept out of
 line (with the registry's call gone it was inlined at its two other call sites, +357 B raw).
+
+## D3643: Dumps fall under D024 until the owner declares the format stable
+date: 2026-11-23 · by: pcompat · issue: 0297
+Amends D3596 and D2619 (owner, 2026-11-23, on whether dumps of the dev past must keep
+loading: "In the future sure, but not for formats that were made in the dev past"). D3596's
+guarantee, that a dump written by any build loads in every later one, is suspended until
+the owner declares the dump format stable; until then dumps are under D024 like images and
+the ABI. The dump runtime's helpers (dump_runtime.rs, js/src/dump-runtime.js), the `$djs`
+hooks and their arguments change with the code, without keeping old names or meanings for
+dumps already written, and the golden dumps (tests/dump/v2/golden/, golden-host/) are
+regenerated, not frozen: a change that breaks them deletes the affected `NAME.*.dump.js`
+and writes them again (`DJS_GOLDEN_WRITE=1`, which writes every program that has none) in
+the same commit, so the change to stored dumps shows in review. What D3596 lists as what a
+stored dump relies on stays the description of the format, and is what a stable format
+will hold fixed. Dropped with it: the CLI's `console.log`/`info`/`warn`/`error`/`debug`
+identities for its printing function, which only dumps of an earlier exporter named (it
+writes `print`). TESTING.md "Dumps across builds" is now "Golden dumps"; ARCH.md, docs/host.md,
+the Sandbox.dump doc and the guide (dumps.md "Dumps and later builds", continuations.md,
+testing.md, goals.md, introduction.md, index.md, snapshots.md, suspension.md, pi.md) no
+longer promise that a later djs loads a dump.

@@ -47,11 +47,12 @@ of pi's sits in the VM, so none is in a dump.
   body does: calls still running then are in `run.dropped`, and pi cancels them.
 - **Saving.** Before a call leaves the VM, and before the script parks to wait for a
   person or a slow job, pi writes the idle run as a dump, with the output and store
-  writes so far. A restart or a wake, maybe weeks later and with another djs, loads the
+  writes so far. A restart or a wake, maybe weeks later, loads the
   dump with `loadRun` and the same scope, finds each open call's task by its id and goes
   on. Nothing is replayed, and no journal is kept: the latest dump is the script's
-  state. [What later builds keep](dumps.md#what-later-builds-keep) is what makes that
-  safe.
+  state. [Dumps and later builds](dumps.md#dumps-and-later-builds) says what a dump
+  relies on; until the dump format is declared stable, a waiting dump may not load
+  after an upgrade of djs.
 - **Steps.** pi runs code mode on its own thread, so each `advance` is bounded:
   `yieldMs` keeps pi responsive while a script computes, and pi's abort signal stops
   the step.

@@ -139,14 +139,13 @@ impl Tools {
 
     /// The host function id for an identity a dump names (`tools.read`, in `$djs.resume`);
     /// `None` for a name that is neither a tool nor a function the run has (bound with
-    /// `--bind`, or in the dump's state). `print` and the `console` methods share the
-    /// printing function's id.
+    /// `--bind`, or in the dump's state). The printing function's identity is `print`
+    /// (the `console` methods are the same function).
     pub fn id_for_call_name(&self, call_name: &str) -> Option<u32> {
         match call_name {
             "later" => return Some(LATER),
             DEBUGGER_NAME => return Some(DEBUGGER),
-            "print" | "console.log" | "console.info" | "console.warn" | "console.error"
-            | "console.debug" => return Some(crate::run::CONSOLE_LOG),
+            "print" => return Some(crate::run::CONSOLE_LOG),
             _ => {}
         }
         // (A tool the answers file answers is one too, whether or not a call to it was
@@ -705,7 +704,7 @@ mod tests {
         assert_eq!(t.call_name(LATER).as_deref(), Some("later"));
         let print = crate::run::CONSOLE_LOG;
         assert_eq!(t.id_for_call_name("print"), Some(print));
-        assert_eq!(t.id_for_call_name("console.warn"), Some(print));
+        assert_eq!(t.id_for_call_name("console.warn"), None);
         assert_eq!(t.call_name(print).as_deref(), Some("print"));
         // `make` stays private to the tools Proxy.
         assert_eq!(t.call_name(MAKE_TOOL), None);

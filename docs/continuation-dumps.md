@@ -274,11 +274,11 @@ policy from hooks the host function declares (D2771).
 
 ### Compatibility (D2560, D2920)
 
-A dump is JavaScript that calls only `$djs`, so any later djs, or node, runs it; what it
+A dump is JavaScript that calls only `$djs`, so another djs, or node, runs it; what it
 depends on is the dump runtime and the language, not the compiler. The golden dumps
-(tests/dump/v2/golden/, written once, run by every gate) hold the runtime and the engine
-to that (TESTING.md "Dumps across builds"); djs is unreleased, so the runtime may still
-change incompatibly by a decision (D024).
+(tests/dump/v2/golden/, run by every gate) check the runtime and the engine against
+committed dumps (TESTING.md "Golden dumps"). Until the owner declares the format stable,
+the runtime, the hooks and the goldens change with the code (D024, D3643).
 
 ### One dumper, in the one module (D2564, D3600)
 

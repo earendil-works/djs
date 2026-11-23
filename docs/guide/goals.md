@@ -71,16 +71,17 @@ compile, and optimizations that need a whole function's tree are out of reach.
 ### Persistence
 
 **For you:** a run that waits for a tool, minutes or days, can be written out, the
-sandbox thrown away, and the run continued later, in another process or with a later
-version of djs.
+sandbox thrown away, and the run continued later, in another process, and with a later
+version of djs once the dump format is declared stable.
 
 **Why:** a script may wait for a slow tool or a person. Keeping its sandbox in memory all
-that time is wasteful, and a restart or an upgrade would lose it.
+that time is wasteful, and a restart would lose it.
 
 **How:** at an **idle point**, where the run only waits for its tools, djs writes it as a
-[continuation dump](dumps.md), a JavaScript program that recreates it and any later djs
-runs. Inside one process a copy of the arena does the same job for any stop ([the
-arena](arena.md)), but such an image is tied to how one engine build numbers its
+[continuation dump](dumps.md), a JavaScript program that recreates it and that another
+process, or node, runs ([dumps and later builds](dumps.md#dumps-and-later-builds) says
+what a later djs will keep). Inside one process a copy of the arena does the same job
+for any stop ([the arena](arena.md)), but such an image is tied to how one engine build numbers its
 internals, so it is not what a run is kept in.
 
 **The cost:** a run can be persisted only while it waits, not in the middle of a

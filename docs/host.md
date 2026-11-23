@@ -560,8 +560,9 @@ host code and runs at the same speed.
 
 - **Host refs** (ARCH "Data passing") are not built: pass-through data such as images is
   copied in and out.
-- **Persistence** is by continuation dumps (D2560): any later djs loads one or refuses it
-  with a reason. A run computing between idle points cannot be persisted (D2561): give it
+- **Persistence** is by continuation dumps (D2560): another sandbox or process loads one
+  or refuses it with a reason; a later djs only once the dump format is declared stable
+  (D3643). A run computing between idle points cannot be persisted (D2561): give it
   fuel to reach one, or rerun it.
 - **Sync host functions** run one at a time (the VM parks); use `asyncFunctions` for
   concurrent calls.

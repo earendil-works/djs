@@ -203,8 +203,8 @@ every stop, and under GC stress.
 
 ## Dumps: continuing in another engine
 
-A [continuation dump](dumps.md) must resume in a fresh VM, in a later build, and in
-node, which has never seen djs. Three kinds of tests hold it to that:
+A [continuation dump](dumps.md) must resume in a fresh VM and in node, which has never
+seen djs. Three kinds of tests hold it to that:
 
 - **A dump at every idle point.** The plain-dumps check dumps each codemode case of the
   corpus at every idle point, with frozen builtins, runs the dump in a fresh VM and goes
@@ -217,9 +217,9 @@ node, which has never seen djs. Three kinds of tests hold it to that:
 - **Golden dumps.** [`tests/dump/v2/golden/`](../../tests/dump/v2/golden/) holds small
   programs and the dumps written of them at every idle point, one program per construct
   the writer handles (operand positions, loop kinds, promise combinators, generators,
-  classes). Every build must load each dump and finish the program with the output of
-  the uninterrupted run, plainly and under GC stress. A golden dump is never rewritten to
-  make a build pass: that a later build runs an earlier build's dumps is the point.
+  classes). Every test run loads each dump and finishes the program with the output of
+  the uninterrupted run, plainly and under GC stress. A change to the dump runtime that
+  breaks them writes them again, so what changed for stored dumps shows in review.
 - **Size.** The dumps of the corpus, of the golden programs and of an example are
   measured, and [`tests/scores/dump-size.tsv`](../../tests/scores/dump-size.tsv) records
   each case's raw and gzip size; the gate fails when a dump grows past its score.

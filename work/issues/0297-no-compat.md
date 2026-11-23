@@ -216,6 +216,16 @@ docs/web-globals.md updated. D3642. Size, after the rebase onto 0298's D3660: 70
 701,738 B gzip (1,661,729 -> 1,661,727 raw; `Intrinsic::prototype_of` now #[inline(never)]:
 without it, it was inlined twice into realm_intrinsic, +357 B raw); codemode-memory OK.
 
+### 2026-11-23: J1 (dumps under D024)
+D3643 amends D3596/D2619: the later-build guarantee for dumps is suspended until the owner
+declares the format stable; helpers, hooks and goldens change with the code, goldens are
+regenerated (delete the dumps, `DJS_GOLDEN_WRITE=1`). TESTING.md "Dumps across builds" ->
+"Golden dumps"; ARCH.md, docs/host.md Gaps, docs/continuation-dumps.md "Compatibility",
+Sandbox.dump's doc, golden-host.test.ts's header. Guide: dumps.md ("What later builds keep"
+-> "Dumps and later builds"), continuations.md, testing.md, goals.md, introduction.md,
+index.md, snapshots.md, suspension.md, pi.md. djs-cli tools.rs: only `print` names the
+printing function (console.* identities dropped, test updated). dump_runtime.rs untouched.
+
 ## Follow-ups
 
 ## Result
