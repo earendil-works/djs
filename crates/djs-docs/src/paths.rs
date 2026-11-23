@@ -284,7 +284,7 @@ pub fn unlinked(html: &str, ix: &RepoIndex) -> Vec<String> {
             if hit(ix.code(&text)) {
                 found.push(text.trim().to_string());
             } else {
-                // A command or glob with a path in it (`node js/pi/pi-tests.ts`).
+                // A command or glob with a path in it (`node js/test/plain.test.ts`).
                 for w in text.split_whitespace() {
                     if hit(ix.text(w)) {
                         found.push(w.to_string());

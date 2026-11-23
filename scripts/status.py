@@ -15,13 +15,8 @@ usage:
   scripts/status.py speed [-n N]      scripts/perf/wmeasure.py on the README workloads:
                                       instructions of djs-wasm and quickjs-wasi (needs
                                       scripts/perf/setup.sh; takes minutes)
-  scripts/status.py pi                pi's codemode tests on djs (`node js/pi/pi-tests.ts`: the
-                                      default mode, the next mode, the next mode with a dump at
-                                      every idle point; needs pi-private)
-                                      and pi's benchmark vs quickjs-wasi (js/bench/pi.bench.ts,
-                                      the median of 3 runs)
   scripts/status.py startup           js/bench/sandbox.bench.ts: vm_new, Sandbox.create, the
-                                      first run (median of 3 runs)
+                                      first run, a 10,000-fuel slice (median of 3 runs)
   scripts/status.py dumps             scripts/dump-costs/dump-costs.ts: dump sizes
                                       and times over the harvested corpus, and the log case
   scripts/status.py bounds            what the arena's bounds checks would cost: the shipped
@@ -44,11 +39,10 @@ usage:
   scripts/status.py bridge            js/bench/engines/bridge.ts three times: per payload and engine
                                       the time and memory of passing it in and out, per end-to-end
                                       case the run time (medians); `engines` runs it too
-  scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, engines, bench
+  scripts/status.py all               size, speed, startup, dumps, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
-                                      `set pi/passed 221 pi/total 226` after
-                                      `node js/pi/pi-tests.ts`; --at names an older
+                                      `set speed/x/djs-wasm 1.0`; --at names an older
                                       measurement (an issue or commit) instead of HEAD
 """
 import datetime
@@ -216,49 +210,12 @@ def median(xs):
     return xs[len(xs) // 2]
 
 
-def pi():
-    new = {}
-    modes = [
-        ("pi", [], None),
-        ("pi/next", ["--next"], None),
-        ("pi/dump", ["--next", "--dump-every-idle"], None),
-    ]
-    for key, flags, env in modes:
-        # Failing tests make it exit non-zero; the count is what is recorded.
-        out = node("js/pi/pi-tests.ts", *flags, "--out", f"target/status-{key.replace('/', '-')}",
-                   env=env, check=False)
-        m = re.search(r"^(\d+) / (\d+) passed", out, re.M)
-        if not m:
-            sys.exit(f"status.py: no pass count from pi-tests {' '.join(flags)}:\n{out[-2000:]}")
-        new[f"{key}/passed"], new[f"{key}/total"] = int(m.group(1)), int(m.group(2))
-    # pi.bench.ts's table: a row per case, a column per engine (quickjs-wasi first).
-    rows = {"script start": "start", "tool-heavy": "tool-heavy", "interrupt polls": "polls"}
-    cols = ["qjs", "djs", "djs-prelude"]
-    runs = {}
-    for _ in range(3):
-        out = node("js/bench/pi.bench.ts")
-        if "quickjs-wasi" not in out:
-            sys.exit(f"status.py: pi.bench.ts ran without quickjs-wasi (no pi-private):\n{out}")
-        for line in out.splitlines():
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            for prefix, row in rows.items():
-                if cells[0].startswith(prefix):
-                    for col, cell in zip(cols, cells[1:]):
-                        runs.setdefault(f"pi/bench/{row}/{col}", []).append(float(cell.split()[0]))
-    if len(runs) != len(rows) * len(cols):
-        sys.exit(f"status.py: pi.bench.ts gave {sorted(runs)}")
-    for k, xs in runs.items():
-        v = median(xs)
-        new[k] = round(v) if k.startswith("pi/bench/polls") else v
-    # The time of one 10,000-fuel slice (the adapter's poll interval) in a tight loop.
-    new["fuel/slice-us"] = round(1e6 / new["pi/bench/polls/djs"], 1)
-    return new
-
-
 def startup():
     pats = {"startup/vm-new-us": r"^vm_new: ([\d.]+) us", "startup/sandbox-us": r"^Sandbox.create: ([\d.]+) us",
             "startup/sandbox-run-us": r"^Sandbox.create \+ first run: ([\d.]+) us",
-            "startup/instantiate-us": r"^instantiate: ([\d.]+) us"}
+            "startup/instantiate-us": r"^instantiate: ([\d.]+) us",
+            # One 10,000-fuel slice of a tight loop (a host's poll interval).
+            "fuel/slice-us": r"^fuel slice: ([\d.]+) us"}
     runs = {k: [] for k in pats}
     for _ in range(3):
         out = node("js/bench/sandbox.bench.ts", env={"DJS_WASM": WASM})
@@ -536,9 +493,6 @@ def main():
         n = int(args[2]) if len(args) > 2 and args[1] == "-n" else 3
         build()
         save(rows, loaded(speed(n), "speed"))
-    elif args[0] == "pi":
-        build()
-        save(rows, loaded(pi(), "pi"))
     elif args[0] == "startup":
         build()
         save(rows, loaded(startup(), "startup"))
@@ -565,7 +519,6 @@ def main():
     elif args[0] == "all":
         save(rows, size(rows))
         save(rows, loaded(speed(3), "speed"))
-        save(rows, loaded(pi(), "pi"))
         save(rows, loaded(startup(), "startup"))
         save(rows, loaded(dumps(), "dumps"))
         save(rows, loaded(bounds(), "bounds"))

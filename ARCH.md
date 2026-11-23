@@ -592,9 +592,7 @@ vm_collect, vm_canonical_hash, vm_abort, vm_take_unhandled_rejections, ...
 
 The JS host package wraps it: `Sandbox` (js/src/sandbox.ts) runs codemode bodies with
 host functions, fuel slices, host-driven runs that persist as continuation dumps (the
-shipped module has the dumper, D3600), a deterministic mode and journals;
-js/pi/vm.ts adapts it to pi's codemode contract (D1490), and in its next mode persists pi
-sessions as dumps (D2650).
+shipped module has the dumper, D3600), a deterministic mode and journals.
 
 - **Async host functions** (`tools.*`, `models.*`): calling one creates a promise and an
   entry `{call_id, fn_id, args, promise}` in the heap's pending host call table. Execution
@@ -781,7 +779,7 @@ The original phases, with their status:
 - **P0, skeleton:** done.
 - **P1, core language:** done. The hand-written `prelude.js` was replaced by bgen's output
   in P2 as planned.
-- **P2, codemode MVP:** done. pi codemode runs on djs through js/pi/vm.ts (D1490).
+- **P2, codemode MVP:** done (D1490).
 - **P3, TypeScript:** done (the type skipper, enums, namespaces, parameter properties,
   decorators).
 - **P4, durability:** done, in a different form than planned: deterministic images,

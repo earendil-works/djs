@@ -492,7 +492,7 @@ fn check_code(text: &str, page: &str, env: &mut Env) {
             ));
         }
     }
-    // pi by name (`pi`, `pi's`, `js/pi/vm.ts`): whole words, so neither `π` nor `pipeline`.
+    // pi by name (`pi`, `pi's`, `pi.startVm()`): whole words, so neither `π` nor `pipeline`.
     if page != PI_PAGE
         && text
             .split(|c: char| !c.is_ascii_alphanumeric())
@@ -541,7 +541,7 @@ fn code_link(t: &str, page: &str, env: &mut Env) -> Option<String> {
 }
 
 /// Inline code that is a command or glob with repository paths in it (`node
-/// js/pi/pi-tests.ts`, `builtins/*.ts`): the paths become links inside the code (a glob
+/// js/test/plain.test.ts`, `builtins/*.ts`): the paths become links inside the code (a glob
 /// links its directory). None if it has no paths.
 fn code_words(t: &str, page: &str, env: &mut Env) -> Option<String> {
     use crate::paths::Resolved;
@@ -710,7 +710,7 @@ mod tests {
     #[test]
     fn no_decisions_no_history_pi_on_its_page() {
         let md = "# T\n\nAs D1050 says (`D016`), this was replaced. It no longer \
-                  runs in pi or pi's adapter (`js/pi/vm.ts`).\n\n\
+                  runs in pi or pi's adapter (`pi.startVm()`).\n\n\
                   A pipeline, π and `Math.PI` are fine; so is code:\n\n```js\n// pi, D1050, no longer\n```\n";
         let (_, errors) = with_env(|env| render("p.md", md, env));
         assert_eq!(
@@ -726,7 +726,7 @@ mod tests {
             "{errors:#?}"
         );
         let (_, errors) =
-            with_env(|env| render("pi.md", "# pi\n\npi's adapter, `js/pi/vm.ts`.\n", env));
+            with_env(|env| render("pi.md", "# pi\n\npi's adapter, `pi.startVm()`.\n", env));
         assert!(errors.is_empty(), "{errors:?}");
     }
 

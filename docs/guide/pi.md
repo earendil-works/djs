@@ -2,107 +2,14 @@
 
 djs was built for pi, a coding agent, whose **codemode** lets the model write a small
 JavaScript program that calls pi's tools instead of calling them one at a time. pi runs
-those programs on QuickJS, compiled to wasm, through one module with a small contract.
-This page shows how djs takes QuickJS's place behind that contract, what it adds, how
-pi's own tests fare, and how another agent host could wire djs up the same way. It is
-the one page of the guide about a particular host; everywhere else, hosts are described
-in general.
+those programs on QuickJS, compiled to wasm. This page shows how pi's durable code mode
+runs them on djs instead, how djs compares on pi's workloads, and how another agent host
+could wire djs up the same way. It is the one page of the guide about a particular host;
+everywhere else, hosts are described in general.
 
-> **In short.** An adapter, `js/pi/vm.ts`, implements pi's VM contract on djs and runs
-> pi's unmodified prelude, so trying djs in pi means swapping one module. It keeps an
-> image of the VM after the prelude and starts later scripts from it, and it polls pi's
-> interrupt every 10,000 fuel. In its *next* mode, with a prelude reshaped for djs and
-> frozen builtins, a waiting session is written as a continuation dump and resumed in a
-> new process or a later djs. pi's durable code mode goes further: no prelude, a
-> host-driven run whose latest dump is the script's state.
-
-## pi's VM contract
-
-pi's codemode runs each script in a fresh VM, driven by one module with a small
-contract:
-
-- **start** a VM for one script, with pi's *prelude*: JavaScript that runs before the
-  script and builds `tools`, the output helpers (`text`, `image`, `exit`, `console`), a
-  small key-value store and pi's globals on top of one bridge function, then freezes the
-  realm with a *lockdown*;
-- **post**: the VM passes messages to the host (a tool call, output, the end), from
-  inside its callbacks;
-- **deliver**: the host hands the VM a tool result, and the script runs until it waits
-  again;
-- **should interrupt**: polled while the script runs; when it says so, the VM stops.
-
-[`js/pi/vm.ts`](../../js/pi/vm.ts) implements that contract on djs. pi's launchers
-(worker thread, in-thread, remote) and its host side stay as they are; only the module
-that drives one VM changes. [`js/pi/engine.ts`](../../js/pi/engine.ts) is a client of the
-wasm module's exports at the level of handles, because pi's prelude keeps its functions
-alive across calls, which the `Sandbox` of [the JavaScript interface](js-api.md), made
-for whole function bodies, does not do.
-
-> **Trade-off.** Implementing pi's existing contract over designing a new one around
-> djs. pi can adopt djs behind a flag by swapping one module, and its tests run
-> unchanged. The cost: the adapter carries pi's protocol (a sync bridge function,
-> polling between fuel slices instead of an interrupt handler), and what djs could offer
-> beyond QuickJS, such as persisting waiting sessions, is something pi has to opt into.
-
-## What the adapter does
-
-**Prelude images.** Running pi's prelude, whose lockdown freezes about 700 objects, is
-most of a start. The adapter collects the heap right after it, keeps that VM image, keyed
-by everything the prelude saw (the tools, the globals, the store, the heap limit), and
-starts the next script with the same inputs from a copy of it. A start then takes
-<!--n pi/bench/start/djs .2-->0.04<!--/n--> ms instead of <!--n pi/bench/start/djs-prelude .1-->3.4<!--/n--> ms, against <!--n pi/bench/start/qjs .1-->3.1<!--/n--> ms on QuickJS. The prelude's work is not counted
-against the script's interrupt budget, so a start from an image and one that runs the
-prelude behave the same. The image never leaves the process: it is a cache, not a
-persistence format.
-
-**Interrupts.** pi's contract polls `shouldInterrupt`; the adapter runs the script in
-slices of 10,000 fuel and polls between them. A tight loop then polls about
-<!--n pi/bench/polls/djs ~1000-->117,000<!--/n--> times a second, against <!--n pi/bench/polls/qjs ~1000-->60,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
-mean a little over half the CPU time on djs: a slice of 10,000 fuel runs faster than
-QuickJS's poll interval ([limits](limits.md#fuel)). Code that allocates or calls builtins
-polls more often than on QuickJS, since djs charges fuel for that work too. When the
-poll says stop, the adapter abandons the run, which the script cannot catch.
-
-**Globals.** The adapter defines `performance.now()` before the prelude, which pi's
-QuickJS host layer provides, so the lockdown freezes it too; `atob`, `btoa` and
-`queueMicrotask` are djs builtins.
-
-**Deterministic runs.** In pi's deterministic mode the adapter makes the VM
-deterministic as [determinism](determinism.md) describes: the clock reads the start
-time, then the time of the result being processed; `Math.random` is seeded from pi's
-seed; the time zone is UTC; and `WeakRef` and `FinalizationRegistry` are absent, as in
-pi's QuickJS VM.
-
-## The next mode: sessions as dumps
-
-pi's prelude keeps its own in-flight state: a map of pending tool calls, the store's
-writes, reactions on the script's promise. A dump would have to write all of it as
-prelude internals, and the prelude's lockdown changes builtins in ways a dump cannot
-recreate. So the adapter has a second mode, `shape: "next"`, with a variant of the
-prelude in the shape pi would adopt on djs,
-[`tests/pi/prelude-next.ts`](../../tests/pi/prelude-next.ts), whose every difference from
-pi's prelude is listed at its top:
-
-- tools are the engine's async host calls, so an open tool call is an open host call
-  that a dump writes;
-- the script's promise, the output counters and the store belong to the adapter;
-- frozen builtins replace the lockdown.
-
-A waiting session is then written by `dumpSession()` as a [continuation dump](dumps.md)
-plus the adapter's own state, JSON that the host stores. `resumeFromDump` continues it
-in a new instance, another process or a later djs: it runs the prelude again, loads the
-dump, and the script goes on where it waited, without replaying anything. `openCalls()`
-lists the calls the session waits for, which the host answers with a recorded result,
-issues again or rejects. Each open call carries its id in pi's protocol as its state, so
-the resumed session posts results under the ids pi knows.
-
-pi makes runs durable today by recording tool results and replaying them into a fresh
-run. Dumps are the alternative it would adopt: a resumed session does not run the script
-again.
-
-The next mode keeps pi's prelude, reshaped, and its protocol of a bridge function, so
-that pi's test suite runs on it unchanged. It stays as that test of the prelude's shape;
-pi's durable code mode below does not build on it.
+> **In short.** pi's durable code mode runs each script as a host-driven run of a plain
+> `Sandbox`: no prelude, every tool and output helper a host function with a stable
+> identity, and the latest dump of the idle run is the script's state.
 
 ## Durable code mode on host-driven runs
 
@@ -149,26 +56,7 @@ of pi's sits in the VM, so none is in a dump.
   `yieldMs` keeps pi responsive while a script computes, and pi's abort signal stops
   the step.
 
-## pi's tests on djs
-
-pi's own codemode test suite runs against the adapter (`node js/pi/pi-tests.ts`), in
-the default mode, in the next mode, and with a dump and a resume at every idle point:
-
-<!-- gen:status conformance -->
-- test262 (at dquickts' pinned commit): djs passes **39,325 of the 39,365** tests in the
-  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 40 known
-  failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
-  qjs fails 17 active tests under the same runner.
-- The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **658 of 669** cases match qjs; 6 known
-  failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
-  next mode and with a dump at every idle point (measured at 211ecfb72c, 2026-11-21).
-<!-- /gen -->
-
-The tests that fail come from djs being always strict, from a test that expects
-QuickJS's fingerprint, and from a workload pi's tests use to cancel scripts, which
-finishes on djs before the cancel.
+## pi's workloads on djs
 
 Speed, measured in machine instructions for the same workloads on djs-wasm and on the
 QuickJS build pi uses (lower is better; "a pi-like script" is a typical codemode
@@ -194,41 +82,19 @@ Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 2026-11-21; lower is better.
 <!-- /gen -->
 
-Through the VM contract, as pi runs them (`js/bench/pi.bench.ts`, on the calling
-thread): a tool-heavy script, which searches, reads 60 files in parallel batches,
-filters and prints, takes <!--n pi/bench/tool-heavy/djs .1-->1.8<!--/n--> ms on djs from the prelude image and
-<!--n pi/bench/tool-heavy/qjs .1-->4.6<!--/n--> ms on QuickJS; a script that only returns takes <!--n pi/bench/start/djs .2-->0.04<!--/n--> ms against <!--n pi/bench/start/qjs .1-->3.1<!--/n--> ms.
-
 The measurements behind this section, from `tests/scores/status.tsv`
-(`scripts/status.py pi` and `speed`):
+(`scripts/status.py speed`):
 
 <!-- gen:status recorded -->
 | measurement | value | measured at |
 | --- | ---: | --- |
-| `pi/bench/polls/djs` | 116575 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/polls/djs-prelude` | 118392 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/polls/qjs` | 60092 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/start/djs` | 0.04 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/start/djs-prelude` | 3.39 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/start/qjs` | 3.07 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/tool-heavy/djs` | 1.75 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/tool-heavy/djs-prelude` | 5.05 | 211ecfb72c, 2026-11-21 |
-| `pi/bench/tool-heavy/qjs` | 4.62 | 211ecfb72c, 2026-11-21 |
-| `pi/dump/passed` | 221 | 211ecfb72c, 2026-11-21 |
-| `pi/dump/total` | 226 | 211ecfb72c, 2026-11-21 |
-| `pi/load` | 3.3 | 211ecfb72c, 2026-11-21 |
-| `pi/next/passed` | 221 | 211ecfb72c, 2026-11-21 |
-| `pi/next/total` | 226 | 211ecfb72c, 2026-11-21 |
-| `pi/passed` | 221 | 211ecfb72c, 2026-11-21 |
-| `pi/total` | 226 | 211ecfb72c, 2026-11-21 |
 | `speed/pi-like/djs-wasm` | 5341.6 | edd129067f, 2026-11-21 |
 | `speed/pi-like/qjs-wasi` | 6875.1 | edd129067f, 2026-11-21 |
 <!-- /gen -->
 
 ## Wiring up another agent host
 
-An agent host that wants djs for its codemode needs little of what the adapter does,
-since the `Sandbox` covers it:
+An agent host that wants djs for its codemode builds on the `Sandbox`:
 
 1. **Tools as async host functions.** Give each tool a name (`tools.search`) and make it
    an async host function, so a script can run several at once
@@ -248,12 +114,3 @@ since the `Sandbox` covers it:
 6. **Values at the boundary.** `jsonBoundary` gives tools JSON, as a prelude that
    stringifies arguments would, without a prelude ([the JSON
    boundary](js-api.md#the-json-boundary)).
-
-## Where to look
-
-- [`js/pi/vm.ts`](../../js/pi/vm.ts): the adapter, its prelude images and the next
-  mode; [`js/pi/engine.ts`](../../js/pi/engine.ts): its client of the exports.
-- [`tests/pi/`](../../tests/pi/): pi's prelude, as copied from pi, and the next mode's
-  variant.
-- [`js/pi/pi-tests.ts`](../../js/pi/pi-tests.ts): runs pi's test suite against the
-  adapter.

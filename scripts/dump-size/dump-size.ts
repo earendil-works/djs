@@ -15,7 +15,6 @@
 //   v2:     DJS_PLAIN_OUT=DIR cargo test -p djs-core --lib plain_dumps_at_every_idle_point
 //                                                                   (SRCROOT tests/dump/v2, .src.js)
 //   sleep:  examples/sleep-dump/run.sh --restart 50 (examples/sleep-dump/out/)
-//   pi:     work/research/0207/README.md says how (a two-line patch of js/pi/vm.ts)
 //
 //   node scripts/dump-size/dump-size.ts --show FILE    the spans of one dump
 //   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv [--update] corpus=DIR v2=DIR sleep=DIR
@@ -423,7 +422,6 @@ function lineSet(text: string): Set<string> {
 
 const PRELUDES: [string, Set<string>][] = [
   ["corpus-prelude", lineSet(readFileSync(join(root, "tests/corpus/prelude.js"), "utf8"))],
-  ["pi-prelude", lineSet(existsSync(join(root, "tests/pi/prelude-next.ts")) ? readFileSync(join(root, "tests/pi/prelude-next.ts"), "utf8") : "")],
 ];
 
 /** Lines of the environment: the corpus prelude and the harvest harness (each harvest file before its script). */

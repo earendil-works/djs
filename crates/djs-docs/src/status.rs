@@ -397,7 +397,7 @@ fn recorded(st: &Status, pi: bool) -> String {
 /// workload by name. Elsewhere the guide names no host.
 pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
     match what {
-        "conformance" => conformance(st, pi),
+        "conformance" => conformance(st),
         "speed" => speed(st, pi),
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
@@ -414,7 +414,7 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
     }
 }
 
-fn conformance(st: &Status, pi: bool) -> Result<String, String> {
+fn conformance(st: &Status) -> Result<String, String> {
     let t = st.test262.as_ref().map_err(Clone::clone)?;
     let pass = t.active.saturating_sub(st.ratchet262);
     let pct = 100.0 * pass as f64 / t.active.max(1) as f64;
@@ -447,46 +447,6 @@ fn conformance(st: &Status, pi: bool) -> Result<String, String> {
         "- ",
         "  ",
     );
-    if let (true, Some(p), Some(n)) = (pi, st.num("pi/passed"), st.num("pi/total")) {
-        // The adapter's next mode, and that with a dump and a resume at every idle point.
-        let modes = [
-            ("pi/next", "in the next mode"),
-            ("pi/dump", "with a dump at every idle point"),
-        ];
-        let mut keys = vec!["pi/passed".to_string(), "pi/total".to_string()];
-        let mut same = vec!["in the default mode"];
-        let mut other = Vec::new();
-        for (k, what) in modes {
-            let (pk, nk) = (format!("{k}/passed"), format!("{k}/total"));
-            if let (Some(mp), Some(mn)) = (st.num(&pk), st.num(&nk)) {
-                if (mp, mn) == (p, n) {
-                    same.push(what);
-                } else {
-                    other.push(format!("{mp} of {mn} {what}"));
-                }
-                keys.extend([pk, nk]);
-            }
-        }
-        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-        let same = match same.as_slice() {
-            [one] => one.to_string(),
-            [init @ .., last] => format!("{} and {last}", init.join(", ")),
-            [] => String::new(),
-        };
-        let other = if other.is_empty() {
-            String::new()
-        } else {
-            format!("; {}", other.join("; "))
-        };
-        s += &wrap(
-            &format!(
-                "pi's codemode test suite on djs: {p} of {n} tests pass {same}{other} ({}).",
-                provenance(st, &keys)
-            ),
-            "- ",
-            "  ",
-        );
-    }
     Ok(s)
 }
 

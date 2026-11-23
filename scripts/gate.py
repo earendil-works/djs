@@ -9,7 +9,7 @@ time (cargo locks it); everything else runs at once, at the machine's full width
 
 Each leg is cached by its inputs (D2662): the key hashes the leg's name, the committed tree
 restricted to the leg's input class, and what the leg reads outside the repository (the
-toolchain, the qjs binary, vendor/test262, pi-private). A leg whose key passed before is
+toolchain, the qjs binary, vendor/test262). A leg whose key passed before is
 not run again; a build whose legs are all cached is not built. `--full` reads no cache and
 also runs the full-only legs (D2664).
 
@@ -133,7 +133,6 @@ def _git_state(path):
 
 
 def _externals():
-    pi = os.environ.get("PI_PRIVATE", str(Path.home() / "Development/pi-private"))
     return {
         # Every leg: the tools that build and run it, and the oracle and data files that
         # tests of every crate may read.
@@ -147,8 +146,6 @@ def _externals():
         # The npm package's leg: npm packs and installs it (TypeScript is pinned by
         # js/package-lock.json, in the tree).
         "npm": lambda: _run("npm", "--version"),
-        # pi's codemode tests and prelude, and its installed packages.
-        "pi": lambda: "\n".join([_git_state(pi), _stat(Path(pi) / "node_modules/.package-lock.json")]),
     }
 
 
@@ -383,8 +380,7 @@ def jobs():
           " --group active --quiet --expected tests/test262/expected-failures-slim.txt",
           cls="rust", needs=["build:slim-bins"], summary=r"^ratchet:|^\| active"),
 
-        # --- The shipped module and slim: the size budget (D020), pi's tests on the slim module
-        # without pi's lockdown (D2411), and in the adapter's next mode (0176, D2650).
+        # --- The shipped module and slim: the size budget (D020).
         J("size budget", f"python3 scripts/size/budget.py {size_mod} && python3 scripts/size/budget.py"
           f" {slim_mod} --slim", cls="rust", needs=["build:size", "build:size-slim"]),
         # 0265: the shipped module's wasm memory per codemode workload, first and later
@@ -393,12 +389,6 @@ def jobs():
         J("codemode memory", f"node scripts/size/codemode-memory.ts $PWD/{size_mod}"
           " --check tests/scores/codemode-memory.tsv", cls="nodocs", needs=["build:size"],
           summary=r"^codemode-memory:"),
-        J("pi tests (slim without lockdown)", f"DJS_WASM=$PWD/{slim_mod} node js/pi/pi-tests.ts --no-lockdown"
-          " --out target/pi-codemode-slim --expected tests/pi/slim-expected-failures.txt",
-          cls="nodocs", ext=("base", "pi"), needs=["build:size-slim"], summary=r"^pi tests:"),
-        J("pi tests (next mode)", f"DJS_WASM=$PWD/{size_mod} node js/pi/pi-tests.ts --next"
-          " --out target/pi-codemode-next --expected tests/pi/expected-failures.txt",
-          cls="nodocs", ext=("base", "pi"), needs=["build:size"], summary=r"^pi tests:"),
 
         # --- Full runs only (D2664). 0273 (D3440): test262's active group under GC stress (a
         # collection at every safepoint) in the debug build, where the heap's checks run at
@@ -413,11 +403,6 @@ def jobs():
           " --expected tests/test262/expected-failures.txt || exit 1; done",
           cls="rust", needs=["build:test262"], full_only=True,
           summary=r"^mode:|^ratchet:|^\| active|^deadline:|^slowest:|^ +[0-9.]+s "),
-        # Pi's tests in the next mode with a dump and a resume at every idle point, on the
-        # shipped module (0176, D3600).
-        J("pi tests (next mode with a dump at every idle point)", f"scripts/pi-dump-every-idle.sh $PWD/{size_mod}",
-          cls="nodocs", ext=("base", "pi"), needs=["build:size"], full_only=True,
-          summary=r"^pi tests:"),
     ]
 
 

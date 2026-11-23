@@ -28,7 +28,6 @@ W=../../target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
   `CARGO_TARGET_DIR`) to compare x86-64. `native-vs-wasm.sh <wasm>` compares the two for
   the cases below at two slices; the gate runs it (0072).
 - `node sandbox_interleave.ts $PWD/$W`: the Sandbox's output depends on `fuelSlice`.
-- `node pi_polls.ts $PWD/$W`: pi adapter interrupt polls, cold start vs prelude image.
 - `python3 deep_search.py`: the deepest source each compile-time nesting limit accepts
   natively, then the same source in wasm.
 

@@ -39,7 +39,7 @@ const sb = await Sandbox.create({
 const n = await sb.runAsync("const hits = await search(q); return hits.length", { q: "djs" });
 ```
 
-See `js/README.md` for the package and `js/pi/vm.ts` for pi's codemode adapter.
+See `js/README.md` for the package.
 
 ## Building and testing
 

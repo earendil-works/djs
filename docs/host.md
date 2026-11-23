@@ -22,7 +22,7 @@ it), and the dump runtime's `helpers`, `script` and `scriptFor`; besides it only
 `new URL("../wasm/djs.wasm", import.meta.url)`, which bundlers copy as an asset;
 `Sandbox.defaultModule()` is the hook the entry point overrides.
 `js/src/sandbox.ts` itself defaults to `$DJS_WASM`, else the repository's build when it
-runs from source. The wire encoder, the reader and the pi adapter are not exported.
+runs from source. The wire encoder and the reader are not exported.
 
 The gate builds a debug djs-wasm and runs the node tests against it.
 
@@ -33,13 +33,6 @@ reference, the guide's rust-api.md the overview). What it needs from djs-core be
 modules' needs sits behind djs-core's `embed` feature (D3180): the outbound wire encoder, the
 uncounted UTF-8 string tag, `ExecOptions::fatal_out_of_memory` (D3181), `Vm::reset_to`
 (D3182), `Vm::decode_wire`.
-
-The slim module (djs-core without its default `full` and `unicode` features, D2411) has
-the same exports and ABI. It lacks typed arrays, BigInt, the Iterator helpers, weak
-references, DisposableStack/`using` and decorators, so the wire format's bytes tag
-(`Uint8Array`) fails to decode there, and its images (build hash, base prefix) load only
-into a slim module. pi's adapter runs it with `frozenBuiltins` and pi's prelude without its
-lockdown (js/pi/pi-tests.ts `--no-lockdown`); the Sandbox keeps the full module by default.
 
 ## The Sandbox API
 
@@ -288,8 +281,7 @@ compressed at the median, 17 KB compressed at p99; a session holding a 1.8 MB lo
 394 KB. That is a third of what the image containers took (5.1 KB at the median), with
 no dictionary and no reference image to keep: any zstd reads it, and so does any later
 djs once decompressed. Level 19 saves a fifth to a quarter more on megabyte dumps (big-log
-394 → 299 KB), at a much slower compression. pi's `{ dump, state }` is JSON and
-compresses the same way.
+394 → 299 KB), at a much slower compression.
 
 ### Journals: record and replay (D1730)
 
@@ -332,8 +324,7 @@ the hash does not depend on fuel slices or when the VM last collected.
 
 Heap images are not a persistence format: a run that must outlive its process is written
 as a continuation dump. Images remain the engine's in-process mechanism: the base image
-every VM is copied from, pi's prelude images (a start restores one instead of running
-the prelude) and the stress and determinism checks. `vm_arena_ptr`/`vm_arena_len` read an
+every VM is copied from and the stress and determinism checks. `vm_arena_ptr`/`vm_arena_len` read an
 image, `vm_from_bytes` loads one. The REPL's `.heap` reports on the live VM's heap.
 
 #### What an image depends on (D026, D2265)
@@ -353,10 +344,8 @@ each of those tables, and loading checks them first (`Vm::from_bytes` refuses wi
 | intrinsic table | `INTRINSICS` | intrinsic names, kinds, arities and numbering (`INTRINSICS_HASH`) |
 | internal id tables | `RECORDS` | the id tables and slot conventions in source: object classes, realm slots, run states, header and template flags, value tags, frame continuations, the fast and native builtin tables, and the named slot numbers of internal records (`RECORDS_HASH`, D2266) |
 
-Within a process the descriptor guards the images that move between instances (pi's
-prelude images must be of one build's tables). The engine build hash
-(`djs_build_hash`) still identifies the exact build where that matters: Sandbox journals
-replay only on it, and pi's fingerprint names it.
+The engine build hash (`djs_build_hash`) identifies the exact build where that matters:
+Sandbox journals replay only on it.
 
 ## The ABI
 
@@ -534,7 +523,7 @@ at its first VM: about 5 ms, once. Every sandbox is its own instance, so the hos
 once per compiled module instead: `js/src/base.ts`'s `provideBase` (right after
 instantiating) copies the base an earlier instance of the module decoded into the new
 one, which checks its length and hash, and `rememberBase` keeps it, per
-`WebAssembly.Module`. Both the Sandbox and pi's engine do this. A later instance then costs
+`WebAssembly.Module`. The Sandbox does this. A later instance then costs
 about 0.15 ms more than with the uncoded base (the copy and its check), and a host that
 never injects still works (each instance decodes its own).
 
@@ -546,8 +535,8 @@ only into instances that create a VM, not into ones that restore an image. An in
 that creates a second VM decodes the base once more, from the coded section handed over
 again (the first VM's `vm_new` drops the coded base, D3360), and keeps it for its further
 VMs.
-Measured: every sandbox and pi session uses 0.31 MiB less wasm memory (an empty Sandbox
-1.50 → 1.19 MiB, pi warm `return 1` 1.81 → 1.50 MiB), and later `Sandbox.create` is
+Measured: every sandbox uses 0.31 MiB less wasm memory (an empty Sandbox
+1.50 → 1.19 MiB), and later `Sandbox.create` is
 about 20 µs faster (no copy).
 | 1000-item tool result in, a loop over it, an object out | 0.6 ms |
 
@@ -594,226 +583,3 @@ host code and runs at the same speed.
   fuel to reach one, or rerun it.
 - **Sync host functions** run one at a time (the VM parks); use `asyncFunctions` for
   concurrent calls.
-
-## pi codemode
-
-pi's codemode (pi-private `packages/codemode`, compared at pi d65de9db942d) runs scripts on
-quickjs-wasi. Everything engine-specific is in one module, `src/runtime/vm.ts`: `startVm`
-drives one VM through one script and talks to the host only through the messages of
-`protocol.ts`. The launchers (a worker thread, the calling thread, a remote isolate) and the
-host side (`execution.ts`: tools, deadlines, output, store writes, deterministic runs) do not
-touch QuickJS. `js/pi/vm.ts` implements the same `startVm` contract on djs, running pi's
-unmodified `PRELUDE_SOURCE`. To try it, swap that one module (issue 0049).
-
-```ts
-import { loadModule } from "../src/sandbox.ts";
-import { startVm } from "./vm.ts";                       // js/pi/vm.ts, not in the package
-const session = await startVm({ data, wasm: await loadModule(), prelude: PRELUDE_SOURCE, post, shouldInterrupt });
-session.deliver({ type: "result", id, ok: true, payload: "42" });
-// Persisting a waiting session: the next mode (prelude-next), below.
-```
-
-`js/pi/engine.ts` is a handle-level client of the exports (the Sandbox runs whole bodies,
-but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
-`tests/pi/prelude-source.ts` is a verbatim copy of pi's prelude for the tests here.
-
-### How the contract maps
-
-| pi on quickjs-wasi (vm.ts) | djs (js/pi/vm.ts) |
-| --- | --- |
-| `QuickJS.create({ memoryLimit, maxStackSize, interruptHandler, wasi })` | `vm_new(memoryLimit)` in a new instance of the djs-wasm module. Frames live in the heap, so there is no host-stack guard and `maxStackSize` is ignored. Deep recursion fails at about 131,000 frames, inside the heap limit, with `RangeError: Maximum call stack size exceeded`, as on quickjs-wasi (D013) |
-| `evalCode(PRELUDE_SOURCE, "codemode-prelude.js")`, then calling it with `bridge` and JSON | the same, as `return <prelude>` compiled with `vm_compile_file` (an async body; djs Scripts have no completion value, D004) |
-| `bridge`: a sync host function called with primitives | a sync host function (`vm_new_host_function`): the VM parks, the adapter reads the arguments with the reader, `post`s, and resolves the call with `undefined` |
-| `(async (tools, console) => {code\n})` as `codemode.js` | the same text after `return `, so line numbers match. Compile errors become pi's script-error JSON with a `codemode.js:line:col` frame |
-| `drain()`: run jobs one by one, poll `shouldInterrupt` every 50 jobs, then `stalled()` | `vm_run` runs the job queue to empty itself (D1370). `stalled()` is called after it |
-| QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000) of the script's work, not while the host globals and the prelude run (D1660: a start that reuses a prelude image skips that work, so a budget means the same on cold and warm starts). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
-| deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). In deterministic runs the VM deletes `WeakRef` and `FinalizationRegistry` (`vm_set_weak_refs`, D1680) before the prelude's lockdown |
-| `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
-| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 3, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890, and 3 since the fuel between polls counts across sync host calls, D2653) |
-| quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
-| no snapshots: durability by deterministic replay | the same in pi's mode; with prelude-next (`shape: "next"`), `dumpSession()` / `resumeFromDump()` in addition: the session as a continuation dump plus the adapter's state, taken while the script waits, resumed in a new instance (or process, or a later djs) with no replay (below) |
-
-**Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
-about 700 objects, and builtin-heavy code like it still runs 1.5-4x more instructions on
-djs than on quickjs-wasi (README.md "Status"). The adapter keeps the VM image taken right after the prelude,
-keyed by everything the prelude saw (prelude, tools, globals, store, heap limit, deterministic mode; at most
-16 images per module, 540 KB each at 0117: every cold start collects after the prelude,
-D1890; they were 933 KB of mostly garbage before 0089). A start with the same inputs
-restores the image (0.6 ms) instead. The prelude runs with the clock at 0 in UTC, so its
-image depends only on those inputs and the build (D2262), and a session resumed from a
-dump reruns the same prelude. Only `performance`'s origin and the seed are set per run, after the
-restore. `reuseImages: false` turns it off. pi's worker launcher creates a worker per
-execution, so it would need to keep the image in the parent (or keep workers warm) to
-benefit. The in-thread and remote launchers benefit as they are.
-
-### pi's own tests on djs
-
-`node js/pi/pi-tests.ts` copies pi's package (sources and tests) into `target/pi-codemode`,
-swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
-the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
-and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
-`report.md` with pass/fail per test and the failure messages. Rerun at 0102 (main after
-0093 and 0097, pi c1b68f09da5b): **221 of 226 pass**, the same tests as at pi d65de9db942d
-after 0058 and 0066 (204 in 0049, 213 after 0054, 215 after 0059), so no regressions. 0054 fixed the
-stack overflow test, 0050's regexp work the two large-image tests, 0051 plus the adapter's
-deterministic mode the WeakRef test, and 0058 the eval (completion value) and dynamic
-import (a runtime rejection) tests. Declarations, source, portable and worker-lifetime
-pass completely; sandbox 150/153; deterministic 28/30.
-Each failing test fails on every backend it runs on (worker, inline, remote):
-
-| test | why |
-| --- | --- |
-| ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
-| reports the fingerprint … | the test matches `/^quickjs-wasi /`. Inherent: a different engine must have a different fingerprint |
-
-**Since 0116 (re-run at 0127): 215 of 226.** The six worker-lifetime "process lifetime"
-tests fail too (Node and Bun × abort, timeout, close), because the fast search finished
-their workload. Their fixture (`test/fixtures/worker-process-exit.ts`) cancels a script
-that is meant to run long, `'a'.repeat(300000).indexOf('a'.repeat(10000) + 'b')`.
-Byte-at-a-time search made that quadratic, and seconds long. The one-byte search tests
-the needle's first and last byte together (D2250), so it rejects every position at once
-and the script completes in microseconds, before the cancel: "The script completed
-instead of being cancelled". Cancellation itself works. The same fixture with a busy loop
-(`let x = 0; for (;;) { x++; }`) is aborted, timed out and closed in 0.2–0.3 s on Node
-and on Bun, with the process exiting right after, as the tests require. These six are
-known and explained, not regressions; they pass again if pi's fixture uses a workload
-that is slow on every engine.
-
-**Since 0211:** js/pi/pi-tests.ts gives the copy of that fixture such a workload,
-`while (true) {}`, so the six run what they are about (prompt cancellation and prompt
-process exit) and pass on any machine. Before, one of them passed now and then on a
-loaded machine, where the search had not finished at the cancel. They are no longer in
-tests/pi's expected failures.
-
-### What differs for scripts
-
-Besides the failures above:
-- **Strict mode.** pi evaluates scripts sloppy on QuickJS. On djs they are strict: an
-  assignment to an undeclared variable is a ReferenceError instead of creating a global,
-  and writes to read-only properties throw. Model-written code rarely relies on either.
-- **Globals djs lacks** (quickjs-wasi has them; compared again after 0059):
-  `SharedArrayBuffer` (an ARCH non-goal). `Iterator` (D1510), the disposables (D1512),
-  WeakRef and FinalizationRegistry (D1513), the URI functions and `escape`/`unescape`
-  (0054), `eval`, the Function constructors and `queueMicrotask` (0059), `atob`, `btoa`
-  and `DOMException` (0084, D1840) are there now. The adapter supplies `performance`.
-- **Dynamic code.** `eval(x)` is always indirect eval (D014): it sees globals, not the
-  caller's locals. Functions made by `Function(...)` are strict like everything else, so
-  `Function("return this")()` is `undefined`, not the global object.
-- **Interrupt budgets.** A poll is 10,000 fuel. On a tight loop that is about as many polls
-  per second as QuickJS makes (34,000/s vs 32,000/s; a budget of 20,000 lasts 0.58 s vs
-  0.62 s). Code that allocates or calls builtins polls far more often than on QuickJS,
-  which does not count that work. A push loop with a budget of 20,000 lasts 1.2 s on djs
-  and 10 s on QuickJS; string keys with JSON take 3.4 s and 55 s. pi's prelude uses no polls
-  on djs (about 4 on QuickJS): it is not polled, so cold and warm starts count the same
-  (D1660).
-- **Memory limit.** djs caps its arena. Running out is a catchable
-  `InternalError: out of memory`, as on QuickJS. With a limit of 256 KB or less, `startVm`
-  rejects because the VM cannot be created; 512 KB is enough for pi's prelude.
-
-### The shape pi should adopt: prelude-next and continuation dumps (D2565, D2650)
-
-pi's prelude keeps the run's in-flight state itself: a `pending` map of resolve/reject
-functions per call, `nextId`, `finished`, the output counters, the store's contents and
-writes, and `then` reactions on the body's promise. A continuation dump, which writes the run as JavaScript, would have to
-write the prelude's internals too. tests/pi/prelude-next.ts is pi's prelude changed so
-that it keeps none of it (the changes are listed at its top):
-
-- tools and globals are engine async host calls: `tools.x(args)` serializes as before and
-  returns the promise of the adapter's async host function `call(kind, name, argsJson)`.
-  An open call is engine state, and a dump writes it as `$dump.pending(id, "call",
-  [kind, name, argsJson], {"id": n})`. The adapter numbers the calls for pi's protocol,
-  and that number is the call's state (D2770), so the dump carries it and the adapter's
-  own state has no call table;
-- the body's promise is the adapter's (a handle), and so are `finished`, the output
-  counters and the store. `bridge("output" | "store" | "load", ...)` answer: nothing, a
-  limit's message, or the stored JSON. When the body settles the adapter calls the
-  prelude's `encode`/`describe` and posts `done`; results are decoded by `decode`/`failure`;
-- no lockdown: the VM has frozen builtins (D2304, D2652), which do the lockdown's job (pi's
-  suite fails the same tests either way); the lockdown's accessors on builtins were
-  prelude state a dump cannot recreate.
-
-The adapter runs it with `startVm({ ..., prelude: PRELUDE_NEXT, shape: "next" })`; pi's
-messages and launchers stay as they are. A waiting session persists as a dump:
-
-```ts
-const saved = session.dumpSession();       // { dump: "\"djs-dump 2\"; ...", state: { ... } }: JSON
-// ... a restart ...
-const resumed = resumeFromDump(saved, { wasm, prelude: PRELUDE_NEXT, data, post, shouldInterrupt });
-resumed.openCalls();                       // the calls still waiting, as pi's call messages
-resumed.deliver({ type: "result", id, ok: true, payload, seq, now });
-```
-
-`dumpSession()` writes the VM as a dump (a plain Script, D2830: the script's functions,
-data, suspended activations as continuations, and open calls; the prelude's globals are
-host globals, written by name) and the adapter's state beside it (`finished`, the store,
-the output counters, the deterministic clock and sequence numbers). Each open call's pi
-id is in the dump, as its state: `$djs.resume(4, "call", ["call", "slow", "1"],
-{"id": 2})`. The adapter's host functions are named `bridge` and `call` (D2973); a dump
-that holds one, or a prelude global such as `tools`, writes it as `$djs.host(name)`, and
-the adapter answers with the prelude's own `bridge`/`call` or the global's value
-(D2971). `resumeFromDump` runs the host globals and prelude-next again (deterministic,
-D2262; or restores the prelude image), restores the adapter's state first (the dump's code
-runs while it loads), runs the dump and rebuilds the call table from the resumed calls'
-states. The open calls are not posted again: the host delivers a recorded result, issues
-the call again, or rejects it (pi's host is the `resume` hook here: the adapter cannot run
-tools). Writing a dump needs the dumper (the `dump` feature) and frozen builtins, which
-the `next` mode has; loading one needs neither. pi's other modes cannot dump.
-`dumpEveryIdle: true` dumps and resumes in a new instance at every idle point (D2651);
-pi's suite passes the same in all three modes (`node js/pi/pi-tests.ts`, `--next`, `--next
---dump-every-idle`: 215 of 226 at 0176, at 0195 with the call states and at 0204 with
-plain dumps, the same 11 failures as above), and js/test/pi-vm.test.ts runs every adapter
-test in each and the open-call policies through a real dump. A dump carries
-`Math.random`'s state where the run used it (`$djs.seed`, D2897, D2837), so a resumed
-deterministic run continues its sequence; one that never drew a number continues from the
-resumed session's own (deterministic) seed, as the uninterrupted run does. A call whose pi
-id is its call id has no state argument (D2838). What every load needs and is the same for the start is made with the prelude,
-in its image: the dump runtime with the hooks, and the host globals' values (0215). The
-adapter keeps up to two instances whose VM was disposed and gives the next VM one of them,
-made as new first: its memory restored to a new instance's, the rest zeroed (D3023;
-creating an instance was most of a start from a cached image). A load in pi's
-adapter costs ~0.23 ms at the median for small dumps; a dump costs ~0.3 ms.
-
-What pi would change to adopt it: take prelude-next's changes into its prelude (they are
-small and engine-neutral except the async host function), let the engine own call ids
-and the body's promise, and persist sessions as `{ dump, state }` instead of replaying
-results after a restart.
-
-### What pi would change to run on djs behind a flag
-
-1. An engine option (`engine: "quickjs" | "djs"`) that picks `startVm` (vm.ts or this
-   adapter) and the wasm loader (`loadQuickJSWasm` or djs's `loadModule`). The launchers,
-   `execution.ts`, the protocol and the prelude stay as they are. Ship `djs_wasm.wasm` and the
-   host files the adapter imports (js/src/{sandbox,wire,reader,layout.generated}.ts,
-   js/pi/{vm,engine,protocol}.ts).
-2. Replays must not mix engines. The fingerprints already differ. pi's fingerprint test would
-   accept either prefix.
-3. Optionally, durable runs through continuation dumps instead of replaying all results
-   after a restart: with prelude-next's shape (above).
-4. Optionally, for fast starts in the worker launcher: keep prelude images in the parent
-   thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
-   the prelude would let one image serve every tool table and store.
-5. The engine gaps found earlier are closed: eval's completion value and `import()` as a
-   runtime rejection (0058), stack overflow as a `RangeError` (0054, D013). Interpreter
-   speed still matters for builtin-heavy scripts (see below).
-
-### Numbers
-
-`node js/bench/pi.bench.ts`: djs through js/pi/vm.ts and quickjs-wasi 3.6.2 through pi's vm.ts,
-both on the calling thread with pi's prelude, tools answered in a microtask. Medians on
-an Apple M-series machine, node 25, djs-wasm `wasm` profile (opt-level s). At 0095
-(main after 0091, load about 7, so ±20%):
-
-| case | quickjs-wasi | djs, prelude image reused | djs, prelude run each time |
-| --- | ---: | ---: | ---: |
-| script start (`return 1`) | 3.9 ms | 1.0 ms | 7.0 ms |
-| tool-heavy script (61 calls, 120 KB of results) | 5.3 ms | 4.2 ms | 9.1 ms |
-
-On 0033's branch the tool-heavy row was 5.0 / 7.1 / 16.1 ms and the start 3.2 / 0.49 /
-9.8 ms; the interpreter and builtin work since (0063, 0080-0091) made the script part
-faster than quickjs-wasi.
-
-The tool-heavy script searches, reads 60 files in batches of 10 concurrent calls, splits
-and filters the lines, prints a table and stores a summary. With an image, djs starts
-several times faster than quickjs-wasi, because restoring an image is a copy plus a check.
-(At 0033: the script part was about 4x slower, opt-level 3 brought that row to 6.6 ms,
-and pi's whole test suite on djs took 29 s, 100 s without prelude images.)

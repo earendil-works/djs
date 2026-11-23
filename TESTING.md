@@ -203,8 +203,7 @@ Sources (about 230 cases at 0095, in `builtins/`, `codemode/`, `console/`, `dqui
    record them): text for the string tools, values built from the session's declared
    result types for MCP tools, fakes for `models`, `image` and `load`.
    `codemode-harvest/REDACTION.md` lists what was redacted per case. Every case was
-   reviewed by hand. pi's own codemode tests run on djs too (docs/host.md "pi's
-   own tests on djs").
+   reviewed by hand.
 2. dquickts' `tests/test_language.js`, `test_builtin.js`, `test_closure.js`,
    `test_loop.js` and `test_typescript.ts`, split into one case per test function
    (D1102).
@@ -656,8 +655,7 @@ codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
 GC stress, heap-image determinism and a dump at every idle point; the unsafe-heap build, which the shipped and slim modules use (D3100;
 verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet; the slim build's legs (below);
-the size budget (below); pi's tests on the slim module and in the adapter's next mode
-(both on the shipped, unchecked builds);
+the size budget (below);
 the merge drivers of derived files (below).
 The `test` and `test262` legs print the slowest tests. The always-run `targets` leg
 keeps what the manifests leave out of `cargo test` empty (D2790): no library has doctests
@@ -708,16 +706,14 @@ all of them:
 | class | leaves out | legs |
 |---|---|---|
 | `all` | nothing | the guide, djs-docs's tests |
-| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, the npm package, the codemode workloads, wire/reader cross-language, native vs wasm, pi's tests |
+| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, the npm package, the codemode workloads, wire/reader cross-language, native vs wasm |
 | `rust` | `nodocs`'s, and `js/` (but `js/src/layout.generated.ts`) and `examples/` | everything else |
 
 `scripts/` is in every class, so a change to the gate reruns every leg. Outside the
 repository, every leg's key has the toolchain (`rustc -vV`, `cargo -V`, node, python),
 the qjs binary (size and mtime; `$DJS_QJS`), vendor/test262's commit and local changes
-(`$DJS_TEST262`) and vendor/unicode's NormalizationTest.txt; pi's legs also have
-pi-private's commit, its local changes and its installed packages
-(`$PI_PRIVATE`, node_modules/.package-lock.json); the npm package's leg also has npm's
-version. A leg that reads something new outside
+(`$DJS_TEST262`) and vendor/unicode's NormalizationTest.txt; the npm package's leg also
+has npm's version. A leg that reads something new outside
 the repository adds it to `EXTERNALS` in scripts/gate.py.
 
 Why nothing the uncached gate caught can pass: a cached leg passed on a tree whose files
@@ -741,8 +737,6 @@ leg", and entries unused for 14 days are pruned on every run. `scripts/gate.sh
 
 `scripts/gate.sh --full` reads no cache and also runs the **full-only** legs, checks too
 slow for every merge:
-- pi's tests in the next mode with a dump and a resume at every idle point
-  (`scripts/pi-dump-every-idle.sh`, its own LTO build);
 - **test262 under GC stress** (D3440): the active group, eager and with lazy functions,
   collecting at every safepoint (`djs-test262 run --gc-stress`) in the debug build, where
   the heap checks its invariants at each collection (the builtin prefix's, D3290). The
@@ -817,9 +811,6 @@ lockdown. Everything above runs the full build. The slim build, natively in `tar
   groups and compares with tests/test262/expected-failures-slim.txt (update it with the
   same command and `--update`). The slim build has no `embed`, so no ES modules: its
   `no-modules` group skips the `module` and `dynamic-import` tests (D3230);
-- pi's codemode tests on djs-slim.wasm, with pi's prelude minus its lockdown on frozen
-  builtins: `DJS_WASM=target/djs-slim.wasm node js/pi/pi-tests.ts --no-lockdown --expected
-  tests/pi/slim-expected-failures.txt` (only new failures fail);
 - its size ratchet, `slim_ceiling_gzip` (`scripts/size/budget.py MODULE --slim`).
 
 A change that adds or removes a builtin in an omitted family updates

@@ -165,6 +165,19 @@ compatibility: kept), C12 (compat.rs goes, J2). Guide: js-api.md (callSite), dum
 (no dumper-less build). Checked: tsc, js tests on the dev module, djs-cli tests, clippy of
 the touched crates, djs-docs check.
 
+### 2026-11-23: merge 2 (J3a: js/pi)
+Removed js/pi (vm.ts, engine.ts, protocol.ts, pi-tests.ts), tests/pi, js/test/pi-vm and
+pi-pool, js/bench/pi.bench.ts, scripts/determinism/pi_polls.ts,
+scripts/dump-costs/pi-sessions.ts, scripts/pi-dump-every-idle.sh, the gate legs "pi tests
+(slim without lockdown)", "pi tests (next mode)" and the full-only "with a dump at every
+idle point", the gate's `pi` external, status.py's `pi` command and the pi/* rows of
+status.tsv, djs-docs's pi conformance line, the djs-cli heap test that built a pi session
+(from scripts/snapshot-research/src/pi.rs; a waiting VM keeps its own test). `fuel/slice-us`
+(limits.md) is now measured by js/bench/sandbox.bench.ts (`status.py startup`). Guide:
+pi.md rewritten around the durable code mode (the adapter, next mode and pi's test
+sections went). docs/host.md: its "pi codemode" section went. vm_from_bytes,
+djs_image_staging and vm_seal go with the ABI change (J5).
+
 ## Follow-ups
 
 ## Result

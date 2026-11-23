@@ -68,3 +68,13 @@ const script = "let total = 0; for (let i = 0; i < data.items.length; i++) total
 const data = { items: Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `item ${i}`, price: i * 0.5 })) };
 const quiet = await Sandbox.create({ module, console: { log() {}, info() {}, warn() {}, error() {} } });
 console.log(`1000-item tool result in, loop, object out: ${median(() => void quiet.run(script, { data }), 100).toFixed(1)} us`);
+// One fuel slice of 10,000 (a host's poll interval, docs/guide/limits.md) in a tight loop:
+// the time between two returns to the host.
+const SLICES = 2_000;
+const looping = new Sandbox({ module, fuelSlice: 10_000, maxFuel: SLICES * 10_000 });
+const loop = median(() => {
+  try {
+    looping.run("for (;;) {}");
+  } catch {}
+}, 9);
+console.log(`fuel slice: ${(loop / SLICES).toFixed(2)} us (10,000 fuel of a tight loop)`);
