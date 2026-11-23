@@ -1366,7 +1366,7 @@ impl<'a> Dumper<'a> {
         let i = self.roots.len();
         if value.is_uninitialized() {
             self.refuse(name.clone(), "a binding before its declaration ran (TDZ)");
-        } else if let Some(n) = self.note(value, || name.clone())
+        } else if let Some(n) = self.note(value, &|| name.clone())
             && self.nodes[n].root.is_none()
         {
             self.nodes[n].root = Some(i);
@@ -1381,16 +1381,9 @@ impl<'a> Dumper<'a> {
     }
 
     /// Records a reference to `v`; its node, if it is one the dump writes. (`path` is
-    /// called at most once; one copy of the body for every caller's closure.)
+    /// called only where it is needed: a new node, a refusal.)
     #[cfg_attr(djs_optsize, optimize(size))]
-    fn note(&mut self, v: Value, path: impl FnOnce() -> String) -> Option<usize> {
-        let mut path = Some(path);
-        self.note_dyn(v, &mut || path.take().map(|p| p()).unwrap_or_default())
-    }
-
-    #[inline(never)]
-    #[cfg_attr(djs_optsize, optimize(size))]
-    fn note_dyn(&mut self, v: Value, path: &mut dyn FnMut() -> String) -> Option<usize> {
+    fn note(&mut self, v: Value, path: &dyn Fn() -> String) -> Option<usize> {
         match v.kind() {
             Kind::Object | Kind::Symbol | Kind::Internal => {}
             Kind::BigInt
@@ -1464,22 +1457,8 @@ impl<'a> Dumper<'a> {
     }
 
     #[cfg_attr(djs_optsize, optimize(size))]
-    fn edge(&mut self, from: usize, v: Value, path: impl FnOnce() -> String) -> Option<usize> {
-        let mut path = Some(path);
-        self.edge_dyn(from, v, &mut || {
-            path.take().map(|p| p()).unwrap_or_default()
-        })
-    }
-
-    #[inline(never)]
-    #[cfg_attr(djs_optsize, optimize(size))]
-    fn edge_dyn(
-        &mut self,
-        from: usize,
-        v: Value,
-        path: &mut dyn FnMut() -> String,
-    ) -> Option<usize> {
-        let n = self.note_dyn(v, path)?;
+    fn edge(&mut self, from: usize, v: Value, path: &dyn Fn() -> String) -> Option<usize> {
+        let n = self.note(v, path)?;
         self.nodes[from].edges.push_out(n);
         Some(n)
     }
@@ -1548,11 +1527,11 @@ impl<'a> Dumper<'a> {
             let path = cat!(self.nodes[n].path, self.key_path(k));
             match prop {
                 Some(Property::Data { value, .. }) => {
-                    self.edge(n, value, || path);
+                    self.edge(n, value, &|| path.clone());
                 }
                 Some(Property::Accessor { getter, setter, .. }) => {
-                    self.edge(n, getter, || cat!("get ", path));
-                    self.edge(n, setter, || cat!("set ", path));
+                    self.edge(n, getter, &|| cat!("get ", path));
+                    self.edge(n, setter, &|| cat!("set ", path));
                 }
                 None => {}
             }
@@ -1561,7 +1540,7 @@ impl<'a> Dumper<'a> {
             && !self.default_proto(o, Some(p))
         {
             let path = cat!(self.nodes[n].path, ".[[Prototype]]");
-            self.edge(n, Value::object(p), || path);
+            self.edge(n, Value::object(p), &|| path.clone());
         }
     }
 
@@ -1571,7 +1550,7 @@ impl<'a> Dumper<'a> {
     fn key_edge(&mut self, n: usize, k: Atom) {
         if let Some(s) = self.h.atom_symbol(k) {
             let base = self.nodes[n].path.clone();
-            if let Some(c) = self.edge(n, Value::symbol(s), || cat!(base, "<key>")) {
+            if let Some(c) = self.edge(n, Value::symbol(s), &|| cat!(base, "<key>")) {
                 self.nodes[c].refs += 1;
             }
         }
@@ -1633,7 +1612,7 @@ impl<'a> Dumper<'a> {
             let inner: Value = h.arena().get(b, BoxCell::VALUE);
             // (In its TDZ: its factory declares it after its `return`.)
             if !inner.is_uninitialized() {
-                self.edge(n, inner, || path);
+                self.edge(n, inner, &|| path.clone());
             }
             return;
         }
@@ -1647,7 +1626,7 @@ impl<'a> Dumper<'a> {
                 && !self.is_brand(*k)
             {
                 let path = cat!(path, ".", atom_text(h, *k));
-                self.edge(n, *value, || path);
+                self.edge(n, *value, &|| path.clone());
             }
         }
         self.nodes[n].privates = privates;
@@ -1659,7 +1638,7 @@ impl<'a> Dumper<'a> {
                 let el: Ref = h.arena().get(o.offset(), ObjectCell::ELEMENTS);
                 for i in 0..len {
                     let v = array_element(h, o, el, i);
-                    self.edge(n, v, || cat!(path, "[", i, "]"));
+                    self.edge(n, v, &|| cat!(path, "[", i, "]"));
                 }
                 // Sparse elements, accessors among the elements and named properties.
                 let dense = el.get().map_or(0, |el| h.value_array_len(el));
@@ -1674,9 +1653,9 @@ impl<'a> Dumper<'a> {
                 let map = h.object_class(o) == ObjectClass::Map;
                 for (i, (k, v)) in h.collection_entries_list(o).into_iter().enumerate() {
                     let p = cat!(path, "<entries>[", i, "]");
-                    self.edge(n, k, || p.clone());
+                    self.edge(n, k, &|| p.clone());
                     if map {
-                        self.edge(n, v, || p);
+                        self.edge(n, v, &|| p.clone());
                     }
                 }
                 self.props(n, o, &|_, _| false);
@@ -1696,12 +1675,12 @@ impl<'a> Dumper<'a> {
                     return;
                 }
                 let r = h.object_slot(o, 1);
-                self.edge(n, r, || cat!(path, "<result>"));
+                self.edge(n, r, &|| cat!(path, "<result>"));
                 self.props(n, o, &|_, _| false);
             }
             ObjectClass::BoundFunction => {
-                self.edge(n, h.object_slot(o, 0), || cat!(path, "<target>"));
-                self.edge(n, h.object_slot(o, 1), || cat!(path, "<this>"));
+                self.edge(n, h.object_slot(o, 0), &|| cat!(path, "<target>"));
+                self.edge(n, h.object_slot(o, 1), &|| cat!(path, "<this>"));
                 if let Some(args) = h.object_slot(o, 2).as_object() {
                     let len = h.array_length(args);
                     let el: Ref = h.arena().get(args.offset(), ObjectCell::ELEMENTS);
@@ -1709,7 +1688,7 @@ impl<'a> Dumper<'a> {
                         let v = el
                             .get()
                             .map_or(Value::UNDEFINED, |el| h.value_array_get(el, i));
-                        self.edge(n, v, || cat!(path, "<args>[", i, "]"));
+                        self.edge(n, v, &|| cat!(path, "<args>[", i, "]"));
                     }
                 }
                 self.props(n, o, &|k, _| k == atoms::NAME || k == atoms::LENGTH);
@@ -1722,7 +1701,7 @@ impl<'a> Dumper<'a> {
             }
             ObjectClass::TypedArray | ObjectClass::DataView => {
                 let b = h.object_slot(o, 0);
-                self.edge(n, b, || cat!(path, ".buffer"));
+                self.edge(n, b, &|| cat!(path, ".buffer"));
                 self.props(n, o, &|_, i| i.is_some());
             }
             ObjectClass::HostFunction => {
@@ -1738,7 +1717,7 @@ impl<'a> Dumper<'a> {
                 self.nodes[n].fl = 0;
                 for i in 0..h.object_slot_count(o) {
                     let v = h.object_slot(o, i);
-                    self.edge(n, v, || cat!(path, "<", i, ">"));
+                    self.edge(n, v, &|| cat!(path, "<", i, ">"));
                 }
             }
             ObjectClass::ArrayIterator
@@ -1754,7 +1733,7 @@ impl<'a> Dumper<'a> {
                                 .and_then(|k| h.get_own_property(o, k))
                                 .and_then(|p| p.value())
                                 .unwrap_or(Value::UNDEFINED);
-                            self.edge(n, v, || cat!(path, "[", i, "]"));
+                            self.edge(n, v, &|| cat!(path, "[", i, "]"));
                         }
                     }
                     None => self.refuse(path, "an arguments object that was changed"),
@@ -1762,8 +1741,8 @@ impl<'a> Dumper<'a> {
             }
             ObjectClass::Proxy => match (h.proxy_target(o), h.proxy_handler(o)) {
                 (Some(t), Some(hd)) => {
-                    self.edge(n, Value::object(t), || cat!(path, "<target>"));
-                    self.edge(n, Value::object(hd), || cat!(path, "<handler>"));
+                    self.edge(n, Value::object(t), &|| cat!(path, "<target>"));
+                    self.edge(n, Value::object(hd), &|| cat!(path, "<handler>"));
                 }
                 _ => self.refuse(path, "a revoked Proxy"),
             },
@@ -1835,7 +1814,7 @@ impl<'a> Dumper<'a> {
                         .as_object()
                         .is_some_and(|f| h.object_class(f) == ObjectClass::Function)
                 {
-                    self.edge(n, inner, || p);
+                    self.edge(n, inner, &|| p.clone());
                 }
                 continue;
             }
@@ -1851,7 +1830,7 @@ impl<'a> Dumper<'a> {
                 }
                 continue;
             }
-            self.edge(n, Value::internal(b), || p);
+            self.edge(n, Value::internal(b), &|| p.clone());
         }
         // The user globals its code reads by name are part of the dump.
         self.global_refs(t);
@@ -1868,11 +1847,11 @@ impl<'a> Dumper<'a> {
             let p = cat!(path, self.key_path(k));
             match h.get_own_property(o, k) {
                 Some(Property::Data { value, .. }) => {
-                    self.edge(n, value, || p);
+                    self.edge(n, value, &|| p.clone());
                 }
                 Some(Property::Accessor { getter, setter, .. }) => {
-                    self.edge(n, getter, || cat!("get ", p));
-                    self.edge(n, setter, || cat!("set ", p));
+                    self.edge(n, getter, &|| cat!("get ", p));
+                    self.edge(n, setter, &|| cat!("set ", p));
                 }
                 None => {}
             }
@@ -1883,7 +1862,7 @@ impl<'a> Dumper<'a> {
             if let Some(p) = proto
                 && (kind == func_flags::KIND_DERIVED_CTOR || !self.default_proto(o, Some(p)))
             {
-                self.edge(n, Value::object(p), || cat!(path, ".[[Prototype]]"));
+                self.edge(n, Value::object(p), &|| cat!(path, ".[[Prototype]]"));
             }
         } else if !self.default_proto(o, proto) && kind != func_flags::KIND_ASYNC_BODY {
             // (A codemode body is made with `Function.prototype` and only its run holds

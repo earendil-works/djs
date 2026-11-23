@@ -307,9 +307,9 @@ impl Dumper<'_> {
             let promise = crate::interp::run::host_call_cell(h, id)
                 .map_or(Value::UNDEFINED, |c| h.arena().get(c, HostCall::PROMISE));
             for (i, &a) in info.args.iter().enumerate() {
-                self.note(a, || cat!(path, ".args[", i, "]"));
+                self.note(a, &|| cat!(path, ".args[", i, "]"));
             }
-            self.note(promise, || path.clone());
+            self.note(promise, &|| path.clone());
             let mut state = None;
             if let Some(&(_, json)) = opts.call_states.iter().find(|(c, _)| *c == id) {
                 match crate::vm::dump_state::check(json) {
@@ -334,7 +334,7 @@ impl Dumper<'_> {
             }
         }
         for &(name, v) in opts.handles {
-            self.note(v, || cat!("<handle ", name, ">"));
+            self.note(v, &|| cat!("<handle ", name, ">"));
             self.fl.handles.push_out((String::from(name), v));
         }
     }
@@ -376,10 +376,10 @@ impl Dumper<'_> {
                     }
                 }
                 let p = cat!(path, "<reaction ", j, ">");
-                self.edge(n, cap, || cat!(p, ".promise"));
-                self.edge(n, f, || cat!(p, ".onFulfilled"));
+                self.edge(n, cap, &|| cat!(p, ".promise"));
+                self.edge(n, f, &|| cat!(p, ".onFulfilled"));
                 if rj != f {
-                    self.edge(n, rj, || cat!(p, ".onRejected"));
+                    self.edge(n, rj, &|| cat!(p, ".onRejected"));
                 }
                 reactions.push_out(Reaction {
                     cap,
@@ -568,7 +568,7 @@ impl Dumper<'_> {
             suspend::COMPLETED => {
                 // A finished generator of the same kind and prototype.
                 let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
-                self.edge(n, proto, || cat!(path, ".[[Prototype]]"));
+                self.edge(n, proto, &|| cat!(path, ".[[Prototype]]"));
                 None
             }
             suspend::START => {
@@ -591,10 +591,10 @@ impl Dumper<'_> {
                     .get(s.hp as usize + crate::interp::frame::ARGC as usize)
                     .and_then(|v| v.as_int())
                     .unwrap_or(0) as usize;
-                self.edge(n, fp(0), || cat!(path, "<function>"));
-                self.edge(n, fp(1), || cat!(path, "<this>"));
+                self.edge(n, fp(0), &|| cat!(path, "<function>"));
+                self.edge(n, fp(1), &|| cat!(path, "<this>"));
                 for i in 0..argc {
-                    self.edge(n, fp(2 + i), || cat!(path, "<args>[", i, "]"));
+                    self.edge(n, fp(2 + i), &|| cat!(path, "<args>[", i, "]"));
                 }
                 self.check_generator_proto(&path, g, fp(0));
                 None
@@ -608,7 +608,7 @@ impl Dumper<'_> {
             self.check_generator_proto(&path, g, runs);
             // Its prototype is its continuation's (`Act::proto`).
             let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
-            self.edge(n, proto, || cat!(path, ".[[Prototype]]"));
+            self.edge(n, proto, &|| cat!(path, ".[[Prototype]]"));
         }
         // What `super[...]` read before the site: its continuation reads `super` again.
         let mut super_read: Vec<(bool, Value, Value)> = Vec::new();
@@ -621,16 +621,16 @@ impl Dumper<'_> {
                 .unwrap_or(0) as usize;
             let lp = hp + crate::interp::frame::HEADER as usize;
             let fp = |i: usize| s.frame.get(i).copied().unwrap_or(Value::UNDEFINED);
-            self.edge(n, fp(0), || cat!(path, "<function>"));
-            self.edge(n, fp(1), || cat!(path, "<this>"));
+            self.edge(n, fp(0), &|| cat!(path, "<function>"));
+            self.edge(n, fp(1), &|| cat!(path, "<this>"));
             for i in 0..argc {
-                self.edge(n, fp(2 + i), || cat!(path, "<args>[", i, "]"));
+                self.edge(n, fp(2 + i), &|| cat!(path, "<args>[", i, "]"));
             }
             // Parameters: written as bindings too (and past the arguments given,
             // assigned since).
             for (i, slot) in site.args.iter().enumerate() {
                 if let Slot::Binding { name, .. } = slot {
-                    self.edge(n, fp(2 + i), || cat!(path, ".", name));
+                    self.edge(n, fp(2 + i), &|| cat!(path, ".", name));
                 }
             }
             for (i, slot) in site.locals.iter().enumerate() {
@@ -659,7 +659,7 @@ impl Dumper<'_> {
                 }
                 // A box's path ends in `~name`: its factory's variable.
                 let sep = if v.as_internal().is_some() { "~" } else { "." };
-                if let Some(b) = self.edge(n, v, || cat!(path, sep, name))
+                if let Some(b) = self.edge(n, v, &|| cat!(path, sep, name))
                     && v.as_internal().is_some()
                 {
                     self.nodes[b].frame_box = true;
@@ -696,7 +696,7 @@ impl Dumper<'_> {
                         // The key iterator: its object (its keys are strings).
                         match for_in_parts(h, v) {
                             Some((target, _)) => {
-                                self.edge(n, target, || cat!(path, "<for-in.target>"));
+                                self.edge(n, target, &|| cat!(path, "<for-in.target>"));
                             }
                             None => self.refuse(path.clone(), "a for-in loop over a Proxy"),
                         }
@@ -713,7 +713,7 @@ impl Dumper<'_> {
                     }
                     _ => {}
                 }
-                let e = self.edge(n, v, || cat!(path, "<", slot.name, ">"));
+                let e = self.edge(n, v, &|| cat!(path, "<", slot.name, ">"));
                 if slot.construct() == "using.record"
                     && let Some(e) = e
                 {
@@ -733,14 +733,14 @@ impl Dumper<'_> {
                 }
             }
             if s.kind == suspend::ASYNC {
-                self.edge(n, s.promise, || cat!(path, "<promise>"));
+                self.edge(n, s.promise, &|| cat!(path, "<promise>"));
             }
             for (k, &r) in s.queue.iter().enumerate() {
                 if let Some(r) = r.as_object() {
-                    self.edge(n, h.object_slot(r, 1), || {
+                    self.edge(n, h.object_slot(r, 1), &|| {
                         cat!(path, "<queue ", k, ">.value")
                     });
-                    self.edge(n, h.object_slot(r, 2), || cat!(path, "<queue ", k, ">"));
+                    self.edge(n, h.object_slot(r, 2), &|| cat!(path, "<queue ", k, ">"));
                 }
             }
         }
@@ -772,7 +772,7 @@ impl Dumper<'_> {
                     "a super base or this the method no longer has",
                 );
             }
-            self.edge(n, p, || cat!(path, "<super>"));
+            self.edge(n, p, &|| cat!(path, "<super>"));
             self.fl.supers.push_out((self.fl.acts.len(), p));
         }
         self.fl.acts.push(Act {
@@ -983,10 +983,10 @@ impl Dumper<'_> {
                     .async_from_state(clo.1)
                     .unwrap_or([Value::UNDEFINED; FROM_ASYNC_SLOTS as usize])
                 {
-                    self.edge(n, v, || cat!(path, "<fromAsync>"));
+                    self.edge(n, v, &|| cat!(path, "<fromAsync>"));
                 }
             } else {
-                self.edge(n, clo.1, || cat!(path, "<data>"));
+                self.edge(n, clo.1, &|| cat!(path, "<data>"));
             }
             self.nodes[n].fl = self.fl.clos.len();
             self.fl.clos.push_out(Clo {
@@ -999,8 +999,8 @@ impl Dumper<'_> {
         let Some((it, next)) = self.runtime_from_sync(o) else {
             return false;
         };
-        self.edge(n, it, || cat!(path, "<iterator>"));
-        self.edge(n, next, || cat!(path, "<next>"));
+        self.edge(n, it, &|| cat!(path, "<iterator>"));
+        self.edge(n, next, &|| cat!(path, "<next>"));
         self.nodes[n].fl = 0;
         true
     }
@@ -1015,7 +1015,7 @@ impl Dumper<'_> {
             RESOLVE | REJECT | ALL_ELEMENT | SETTLED_FULFILLED | SETTLED_REJECTED | ANY_REJECT
             | THEN_FINALLY | CATCH_FINALLY | VALUE_THUNK | THROWER | FROM_SYNC_UNWRAP
             | FROM_SYNC_CLOSE => {
-                self.edge(n, data, || cat!(path, "<data>"));
+                self.edge(n, data, &|| cat!(path, "<data>"));
             }
             // Array.fromAsync waiting: its state, which `$djs.fromAsync` takes (0215).
             FROM_ASYNC_FULFILLED | FROM_ASYNC_REJECTED => match data.as_object() {
@@ -1029,7 +1029,7 @@ impl Dumper<'_> {
                         if i == 4 && from_sync {
                             continue;
                         }
-                        self.edge(n, v, || cat!(path, "<fromAsync ", i, ">"));
+                        self.edge(n, v, &|| cat!(path, "<fromAsync ", i, ">"));
                     }
                 }
                 _ => self.refuse(path, "an internal function of a builtin"),
@@ -1049,17 +1049,17 @@ impl Dumper<'_> {
         let h = self.h;
         let path = self.nodes[n].path.clone();
         if h.object_class(o) == ObjectClass::ArrayIterator {
-            self.edge(n, h.object_slot(o, 0), || cat!(path, "<target>"));
+            self.edge(n, h.object_slot(o, 0), &|| cat!(path, "<target>"));
         } else if h.object_class(o) == ObjectClass::IteratorHelper {
             for i in 0..h.object_slot_count(o) {
-                self.edge(n, h.object_slot(o, i), || cat!(path, "<slot ", i, ">"));
+                self.edge(n, h.object_slot(o, i), &|| cat!(path, "<slot ", i, ">"));
             }
             if h.get_prototype_of(o).map(Value::object) != Some(helper_proto(h, o)) {
                 self.refuse(path.clone(), "an iterator with another prototype");
             }
         } else if h.object_class(o) == ObjectClass::RegExpStringIterator {
             // (Its string is a primitive.)
-            self.edge(n, h.object_slot(o, regexp::IT_REGEXP), || {
+            self.edge(n, h.object_slot(o, regexp::IT_REGEXP), &|| {
                 cat!(path, "<regexp>")
             });
             if h.get_prototype_of(o).map(Value::object)
@@ -1070,8 +1070,8 @@ impl Dumper<'_> {
         } else if let Some((entries, _)) = h.collection_iterator_position(o) {
             // (Written again if only the iterator holds the collection.)
             for (i, (k, v)) in h.collection_entries_of(entries).into_iter().enumerate() {
-                self.edge(n, k, || cat!(path, "<entries>[", i, "]"));
-                self.edge(n, v, || cat!(path, "<entries>[", i, "]"));
+                self.edge(n, k, &|| cat!(path, "<entries>[", i, "]"));
+                self.edge(n, v, &|| cat!(path, "<entries>[", i, "]"));
             }
         }
         let extra = self.h.own_keys(o).len();
