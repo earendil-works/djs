@@ -14162,7 +14162,10 @@ gzip (+334,691 B gzip, +77%; code 340 -> 643 KB gzip, most of it vm::dump). The 
 module (the dumper with the checks) was 1,893,434 / 778,007. `ceiling_gzip` in
 tests/scores/size.tsv becomes 768,597 (the measurement plus the 1 KB slack); the 1.5x budget
 (D020, D3510) no longer holds, so the ceiling is the limit and lowers by `--update` as
-before. Bringing the size down again is later work.
+before. Bringing the size down again is later work. tests/scores/codemode-memory.tsv
+(D3367, a gate input) is re-recorded on the new module: every row +192 KiB (idle 384 -> 576
+KiB, heavy 3,968 -> 4,160), the module's larger static data (initial memory 2 -> 4 pages),
+not an arena that moved.
 
 ## D3602: The npm package has one entry point (0.2.0)
 date: 2026-11-23 · by: pone (owner's decision) · issue: 0294
