@@ -65,14 +65,13 @@ fn the_sleep_example_dumps() {
     };
     let call = *vm.pending_host_calls().first().expect("the open sleep");
     let opts = super::dump::DumpOptions {
-        base: base(),
         host: &["console", "tools"],
         host_roots: &[],
         host_fn_name: &name,
         handles: &[("run", run)],
         call_states: &[(call, "{\"due\":1793822825106}")],
         source_refs: true,
-        base_names: None,
+        base_names: crate::vm::dump_harvest::base_names(),
         check: true,
     };
     let text = vm.dump(&opts, None).map_err(|e| e.message()).unwrap();
@@ -182,7 +181,7 @@ fn the_sleep_example_dumps() {
                 slept += 1;
                 if slept == 2 && dumped.is_none() {
                     let opts = super::dump::DumpOptions {
-                        base: base(),
+                        base_names: crate::vm::dump_harvest::base_names(),
                         host: &["console", "tools"],
                         host_fn_name: &name,
                         source_refs: true,

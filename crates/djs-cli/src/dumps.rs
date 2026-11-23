@@ -358,7 +358,6 @@ pub fn dump_names(
         .collect();
     let states: Vec<(u32, &str)> = states.iter().map(|(id, s)| (*id, s.as_str())).collect();
     let opts = DumpOptions {
-        base: djs_prelude::BASE,
         host: HOST_GLOBALS,
         host_roots: &[],
         host_fn_name: &name,
@@ -367,10 +366,10 @@ pub fn dump_names(
         // `djs run`: the body by reference, `djs resume` reads it from its path again
         // (D2882); the REPL writes its inputs' text (a dump that stands alone).
         source_refs,
-        base_names: Some(djs_core::vm::dump::BaseNames {
+        base_names: djs_core::vm::dump::BaseNames {
             builtins: djs_prelude::BASE_NAMES,
             globals: djs_prelude::BASE_GLOBALS,
-        }),
+        },
         check: true,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())

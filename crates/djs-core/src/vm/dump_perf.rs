@@ -74,12 +74,11 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     // The api is the dump's completion value (D2895).
     let handles = [("run", api)];
     let opts = DumpOptions {
-        base: base(),
         host_fn_name: &host_fn_name,
         handles: &handles,
         check: std::env::var("DJS_DUMP_PERF_CHECK").map_or(true, |v| v != "0"),
         // As the hosts that dump have it (djs-prelude's `BASE_NAMES`).
-        base_names: Some(super::dump_harvest::base_names()),
+        base_names: crate::vm::dump_harvest::base_names(),
         ..Default::default()
     };
     let skip = std::env::var("DJS_DUMP_PERF_SKIP").unwrap_or_default();
@@ -147,6 +146,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     let Some((b, api)) = loaded else { return };
     let handles = [("run", api)];
     let opts = DumpOptions {
+        base_names: crate::vm::dump_harvest::base_names(),
         handles: &handles,
         ..opts
     };

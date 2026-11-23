@@ -370,15 +370,14 @@ impl Session {
         let handles = [("run", api)];
         let text = self.vm.dump(
             &DumpOptions {
-                base: djs_prelude::BASE,
                 host_fn_name: &host_fn_name,
                 handles: &handles,
                 // The case's function by reference (D2882): the corpus measures it.
                 source_refs: true,
-                base_names: Some(djs_core::vm::dump::BaseNames {
+                base_names: djs_core::vm::dump::BaseNames {
                     builtins: djs_prelude::BASE_NAMES,
                     globals: djs_prelude::BASE_GLOBALS,
-                }),
+                },
                 ..DumpOptions::default()
             },
             None,

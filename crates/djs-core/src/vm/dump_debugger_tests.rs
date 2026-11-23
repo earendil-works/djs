@@ -117,10 +117,9 @@ fn straight(src: &str) -> (Vec<String>, usize) {
 
 fn dump(vm: &Vm) -> String {
     let opts = super::dump::DumpOptions {
-        base: &[],
         host: &["debugger", "print"],
         host_fn_name: &host_fn_name,
-        base_names: Some(super::dump_harvest::base_names()),
+        base_names: crate::vm::dump_harvest::base_names(),
         ..Default::default()
     };
     vm.dump(&opts, None)

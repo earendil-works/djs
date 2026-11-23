@@ -153,17 +153,16 @@ pub fn dump(src: &str, nth: usize, ts: bool) -> String {
                 let roots = [("console", Value::object(console))];
                 let handles = [("run", run)];
                 let opts = DumpOptions {
-                    base: djs_prelude::BASE,
                     host: &["console", "debugger"],
                     host_roots: &roots,
                     host_fn_name: &name,
                     handles: &handles,
                     call_states: &[],
                     source_refs: true,
-                    base_names: Some(BaseNames {
+                    base_names: BaseNames {
                         builtins: djs_prelude::BASE_NAMES,
                         globals: djs_prelude::BASE_GLOBALS,
-                    }),
+                    },
                     check: true,
                 };
                 return match vm.dump(&opts, None) {

@@ -238,7 +238,7 @@ fn show_maps() {
 #[test]
 fn dumps_need_an_idle_vm() {
     let opts = super::dump::DumpOptions {
-        base: base(),
+        base_names: crate::vm::dump_harvest::base_names(),
         host_fn_name: &host_fn_name,
         ..Default::default()
     };
@@ -324,7 +324,7 @@ fn the_report_names_where_activations_stopped() {
         Status::Idle | Status::Done(_)
     ));
     let opts = super::dump::DumpOptions {
-        base: base(),
+        base_names: crate::vm::dump_harvest::base_names(),
         host: &["later", "print"],
         host_fn_name: &host_fn_name,
         ..Default::default()
@@ -461,14 +461,13 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
     }
     let handles = [("run", vm.heap().get_handle(run.unwrap()))];
     let opts = super::dump::DumpOptions {
-        base: base(),
         host: &["console", "tools", "print", "later"],
         host_roots: &[],
         host_fn_name: &host_fn_name,
         handles: &handles,
         call_states: &[],
         source_refs: false,
-        base_names: None,
+        base_names: crate::vm::dump_harvest::base_names(),
         check: true,
     };
     let d = vm.dump_report(&opts, None).map_err(|e| e.message());
@@ -804,14 +803,13 @@ fn write_golden_dumps() {
             let run = run.map_or(Value::UNDEFINED, |h| vm.heap().get_handle(h));
             let handles = [("run", run)];
             let opts = super::dump::DumpOptions {
-                base: base(),
                 host: GOLDEN_HOST,
                 host_roots: &[],
                 host_fn_name: &host_fn_name,
                 handles: if body { &handles } else { &[] },
                 call_states: &[],
                 source_refs: false,
-                base_names: None,
+                base_names: crate::vm::dump_harvest::base_names(),
                 check: true,
             };
             let text = match vm.dump(&opts, None) {
@@ -1081,10 +1079,9 @@ fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
 fn plain_dump(vm: &Vm) -> Result<String, String> {
     // (The base's names as hosts that dump have them, D3020: the base is not read.)
     let opts = super::dump::DumpOptions {
-        base: &[],
         host: &["console", "tools", "print", "later"],
         host_fn_name: &host_fn_name,
-        base_names: Some(super::dump_harvest::base_names()),
+        base_names: crate::vm::dump_harvest::base_names(),
         ..Default::default()
     };
     vm.dump(&opts, None).map_err(|e| e.message())

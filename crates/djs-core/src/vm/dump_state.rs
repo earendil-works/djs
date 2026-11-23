@@ -293,7 +293,7 @@ mod round_trip {
 
     fn dump(vm: &Vm, states: &[(u32, &str)]) -> Result<String, String> {
         let opts = DumpOptions {
-            base: base(),
+            base_names: crate::vm::dump_harvest::base_names(),
             host: &["later"],
             host_fn_name: &name,
             call_states: states,

@@ -180,7 +180,7 @@ fn load(vm: &mut Vm, text: &str) -> String {
 fn dump(vm: &Vm, names: Option<&[&str]>) -> Result<String, DumpError> {
     vm.dump(
         &DumpOptions {
-            base: base(),
+            base_names: crate::vm::dump_harvest::base_names(),
             host: &[],
             ..Default::default()
         },
@@ -361,7 +361,7 @@ fn function_scope_bindings_by_box() {
     let text = a
         .dump_values(
             &DumpOptions {
-                base: base(),
+                base_names: crate::vm::dump_harvest::base_names(),
                 host: &[],
                 ..Default::default()
             },
@@ -433,7 +433,7 @@ fn captured_host_values_are_the_host_s() {
     let text = a
         .dump(
             &DumpOptions {
-                base: base(),
+                base_names: crate::vm::dump_harvest::base_names(),
                 host: &["tools"],
                 ..Default::default()
             },
@@ -483,7 +483,7 @@ fn host_functions_are_written_by_identity_not_binding() {
     let text = a
         .dump(
             &DumpOptions {
-                base: base(),
+                base_names: crate::vm::dump_harvest::base_names(),
                 host_roots: &[("sdk", Value::object(sdk))],
                 host_fn_name: &binding_name,
                 ..Default::default()

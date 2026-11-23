@@ -1142,17 +1142,16 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
         }
         // The base's names are the module's own (built with it): the dumper needs no base.
         let opts = djs_core::vm::dump::DumpOptions {
-            base: &[],
             host: &host,
             host_roots: &roots,
             host_fn_name: &host_fn_name,
             handles: &handles,
             call_states: &call_states,
             source_refs: slot.source_refs,
-            base_names: Some(djs_core::vm::dump::BaseNames {
+            base_names: djs_core::vm::dump::BaseNames {
                 builtins: djs_prelude::BASE_NAMES,
                 globals: djs_prelude::BASE_GLOBALS,
-            }),
+            },
             check: true,
         };
         match slot

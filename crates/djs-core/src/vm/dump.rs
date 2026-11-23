@@ -71,8 +71,6 @@ fn dump_options(typescript: bool) -> crate::compiler::CompileOptions<'static> {
 /// What [`Vm::dump`] needs besides the VM.
 #[derive(Clone, Copy)]
 pub struct DumpOptions<'a> {
-    /// The base image the VM was made from: builtins are named by their paths on it.
-    pub base: &'a [u8],
     /// Globals the host defines again in every VM it loads a dump into (`console`,
     /// `tools`): never dumped. Each one's value is a host root named by the global's name
     /// (see `host_roots`), unless it is a host function or named otherwise.
@@ -96,11 +94,9 @@ pub struct DumpOptions<'a> {
     /// Write a codemode body's origin as `$djs.source(name, hash, params)`, a reference
     /// the host resolves to the script it ran (D2882), instead of its text.
     pub source_refs: bool,
-    /// What a dump needs of the base, made when the base image was built (djs-prelude's
-    /// `BASE_NAMES` and `BASE_GLOBALS` for its `BASE`): with them `base` may be empty. Without
-    /// them the dump reads `base`, a copy of it and a walk for its builtins' paths: most
-    /// of a small dump's cost in a host that dumps each VM once (pi, 0215).
-    pub base_names: Option<BaseNames<'static>>,
+    /// What a dump needs of the base the VM was made from, made when the base image was
+    /// built (djs-prelude's `BASE_NAMES` and `BASE_GLOBALS` for its `BASE`).
+    pub base_names: BaseNames<'static>,
     /// Check the dump before returning it (D2888): compile the written text and refuse a
     /// function whose names would resolve to other bindings after the load. On by default;
     /// a host may turn it off to save its cost (~40% of a dump).
@@ -113,10 +109,10 @@ pub use super::script_hash;
 #[derive(Clone, Copy)]
 pub struct BaseNames<'a> {
     /// Every builtin [`super::registry::reachable_names`] finds in the base, with its path,
-    /// sorted by cell (else the dump sorts a copy).
+    /// sorted by cell.
     pub builtins: &'a [(u32, &'a str)],
     /// The base global object's own properties ([`super::registry::base_globals`]),
-    /// sorted by atom (else the dump searches them).
+    /// sorted by atom.
     pub globals: &'a [(u32, &'a str, u64, u8)],
 }
 
@@ -127,14 +123,16 @@ fn no_host_fn_name(_: u32) -> Option<String> {
 impl Default for DumpOptions<'_> {
     fn default() -> Self {
         DumpOptions {
-            base: &[],
             host: &[],
             host_roots: &[],
             host_fn_name: &no_host_fn_name,
             handles: &[],
             call_states: &[],
             source_refs: false,
-            base_names: None,
+            base_names: BaseNames {
+                builtins: &[],
+                globals: &[],
+            },
             check: true,
         }
     }
@@ -372,77 +370,14 @@ struct Builtin<'t> {
     named: Named,
 }
 
-/// The base's builtins as the dumper names them, made once per VM (`Vm::base_names`): by
-/// canonical path (D2371), sorted by cell, and the base's global names. With the build's
-/// names (D3020) the list is theirs, borrowed: a fresh VM's first dump builds nothing
-/// for it (0215).
-#[derive(Default)]
-pub(crate) struct BaseTable {
-    list: alloc::borrow::Cow<'static, [(u32, &'static str)]>,
-    /// The walked paths, which `list` refers to by index (`""` borrowed for each).
-    owned: Vec<String>,
-    globals: Vec<alloc::borrow::Cow<'static, str>>,
-}
-
-impl BaseTable {
-    /// The table of `base`, from `names` (`DumpOptions::base_names`: its
-    /// [`super::registry::reachable_names`], made when the base was built) or a walk.
-    fn new(base: Option<&Heap>, base_end: u32, names: Option<BaseNames<'static>>) -> BaseTable {
-        let mut t = BaseTable::default();
-        match (names, base) {
-            (Some(n), _) => {
-                if n.builtins.windows(2).all(|w| w[0].0 < w[1].0)
-                    && n.builtins.last().is_none_or(|l| l.0 < base_end)
-                {
-                    t.list = alloc::borrow::Cow::Borrowed(n.builtins);
-                } else {
-                    let mut l: Vec<(u32, &'static str)> = n
-                        .builtins
-                        .iter()
-                        .copied()
-                        .filter(|b| b.0 < base_end)
-                        .collect();
-                    crate::sort::sort_by(&mut l, |a, b| a.0 < b.0);
-                    t.list = alloc::borrow::Cow::Owned(l);
-                }
-                t.globals = n
-                    .globals
-                    .iter()
-                    .map(|g| alloc::borrow::Cow::Borrowed(g.1))
-                    .collect();
-            }
-            (None, Some(base)) => {
-                let mut walked: Vec<(u32, String)> = super::registry::reachable_names(base)
-                    .into_iter()
-                    .filter(|b| b.0 < base_end)
-                    .collect();
-                crate::sort::sort_by(&mut walked, |a, b| a.0 < b.0);
-                // (The owned paths are found by index: `list` holds `""` for them.)
-                t.list = alloc::borrow::Cow::Owned(walked.iter().map(|w| (w.0, "")).collect());
-                t.owned = walked.into_iter().map(|w| w.1).collect();
-                if let Some(bg) = intrinsic(base, Intrinsic::Global).as_object() {
-                    t.globals = base
-                        .own_keys(bg)
-                        .into_iter()
-                        .map(|k| alloc::borrow::Cow::Owned(atom_text(base, k)))
-                        .collect();
-                }
-            }
-            (None, None) => {}
-        }
-        t
-    }
-
+impl BaseNames<'static> {
     /// The index of base cell `cell`'s builtin.
     fn index(&self, cell: u32) -> Option<usize> {
-        self.list.binary_search_by_key(&cell, |b| b.0).ok()
+        self.builtins.binary_search_by_key(&cell, |b| b.0).ok()
     }
 
-    fn get(&self, i: usize) -> Builtin<'_> {
-        let path = match self.owned.get(i) {
-            Some(p) => p.as_str(),
-            None => self.list[i].1,
-        };
+    fn get(&self, i: usize) -> Builtin<'static> {
+        let path = self.builtins[i].1;
         Builtin {
             path,
             named: named(path),
@@ -887,7 +822,7 @@ struct Dumper<'a> {
     base_end: u32,
     /// Builtin cells (below `BASE_END`), host values, nodes and root boxes by cell offset.
     cells: Index,
-    builtins: Arc<BaseTable>,
+    builtins: BaseNames<'static>,
     host_exprs: Vec<HostExpr>,
     host_names: Vec<&'a str>,
     globals: Vec<Global>,
@@ -983,24 +918,15 @@ impl<'a> Dumper<'a> {
         }
         let base_end = h.base_end();
         let names = opts.base_names;
-        if base_end == 0 || names.is_none() && opts.base.len() < base_end as usize {
+        if base_end == 0 || names.builtins.is_empty() {
             return Err(refuse("the VM was not made from this base image"));
         }
-        // Without the base's names, a copy of the base to read them from (and for the
-        // checker to compile the dump into).
-        let base = match names {
-            Some(_) => None,
-            None => Some(
-                Heap::from_bytes_trusted(opts.base.to_vec(), crate::heap::DEFAULT_LIMIT)
-                    .map_err(|_| refuse("the base image does not load"))?,
-            ),
-        };
         let mut d = Dumper {
             vm,
             h,
             base_end,
             cells: Index::default(),
-            builtins: Arc::default(),
+            builtins: names,
             host_exprs: Vec::new(),
             host_names: opts.host.to_vec(),
             globals: Vec::new(),
@@ -1040,35 +966,15 @@ impl<'a> Dumper<'a> {
             depth: 0,
             visited: 0,
         };
-        // Once per VM: the walk is most of a small dump's cost (D2626), and the table
-        // made from it (0198).
-        let fresh;
-        // (Kept by the base's length; names given count as their own.)
-        let key = names.map_or(opts.base.len(), |n| usize::MAX - n.builtins.len());
-        let table: &Arc<BaseTable> = match vm.base_names.get_or_init(|| {
-            (
-                key,
-                Arc::new(BaseTable::new(base.as_ref(), base_end, names)),
-            )
-        }) {
-            (k, t) if *k == key => t,
-            _ => {
-                fresh = Arc::new(BaseTable::new(base.as_ref(), base_end, names));
-                &fresh
-            }
-        };
-        d.builtins = table.clone();
-
         for &(name, v) in opts.host_roots {
             d.host_values(v, HostExpr::Root(host_ref(name)), 0);
         }
-        d.read_globals(base.as_ref(), names.map_or(&[][..], |n| n.globals));
-        d.scratch = base;
+        d.read_globals(names.globals);
         Ok(d)
     }
 
-    /// The heap the dump compiles texts into: the base's copy, or a fresh one when the
-    /// base was not copied (compiling needs only its atoms, D3020).
+    /// The heap the dump compiles texts into: a fresh one (compiling needs only its atoms,
+    /// D3020).
     pub(super) fn scratch_heap(&mut self) -> Option<&mut Heap> {
         if self.scratch.is_none() {
             self.scratch = Heap::new().ok();
@@ -1101,10 +1007,9 @@ impl<'a> Dumper<'a> {
     }
 
     /// The user's globals (what the base does not have), and the host's values by name.
-    fn read_globals(&mut self, base: Option<&Heap>, base_globals: &[(u32, &str, u64, u8)]) {
+    fn read_globals(&mut self, base_globals: &[(u32, &str, u64, u8)]) {
         let h = self.h;
         let g = self.vm.global();
-        let bg = base.and_then(|b| intrinsic(b, Intrinsic::Global).as_object());
         let lex = self.vm.global_lexical();
         for k in h.own_keys(lex) {
             if let Some(Property::Data { value, flags }) = h.get_own_property(lex, k) {
@@ -1116,10 +1021,6 @@ impl<'a> Dumper<'a> {
                 self.global_binding(k, value, decl);
             }
         }
-        let bkeys = match (base, bg) {
-            (Some(b), Some(bg)) => b.own_keys(bg),
-            _ => Vec::new(),
-        };
         for k in h.own_keys(g) {
             if h.atom_symbol(k).is_some() {
                 continue;
@@ -1129,24 +1030,15 @@ impl<'a> Dumper<'a> {
             };
             // The VM's atom table starts with the base's: the same keys, the same atoms.
             // (The name only for what is not the base's: most globals are, 0215.)
-            let same = match (base, bg) {
-                (Some(base), Some(bg)) => bkeys
-                    .contains(&k)
-                    .then(|| base.get_own_property(bg, k))
-                    .flatten()
-                    .map(|bp| bp == p),
-                // The base's properties as they were built: a value by its bits.
-                // (Sorted by atom when the build made them, else searched.)
-                _ => match base_globals.binary_search_by_key(&k.id(), |x| x.0) {
-                    Ok(i) => Some(i),
-                    Err(_) => base_globals.iter().position(|x| x.0 == k.id()),
-                }
+            // The base's properties as they were built: a value by its bits.
+            let same = base_globals
+                .binary_search_by_key(&k.id(), |x| x.0)
+                .ok()
                 .map(|i| base_globals[i])
                 .map(|(_, _, bits, fl)| {
                     matches!(p, Property::Data { value, flags }
                         if value.to_bits() == bits && flags.bits() == fl)
-                }),
-            };
+                });
             if same == Some(true) {
                 continue;
             }
@@ -2617,7 +2509,7 @@ impl<'a> Dumper<'a> {
                             u.name == *g
                                 && (u.decl != Decl::Var
                                     || !self.host_names.contains(&g.as_str())
-                                        && !self.builtins.globals.iter().any(|b| b == g))
+                                        && !self.builtins.globals.iter().any(|b| b.1 == g))
                         })
                     {
                         why.push_out(cat!(
@@ -5428,7 +5320,7 @@ mod check_tests {
         vm.call(f, g, &[]).unwrap();
         assert!(matches!(vm.run(u64::MAX), Status::Done(_)));
         let opts = DumpOptions {
-            base: base(),
+            base_names: crate::vm::dump_harvest::base_names(),
             host: &["console"],
             ..Default::default()
         };

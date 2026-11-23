@@ -333,7 +333,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
     let refs: Vec<(&str, Value)> = roots.iter().map(|(n, v)| (n.as_str(), *v)).collect();
     match vm.dump_values(
         &DumpOptions {
-            base: base(),
+            base_names: crate::vm::dump_harvest::base_names(),
             host: HOST,
             ..Default::default()
         },
@@ -669,7 +669,7 @@ fn idle_call(
                     // The api is the dump's completion value (D2895).
                     let handles = [("run", apiv)];
                     let opts = DumpOptions {
-                        base: base(),
+                        base_names: crate::vm::dump_harvest::base_names(),
                         host_fn_name: &host_fn_name,
                         handles: &handles,
                         ..Default::default()

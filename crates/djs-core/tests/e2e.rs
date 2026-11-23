@@ -162,7 +162,10 @@ fn dump_round_trip(vm: &Vm) -> Option<String> {
     // `console` is the host's: re-bound by name, its `log` written as `console.log`.
     let name = |id: u32| name(id).map(|n| format!("console.{n}"));
     let opts = DumpOptions {
-        base: djs_prelude::BASE,
+        base_names: djs_core::vm::dump::BaseNames {
+            builtins: djs_prelude::BASE_NAMES,
+            globals: djs_prelude::BASE_GLOBALS,
+        },
         host: &["console"],
         host_fn_name: &name,
         ..DumpOptions::default()
