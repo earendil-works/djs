@@ -132,6 +132,36 @@ them to append into one output buffer with borrowed slices throughout (a rewrite
 ~10 K lines, the writer's scheduling and placement included), which I will scope after
 steps 1-3 show how much of the size is that style rather than the logic.
 
+### 2026-11-23 pdiet: merge 1 (steps 0-2, mechanical), 767,666 -> 734,118 B gzip (-33.5 KB)
+
+Every commit's dumps are byte-identical to d481d1fe's over the corpus (3,777 dump files of
+`difftest --plain-out`, the clock's value normalized), the v2 programs' 196 and the sleep
+example's (work/scratch/0298/compare.sh, cmp.py).
+
+| commit | change | module gzip |
+| --- | --- | ---: |
+| base d481d1fe | | 767,666 |
+| DumpOptions::base goes (coordinator, from 0297's survey) | the dumper takes `BaseNames` (no `Option`): no base copy, no walk of it for the builtins' paths (`registry::reachable_names` is dead in the module), no per-VM `BaseTable` cache; tests take `dump_harvest::base_names()`, e2e djs-prelude's `BASE_NAMES` (djs-core's dev-dependency gets `names`) | 761,253 (-6.4 K) |
+| `cat!` | the dump's `cat!` is `crate::text::cat!` (a `put` per piece; no `&[&dyn Piece]` array and no `size_hint`) | 759,048 (-2.2 K) |
+| `note`/`edge` | one body behind `&mut dyn FnMut() -> String`; the generic wrappers only box the caller's closure (they were inlined into ~60 callers) | 752,562 (-6.5 K) |
+| no ordered maps or core sorts | `StrSet`/`StrMap` (dump.rs: strings over the `Index`, insertion order, FNV-1a with a collision list) for every BTreeSet/BTreeMap of the dumper and the writer (the insertion order never reaches the output: the iterated ones only fill hashes or bitmaps); `Key` sets by `Key::text`; `recs` a Vec by line; `lazy_globals` by `Index`; std's `sort_by_key` and every `crate::sort::sort_by` of dump code -> `sort::sort_cold` (one `dyn`-compared merge sort of indexes, the permutation as swaps) | 734,119 (-18.4 K) |
+
+(compile_cache.rs is left as it was: 0297 removes it.)
+
+Dump cost (scripts/dump-costs/instructions.sh, native release, all cases): base dump 16,490
+M instructions, load 12,766 M, re-dump 17,984 M; now dump 17,485 M (+6%), load 12,833 M,
+re-dump 18,793 M (+4.5%). Of the dump's +995 M, 460 M are `cat!` without sizing its string
+first (measured by putting `cat_sized` back); the rest is the hash sets, the dyn sort and
+`note` behind a dyn call. Left as is for now: step 3 takes the text scans out, which are
+most of a dump's time in the writer; measured again at the end.
+
+`#[optimize(size)]` measured again on this tree (variant.sh, optsize-files.py over
+vm/dump*.rs, compiler/smap*.rs, lazy.rs, registry.rs, compile_cache.rs): 661,320 -> 646,031,
+-15.3 KB: still pays (step 4).
+
+Guide: none of the pages' prose changed (dumps.md's dumper size is the status number
+`dump/extra-gzip`, which the status refresh measures).
+
 ## Follow-ups
 
 ## Result
