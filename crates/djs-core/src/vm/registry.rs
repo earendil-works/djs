@@ -1,11 +1,12 @@
-//! The builtin registry (D2371, issue 0145): stable ids for the builtin objects, functions
-//! and symbols of the realm and for the intrinsics, keyed by a spec-style path.
+//! The builtin registry (D2371, issue 0145, D3644): a name for every builtin object,
+//! function and symbol of the realm and every intrinsic, a spec-style path, and an id.
 //!
-//! The registry is a committed, append-only table (tests/builtins/registry.tsv): an id is
-//! never renumbered or reused, and a builtin that goes away keeps its line as a tombstone.
-//! It names builtins across djs builds, where offsets, intrinsic ids and the base image's
-//! layout change: snapshot exports (docs/goldilocks-snapshots.md, tier 2) and tools such as
-//! the REPL's `.heap` name a builtin by its id or path.
+//! The registry is a committed table (tests/builtins/registry.tsv), so that a change that
+//! adds or removes a builtin shows in review and every builtin is reachable by a path.
+//! An id is the entry's position in this tree's table: it names a builtin within a build
+//! (djs-prelude's base offsets, the REPL's `.heap`) and changes when builtins come or go;
+//! the path is the name that stays. `update` drops the entries that no longer resolve and
+//! appends the new builtins, keeping the order of the others.
 //!
 //! **Paths.** A *value* entry is a path that leads from a root to an object or symbol of the
 //! base realm, the way the spec writes intrinsics without the `%`s:
@@ -61,8 +62,6 @@ pub struct Entry {
     pub id: u32,
     pub kind: EntryKind,
     pub path: String,
-    /// A tombstone: why the builtin went away. Its id is never used again.
-    pub removed: Option<String>,
 }
 
 /// The registry.
@@ -72,34 +71,35 @@ pub struct Registry {
     pub entries: Vec<Entry>,
 }
 
-/// What [`Registry::update`] changed.
+/// What [`Registry::update`] changed: the entries added (their new ids) and the paths of
+/// the ones dropped.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Update {
     pub added: Vec<u32>,
-    pub removed: Vec<u32>,
+    pub removed: Vec<(EntryKind, String)>,
 }
 
 /// The header of the registry file.
 const HEADER: &str = "\
-# The builtin registry (D2371): stable ids for builtins, append-only. Never edit by hand:
-# `scripts/registry-update.sh` appends new builtins and tombstones removed ones. Columns:
-# id, kind (value: an object or symbol by path; intrinsic: by name), path, and for a
-# tombstone why it was removed. An id is never renumbered or reused (the gate checks it).
+# The builtin registry (D2371, D3644): every builtin and intrinsic by path. Never edit by
+# hand: `scripts/registry-update.sh` drops removed builtins and appends new ones. Columns:
+# id (the position, which names a builtin within one build), kind (value: an object or
+# symbol by path; intrinsic: by name), path.
 ";
 
 impl Registry {
-    /// Parses the registry file. Ids must be 0, 1, 2, ... in order, and no two live entries
-    /// of a kind may share a path.
+    /// Parses the registry file. Ids must be 0, 1, 2, ... in order, and no two entries of a
+    /// kind may share a path.
     pub fn parse(text: &str) -> Result<Registry, String> {
         let mut entries = Vec::new();
-        let mut live = BTreeSet::new();
+        let mut seen = BTreeSet::new();
         for (n, line) in text.lines().enumerate() {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
             let cols: Vec<&str> = line.split('\t').collect();
-            if !(3..=4).contains(&cols.len()) {
-                return Err(format!("line {}: expected 3 or 4 columns", n + 1));
+            if cols.len() != 3 {
+                return Err(format!("line {}: expected 3 columns", n + 1));
             }
             let id: u32 = cols[0]
                 .parse()
@@ -116,22 +116,13 @@ impl Registry {
                 "intrinsic" => EntryKind::Intrinsic,
                 k => return Err(format!("line {}: unknown kind {k:?}", n + 1)),
             };
-            let removed = match cols.get(3) {
-                None => None,
-                Some(r) => Some(
-                    r.strip_prefix("removed: ")
-                        .ok_or_else(|| format!("line {}: expected `removed: ...`", n + 1))?
-                        .to_string(),
-                ),
-            };
-            if removed.is_none() && !live.insert((kind, cols[2].to_string())) {
+            if !seen.insert((kind, cols[2].to_string())) {
                 return Err(format!("line {}: {} registered twice", n + 1, cols[2]));
             }
             entries.push_out(Entry {
                 id,
                 kind,
                 path: cols[2].to_string(),
-                removed,
             });
         }
         Ok(Registry { entries })
@@ -141,21 +132,16 @@ impl Registry {
     pub fn to_text(&self) -> String {
         let mut out = String::from(HEADER);
         for e in &self.entries {
-            out.push_str(&format!("{}\t{}\t{}", e.id, e.kind.as_str(), e.path));
-            if let Some(r) = &e.removed {
-                out.push_str("\tremoved: ");
-                out.push_str(r);
-            }
-            out.push_out('\n');
+            out.push_str(&format!("{}\t{}\t{}\n", e.id, e.kind.as_str(), e.path));
         }
         out
     }
 
-    /// The live entry with this kind and path.
+    /// The entry with this kind and path.
     pub fn id_of(&self, kind: EntryKind, path: &str) -> Option<u32> {
         self.entries
             .iter()
-            .find(|e| e.kind == kind && e.path == path && e.removed.is_none())
+            .find(|e| e.kind == kind && e.path == path)
             .map(|e| e.id)
     }
 
@@ -170,14 +156,13 @@ impl Registry {
             .collect()
     }
 
-    /// The ids of the builtin objects and symbols of `heap`, by cell offset: every live
-    /// value entry resolved on this heap, the lowest id for an object with several paths.
+    /// The ids of the builtin objects and symbols of `heap`, by cell offset: every value
+    /// entry resolved on this heap, the lowest id for an object with several paths.
     pub fn name_cells(&self, heap: &Heap) -> BTreeMap<u32, u32> {
         let mut r = Resolver::new(heap);
         let mut out = BTreeMap::new();
         for e in &self.entries {
             if e.kind == EntryKind::Value
-                && e.removed.is_none()
                 && let Some(cell) = r.resolve(&e.path).and_then(cell_of)
             {
                 out.entry(cell).or_insert(e.id);
@@ -186,12 +171,12 @@ impl Registry {
         out
     }
 
-    /// What is wrong with the registry on this realm: live entries that no longer resolve,
+    /// What is wrong with the registry on this realm: entries that no longer resolve,
     /// builtins without an entry, intrinsics without an entry. Empty when it is current.
     pub fn check(&self, heap: &Heap) -> Vec<String> {
         let mut problems = Vec::new();
         let mut r = Resolver::new(heap);
-        for e in self.entries.iter().filter(|e| e.removed.is_none()) {
+        for e in &self.entries {
             let ok = match e.kind {
                 EntryKind::Value => r.resolve(&e.path).and_then(cell_of).is_some(),
                 EntryKind::Intrinsic => intrinsics::names().any(|i| i == e.path),
@@ -219,21 +204,24 @@ impl Registry {
         problems
     }
 
-    /// Brings the registry up to date with this realm: tombstones live entries that no
-    /// longer resolve (with `reason`), then appends the builtins and intrinsics that have
-    /// none. Never renumbers.
-    pub fn update(&mut self, heap: &Heap, reason: &str) -> Update {
+    /// Brings the registry up to date with this realm: drops the entries that no longer
+    /// resolve, then appends the builtins and intrinsics that have none, and numbers the
+    /// entries by their position again.
+    pub fn update(&mut self, heap: &Heap) -> Update {
         let mut u = Update::default();
         let mut r = Resolver::new(heap);
-        for e in self.entries.iter_mut().filter(|e| e.removed.is_none()) {
+        self.entries.retain(|e| {
             let ok = match e.kind {
                 EntryKind::Value => r.resolve(&e.path).and_then(cell_of).is_some(),
                 EntryKind::Intrinsic => intrinsics::names().any(|i| i == e.path),
             };
             if !ok {
-                e.removed = Some(reason.to_string());
-                u.removed.push_out(e.id);
+                u.removed.push_out((e.kind, e.path.clone()));
             }
+            ok
+        });
+        for (i, e) in self.entries.iter_mut().enumerate() {
+            e.id = i as u32;
         }
         let named = self.name_cells(heap);
         for (cell, path) in canonical_names(heap) {
@@ -252,12 +240,7 @@ impl Registry {
 
     fn push(&mut self, kind: EntryKind, path: String) -> u32 {
         let id = self.entries.len() as u32;
-        self.entries.push_out(Entry {
-            id,
-            kind,
-            path,
-            removed: None,
-        });
+        self.entries.push_out(Entry { id, kind, path });
         id
     }
 }

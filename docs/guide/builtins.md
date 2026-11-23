@@ -430,13 +430,13 @@ default: its loops over dense arrays already run in leaf intrinsics.
 > base-image bytes, and the rules that kept a twin's behavior in step with its Rust
 > (declining wherever the builtin would throw) are gone with it.
 
-## Names that outlive a build: the builtin registry
+## Builtins by name: the builtin registry
 
 Offsets, intrinsic ids and the base image's layout change from build to build: a new
-builtin shifts every cell after it. Something that must name a builtin across builds
-(a snapshot exported by meaning, a heap dump read by a newer tool) names it by its
-*registry* entry instead. Every builtin object, function and symbol of the base realm,
-and every intrinsic, has a stable id there, keyed by a path in the spec's style:
+builtin shifts every cell after it. Tools that print or compare builtins, such as the
+heap analyzer, name them by their *registry* entry instead. Every builtin object,
+function and symbol of the base realm, and every intrinsic, has an entry there, keyed by a
+path in the spec's style:
 
 ```text
 0     value      globalThis
@@ -444,9 +444,9 @@ and every intrinsic, has a stable id there, keyed by a path in the spec's style:
 267   value      Array.prototype.map
 431   value      get Map.prototype.size
 538   value      %ArrayIteratorPrototype%
-690   value      %intrinsic:PromiseResolveFunction%   (the prelude function behind it)
-1409  value      %prelude:SameValueZero%              (a prelude helper builtins call)
-1349  intrinsic  PromiseResolveFunction               (the intrinsic, by name)
+687   value      %intrinsic:PromiseResolveFunction%   (the prelude function behind it)
+1180  value      %prelude:SameValueZero%              (a prelude helper builtins call)
+1120  intrinsic  PromiseResolveFunction               (the intrinsic, by name)
 ```
 
 A path walks from `globalThis`, a global, a realm intrinsic that no global reaches
@@ -454,19 +454,16 @@ A path walks from `globalThis`, a global, a realm intrinsic that no global reach
 a helper in the realm's prelude function table, by its source name (`%prelude:Name%`),
 through properties (`.key`, `[Symbol.iterator]`) and `.[[Prototype]]`. A new builtin gets
 the first path a breadth-first walk finds, so the paths read like the spec wherever the
-spec has a name.
+spec has a name, and a builtin reached by a second path keeps its first entry (the other
+paths are aliases). The number in front is the entry's position: it names a builtin
+within one build, and the path is the name that stays.
 
 The table is a committed file,
-[`tests/builtins/registry.tsv`](../../tests/builtins/registry.tsv), and it only grows:
-
-- an id is never renumbered or reused;
-- a builtin that goes away keeps its line, marked removed: a tombstone;
-- a builtin reached by a second path keeps its first id (the paths are aliases).
-
-`scripts/registry-update.sh` appends new builtins and tombstones removed ones. Tests fail
-when a builtin has no entry or an entry does not resolve, and the gate fails when a line
-of main's table is renumbered or dropped. At build time the base image gets a table from
-ids to cell offsets
+[`tests/builtins/registry.tsv`](../../tests/builtins/registry.tsv), so that a change that
+adds or removes a builtin shows in review. `scripts/registry-update.sh` drops the
+entries of removed builtins and appends new ones, keeping the order of the rest. Tests
+fail when a builtin has no entry or an entry does not resolve. At build time the base
+image gets a table from positions to cell offsets
 ([`crates/djs-prelude/src/registry.rs`](../../crates/djs-prelude/src/registry.rs)); for
 any other heap the paths are resolved on that heap
 ([`crates/djs-core/src/vm/registry.rs`](../../crates/djs-core/src/vm/registry.rs)). The
@@ -476,7 +473,7 @@ heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
 > what the spec prints, and it is checked by resolving it. Helpers that no property
 > reaches are named by their source name in the prelude (`%prelude:Name%`), which stays
 > the same as long as the helper keeps its name, whatever the builtins that call it do.
-> The cost: a rename of a helper is a new entry and a tombstone.
+> The cost: a rename of a helper is a new entry.
 
 ## Frozen builtins
 

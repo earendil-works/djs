@@ -617,7 +617,7 @@ set of **legs**, the checks, and the **builds** they need (D2660). `scripts/gate
 and djs-wasm), and on the other feature combinations that ship (D2668: djs-core with
 only `unicode`; the shipped wasm module in release); the workspace's unit and integration tests (djs-docs's apart; djs-bgen's
 `builtins_gen_is_fresh` is what `scripts/bgen.sh --check` checks); the no_std wasm32 build
-of djs-core; the builtin registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
+of djs-core; the guide (`djs-docs
 check`); the JS host package's tests on the dev modules; the npm package (below); the
 codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
@@ -690,7 +690,7 @@ nothing else, so it would pass again. The classes hold because only djs-docs rea
 `.github/`, and of `js/` and `examples/` Rust reads only the layout file; the always-run
 `paths` leg fails when Rust code outside djs-docs names a path outside the `rust` class
 (`PATHS_ALLOWED` lists the exceptions with their reasons). Legs that depend on more than
-the tree run every time: `fmt`, `registry` (it compares with main) and `paths`. Builds are
+the tree run every time: `fmt` and `paths`. Builds are
 not cached (cargo's own incremental builds are); a build runs when a leg that needs it
 runs.
 
@@ -724,21 +724,16 @@ one is older than 24 hours. A full run also catches what the cache cannot see: a
 and a leg that reads a path outside its class without the `paths` leg noticing (a path
 built at run time).
 
-### Builtin registry (D2371)
+### Builtin registry (D2371, D3644)
 
-tests/builtins/registry.tsv gives every builtin object, function and symbol and every
-intrinsic a stable id, keyed by a spec-style path. Two checks keep it honest:
-- `cargo test -p djs-prelude` (registry test): every builtin and intrinsic of this build
-  has a live entry, and every live entry still resolves. When it fails after adding or
-  removing builtins, run `scripts/registry-update.sh [reason]` and commit the file (new
-  builtins are appended; removed ones become tombstones with the reason).
-- The gate step `scripts/registry.py check main`: the file is append-only against main.
-  No line of main's table may be renumbered, dropped or rewritten, except that a live
-  entry may gain a tombstone.
-
-The file merges with git's union driver; scripts/regen.sh (run by merge-to-main after the
-rebase) renumbers a merged tail after main's entries and runs the update, so two branches
-that both appended need no hand resolution.
+tests/builtins/registry.tsv names every builtin object, function and symbol and every
+intrinsic by a spec-style path, with an id that is its position (it names a builtin
+within one build: djs-prelude's base offsets, the REPL's `.heap`). `cargo test -p
+djs-prelude` (registry test) checks that every builtin and intrinsic of this build has an
+entry and every entry resolves. When it fails after adding or removing builtins, run
+`scripts/registry-update.sh` and commit the file: removed builtins are dropped, new ones
+appended, and the ids follow. A merge keeps one side of the file and scripts/regen.sh
+(run by merge-to-main after the rebase) runs the update on the merged tree.
 
 ### Derived files that merge by themselves (D1791, 0214)
 

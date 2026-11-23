@@ -268,7 +268,6 @@ consists of legs, each one check:
 - all unit and integration tests, which include the freshness of the generated builtins
   and the golden dumps;
 - the `no_std` wasm32 build of djs-core;
-- the builtin registry's append-only check against `main`;
 - `djs-docs check` for this guide, which also reruns its examples;
 - the host package's tests on the djs-wasm modules, native-versus-wasm images, and the
   cross-language wire and reader checks;

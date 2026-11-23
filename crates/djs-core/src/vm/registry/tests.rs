@@ -61,33 +61,43 @@ fn canonical_names_resolve_to_their_cells() {
 }
 
 #[test]
-fn update_appends_and_tombstones_without_renumbering() {
+fn update_drops_the_gone_and_appends_the_new() {
     let vm = vm();
     let heap = vm.heap();
     let mut reg = Registry::default();
-    let u = reg.update(heap, "test");
+    let u = reg.update(heap);
     assert!(u.removed.is_empty());
     assert_eq!(u.added.len(), reg.entries.len());
     assert!(reg.check(heap).is_empty(), "{:?}", reg.check(heap));
     // A second update changes nothing.
     let before = reg.clone();
-    assert_eq!(reg.update(heap, "test"), Update::default());
+    assert_eq!(reg.update(heap), Update::default());
     assert_eq!(reg, before);
-    // An entry that no longer resolves is tombstoned, keeps its id, and is never reused.
-    reg.entries.push(Entry {
-        id: reg.entries.len() as u32,
-        kind: EntryKind::Value,
-        path: "Array.prototype.noSuchMethod".into(),
-        removed: None,
-    });
-    let gone = reg.entries.len() as u32 - 1;
+    // An entry that no longer resolves is dropped, and the ones after it move up.
+    let map = reg.id_of(EntryKind::Value, "Array.prototype.map").unwrap();
+    reg.entries.insert(
+        0,
+        Entry {
+            id: 0,
+            kind: EntryKind::Value,
+            path: "Array.prototype.noSuchMethod".into(),
+        },
+    );
+    for (i, e) in reg.entries.iter_mut().enumerate() {
+        e.id = i as u32;
+    }
     let problems = reg.check(heap);
     assert_eq!(problems.len(), 1, "{problems:?}");
-    let u = reg.update(heap, "gone in a test");
-    assert_eq!(u.removed, [gone]);
+    let u = reg.update(heap);
     assert_eq!(
-        reg.entries[gone as usize].removed.as_deref(),
-        Some("gone in a test")
+        u.removed,
+        [(EntryKind::Value, "Array.prototype.noSuchMethod".into())]
+    );
+    assert!(u.added.is_empty());
+    assert_eq!(reg, before);
+    assert_eq!(
+        reg.id_of(EntryKind::Value, "Array.prototype.map"),
+        Some(map)
     );
     // The text round-trips.
     let text = reg.to_text();
@@ -99,7 +109,7 @@ fn ids_name_cells_and_intrinsics() {
     let vm = vm();
     let heap = vm.heap();
     let mut reg = Registry::default();
-    reg.update(heap, "test");
+    reg.update(heap);
     let map = reg.id_of(EntryKind::Value, "Array.prototype.map").unwrap();
     let cells = reg.name_cells(heap);
     let cell = cells
@@ -120,11 +130,10 @@ fn ids_name_cells_and_intrinsics() {
 }
 
 #[test]
-fn parse_rejects_renumbering_and_duplicates() {
+fn parse_rejects_gaps_and_duplicates() {
     assert!(Registry::parse("0\tvalue\tArray\n2\tvalue\tObject\n").is_err());
     assert!(Registry::parse("0\tvalue\tArray\n1\tvalue\tArray\n").is_err());
-    // A tombstoned path may come back under a new id.
-    assert!(Registry::parse("0\tvalue\tArray\tremoved: x\n1\tvalue\tArray\n").is_ok());
+    assert!(Registry::parse("0\tvalue\tArray\tremoved: x\n").is_err());
     assert!(Registry::parse("0\tthing\tArray\n").is_err());
 }
 

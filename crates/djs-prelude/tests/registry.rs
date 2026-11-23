@@ -1,7 +1,5 @@
-//! The builtin registry is current for this build (D2371): every builtin and intrinsic has
-//! a live entry, every live entry resolves, and the base offset table agrees. The
-//! append-only property (no renumbering, no dropped lines) is checked against main by
-//! scripts/registry.py in the gate.
+//! The builtin registry is current for this build (D2371, D3644): every builtin and
+//! intrinsic has an entry, every entry resolves, and the base offset table agrees.
 
 use djs_core::bytecode::intrinsics::INTRINSICS;
 use djs_core::vm::VmOptions;
@@ -29,7 +27,7 @@ fn base_offsets_agree_with_paths() {
     let cells = reg.name_cells(vm.heap());
     let mut values = 0;
     for e in &reg.entries {
-        let want = if e.kind == EntryKind::Value && e.removed.is_none() {
+        let want = if e.kind == EntryKind::Value {
             cells.iter().find(|(_, id)| **id == e.id).map(|(c, _)| *c)
         } else {
             None

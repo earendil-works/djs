@@ -193,10 +193,8 @@ def jobs():
     wasm = "target/wasm-dev/wasm32-unknown-unknown/debug/djs_wasm.wasm"
     J = Job
     return [
-        # Cheap and always run: formatting, the registry against main (which is not in
-        # the key), and the input classes' guard.
+        # Cheap and always run: formatting and the input classes' guard.
         J("fmt", "cargo fmt --all --check"),
-        J("registry", "python3 scripts/registry.py check main"),
         J("paths", "python3 scripts/gate.py paths"),
         J("targets", "python3 scripts/gate.py targets"),
         # 0214: the merge drivers of derived files, through scripted three-way merges.

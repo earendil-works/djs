@@ -14403,3 +14403,20 @@ writes `print`). TESTING.md "Dumps across builds" is now "Golden dumps"; ARCH.md
 the Sandbox.dump doc and the guide (dumps.md "Dumps and later builds", continuations.md,
 testing.md, goals.md, introduction.md, index.md, snapshots.md, suspension.md, pi.md) no
 longer promise that a later djs loads a dump.
+
+## D3644: The builtin registry is a current table, not an append-only one
+date: 2026-11-23 · by: pcompat · issue: 0297
+Amends D2371 (owner, 2026-11-23: no backwards compatibility). The registry's append-only
+numbering and its tombstones served names that cross builds: snapshot exports by meaning
+(the portable and goldilocks snapshot designs), heap dumps read by a newer tool. None of
+them exists, so an id is now an entry's position in this tree's table: it names a builtin
+within one build (djs-prelude's base offset table, the REPL's `.heap`), and the path is the
+name that stays. `Registry::update` drops the entries that no longer resolve, appends the
+new builtins and numbers by position; the file has three columns (no `removed: ...`), and
+its 306 tombstones are gone (1,753 -> 1,447 entries). Kept: the committed file, so that a
+change that adds or removes a builtin shows in review, and the djs-prelude test that every
+builtin and intrinsic has an entry that resolves. Removed: scripts/registry.py (the gate's
+`registry` leg, `check main`, and `merge`, which renumbered a union-merged tail), the
+update's REASON argument, the union merge driver (the file is `djs-generated` now: a merge
+keeps one side and scripts/regen.sh runs the update on the merged tree), and the test that
+an id is never reused.

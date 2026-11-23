@@ -1,4 +1,4 @@
-//! The builtin registry of this build (D2371): stable ids for the builtin objects,
+//! The builtin registry of this build (D2371, D3644): ids for the builtin objects,
 //! functions and symbols and for the intrinsics, keyed by spec path
 //! (djs_core::vm::registry has the format and the paths). The committed table is
 //! tests/builtins/registry.tsv; build.rs adds each id's cell in this build's base image.
@@ -28,7 +28,7 @@ fn entries() -> Vec<Entry> {
     registry().entries
 }
 
-/// The path (value entries) or name (intrinsic entries) of an id, live or tombstoned.
+/// The path (value entries) or name (intrinsic entries) of an id.
 pub fn path(id: u32) -> Option<alloc::string::String> {
     entries().into_iter().nth(id as usize).map(|e| e.path)
 }

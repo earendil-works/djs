@@ -3,7 +3,7 @@
 #   builtins/gen/prelude.js, builtins/gen/resume-points.txt   (scripts/bgen.sh)
 #   the INTRINSICS table in bytecode/intrinsics.rs            (scripts/gen-intrinsics.py)
 #   js/src/layout.generated.ts                                (--layout: builds djs-core)
-#   tests/builtins/registry.tsv: merged tail, new builtins     (scripts/registry.py, D2371)
+#   tests/builtins/registry.tsv                               (scripts/registry-update.sh, D3644)
 #   the guide's generated regions and docs/guide/gen/         (djs-docs regen, D2100)
 #   tests/smap/summary.txt, when a merge kept one side of it  (pinned_maps, 0214)
 # A file the merge driver kept one side of (listed in $GIT_DIR/djs-regen) is always
@@ -28,9 +28,7 @@ fi
 
 ./scripts/bgen.sh
 
-# The builtin registry after a union merge of appended lines (D2371): dedupe and renumber
-# the tail after main's entries, then append what this tree adds.
-python3 scripts/registry.py merge main
+# The builtin registry (D3644): drop what this tree no longer has, append what it adds.
 ./scripts/registry-update.sh > /dev/null
 
 python3 scripts/gen-intrinsics.py

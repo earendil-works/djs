@@ -10,7 +10,7 @@ use djs_core::vm::{Vm, VmOptions};
 const REGISTRY: &str = "../../tests/builtins/registry.tsv";
 
 /// `$OUT_DIR/registry_offsets.rs`: each registry id's cell in the base image (`u32::MAX`
-/// for intrinsics, tombstones and paths that do not resolve; the registry test reports
+/// for intrinsics and paths that do not resolve; the registry test reports
 /// those). A registry that does not parse yields an empty table, so that the update tool
 /// still builds; the test fails on it.
 fn registry_offsets(vm: &Vm, dir: &std::path::Path) {

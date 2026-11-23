@@ -239,6 +239,15 @@ scripts/plain-fuzz/ -> scripts/dump-fuzz/, gate leg "dumps (djs and node)", dump
 case keys of dump-size.tsv and are cited in pdiet's dump*.rs), DJS_PLAIN_OUT and the
 `plain_*` test names in dump_resume_tests.rs, and docs/plain-js-dumps.md (J9).
 
+### 2026-11-23: J7 (the registry)
+D3644: ids are positions; `Registry::update` drops what no longer resolves and appends the
+new (no REASON); the file has three columns and lost its 306 tombstones (1,753 -> 1,447);
+scripts/registry.py and the gate's `registry` leg are gone; registry.tsv merges as
+`djs-generated` and regen.sh runs the update. Tests: the tombstone/never-reused test became
+`update_drops_the_gone_and_appends_the_new`. TESTING.md "Builtin registry", the gate leg
+list and the always-run list; guide builtins.md ("Builtins by name: the builtin registry")
+and testing.md.
+
 ## Follow-ups
 
 ## Result

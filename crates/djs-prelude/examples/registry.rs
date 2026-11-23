@@ -1,8 +1,7 @@
-//! Maintains the builtin registry (D2371): `cargo run -p djs-prelude --example registry --
-//! update [REASON]` appends this build's new builtins and intrinsics to
-//! tests/builtins/registry.tsv and tombstones the entries that no longer resolve (with
-//! REASON, default "removed"); `check` lists what is out of date. Prefer
-//! scripts/registry-update.sh.
+//! Maintains the builtin registry (D2371, D3644): `cargo run -p djs-prelude --example
+//! registry -- update` drops the entries of tests/builtins/registry.tsv that no longer
+//! resolve and appends this build's new builtins and intrinsics; `check` lists what is out
+//! of date. Prefer scripts/registry-update.sh.
 
 use djs_core::vm::VmOptions;
 use djs_core::vm::registry::Registry;
@@ -24,19 +23,17 @@ fn main() {
     };
     match args.first().map(String::as_str) {
         Some("update") => {
-            let reason = args.get(1).map_or("removed", String::as_str);
-            let u = reg.update(vm.heap(), reason);
+            let u = reg.update(vm.heap());
+            for (kind, path) in &u.removed {
+                println!("removed {kind:?} {path}");
+            }
             for id in &u.added {
                 let e = &reg.entries[*id as usize];
                 println!("added {} {:?} {}", e.id, e.kind, e.path);
             }
-            for id in &u.removed {
-                let e = &reg.entries[*id as usize];
-                println!("tombstoned {} {:?} {}", e.id, e.kind, e.path);
-            }
             std::fs::write(FILE, reg.to_text()).expect("cannot write the registry");
             println!(
-                "registry: {} entries, {} added, {} tombstoned",
+                "registry: {} entries, {} added, {} removed",
                 reg.entries.len(),
                 u.added.len(),
                 u.removed.len()
@@ -52,7 +49,7 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("usage: registry update [REASON] | check");
+            eprintln!("usage: registry update | check");
             std::process::exit(2);
         }
     }
