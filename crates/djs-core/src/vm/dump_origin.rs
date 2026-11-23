@@ -1,5 +1,6 @@
-//! Origin tracking (D2870, docs/plain-js-dumps.md §2.3): an activation of a plain dump's
-//! continuation `K` is read as an activation of the function `K` stands for.
+//! Origin tracking (D2870, docs/guide/continuations.md "Origin tracking"): an activation
+//! of a plain dump's continuation `K` is read as an activation of the function `K` stands
+//! for.
 //!
 //! A plain dump writes every suspended activation as a continuation `K` with its origin
 //! `K.$djs = [f, at, r, h]` (`$djs.k(K, f, at, r, h)`). Once the dump is loaded and runs, the frames are `K`'s.

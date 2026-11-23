@@ -555,7 +555,7 @@ loops), re-enactment (then/catch/finally, held resolving functions, the combinat
 iterators, generators, activations: a returned promise, `arguments`, shared cells), class
 case (fields, static block, accessor; derived with `super`; a class from a factory) and
 the codemode body; a program whose idle points are all refused (instances with private
-names, D2878) is listed in tests/dump/plain-refusals.txt. Since the dumps are
+names, D2878) is listed in tests/dump/refusals.txt. Since the dumps are
 JavaScript, they hold the runtime and the engine to the format, not the exporter: a
 change to the exporter leaves them alone, and a change to the runtime or the hooks that
 breaks them shows in review. Such a change regenerates them in the same commit: delete the

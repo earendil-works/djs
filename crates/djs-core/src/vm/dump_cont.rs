@@ -1,4 +1,4 @@
-//! The continuation of a suspended activation (D2830, docs/plain-js-dumps.md §2): a
+//! The continuation of a suspended activation (D2830, docs/guide/continuations.md): a
 //! function of the original's kind whose body is the rest of the original from its
 //! site, written from the original's text by the syntax the compiler recorded around
 //! the site (D2850, compiler/smap_syntax.rs).

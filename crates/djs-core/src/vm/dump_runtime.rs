@@ -262,7 +262,7 @@ pub fn module_text() -> String {
     let mut s = String::from(
         "// The plain dump runtime (D2834, D2903): the helpers a plain dump calls as `$djs.NAME`.\n\
          // To run a dump outside djs, set `globalThis.$djs` to these and the host's hooks\n\
-         // (`seed`, `resume`, `source`, `host`; see docs/plain-js-dumps.md, \"The host interface\"), then run the\n\
+         // (`seed`, `resume`, `source`, `host`; see docs/guide/dumps.md, \"`$djs`: what the loading host provides\"), then run the\n\
          // dump as a Script, and delete `$djs` and `$dump` after it. Generated from crates/djs-core/src/vm/dump_runtime.rs:\n\
          //   DJS_UPDATE_DUMP_RUNTIME=1 cargo test -p djs-core dump_runtime\n\n",
     );

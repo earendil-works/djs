@@ -312,13 +312,13 @@ def jobs():
         # 0201: dumps (D2830) at every idle point of the corpus (chains of at most 50),
         # continued in djs and in node; refusals only as tests/dump-refusals.txt lists.
         # 0207: and their size, against tests/scores/dump-size.tsv (D2901, per case: D2906), with the tests/dump
-        # programs' dumps (plain_dumps_at_every_idle_point writes them to DJS_PLAIN_OUT)
+        # programs' dumps (dumps_at_every_idle_point writes them to DJS_DUMP_OUT)
         # and the sleep-dump example's (the_sleep_example_dumps, DJS_SLEEP_OUT).
         J("dumps (djs and node)", f'd=$(mktemp -d); v=$(mktemp -d); s=$(mktemp -d); {G}/bin/djs-difftest'
           f' --engine djs --lazy --ratchet --quiet --no-diff --dump-out "$d" && node scripts/dump-node.mjs "$d"'
           ' --refusals tests/dump-refusals.txt'
-          f' && DJS_PLAIN_OUT="$v" DJS_SLEEP_OUT="$s" {tests} {G}/core-tests.json --'
-          ' plain_dumps_at_every_idle_point the_sleep_example_dumps'
+          f' && DJS_DUMP_OUT="$v" DJS_SLEEP_OUT="$s" {tests} {G}/core-tests.json --'
+          ' dumps_at_every_idle_point the_sleep_example_dumps'
           ' && node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv corpus="$d" programs="$v"'
           ' sleep="$s"; rc=$?; rm -rf "$d" "$v" "$s"; exit $rc',
           cls="rust", needs=["build:difftest", "build:core-tests"],

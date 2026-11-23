@@ -218,7 +218,7 @@ fn the_sleep_example_dumps() {
 /// kept where it would not: a receiver reassigned after its read, a shadowed method, a
 /// user function on a user object, a getter, a callee that is itself a call.
 #[test]
-fn plain_dumps_read_operands_again() {
+fn dumps_read_operands_again() {
     let src = r#"
 const log = [];
 async function builtin() { const a = []; a.push(await later(1)); return a.join(); }
@@ -239,14 +239,14 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("reread", src);
+    let (failed, refused, ok) = check_program("reread", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("reread", src);
+    let (failed, _, refused) = chain_program("reread", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 7, "{ok}");
-    let at = |k: usize| plain_dump_at(src, k);
+    let at = |k: usize| dump_text_at(src, k);
     assert!(at(1).contains("a.push(await "), "{}", at(1));
     assert!(at(2).contains("f(k, await "), "{}", at(2));
     assert!(at(3).contains("Math.max(1, await "), "{}", at(3));
@@ -270,7 +270,7 @@ main();
 /// the placeholder scaffold where the body jumps (`break`, `continue`) or the iterator has
 /// a `return` (a generator).
 #[test]
-fn plain_dumps_continue_loops_after_the_rest() {
+fn dumps_continue_loops_after_the_rest() {
     let src = r#"
 async function arr() { const out = []; for (const x of [1, 2, 3]) { out.push(await later(x)); out.push(x * 10); } return out.join(); }
 async function twice() { let s = ""; for (const x of ["a", "b"]) { s += await later(x); s += await later(x + "!"); } return s; }
@@ -287,23 +287,23 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("rest", src);
+    let (failed, refused, ok) = check_program("rest", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("rest", src);
+    let (failed, _, refused) = chain_program("rest", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 20, "{ok}");
-    let first = plain_dump_at(src, 1);
+    let first = dump_text_at(src, 1);
     // (An array's iterator: the loop goes on over it as it is, a parameter of K, D2917.)
     assert!(first.contains("of $djs_i1)"), "{first}");
     // `while`, `do`-`while` and `for` likewise (D2917); a `for` whose `let` a closure may
     // capture keeps its scaffold (one binding per iteration).
     let (wh, dw, cfor, captured) = (
-        plain_dump_at(src, 14),
-        plain_dump_at(src, 17),
-        plain_dump_at(src, 19),
-        plain_dump_at(src, 22),
+        dump_text_at(src, 14),
+        dump_text_at(src, 17),
+        dump_text_at(src, 19),
+        dump_text_at(src, 22),
     );
     assert!(
         wh.contains("while (i < 3) {") && !wh.contains("$djs_f"),
@@ -324,7 +324,7 @@ main();
 /// arguments (D2909); a constant the text may assign stays a constant (the assignment
 /// throws), as does one the text destructures into; `arguments` stays K's own binding.
 #[test]
-fn plain_dumps_take_the_frame_as_arguments() {
+fn dumps_take_the_frame_as_arguments() {
     let src = r#"
 async function f(a, b) {
   let n = a + 1;
@@ -340,14 +340,14 @@ async function f(a, b) {
 }
 f(1, 2);
 "#;
-    let (failed, refused, ok) = plain_check_program("params", src);
+    let (failed, refused, ok) = check_program("params", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("params", src);
+    let (failed, _, refused) = chain_program("params", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 1, "{ok}");
-    let d = plain_dump_at(src, 1);
+    let d = dump_text_at(src, 1);
     // (`a` and `b` are dead after the site, D2911.)
     assert!(d.contains("async function (n, c) {"), "{d}");
     assert!(
@@ -361,7 +361,7 @@ f(1, 2);
 /// loaded dump writes the original again; one whose continuation's text is not the one its
 /// origin makes (an edit in the copied text) is refused.
 #[test]
-fn plain_records_make_the_layout_again() {
+fn records_make_the_layout_again() {
     let src = r#"
 async function f(xs) {
   const a = [await later(1)];
@@ -370,16 +370,16 @@ async function f(xs) {
 }
 f([2, 3]).then(print);
 "#;
-    let d = plain_dump_at(src, 2);
+    let d = dump_text_at(src, 2);
     assert!(!d.contains("segs:") && !d.contains("scaf:"), "{d}");
     assert!(d.contains("}, f, 2"), "{d}");
     let again = |text: &str| -> Result<String, String> {
-        let mut vm = plain_load(text)?;
+        let mut vm = load_dump(text)?;
         let mut lines = Vec::new();
-        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        let id = idle_step(&mut vm, &mut lines).expect("an idle point");
         settle(&mut vm, id);
-        plain_step(&mut vm, &mut lines).expect("an idle point");
-        plain_dump(&vm)
+        idle_step(&mut vm, &mut lines).expect("an idle point");
+        dump_text(&vm)
     };
     let next = again(&d).unwrap();
     assert_eq!(next.matches("return a.join();").count(), 2, "{next}");
@@ -397,7 +397,7 @@ f([2, 3]).then(print);
 /// (D2836): shorthand and literal ones; kept as the object made so far where a property
 /// would read something else (a binding the site's operand reassigns, a call).
 #[test]
-fn plain_dumps_write_object_literals_again() {
+fn dumps_write_object_literals_again() {
     let src = r#"
 async function plain(path) { return JSON.stringify({ path, n: 1, "s": "x", content: await later(2) }); }
 async function reassigned() { let p = 1; return JSON.stringify({ p, v: await (p = 2, later(3)) }); }
@@ -409,14 +409,14 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("objects", src);
+    let (failed, refused, ok) = check_program("objects", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("objects", src);
+    let (failed, _, refused) = chain_program("objects", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 4, "{ok}");
-    let at = |k: usize| plain_dump_at(src, k);
+    let at = |k: usize| dump_text_at(src, k);
     assert!(at(4).contains("{ q, ...await "), "{}", at(4));
     assert!(
         at(1).contains("{ path, n: 1, \"s\": \"x\", content: await "),
@@ -431,7 +431,7 @@ main();
 /// discriminant's value, and K's one constant or literal stands for both (D2913; pjz's
 /// codemode/plain-fuzz/switch-case-test-await.js), also on a chain.
 #[test]
-fn plain_dumps_of_case_tests() {
+fn dumps_of_case_tests() {
     let src = r#"
 async function f(d) {
   switch (d) { case await later(5): print("five"); case 0: print(await later("x")); }
@@ -440,10 +440,10 @@ async function f(d) {
 }
 f(0).then(print);
 "#;
-    let (failed, refused, ok) = plain_check_program("cases", src);
+    let (failed, refused, ok) = check_program("cases", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("cases", src);
+    let (failed, _, refused) = chain_program("cases", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 4, "{ok}");

@@ -137,7 +137,7 @@ fn dumped(src: &str) -> (Vec<String>, Vec<String>) {
             assert_eq!(fn_id, PRINT);
             print(vm, &mut lines, call_id);
         };
-        super::dump_tests::run_plain_dump_with(&mut next, &text, &host_fn, &mut serve, true)
+        super::dump_tests::run_dump_with(&mut next, &text, &host_fn, &mut serve, true)
             .unwrap_or_else(|e| panic!("{e}\n{text}"));
         // The reopened pause: settle it, and the run goes on to the next one.
         let open = next.pending_host_calls();
@@ -249,7 +249,7 @@ fn call_sites_of_pauses() {
         let text = dump(&vm);
         let mut next = new_vm();
         let mut serve = |vm: &mut Vm, call_id: u32, _: u32| print(vm, &mut lines, call_id);
-        super::dump_tests::run_plain_dump_with(&mut next, &text, &host_fn, &mut serve, true)
+        super::dump_tests::run_dump_with(&mut next, &text, &host_fn, &mut serve, true)
             .unwrap_or_else(|e| panic!("{e}\n{text}"));
         let line_of = |at: &CallSite| {
             text.lines()

@@ -41,17 +41,17 @@ const HOOK_HOST: u32 = 0x7fff_fff2;
 /// that path); the Script runs to its first stop that is not a hook call, `serve` answering the
 /// other sync host calls it makes meanwhile. The Script's completion value (what the dump
 /// names for the host, D2895), or why the dump did not load.
-pub(super) fn run_plain_dump(
+pub(super) fn run_dump(
     vm: &mut Vm,
     text: &str,
     host_fn: &dyn Fn(&str) -> Option<u32>,
     serve: &mut dyn FnMut(&mut Vm, u32, u32),
 ) -> Result<Value, String> {
-    run_plain_dump_with(vm, text, host_fn, serve, false)
+    run_dump_with(vm, text, host_fn, serve, false)
 }
 
-/// [`run_plain_dump`], the dump compiled with `debugger_awaits` (D3050) if asked.
-pub(super) fn run_plain_dump_with(
+/// [`run_dump`], the dump compiled with `debugger_awaits` (D3050) if asked.
+pub(super) fn run_dump_with(
     vm: &mut Vm,
     text: &str,
     host_fn: &dyn Fn(&str) -> Option<u32>,
@@ -171,7 +171,7 @@ fn run(vm: &mut Vm, src: &str) -> String {
 /// Runs a dump that calls no host function: empty, or why it failed.
 fn load(vm: &mut Vm, text: &str) -> String {
     let none = |_: &str| None;
-    match run_plain_dump(vm, text, &none, &mut |_, _, f| panic!("host call {f}")) {
+    match run_dump(vm, text, &none, &mut |_, _, f| panic!("host call {f}")) {
         Ok(_) => String::new(),
         Err(e) => alloc::format!("throw {e}"),
     }

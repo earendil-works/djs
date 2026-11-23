@@ -1,4 +1,4 @@
-//! Dumps (D2830) of programs that wait: tests/dump/v2/ (programs `NAME.src.js` and the
+//! Dumps (D2830) of programs that wait: tests/dump/ (programs `NAME.src.js` and the
 //! golden programs with their dumps, golden/), the exporter's refusals and reports, and
 //! plain dumps run as Scripts at every idle point and in chains.
 //!
@@ -42,7 +42,7 @@ fn new_vm_with(stress: bool) -> Vm {
 }
 
 /// A VM for plain dumps: frozen builtins, which the plain exporter requires (D2836).
-fn plain_vm() -> Vm {
+fn frozen_vm() -> Vm {
     vm_with(VmOptions {
         frozen_builtins: true,
         ..VmOptions::default()
@@ -166,7 +166,7 @@ fn fixture_dir() -> std::path::PathBuf {
 /// Runs `src` to idle point `k`, dumps it, runs the dump in a fresh VM to the end: the
 /// lines before the dump and after, or why the dump was refused.
 fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -177,16 +177,16 @@ fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
     vm.call(f, this, &[]).unwrap();
     let mut lines = Vec::new();
     for _ in 1..k {
-        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        let id = idle_step(&mut vm, &mut lines).expect("an idle point");
         settle(&mut vm, id);
     }
-    plain_step(&mut vm, &mut lines).expect("an idle point");
-    let text = plain_dump(&vm)?;
+    idle_step(&mut vm, &mut lines).expect("an idle point");
+    let text = dump_text(&vm)?;
     if std::env::var("DJS_DUMP_SHOW").is_ok_and(|v| v == "all") {
         std::println!("{text}");
     }
-    let mut vm = plain_load(&text)?;
-    while let Some(id) = plain_step(&mut vm, &mut lines) {
+    let mut vm = load_dump(&text)?;
+    while let Some(id) = idle_step(&mut vm, &mut lines) {
         settle(&mut vm, id);
     }
     Ok((lines, text))
@@ -195,7 +195,7 @@ fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
 /// Runs dump `text` in `vm` (a fresh one, with the host's globals), the open calls
 /// reopened under their ids (D2890), what it prints meanwhile in `lines`: the handle of
 /// its completion value, the run's promise (D2895).
-fn plain_run(
+fn run_dump_text(
     vm: &mut Vm,
     text: &str,
     lines: &mut Vec<String>,
@@ -207,12 +207,12 @@ fn plain_run(
         lines.push(parts.join(" "));
         vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
     };
-    let v = super::dump_tests::run_plain_dump(vm, text, &host_fn, &mut print)?;
+    let v = super::dump_tests::run_dump(vm, text, &host_fn, &mut print)?;
     Ok(vm.heap_mut().new_handle(v).unwrap())
 }
 
 /// Prints the suspension maps of a file, for reading what the exporter reads:
-/// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
+/// `DJS_SMAP=tests/dump/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]
 #[ignore]
 fn show_maps() {
@@ -247,7 +247,7 @@ fn dumps_need_an_idle_vm() {
         Err(e) => e.message(),
     };
     // Parked on a sync host call.
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             b"print(1);",
@@ -259,7 +259,7 @@ fn dumps_need_an_idle_vm() {
     assert!(matches!(vm.run(1_000_000), Status::HostCall { .. }));
     assert!(reason(&vm).contains("is not idle"), "{}", reason(&vm));
     // Out of fuel in the middle of a call.
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             b"for (let i = 0; i < 1e6; i++);",
@@ -271,7 +271,7 @@ fn dumps_need_an_idle_vm() {
     assert!(matches!(vm.run(100), Status::OutOfFuel));
     assert!(reason(&vm).contains("is not idle"), "{}", reason(&vm));
     // A host result delivered and not applied yet.
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             b"globalThis.p = later(1);",
@@ -285,7 +285,7 @@ fn dumps_need_an_idle_vm() {
     vm.resolve_host_call(id, Ok(Value::int(1))).unwrap();
     assert!(reason(&vm).contains("not applied yet"), "{}", reason(&vm));
     // A call of a host function the host does not name.
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let anon = vm.new_async_host_function(9, "anon").unwrap();
     vm.define_global("anon", anon).unwrap();
     let f = vm
@@ -310,7 +310,7 @@ fn dumps_need_an_idle_vm() {
 #[test]
 fn the_report_names_where_activations_stopped() {
     let src = std::fs::read_to_string(fixture_dir().join("steps.src.js")).unwrap();
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -492,7 +492,7 @@ fn a_codemode_body_run_round_trips() {
             d.text
         );
         let mut vm = body_host_vm();
-        let run = plain_run(&mut vm, &d.text, &mut lines)
+        let run = run_dump_text(&mut vm, &d.text, &mut lines)
             .unwrap_or_else(|e| panic!("@{k}: {e}\n{}", d.text));
         let (mut after, mut marks) = (Vec::new(), Vec::new());
         drive(&mut vm, &mut after, &mut marks, None);
@@ -546,7 +546,7 @@ fn a_codemode_body_that_differs_as_a_function_is_refused() {
     let (mut lines, d) = body_dump(src, 1);
     let d = d.unwrap().unwrap();
     let mut vm = body_host_vm();
-    plain_run(&mut vm, &d.text, &mut lines).unwrap();
+    run_dump_text(&mut vm, &d.text, &mut lines).unwrap();
     drive(&mut vm, &mut lines, &mut Vec::new(), None);
     assert_eq!(lines, want[..want.len() - 1]);
     assert_eq!(want, ["true", "run Some(Ok(\"5\"))"]);
@@ -554,7 +554,7 @@ fn a_codemode_body_that_differs_as_a_function_is_refused() {
 
 // ------------------------------------------------------------------ golden dumps (0178)
 //
-// tests/dump/v2/golden/: small programs (`NAME.src.js` Scripts, `NAME.body.js` codemode
+// tests/dump/golden/: small programs (`NAME.src.js` Scripts, `NAME.body.js` codemode
 // bodies) and the dumps the exporter wrote of them, `NAME.K.dump.js` at idle point K.
 // Every later build must run them and finish the run as the program does (D2560, D2920):
 // they are JavaScript that calls the dump runtime, so this holds the runtime and the
@@ -706,7 +706,7 @@ fn golden_run(src: &str, body: bool) -> (Vec<String>, Vec<usize>) {
 fn golden_continue(text: &str, stress: bool) -> Result<Vec<String>, String> {
     let mut vm = body_host_vm_with(stress);
     let (mut lines, mut marks) = (Vec::new(), Vec::new());
-    let mut run = Some(plain_run(&mut vm, text, &mut lines)?);
+    let mut run = Some(run_dump_text(&mut vm, text, &mut lines)?);
     golden_drive(
         &mut vm,
         usize::MAX,
@@ -727,8 +727,8 @@ fn golden_dumps_load_and_finish() {
     let dumps = golden_dumps();
     let mut failed = Vec::new();
     // A program whose idle points are all refused (D2878) has none: it is listed in
-    // plain-refusals.txt.
-    let refusals = std::fs::read_to_string(plain_refusals_file()).unwrap_or_default();
+    // refusals.txt.
+    let refusals = std::fs::read_to_string(refusals_file()).unwrap_or_default();
     for (name, _, _) in &programs {
         let listed = refusals.contains(&alloc::format!("golden/{name}@"));
         if !dumps.iter().any(|d| d.0 == *name) && !listed {
@@ -858,7 +858,7 @@ fn a_codemode_body_whose_parameter_a_closure_captures() {
         let (mut lines, d) = body_dump(src, k);
         let d = d.unwrap().unwrap_or_else(|e| panic!("@{k}: {e}"));
         let mut vm = body_host_vm();
-        let run = plain_run(&mut vm, &d.text, &mut lines).unwrap();
+        let run = run_dump_text(&mut vm, &d.text, &mut lines).unwrap();
         drive(&mut vm, &mut lines, &mut Vec::new(), None);
         let run = vm.heap().get_handle(run);
         let r = vm
@@ -897,10 +897,10 @@ fn traces_after_a_load_name_the_original_functions() {
         async function main() { for (let n = 1; n <= 2; n++) { const v = await later(n); try { print(check(v)); } catch (e) { print(e.stack.split('\\n').filter(Boolean).map((l) => l.trim().split(' ')[1]).join()); } } }\n\
         main();";
     assert_eq!(run_program(src).0, ["1", "check,main"]);
-    let text = plain_dump_at(src, 1);
-    let mut vm = plain_load(&text).unwrap();
+    let text = dump_text_at(src, 1);
+    let mut vm = load_dump(&text).unwrap();
     let mut lines = Vec::new();
-    while let Some(id) = plain_step(&mut vm, &mut lines) {
+    while let Some(id) = idle_step(&mut vm, &mut lines) {
         settle(&mut vm, id);
     }
     assert_eq!(lines, ["1", "check,main"], "{text}");
@@ -923,7 +923,7 @@ fn classes_with_fields_in_a_waiting_frame() {
             let (mut lines, d) = body_dump(src, k);
             let d = d.unwrap().unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
             let mut vm = body_host_vm();
-            let run = plain_run(&mut vm, &d.text, &mut lines)
+            let run = run_dump_text(&mut vm, &d.text, &mut lines)
                 .unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
             drive(&mut vm, &mut lines, &mut Vec::new(), None);
             let run = vm.heap().get_handle(run);
@@ -977,7 +977,7 @@ fn computed_keys_evaluated_again_are_refused() {
 /// The run of `src` dumped at every idle point and continued in a fresh VM that ran the
 /// dump, dump after dump (as `--plain-dumps`): its lines.
 fn chained(src: &str) -> Vec<String> {
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -988,12 +988,12 @@ fn chained(src: &str) -> Vec<String> {
     vm.call(f, this, &[]).unwrap();
     let mut lines = Vec::new();
     for _ in 0..1000 {
-        if plain_step(&mut vm, &mut lines).is_none() {
+        if idle_step(&mut vm, &mut lines).is_none() {
             return lines;
         }
-        let text = plain_dump(&vm).unwrap_or_else(|e| panic!("{e}"));
-        vm = plain_load(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
-        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        let text = dump_text(&vm).unwrap_or_else(|e| panic!("{e}"));
+        vm = load_dump(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        let id = idle_step(&mut vm, &mut lines).expect("an idle point");
         settle(&mut vm, id);
     }
     panic!("runaway: {lines:?}");
@@ -1045,7 +1045,7 @@ fn a_frame_holds_an_array_with_named_properties() {
 
 /// Runs the VM to its next idle point (printing): `Some(oldest open call)`, or `None` at
 /// the end (with "threw ..." for an uncaught error).
-fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
+fn idle_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
     loop {
         match vm.run(1_000_000_000) {
             Status::HostCall { call_id, fn_id } if fn_id == SEED => {
@@ -1076,7 +1076,7 @@ fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
 }
 
 /// A plain dump (D2830) of the idle `vm`, or why it was refused.
-fn plain_dump(vm: &Vm) -> Result<String, String> {
+fn dump_text(vm: &Vm) -> Result<String, String> {
     // (The base's names as hosts that dump have them, D3020: the base is not read.)
     let opts = super::dump::DumpOptions {
         host: &["console", "tools", "print", "later"],
@@ -1088,8 +1088,8 @@ fn plain_dump(vm: &Vm) -> Result<String, String> {
 }
 
 /// The plain dump of program `src` run to idle point `k`.
-fn plain_dump_at(src: &str, k: usize) -> String {
-    let mut vm = plain_vm();
+fn dump_text_at(src: &str, k: usize) -> String {
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1100,18 +1100,18 @@ fn plain_dump_at(src: &str, k: usize) -> String {
     vm.call(f, this, &[]).unwrap();
     let mut lines = Vec::new();
     for _ in 1..k {
-        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        let id = idle_step(&mut vm, &mut lines).expect("an idle point");
         settle(&mut vm, id);
     }
-    plain_step(&mut vm, &mut lines).expect("an idle point");
-    plain_dump(&vm).unwrap()
+    idle_step(&mut vm, &mut lines).expect("an idle point");
+    dump_text(&vm).unwrap()
 }
 
 /// A fresh VM that ran plain dump `text` as a Script, with the dump runtime and the host's
 /// hooks on `$djs` (D2903): `$djs.seed` a no-op (the fixtures draw no random numbers),
 /// `$djs.resume` making the call again, `$djs.host` the global of the name's path.
-fn plain_load(text: &str) -> Result<Vm, String> {
-    let mut vm = plain_vm();
+fn load_dump(text: &str) -> Result<Vm, String> {
+    let mut vm = frozen_vm();
     let seed = vm.new_host_function(SEED, "seed").unwrap();
     vm.define_global("$djs_seed", seed).unwrap();
     let rt = vm.dump_runtime().unwrap();
@@ -1156,7 +1156,7 @@ fn plain_load(text: &str) -> Result<Vm, String> {
 /// its first idle point, the loaded dump at its first, and so on. The lines must be the
 /// uninterrupted run's; a refusal ends the chain (counted: the constructs 0203 adds).
 /// The programs plain dumps are checked on: the v2 fixtures and the golden programs.
-fn plain_programs() -> Vec<(String, String)> {
+fn programs() -> Vec<(String, String)> {
     let mut out = Vec::new();
     for name in [
         "plan",
@@ -1185,20 +1185,20 @@ fn plain_programs() -> Vec<(String, String)> {
 
 /// The refusals plain dumps of the programs may give, `program@k: reason` (a ratchet:
 /// `DJS_UPDATE_PLAIN_REFUSALS=1` rewrites it).
-fn plain_refusals_file() -> std::path::PathBuf {
-    fixture_dir().join("plain-refusals.txt")
+fn refusals_file() -> std::path::PathBuf {
+    fixture_dir().join("refusals.txt")
 }
 
 /// Every program dumped (plainly) at each of its idle points, the dump run in a fresh VM
 /// to the end: the lines before and after must be the uninterrupted run's. Refusals are
-/// checked against tests/dump/v2/plain-refusals.txt.
+/// checked against tests/dump/refusals.txt.
 /// Program `src` dumped plainly at each of its idle points, each dump run in a fresh VM to
 /// the end: the failures (`name@k: ...`), the refusals and how many continued identically.
-fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usize) {
+fn check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usize) {
     let (mut failed, mut refused, mut ok) = (Vec::new(), Vec::new(), 0);
     let (want, marks) = run_program(src);
     for k in 1..=marks.len() {
-        let mut vm = plain_vm();
+        let mut vm = frozen_vm();
         let f = vm
             .compile(
                 src.as_bytes(),
@@ -1209,11 +1209,11 @@ fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usiz
         vm.call(f, this, &[]).unwrap();
         let mut lines = Vec::new();
         for _ in 1..k {
-            let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+            let id = idle_step(&mut vm, &mut lines).expect("an idle point");
             settle(&mut vm, id);
         }
-        plain_step(&mut vm, &mut lines).expect("an idle point");
-        let text = match plain_dump(&vm) {
+        idle_step(&mut vm, &mut lines).expect("an idle point");
+        let text = match dump_text(&vm) {
             Ok(t) => t,
             Err(e) => {
                 let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
@@ -1224,21 +1224,21 @@ fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usiz
         if std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == alloc::format!("{name}@{k}")) {
             std::println!("{text}");
         }
-        // `DJS_PLAIN_OUT=DIR`: every dump goes to DIR/<program>/<k>.js (0207's size
+        // `DJS_DUMP_OUT=DIR`: every dump goes to DIR/<program>/<k>.js (0207's size
         // measurement, scripts/dump-size).
-        if let Ok(dir) = std::env::var("DJS_PLAIN_OUT") {
+        if let Ok(dir) = std::env::var("DJS_DUMP_OUT") {
             let dir = std::path::Path::new(&dir).join(name);
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join(alloc::format!("{k}.js")), &text).unwrap();
         }
-        let mut vm = match plain_load(&text) {
+        let mut vm = match load_dump(&text) {
             Ok(vm) => vm,
             Err(e) => {
                 failed.push(alloc::format!("{name}@{k}: {e}\n{text}"));
                 continue;
             }
         };
-        while let Some(id) = plain_step(&mut vm, &mut lines) {
+        while let Some(id) = idle_step(&mut vm, &mut lines) {
             settle(&mut vm, id);
         }
         if lines != want {
@@ -1253,18 +1253,18 @@ fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usiz
 }
 
 #[test]
-fn plain_dumps_at_every_idle_point() {
+fn dumps_at_every_idle_point() {
     let (mut failed, mut refused, mut ok) = (Vec::new(), Vec::new(), 0);
-    for (name, src) in plain_programs() {
-        let (f, r, n) = plain_check_program(&name, &src);
+    for (name, src) in programs() {
+        let (f, r, n) = check_program(&name, &src);
         failed.extend(f);
         refused.extend(r);
         ok += n;
     }
-    let path = plain_refusals_file();
+    let path = refusals_file();
     if std::env::var("DJS_UPDATE_PLAIN_REFUSALS").is_ok() {
         let mut t = String::from(
-            "# Idle points of tests/dump/v2 whose plain dump is refused (plain_dumps_at_every_idle_point).\n",
+            "# Idle points of tests/dump whose plain dump is refused (dumps_at_every_idle_point).\n",
         );
         for r in &refused {
             t.push_str(r);
@@ -1276,12 +1276,12 @@ fn plain_dumps_at_every_idle_point() {
     let listed: Vec<&str> = listed.lines().filter(|l| !l.starts_with('#')).collect();
     for r in &refused {
         if !listed.contains(&r.as_str()) {
-            failed.push(alloc::format!("refused, not in plain-refusals.txt: {r}"));
+            failed.push(alloc::format!("refused, not in refusals.txt: {r}"));
         }
     }
     for l in &listed {
         if !refused.iter().any(|r| r == l) {
-            std::println!("stale in plain-refusals.txt: {l}");
+            std::println!("stale in refusals.txt: {l}");
         }
     }
     std::println!("plain dumps: {ok} identical, {} refused", refused.len());
@@ -1290,10 +1290,10 @@ fn plain_dumps_at_every_idle_point() {
 
 /// Program `src` dumped plainly at its first idle point, the dump run to its first, dumped
 /// again, and so on: the failures, the links and the refusal that ended the chain.
-fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String>) {
+fn chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String>) {
     let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
     let (want, _) = run_program(src);
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1306,10 +1306,10 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
     let mut dumping = true;
     let show = std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == name);
     let mut sizes = Vec::new();
-    while let Some(id) = plain_step(&mut vm, &mut lines) {
+    while let Some(id) = idle_step(&mut vm, &mut lines) {
         if dumping {
-            match plain_dump(&vm) {
-                Ok(text) => match plain_load(&text) {
+            match dump_text(&vm) {
+                Ok(text) => match load_dump(&text) {
                     _ if show && {
                         std::println!("--- {name} link {}\n{text}", links + 1);
                         false
@@ -1348,7 +1348,7 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
     // Objects the dump runtime made for the previous load are written as its helper
     // calls again (D2951): no link carries the runtime's code.
     for (k, &len) in sizes.iter().enumerate() {
-        let fresh = plain_dump_at(src, k + 1).len();
+        let fresh = dump_text_at(src, k + 1).len();
         // (A link may be smaller: a binding its continuation leaves out as dead, D2911,
         // keeps no data in the next dump.)
         if len > fresh + 512 {
@@ -1362,19 +1362,19 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
 }
 
 #[test]
-fn plain_dump_chains_continue_like_the_run() {
+fn dump_chains_continue_like_the_run() {
     let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
-    for (name, src) in plain_programs() {
-        let (f, n, r) = plain_chain_program(&name, &src);
+    for (name, src) in programs() {
+        let (f, n, r) = chain_program(&name, &src);
         failed.extend(f);
         links += n;
         refused.extend(r);
     }
     // Where chains stop: a ratchet like the single dumps' (the same variable updates it).
-    let path = fixture_dir().join("plain-chain-refusals.txt");
+    let path = fixture_dir().join("chain-refusals.txt");
     if std::env::var("DJS_UPDATE_PLAIN_REFUSALS").is_ok() {
         let mut t = String::from(
-            "# Programs of tests/dump/v2 whose plain-dump chain is refused at some link (plain_dump_chains_continue_like_the_run).\n",
+            "# Programs of tests/dump whose plain-dump chain is refused at some link (dump_chains_continue_like_the_run).\n",
         );
         for r in &refused {
             t.push_str(r);
@@ -1386,14 +1386,12 @@ fn plain_dump_chains_continue_like_the_run() {
     let listed: Vec<&str> = listed.lines().filter(|l| !l.starts_with('#')).collect();
     for r in &refused {
         if !listed.contains(&r.as_str()) {
-            failed.push(alloc::format!(
-                "refused, not in plain-chain-refusals.txt: {r}"
-            ));
+            failed.push(alloc::format!("refused, not in chain-refusals.txt: {r}"));
         }
     }
     for l in &listed {
         if !refused.iter().any(|r| r == l) {
-            std::println!("stale in plain-chain-refusals.txt: {l}");
+            std::println!("stale in chain-refusals.txt: {l}");
         }
     }
     std::println!(
@@ -1412,7 +1410,7 @@ fn a_super_base_changed_since_it_was_read_is_refused() {
     let src = "class A { m(x) { return 'a' + x; } }\nclass B { m(x) { return 'b' + x; } }\n\
                class C extends A { async m() { return super[await later('m')](1); } }\n\
                new C().m().then(print);\nObject.setPrototypeOf(C.prototype, B.prototype);";
-    let mut vm = plain_vm();
+    let mut vm = frozen_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1422,8 +1420,8 @@ fn a_super_base_changed_since_it_was_read_is_refused() {
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).unwrap();
     let mut lines = Vec::new();
-    plain_step(&mut vm, &mut lines).expect("an idle point");
-    let e = plain_dump(&vm).unwrap_err();
+    idle_step(&mut vm, &mut lines).expect("an idle point");
+    let e = dump_text(&vm).unwrap_err();
     assert!(
         e.contains("a super base or this the method no longer has"),
         "{e}"
@@ -1433,7 +1431,7 @@ fn a_super_base_changed_since_it_was_read_is_refused() {
 /// `for await` loops closed while `return()` awaits: left by `continue` and `break` to an
 /// outer label and by `return` (the completion's kind in the frame), and by a `break`.
 #[test]
-fn plain_dumps_of_for_await_closes() {
+fn dumps_of_for_await_closes() {
     let src = r#"
 async function* source(tag) {
   try { yield tag + "1"; yield tag + "2"; } finally { print(tag, "closing", await later(tag)); }
@@ -1456,10 +1454,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("closes", src);
+    let (failed, refused, ok) = check_program("closes", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("closes", src);
+    let (failed, _, refused) = chain_program("closes", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6, "{ok}");
@@ -1470,7 +1468,7 @@ main();
 /// property after the site, getters read in order, reference targets of assignment
 /// patterns, a source that is a string, an iterator closed after the pattern.
 #[test]
-fn plain_dumps_of_patterns() {
+fn dumps_of_patterns() {
     let src = r#"
 const log = [];
 const src = {
@@ -1508,10 +1506,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("patterns", src);
+    let (failed, refused, ok) = check_program("patterns", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("patterns", src);
+    let (failed, _, refused) = chain_program("patterns", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6, "{ok}");
@@ -1521,7 +1519,7 @@ main();
 /// and logical operators, the key converted after the right side as the original does)
 /// and an assignment to a pattern with the site on its right (0203 follow-ups).
 #[test]
-fn plain_dumps_sites_in_assignment_targets() {
+fn dumps_sites_in_assignment_targets() {
     let src = r#"
 async function main() {
   const o = { a: 1, n: 5 };
@@ -1542,10 +1540,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("targets", src);
+    let (failed, refused, ok) = check_program("targets", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("targets", src);
+    let (failed, _, refused) = chain_program("targets", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 20, "{ok}");
@@ -1555,7 +1553,7 @@ main();
 /// `return` forwarded after the dump, an inner iterator without `throw`, an async
 /// delegation to a sync iterable whose values are promises.
 #[test]
-fn plain_dumps_of_yield_star() {
+fn dumps_of_yield_star() {
     let src = r#"
 function* inner() { try { yield 1; yield 2; } finally { print("inner closed"); } }
 function* outer() { const r = yield* inner(); yield* [3, 4]; return r; }
@@ -1582,10 +1580,10 @@ async function main2() {
 }
 main().catch((e) => print("main", e)).then(main2);
 "#;
-    let (failed, refused, ok) = plain_check_program("yieldstar", src);
+    let (failed, refused, ok) = check_program("yieldstar", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("yieldstar", src);
+    let (failed, _, refused) = chain_program("yieldstar", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 5, "{ok}");
@@ -1595,7 +1593,7 @@ main().catch((e) => print("main", e)).then(main2);
 /// done result returns through the delegating generator's `finally`, one that is not
 /// yields and the delegation goes on.
 #[test]
-fn plain_dumps_of_yield_star_awaiting_return() {
+fn dumps_of_yield_star_awaiting_return() {
     let src = r#"
 async function* inner(tag) {
   try { yield tag + 1; yield tag + 2; } finally { print("inner finally", tag, await later(tag)); }
@@ -1632,10 +1630,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("yieldstar-return", src);
+    let (failed, refused, ok) = check_program("yieldstar-return", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("yieldstar-return", src);
+    let (failed, _, refused) = chain_program("yieldstar-return", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 8, "{ok}");
@@ -1645,7 +1643,7 @@ main();
 /// scope whose async disposal awaits, disposals that throw (suppressed errors), a sync
 /// `using` per iteration, a `null` resource before a sync one.
 #[test]
-fn plain_dumps_of_using() {
+fn dumps_of_using() {
     let src = r#"
 const res = (name, fail) => ({
   async [Symbol.asyncDispose]() {
@@ -1687,10 +1685,10 @@ async function iter() {
 async function main() { print(await jumps()); print(await errors()); print(await iter()); }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("using", src);
+    let (failed, refused, ok) = check_program("using", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("using", src);
+    let (failed, _, refused) = chain_program("using", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 8, "{ok}");
@@ -1701,7 +1699,7 @@ main();
 /// map's counter, a helper closed by `return`, Iterator.from's wrapper, and chains of
 /// re-dumps through them.
 #[test]
-fn plain_dumps_of_iterator_helpers() {
+fn dumps_of_iterator_helpers() {
     let src = r#"
 function* nums() { try { let i = 0; while (true) yield i++; } finally { print("nums closed"); } }
 async function main() {
@@ -1734,10 +1732,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("helpers", src);
+    let (failed, refused, ok) = check_program("helpers", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("helpers", src);
+    let (failed, _, refused) = chain_program("helpers", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 9, "{ok}");
@@ -1747,7 +1745,7 @@ main();
 /// literals (a computed key, methods and accessors after the site), a logical assignment
 /// to a member, a tagged template, an update of a member, a catch parameter (D2880).
 #[test]
-fn plain_dumps_of_heads_and_more() {
+fn dumps_of_heads_and_more() {
     let src = r#"
 async function varDecl() { var v = await later(1); var w = v + (await later(2)); return v + w; }
 async function loopTest() { let n = 0; while (await later(n < 2)) n++; return n; }
@@ -1768,10 +1766,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("heads", src);
+    let (failed, refused, ok) = check_program("heads", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("heads", src);
+    let (failed, _, refused) = chain_program("heads", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 17, "{ok}");
@@ -1781,14 +1779,14 @@ main();
 /// refused or differs (a tool for finding the constructs plain dumps miss).
 #[test]
 #[ignore]
-fn plain_dumps_probe() {
+fn dumps_probe() {
     let src = std::fs::read_to_string(std::env::var("DJS_PROBE").unwrap()).unwrap();
-    let (failed, refused, ok) = plain_check_program("probe", &src);
+    let (failed, refused, ok) = check_program("probe", &src);
     std::println!(
         "ok {ok}\nrefused {refused:#?}\nfailed {}",
         failed.join("\n")
     );
-    let (failed, links, refused) = plain_chain_program("probe", &src);
+    let (failed, links, refused) = chain_program("probe", &src);
     std::println!(
         "chain links {links} refused {refused:#?}\nfailed {}",
         failed.join("\n")
@@ -1798,7 +1796,7 @@ fn plain_dumps_probe() {
 /// Classes whose methods read variables a waiting frame shares: their statements go into
 /// the continuation's block, a subclass after its parent (D2881).
 #[test]
-fn plain_dumps_of_shared_classes() {
+fn dumps_of_shared_classes() {
     let src = r#"
 async function classShared() {
   let count = 0;
@@ -1815,10 +1813,10 @@ async function classShared() {
 }
 classShared().then(print);
 "#;
-    let (failed, refused, ok) = plain_check_program("classes", src);
+    let (failed, refused, ok) = check_program("classes", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("classes", src);
+    let (failed, _, refused) = chain_program("classes", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 2, "{ok}");
@@ -1827,7 +1825,7 @@ classShared().then(print);
 /// Classes that name themselves (a class expression on a global, a class in a waiting
 /// frame) and a class whose static private field is still at its initial value (D2883).
 #[test]
-fn plain_dumps_of_self_naming_classes() {
+fn dumps_of_self_naming_classes() {
     let src = r#"
 globalThis.A = class A { static n = 0; m() { return A; } };
 A.n++;
@@ -1841,10 +1839,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("self-classes", src);
+    let (failed, refused, ok) = check_program("self-classes", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("self-classes", src);
+    let (failed, _, refused) = chain_program("self-classes", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 1, "{ok}");
@@ -1854,7 +1852,7 @@ main();
 /// using` block's disposal after copied text, an await in a `finally` in a loop's later
 /// iteration, a disposal whose block has a function sharing a `let` (D2884).
 #[test]
-fn plain_redumps_of_loops_finally_and_using() {
+fn redumps_of_loops_finally_and_using() {
     let src = r#"
 async function f6() {
   for (const x of [1, 2]) {
@@ -1881,10 +1879,10 @@ async function h() {
 async function main() { await f6(); await f7(); await g(); await h(); }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("redumps", src);
+    let (failed, refused, ok) = check_program("redumps", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("redumps", src);
+    let (failed, _, refused) = chain_program("redumps", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6, "{ok}");
@@ -1894,7 +1892,7 @@ main();
 /// operator's left operand, a chain of them, a template's substitution, a callee whose key
 /// awaited, an assignment whose value awaits twice (D2885).
 #[test]
-fn plain_redumps_inside_rewritten_statements() {
+fn redumps_inside_rewritten_statements() {
     let src = r#"
 async function t3() { const x = (await later(1)) + (await later(2)); const o = {}; o.a = (await later(3)) + (await later(4)); print(x, o.a, (await later(5)) + (await later(6))); }
 async function t4() { print(1 + (await later(1)) + (await later(2)) + (await later(3))); }
@@ -1904,10 +1902,10 @@ async function t9() { const f = async (v) => { let s = 0; for (const i of [1, 2]
 async function main() { await t3(); await t4(); await t5(); await t8(); await t9(); }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("rewritten", src);
+    let (failed, refused, ok) = check_program("rewritten", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("rewritten", src);
+    let (failed, _, refused) = chain_program("rewritten", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 10, "{ok}");
@@ -1921,7 +1919,7 @@ mod size;
 /// read each other: the variables read them where their scope objects put them, not
 /// nothing (0215; found by the dump benchmark's fake tools).
 #[test]
-fn plain_dumps_of_frame_closures_reached_by_data() {
+fn dumps_of_frame_closures_reached_by_data() {
     let src = r#"
 async function main() {
   let seed = 5;
@@ -1935,10 +1933,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("frame-closures", src);
+    let (failed, refused, ok) = check_program("frame-closures", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, _, refused) = plain_chain_program("frame-closures", src);
+    let (failed, _, refused) = chain_program("frame-closures", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 2, "{ok}");
@@ -1948,7 +1946,7 @@ main();
 /// loop): the inner loop's iterator is the copy's, not the stale constant of K's
 /// scaffold for the first iteration (0215; pjz's nested for-in).
 #[test]
-fn plain_dumps_of_loops_in_copied_text() {
+fn dumps_of_loops_in_copied_text() {
     let src = r#"
 async function* gen(n) { for (let i = 0; i < n; i++) yield i; }
 async function main() {
@@ -1963,10 +1961,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("copied-loops", src);
+    let (failed, refused, ok) = check_program("copied-loops", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, links, refused) = plain_chain_program("copied-loops", src);
+    let (failed, links, refused) = chain_program("copied-loops", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 26 && links >= 26, "{ok} {links}");
@@ -1976,7 +1974,7 @@ main();
 /// in the rest of the iteration K runs in its loop-once scaffold: re-dumps name the
 /// original's loop (pjz, 0211: "no value for completion.kind").
 #[test]
-fn plain_dumps_of_jumps_pending_in_disposals_of_for_await() {
+fn dumps_of_jumps_pending_in_disposals_of_for_await() {
     let src = r#"
 async function* g(k) { for (let i = 0; i < k; i++) yield await later(i); }
 const res = (n) => ({ async [Symbol.asyncDispose]() { print("bye", n, await later(n)); } });
@@ -1999,10 +1997,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("jump-disposal", src);
+    let (failed, refused, ok) = check_program("jump-disposal", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, links, refused) = plain_chain_program("jump-disposal", src);
+    let (failed, links, refused) = chain_program("jump-disposal", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 18 && links >= 18, "{ok} {links}");
@@ -2012,7 +2010,7 @@ main();
 /// earlier iteration's values: written as in their TDZ, their old values left out
 /// (0215); a declaration whose pattern holds the site keeps what it has bound.
 #[test]
-fn plain_dumps_leave_out_stale_locals() {
+fn dumps_leave_out_stale_locals() {
     let src = r#"
 async function main() {
   for (const i of [0, 1]) for (let j = 0; j < 1; j++) {
@@ -2032,10 +2030,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("stale", src);
+    let (failed, refused, ok) = check_program("stale", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, links, refused) = plain_chain_program("stale", src);
+    let (failed, links, refused) = chain_program("stale", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 5 && links >= 5, "{ok} {links}");
@@ -2045,7 +2043,7 @@ main();
 /// array-like's element), dumped as the runtime's `fromAsync` and re-dumped from it
 /// (0215, pjz: "an internal function of a builtin").
 #[test]
-fn plain_dumps_of_array_from_async() {
+fn dumps_of_array_from_async() {
     let src = r#"
 async function* g(n) { for (let i = 0; i < n; i++) yield await later(i); }
 async function main() {
@@ -2055,10 +2053,10 @@ async function main() {
 }
 main();
 "#;
-    let (failed, refused, ok) = plain_check_program("from-async", src);
+    let (failed, refused, ok) = check_program("from-async", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    let (failed, links, refused) = plain_chain_program("from-async", src);
+    let (failed, links, refused) = chain_program("from-async", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6 && links >= 6, "{ok} {links}");

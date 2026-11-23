@@ -1,2 +1,2 @@
-# Programs of tests/dump whose plain-dump chain is refused at some link (plain_dump_chains_continue_like_the_run).
+# Programs of tests/dump whose plain-dump chain is refused at some link (dump_chains_continue_like_the_run).
 golden/class-fields: <call 1><reaction 0>.onFulfilled<this>: plain dumps: an instance of class Counter with private name #bump (only the class's construction can add it to an object, D2878) | <call 1><reaction 0>.onFulfilled<this>: plain dumps: an instance of class Counter with private name #n (only the class's construction can add it to an object, D2878)

@@ -1,5 +1,5 @@
-//! Plain dumps (format 3, D2830, docs/plain-js-dumps.md): the dump as a Script that runs
-//! given only the host's functions, in djs and in node. Every suspended activation is a
+//! Plain dumps (D2830, docs/guide/dumps.md, docs/guide/continuations.md): the dump as a
+//! Script that runs given only the host's functions, in djs and in node. Every suspended activation is a
 //! *continuation* (dump_cont.rs): a function whose body is the rest of the original from
 //! its site, which is also the factory of the scopes its frame shares with closures.
 //!

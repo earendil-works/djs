@@ -1,8 +1,8 @@
 # The dump size score (0207, D2901, D2906), per case: SUITE, CASE, then the bytes of its
 # dumps at every idle point, raw and gzip -9 per dump, without the corpus prelude and the
 # harvest harness (scripts/dump-size `env`). Suites: corpus (difftest --dump-out), programs
-# (the tests/dump programs and golden programs, plain_dumps_at_every_idle_point with
-# DJS_PLAIN_OUT), sleep (the sleep-dump example, the_sleep_example_dumps with DJS_SLEEP_OUT).
+# (the tests/dump programs and golden programs, dumps_at_every_idle_point with
+# DJS_DUMP_OUT), sleep (the sleep-dump example, the_sleep_example_dumps with DJS_SLEEP_OUT).
 # The gate leg "dumps (djs and node)" fails when a case grows; a new case only asks for its
 # line. Rewrite with
 #   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR programs=DIR sleep=DIR

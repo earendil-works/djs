@@ -1,6 +1,6 @@
-//! Dump coverage on the harvested codemode corpus (0167, docs/functions-as-code.md
-//! "Coverage"): every case of tests/corpus/codemode-harvest runs as the difftest runs it
-//! (the corpus prelude, fake tools), then the top-level bindings of the script's body are
+//! Dump coverage on the harvested codemode corpus (0167): every case of
+//! tests/corpus/codemode-harvest runs as the difftest runs it (the corpus prelude, fake
+//! tools), then the top-level bindings of the script's body are
 //! dumped with `Vm::dump_values` and the dump is loaded into a fresh VM.
 //!
 //! `DJS_HARVEST=1 cargo test -p djs-core --lib vm::dump_harvest -- --ignored --nocapture`
@@ -354,7 +354,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
                     let mut serve = |vm: &mut Vm, id: u32, _: u32| {
                         vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
                     };
-                    super::dump_tests::run_plain_dump(&mut b, s, &none, &mut serve).map(|_| ())
+                    super::dump_tests::run_dump(&mut b, s, &none, &mut serve).map(|_| ())
                 } else {
                     match b.compile(s.as_bytes(), &CompileOptions::script("dump.js")) {
                         Ok(f) => {
@@ -687,9 +687,7 @@ fn idle_call(
                             let mut serve = |vm: &mut Vm, id: u32, _: u32| {
                                 vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
                             };
-                            match super::dump_tests::run_plain_dump(
-                                &mut b, &text, &host_fn, &mut serve,
-                            ) {
+                            match super::dump_tests::run_dump(&mut b, &text, &host_fn, &mut serve) {
                                 Ok(v) => {
                                     st.loaded += 1;
                                     *api = b.heap_mut().new_handle(v).unwrap();

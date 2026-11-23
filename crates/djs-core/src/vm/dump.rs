@@ -1,5 +1,6 @@
-//! Dumps (0167, docs/functions-as-code.md): a VM's own bindings written as a JavaScript
-//! Script that recreates them when run, the semantic counterpart of an image.
+//! Dumps (0167, docs/guide/dumps.md, docs/guide/continuations.md): a VM's own bindings
+//! written as a JavaScript Script that recreates them when run, the semantic counterpart
+//! of an image.
 //!
 //! - Builtins are never written, only referenced: by their canonical path on the base
 //!   image (`Array.prototype.map`; D2371's names), or through the loader's

@@ -125,7 +125,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     for _ in 0..reps_of("load") {
         let mut b = load_vm();
         let t = Instant::now();
-        let api = match super::dump_tests::run_plain_dump(&mut b, &text, &host_fn, &mut serve) {
+        let api = match super::dump_tests::run_dump(&mut b, &text, &host_fn, &mut serve) {
             Ok(api) => api,
             Err(e) => {
                 if FAILED.lock().unwrap().load == 0 {

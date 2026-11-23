@@ -12,7 +12,7 @@
 // SRCROOT/<case> (difftest's --dump-out layout), used for the provenance split.
 // Producers:
 //   corpus: target/debug/djs-difftest --engine djs --dump-out DIR    (SRCROOT tests/corpus)
-//   programs: DJS_PLAIN_OUT=DIR cargo test -p djs-core --lib plain_dumps_at_every_idle_point
+//   programs: DJS_DUMP_OUT=DIR cargo test -p djs-core --lib dumps_at_every_idle_point
 //                                                                   (SRCROOT tests/dump, .src.js)
 //   sleep:  examples/sleep-dump/run.sh --restart 50 (examples/sleep-dump/out/)
 //
