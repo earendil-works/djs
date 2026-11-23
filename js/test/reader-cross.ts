@@ -78,8 +78,11 @@ assert.equal(read("bigint-big"), -((5n << 128n) | (0xffffffffn << 96n) | (3n << 
 const sym = read("symbol");
 assert.ok(sym instanceof Opaque && sym.type === "symbol" && sym.description === "tag");
 
-const [err] = read("error") as Opaque[];
-assert.ok(err instanceof Opaque && err.type === "object" && err.className === "Error" && err.ref > 0);
+// An Error as a host Error (no prototype here: the name is the default; its enumerable
+// own `message` is the message, not one more property).
+const [err] = read("error") as Error[];
+assert.ok(err instanceof Error && err.name === "Error" && err.message === "boom" && err.stack === undefined);
+assert.deepEqual(Object.keys(err), []);
 
 const props = read("props") as Record<string, unknown>;
 assert.deepEqual(Object.keys(props), ["2", "10", "b", "a", "__proto__", "sym"]);

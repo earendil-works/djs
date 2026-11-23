@@ -10,6 +10,9 @@ import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
 import { envVar } from "./env.ts";
 import { ImportSyntaxError, leadingImports, lineColumn } from "./imports.ts";
 
+/** A VM value with no host form (a function, a symbol, a WeakMap, ...), as values out carry it. */
+export { Opaque };
+
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
 
@@ -100,8 +103,10 @@ export interface SandboxOptions {
   /** Fuel per `vm_run` call: how often the host gets control back. Default 1,000,000. */
   fuelSlice?: number;
   /**
-   * Fuel budget of one `run`, after which it fails with "out of fuel" (the call is
-   * abandoned; the sandbox stays usable). Default: none.
+   * Fuel budget of one run, after which it fails with "out of fuel" (the call is
+   * abandoned; the sandbox stays usable): exact, and across all the steps of a
+   * host-driven run (`Run.fuelUsed`; `loadRun`'s `fuelUsed` carries it over a dump and
+   * load). Default: none.
    */
   maxFuel?: number;
   /**
@@ -334,6 +339,16 @@ export interface OpenCall {
 export interface Settlement {
   ok: boolean;
   value: unknown;
+}
+
+/** Options of `Sandbox.loadRun`. */
+export interface LoadRunOptions {
+  /**
+   * The fuel the run had used when it was dumped (`Run.fuelUsed`): the loaded run goes on
+   * from there, so `maxFuel` bounds the run across dumps and loads (D3604). A dump does
+   * not carry it; the host keeps it with the dump. Default 0: a fresh budget.
+   */
+  fuelUsed?: number;
 }
 
 /** What `Sandbox.load` recreated: the open host calls of a dump (0171, D2890). */
@@ -725,6 +740,15 @@ export class Run {
   }
 
   /**
+   * The fuel the run used so far, across its steps (and, after `loadRun`, the
+   * `fuelUsed` it was loaded with): what `maxFuel` bounds (D3604). A host that dumps the
+   * run keeps it with the dump and gives it back to `loadRun`.
+   */
+  get fuelUsed(): number {
+    return this.#core.used;
+  }
+
+  /**
    * The calls that were still open when the run ended (D3602): its result settled while
    * they were running, or a host function exited it. The run no longer waits for them;
    * the host cancels them, and settling one is a no-op.
@@ -951,10 +975,13 @@ export class Sandbox {
    * Loads a dumped run into this sandbox (a fresh one) for the host to drive: the run is
    * idle, waiting on the same open calls with the same ids (`run.calls`, with their
    * states); the host settles them, issues them again or rejects them. No hooks run.
+   * `fuelUsed` continues the run's fuel count (`Run.fuelUsed` when it was dumped).
    */
-  loadRun(dump: string): Run {
+  loadRun(dump: string, opts: LoadRunOptions = {}): Run {
     const { calls, result } = this.loadRunDump(dump);
-    return this.startRun(calls, result).run;
+    const core = this.startRun(calls, result);
+    core.used = Math.max(0, opts.fuelUsed ?? 0);
+    return core.run;
   }
 
   /** Loads a dump that holds a run: its open calls and the run's result promise. */
@@ -2430,7 +2457,9 @@ export class Sandbox {
         const why = step.signal.reason;
         throw new SandboxError("aborted", `the step was aborted${why === undefined ? "" : `: ${why instanceof Error ? why.message : String(why)}`}`);
       }
-      const left = budget - (run.used - start);
+      // The slice ends where the step's budget or the run's `maxFuel` does: the run's
+      // budget spans its steps, which may each end idle before a full slice (D3604).
+      const left = Math.min(budget - (run.used - start), maxFuel - run.used);
       const st = this.guard(() => {
         this.setClock();
         return x.vm_run(vm, Math.max(1, Math.min(slice, left)));
