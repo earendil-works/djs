@@ -1,6 +1,6 @@
 # 0297: missingMember's TypeError stack shows the Sandbox's Proxy trap frame
 
-status: open
+status: in-progress
 agent: pns
 branch: issue/0297-missing-member-stack
 depends-on: 0295
