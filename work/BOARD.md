@@ -6,8 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0297 | Remove everything that exists for backwards compatibility (owner) | pcompat | .worktrees/pns |
-| 0298 | The dumper's size: same dumps, far less code (dump feature 334.6 KB gz of 767.7) | pdiet | .worktrees/pone |
+| 0298 | The dumper's size: same dumps, far less code (dumper 334.6 -> ~270 KB gz; module 698,440; waiting on the owner: B items) | pdiet | .worktrees/pone |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -21,6 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); TESTING.md "Size budget" quotes 767.6 KB; docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
 | - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
@@ -61,6 +61,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0297 | Remove everything that exists for backwards compatibility | b141172f..e22ce519 (agent pcompat; 8 merges; D3640-D3645: ABI 9, build-hash images, no slim build, no js/pi, dumps under D024 until declared stable, registry without tombstones, retired-design docs deleted; 767,573 -> 750,859 B gz before 0298) |
 | 0297 | missingMember's TypeError stack showed the Sandbox's Proxy trap frame: the reader takes an error's own `stack` first | 54e4a8a5 (agent pns; D3624; no size change; follow-up: compile the helper under its own name) |
 | 0296 | Sandbox for pi, part 2: cyclic/unreadable arguments throw at the call, read-only host globals, Error name/message coercion, null-prototype namespaces | 4796e5f1 (agent pns; D3620-D3623; +63 B gz; follow-up: sync/async redefinition of a read-only global keeps the old function) |
 | 0295 | Sandbox for pi on djs: thrown errors and console values as data, frozen ordered namespaces, aliases, missingMember, run ends with its body (dropped calls), per-function JSON boundary, maxFuel across steps | 90886057 (agent pns; D3610-D3614; vm_define freeze flag +39 B gz) |
