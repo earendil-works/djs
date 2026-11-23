@@ -191,7 +191,8 @@ pub struct Vm {
 impl Vm {
     pub fn new(opts: VmOptions) -> Result<Vm, HeapError> {
         let mut heap = Heap::with_limit(opts.memory_limit)?;
-        heap.arena_mut().set(0, crate::heap::cells::Roots::BUILD, BUILD_HASH);
+        heap.arena_mut()
+            .set(0, crate::heap::cells::Roots::BUILD, BUILD_HASH);
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
         let mut vm = Vm {
