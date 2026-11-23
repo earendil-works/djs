@@ -14248,3 +14248,39 @@ left of `maxFuel` (and of the step's `fuel`), so the budget is exact in every ru
 `Run.fuelUsed` reports it; a dump does not carry it (the dump format stays as D3596
 fixes it, and fuel is the host's policy): `loadRun(dump, { fuelUsed })` continues the
 count, default 0 (a fresh budget). The loading Script's own fuel stays bounded apart.
+
+## D3620: An argument a host function cannot read is a TypeError at the call
+date: 2026-11-23 · by: pns · issue: 0296
+The reader refuses a cyclic value (and one past its value budget); a sync host call with
+such an argument used to fail the run on the host side. Now the call completes with a
+TypeError (`argument N: cyclic value at $...`) the script can catch, and the host
+function is not called, as the JSON boundary fails a call it cannot convert; an async
+call's promise rejects with it and the call is never listed (the run loop goes on at once
+so the script sees it). Not journaled (a replay reads the same heap and fails the same
+way). `console` gets the reason as text, `[cyclic value at $...]`: output must not throw.
+
+## D3621: The globals the sandbox binds are read-only and non-configurable
+date: 2026-11-23 · by: pns · issue: 0296
+`bindGlobal` (namespaces, functions, `values`, `globals`, `debugger`) defines with
+`vm_define`'s new flag bit 2, non-writable and non-configurable (`Vm::define_with`, which
+replaces `define_enumerable`), as pi's prelude bound its globals: `globalThis.tools =
+null` throws in a body. A dump never writes these globals; the loading sandbox binds them
+itself the same way. `setGlobal` stays an ordinary global. Part of ABI 8, no bump. A
+redefinition of a function whose kind changes (sync to async) makes a new object, which a
+read-only global then does not take: left as is (no host does it).
+
+## D3622: An Error's name and message are coerced as `String()` would
+date: 2026-11-23 · by: pns · issue: 0296
+The reader converts a primitive `name` or `message` (number, boolean, null, BigInt) as
+`String()` does, so `e.message = 42` reads "42"; `undefined`, a symbol, an accessor or
+an object give the defaults ("Error", ""), since converting them would run code.
+
+## D3623: Namespace objects have a null prototype
+date: 2026-11-23 · by: pns · issue: 0296
+The namespaces of dotted names (the Proxy targets with `missingMember`) and module
+namespaces are made with a null prototype (`vm_new_object`'s new argument `flags`, bit 0;
+part of ABI 8), as pi's were: `tools.toString` is undefined. The missing-member trap
+still lets the names of `Object.prototype`'s members through without asking the host, as
+pi's guard did, so a read of `toString` or `hasOwnProperty` gives undefined, not the hint. Cost of D3621 and
+D3623 together: +83 bytes raw, +63 gzip in the shipped module (767,666 gzip, ceiling
+768,597).

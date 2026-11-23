@@ -1,6 +1,6 @@
 # 0296: Sandbox for pi, part 2: cyclic plain values throw at the call, read-only host globals, Error message coercion, null-prototype namespaces
 
-status: in-progress
+status: done
 agent: pns
 branch: issue/0296-sandbox-host-values-2
 depends-on: 0295
@@ -30,11 +30,36 @@ pi on djs (agent pidjs) after 0295; repros with `jsonBoundary: { except: ["text"
    objects (and the Proxy's target) have a null prototype.
 
 ## Acceptance criteria
-- [ ] 1-4 with tests (with and without the boundary; dump and load for 2 and 4)
-- [ ] guide and decisions
+- [x] 1-4 with tests (with and without the boundary; dump and load for 2 and 4)
+- [x] guide and decisions
 
 ## Log
+- 2026-11-23: (1) readCall catches the reader's TypeError/RangeError per argument: a sync
+  call completes with `TypeError: argument N: <reason>` (function not called), an async
+  call's promise rejects with it (never listed; the run loop runs on at once, else the
+  run sat idle with the rejection in the inbox), console gets `[<reason>]` as text.
+- (2) and (4) need engine bits (coordinator agreed, part of ABI 8, no bump): vm_define
+  bit 2 = non-writable + non-configurable (`Vm::define_with` replaces
+  `define_enumerable`), vm_new_object(vm, flags) bit 0 = null prototype
+  (`Vm::new_null_proto_object`). Size: +83 bytes raw, +63 gzip (767,603 -> 767,666,
+  ceiling 768,597). bindGlobal defines read-only; namespaces and module namespaces null
+  prototype; the missing-member trap still skips Object.prototype's names (as pi's guard).
+  The existing 0295 test expected `typeof tools.toString === "function"`: now "undefined".
+- (3) the reader's textProperty: primitives as String() (number, boolean, null, BigInt);
+  undefined/symbol/accessor/object give the defaults.
+- Tests: js/test/host-values-2.test.ts (1-4, with/without boundary, dump/load for 2 and
+  4); djs-wasm `define_read_only_and_null_prototype_objects`. Ran all js tests, djs-wasm
+  tests, clippy (native and wasm), docs check.
+- Guide: js-api.md (read-only globals, null prototype, unreadable arguments, coercion).
 
 ## Follow-ups
+- A read-only global keeps the old object if a host redefines a function with another
+  kind (sync <-> async): no host does it; could be a misuse.
 
 ## Result
+Landed: (1) unreadable (cyclic, too large) arguments to host functions are a catchable
+TypeError at the call (async: a rejected promise), console gets the reason as text;
+(2) host-bound globals non-writable and non-configurable, also after a load; (3) Error
+name/message primitives coerced like String(); (4) namespaces and module namespaces with
+a null prototype. Engine: vm_define bit 2, vm_new_object flags (ABI 8). +63 bytes gzip.
+Decisions D3620-D3623.

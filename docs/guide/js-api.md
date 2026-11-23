@@ -127,7 +127,10 @@ await sandbox.runAsync("return (await tools.read('a.txt')).length");
 
 - A **sync host function** (`functions`) parks the VM: the script waits at the call
   until the function returns, and the value is the call's result. A thrown error becomes
-  an exception the script can catch. Under `runAsync` it may return a promise; under
+  an exception the script can catch, and so does an argument the host cannot read, such
+  as a cycle (`TypeError: argument 1: cyclic value at $.self`): the function is not
+  called. An async host function's call returns a promise rejected with that error.
+  `console` gets such an argument as the text of the reason instead. Under `runAsync` it may return a promise; under
   `run`, that is an error.
 - An **async host function** (`asyncFunctions`) returns a promise in the VM at once, and
   the script goes on, so several calls can be open together, as in
@@ -150,15 +153,20 @@ const sandbox = await Sandbox.create({
 sandbox.run("return myTool('x')");                       // "tool(x)"; no global myTool
 ```
 
+The globals the sandbox binds (functions, namespaces, `values`, the `globals` table) are
+read-only and cannot be deleted: `globalThis.tools = null` throws a `TypeError` in a
+codemode body, which is strict code, and `tools` stays. A loading sandbox binds them the
+same way. Globals that `setGlobal` defines, or that scripts make, are ordinary.
+
 `defineFunction(name, f)` and `defineAsyncFunction(name, f)` add functions to a sandbox
 that exists, bound by the default rule. Or scripts import them from [host
 modules](#host-modules).
 
 ### Namespaces
 
-A namespace such as `tools` or `console` is an object the sandbox makes, with its
-functions as enumerable members in the order they were defined, so
-`Object.keys(tools)` lists them. The sandbox freezes it before the first script runs: a
+A namespace such as `tools` or `console` is an object the sandbox makes, with a null
+prototype and its functions as enumerable members in the order they were defined, so
+`Object.keys(tools)` lists them and `tools.toString` is `undefined`. The sandbox freezes it before the first script runs: a
 script can neither add, change nor delete a member (and a codemode body is strict code,
 so trying throws a `TypeError`). `defineFunction` can add members until then; a member
 for a namespace that is frozen already is a `misuse` error.
@@ -182,9 +190,9 @@ await sandbox.runAsync(`return tools.Read("a.txt")`);  // threw: TypeError: tool
 - `missingMember(namespace, member)` answers a read of a member the namespace does not
   have: the read throws a `TypeError` with the returned message, where otherwise the
   script would get `undefined` and fail later with `not a function`. Returning
-  `undefined` lets the read give `undefined`. Symbols, the members of `Object.prototype`,
-  `then` and `toJSON` are never asked about, so `await`, `JSON.stringify` and `in` behave
-  as usual. The namespaces are then proxies over their frozen member objects, made by
+  `undefined` lets the read give `undefined`. Symbols, the names of `Object.prototype`'s
+  members, `then` and `toJSON` are never asked about (and read `undefined`), so `await`,
+  `JSON.stringify` and `in` behave as usual. The namespaces are then proxies over their frozen member objects, made by
   the sandbox; a dump still names each by its identity, and a loading sandbox with the
   option gives its own. It applies to the namespaces of dotted names, `console`
   included, not to `values` or the namespaces of host modules.
@@ -328,8 +336,10 @@ the VM's memory, without running any code in the VM:
 The result is a tree, like JSON: an object referenced twice is read twice, and a cycle is
 a `TypeError` naming its path. A value budget turns a blow-up (a small structure
 referenced many times) into an error. An error's `name` and `message` are read as the
-data properties the error or its prototypes hold (an accessor is not run: then the name
-is `Error`), and its `stack` is the VM's trace, frames only, as scripts see `e.stack`:
+data properties the error or its prototypes hold, a number or another primitive as
+`String()` makes it text; an accessor or an object would have to run code, so the name is
+then `Error` and the message empty. Its `stack` is the VM's trace, frames only, as
+scripts see `e.stack`:
 
 ```ts
 try {
