@@ -1,6 +1,6 @@
 # 0296: Sandbox for pi, part 2: cyclic plain values throw at the call, read-only host globals, Error message coercion, null-prototype namespaces
 
-status: open
+status: in-progress
 agent: pns
 branch: issue/0296-sandbox-host-values-2
 depends-on: 0295
