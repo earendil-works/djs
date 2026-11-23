@@ -589,6 +589,14 @@ impl super::parser::Parser<'_, '_> {
     /// index, else the start of the construct that keeps it.
     #[inline]
     pub(super) fn names_push(&mut self, at: u32, cs: &[&'static str]) {
+        // (The recording out of line: only the check is in every caller.)
+        if self.f.smap.is_some() {
+            self.names_push_rec(at, cs);
+        }
+    }
+
+    #[inline(never)]
+    fn names_push_rec(&mut self, at: u32, cs: &[&'static str]) {
         if let Some(r) = &mut self.f.smap {
             r.names.extend(cs.iter().map(|&c| (c, at)));
         }
@@ -597,6 +605,13 @@ impl super::parser::Parser<'_, '_> {
     /// The construct consumed the top `n` values it kept.
     #[inline]
     pub(super) fn names_pop(&mut self, n: usize) {
+        if self.f.smap.is_some() {
+            self.names_pop_rec(n);
+        }
+    }
+
+    #[inline(never)]
+    fn names_pop_rec(&mut self, n: usize) {
         if let Some(r) = &mut self.f.smap {
             let len = r.names.len().saturating_sub(n);
             r.names.truncate(len);
@@ -628,6 +643,13 @@ impl super::parser::Parser<'_, '_> {
     /// A suspension point: the `await`/`yield` instruction is emitted next.
     #[inline]
     pub(super) fn site(&mut self, kind: SiteKind, pos: u32) {
+        if self.f.smap.is_some() {
+            self.site_rec(kind, pos);
+        }
+    }
+
+    #[inline(never)]
+    fn site_rec(&mut self, kind: SiteKind, pos: u32) {
         let p1 = self.f.code.pos();
         let scope = self.scope;
         if let Some(r) = &mut self.f.smap {

@@ -775,6 +775,14 @@ mod recording {
         /// A node starts at `start`.
         #[inline]
         pub(in crate::compiler) fn syn_open(&mut self, kind: NodeKind, start: u32) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_open_rec(kind, start);
+            }
+        }
+
+        #[inline(never)]
+        fn syn_open_rec(&mut self, kind: NodeKind, start: u32) {
             if let Some(r) = self.syn() {
                 let mark = r.parts.len() as u32;
                 r.open.push(Open {
@@ -849,6 +857,14 @@ mod recording {
         /// The innermost open node is a `kind` after all (`for (…` turns out a for-of).
         #[inline]
         pub(in crate::compiler) fn syn_kind(&mut self, kind: NodeKind) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_kind_rec(kind);
+            }
+        }
+
+        #[inline(never)]
+        fn syn_kind_rec(&mut self, kind: NodeKind) {
             if let Some(o) = self.syn().and_then(|r| r.open.last_mut()) {
                 o.kind = kind;
             }
@@ -857,6 +873,14 @@ mod recording {
         /// The innermost open node opens the current scope.
         #[inline]
         pub(in crate::compiler) fn syn_scope(&mut self) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_scope_rec();
+            }
+        }
+
+        #[inline(never)]
+        fn syn_scope_rec(&mut self) {
             let s = self.scope;
             if let Some(o) = self.syn().and_then(|r| r.open.last_mut()) {
                 if o.scopes[0].is_none() {
@@ -870,6 +894,14 @@ mod recording {
         /// A part of the innermost open node (of the body when none is open).
         #[inline]
         pub(in crate::compiler) fn syn_part(&mut self, role: Role, start: u32, end: u32) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_part_rec(role, start, end);
+            }
+        }
+
+        #[inline(never)]
+        fn syn_part_rec(&mut self, role: Role, start: u32, end: u32) {
             if let Some(r) = self.syn() {
                 r.parts.push(Part { role, start, end });
             }
@@ -878,6 +910,14 @@ mod recording {
         /// The innermost open node ends where the last token ended.
         #[inline]
         pub(in crate::compiler) fn syn_close(&mut self) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_close_rec();
+            }
+        }
+
+        #[inline(never)]
+        fn syn_close_rec(&mut self) {
             let end = self.prev_end;
             let Some(r) = self.syn() else { return };
             let Some(o) = r.open.pop() else {
@@ -916,6 +956,14 @@ mod recording {
         /// (`using` declares a `const`, `var f; function f() {}`).
         #[inline]
         pub(in crate::compiler) fn syn_decl(&mut self, v: VarId, kind: DeclKind) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_decl_rec(v, kind);
+            }
+        }
+
+        #[inline(never)]
+        fn syn_decl_rec(&mut self, v: VarId, kind: DeclKind) {
             let pos = self.prev_end.saturating_sub(1);
             if let Some(r) = self.syn() {
                 match r.decls.iter_mut().find(|d| d.0 == v) {
@@ -928,6 +976,14 @@ mod recording {
         /// A TypeScript-only range of the current function's code.
         #[inline]
         pub(in crate::compiler) fn syn_erased(&mut self, start: u32, end: u32) {
+            // (The recording out of line: only the check is in every caller.)
+            if self.syn_on() {
+                self.syn_erased_rec(start, end);
+            }
+        }
+
+        #[inline(never)]
+        fn syn_erased_rec(&mut self, start: u32, end: u32) {
             if let Some(r) = self.syn() {
                 r.erased.push((start, end));
             }
