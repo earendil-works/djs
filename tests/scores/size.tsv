@@ -29,7 +29,7 @@
 # bringing the size down again is later work; lowered by 0297, D3640: the ABI's unused exports, the
 # compile cache and the dump maps' export go, 767,573 -> 750,859 B; lowered by 0298, the dumper's
 # diet: 750,859 -> 717,284 B, and D3660, the dumper optimized for size: -> 701,709 B; 0297, D3642:
-# the slim build goes, MEASURED).
+# the slim build goes, 701,738 B: the guards were constant there).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 # budget_allowance_gzip: added to 1.5x by the owner (D3510, 2026-11-21) to land the speedups
 # parked for size, raised by 1,024 for the fuel fix (D3591, 2026-11-22); the ceiling below

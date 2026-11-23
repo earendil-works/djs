@@ -14380,5 +14380,6 @@ build:slim-tests, build:slim-bins, slim tests/difftest/test262, the slim half of
 budget and the clippy combinations `--no-default-features`, `--no-default-features
 --features dump,lazy` and the wasm `slim` and `slim-dump` modules (the remaining combination
 is djs-core with only `unicode`, the former `full,unicode`). The `unicode` umbrella and its
-two features stay. The shipped module: 717,284 -> 717,204 B gzip (the guards were constant
-true there).
+two features stay. The shipped module, where the guards were constant: 1,661,729 ->
+1,661,727 B raw, 701,709 -> 701,738 B gzip, once `Intrinsic::prototype_of` is kept out of
+line (with the registry's call gone it was inlined at its two other call sites, +357 B raw).

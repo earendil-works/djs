@@ -158,7 +158,10 @@ const _: () = assert!(Intrinsic::UnitStrings as u32 == crate::heap::string::UNIT
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
-    /// constructors installed by the prelude (`%InstallConstructor`) reuse it.
+    /// constructors installed by the prelude (`%InstallConstructor`) reuse it. Not inlined:
+    /// a match over the names, called from more than one place (inlined twice it cost
+    /// 319 B of the shipped module).
+    #[inline(never)]
     pub(crate) fn prototype_of(name: &str) -> Option<Intrinsic> {
         Some(match name {
             "Object" => Intrinsic::ObjectProto,

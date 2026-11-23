@@ -212,7 +212,9 @@ docs/slim-codemode.md deleted (J9's list). Guide: builtins.md ("Two builds" sect
 removed), language.md ("The slim build" removed), goals.md, host.md (module table),
 snapshots.md, testing.md (also the agent-host test bullets left from merge 2),
 typescript.md, status.md (regenerated). TESTING.md, AGENTS.md, ARCH.md, docs/host.md,
-docs/web-globals.md updated. D3642. Size: 717,284 -> 717,204 B gzip.
+docs/web-globals.md updated. D3642. Size, after the rebase onto 0298's D3660: 701,709 ->
+701,738 B gzip (1,661,729 -> 1,661,727 raw; `Intrinsic::prototype_of` now #[inline(never)]:
+without it, it was inlined twice into realm_intrinsic, +357 B raw); codemode-memory OK.
 
 ## Follow-ups
 
