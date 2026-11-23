@@ -207,6 +207,26 @@ Waiting on the owner for the B items (subsystems that could go: canon double-wri
 the free-names checker, single-use inlining, operand re-reading, TS type stripping,
 node-loadability); none started.
 
+### 2026-11-23 pdiet: merge 3, the B items measured, the redesign reassessed
+
+Merge 3 (main 0b15dec1): the parser's suspension-map hooks out of line, note/edge `&dyn Fn`:
+701,738 -> 698,440 B gzip (-3.3 KB), ceiling 699,464. Dumps byte-identical.
+
+The B items (owner's call), variant builds of 0b15dec1 with stub patches
+(work/scratch/0298/stubs/, gzip of code+data, base 625,998): no free-names check of the
+written text -4.1 KB (it is also ~35% of a dump's time); no operand re-reading
+(dump_reread) -4.2 KB; no TS type stripping -2.2 KB. The canon double write is origin
+tracking's layout of holes, not a separable check. Single-use inlining (dump_plain_inline,
+~31 K raw) would make every dump bigger.
+
+The structured-references redesign, mapped: 88 call sites scan texts (scan/refs/keys_in/
+eager_*/dump_refs/only_keys/split_def/classify/...), most over texts that hold user
+function source or composites of several values (slot values, factory members, the
+placed texts of continuation blocks), so a structured form would have to carry
+references through every text the Dumper and cont::G compose; the factory's format-2 text
+is read in two places only (emit_items' `$djs.resume(` test, split_callback's keys_in).
+Estimated net ~5-10 KB at high risk; recommended to the coordinator not to do it.
+
 ## Follow-ups
 
 ## Result
