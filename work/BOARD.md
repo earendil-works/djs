@@ -8,6 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0294 | One wasm module with the dumper, one package entry point, npm 0.2.0 (owner) | pone | .worktrees/pone |
+| 0295 | Sandbox: thrown errors and console values as data; namespace objects like pi's (for pi on djs) | pns | .worktrees/pns |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
 ## Open (ready)
