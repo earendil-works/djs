@@ -1,6 +1,6 @@
 # 0294: One wasm module with the dumper, one package entry point, npm 0.2.0
 
-status: open
+status: in-progress
 agent: pone
 branch: issue/0294-one-module
 depends-on: -
