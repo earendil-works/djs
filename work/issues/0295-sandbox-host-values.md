@@ -104,8 +104,9 @@ h. **`maxFuel` across a host-driven run's steps** (coordinator, from pi): each s
 ## Follow-ups
 - `Vm::define`/`define_enumerable` ignore a refused define (a frozen object): vm_define
   returns 0. Harmless for the Sandbox (it checks first), but a host-facing ABI would want -1.
-- `error_summary`'s DOMException branch checks 2 slots, a DOMException has 3 (stack, name,
-  message), so its display falls back to "Error: ..."? Not checked further.
+- `error_summary` (vm_display) checks a DOMException by 2 slots, but it has 3 (stack, name,
+  message): a thrown `new DOMException("d", "AbortError")` displays as "Error" (the run's
+  `message`), while the reader gives name "AbortError", message "d". Engine fix, small.
 - Tasks have no `fuelUsed` carry-over (`Sandbox.resume`): only host-driven runs.
 - pi's "stalled" message (a body waiting on a promise that can never settle) is still the
   host's: a run idle with no open calls and a pending result.
