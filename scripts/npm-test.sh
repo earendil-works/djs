@@ -5,8 +5,8 @@
 #                       API, in that runtime;
 #   js-tests            js/test's tests and the sleep-dump example on the package (node >= 22.18:
 #                       they are TypeScript), on its module; the tests of internal modules
-#                       (base, trap, wire) and of pi's adapter stay out: the package does not
-#                       export them;
+#                       (base, trap, wire, imports, nesting) and of pi's adapter stay out: the
+#                       package does not export them;
 #   browser             smoke.js in headless Chromium, the package as native modules (an import
 #                       map), bundled by Vite and by webpack (installs playwright, its Chromium,
 #                       vite and webpack, so it needs the network; on Linux, `npx playwright
@@ -40,11 +40,16 @@ for what in "$@"; do
     # `$DJS_WASM` stays unread without a prompt.
     deno) deno run --allow-read=. main.js ;;
     js-tests)
-      rm -rf js examples && mkdir -p js/test examples
+      rm -rf js examples tests && mkdir -p js/test examples tests/dump/v2
       cp -R "$repo/examples/sleep-dump" examples/
+      # golden-host.test.ts's programs and their dumps.
+      cp -R "$repo/tests/dump/v2/golden-host" tests/dump/v2/
       rm -rf examples/sleep-dump/out
       for f in "$repo"/js/test/*.test.ts; do
-        case "$(basename "$f")" in base.test.ts | trap.test.ts | wire.test.ts | pi-vm.test.ts) continue ;; esac
+        # (imports.test.ts and nesting.test.ts test internal helpers beside the Sandbox.)
+        case "$(basename "$f")" in
+          base.test.ts | trap.test.ts | wire.test.ts | imports.test.ts | nesting.test.ts | pi-vm.test.ts | pi-pool.test.ts) continue ;;
+        esac
         cp "$f" js/test/
       done
       # The sources' relative imports become the package's entry points.
