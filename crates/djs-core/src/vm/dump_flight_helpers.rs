@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 use super::*;
 
 impl Dumper<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn plain_helper_expr(&mut self, n: usize, o: Obj, before: u32) -> String {
         let h = self.h;
         let slot = |i: u32| h.object_slot(o, i);
@@ -40,6 +41,7 @@ impl Dumper<'_> {
         name
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn plain_helper_text(&mut self, kind: i32, o: Obj) -> Option<String> {
         let h = self.h;
         let slot = |i: u32| h.object_slot(o, i);
@@ -122,6 +124,7 @@ impl Dumper<'_> {
 
 /// An iterator record a plain dump wrapped (`$djs.I`/`$djs.L`: `next` closes over `it`
 /// and `next`), as the original's.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn unwrap_record(h: &Heap, it: Value, next: Value) -> (Value, Value) {
     let wrapped = it.as_object().is_some_and(|o| {
         super::origin::own(h, o, "next").is_some_and(|n| {
@@ -140,6 +143,7 @@ fn unwrap_record(h: &Heap, it: Value, next: Value) -> (Value, Value) {
 
 /// A helper's callback and counter, through a plain dump's `$djs.M(f, k)` (its arrow
 /// closes over `$djs_f` and `$djs_k`): the user's function and the counter it sees next.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn unwrap_callback(h: &Heap, f: Value, k: Value) -> Option<(Value, i64)> {
     let k = k.as_number().unwrap_or(0.0) as i64;
     if let Some(fo) = f.as_object()
@@ -154,6 +158,7 @@ fn unwrap_callback(h: &Heap, f: Value, k: Value) -> Option<(Value, i64)> {
 
 /// A concat item's `[method, iterable]` through a plain dump's `$djs.CI(m, o)` (its
 /// method closes over `$djs_m` and `$djs_o`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn unwrap_concat_item(h: &Heap, m: Value, it: Value) -> (Value, Value) {
     if let Some(fo) = m.as_object()
         && h.object_class(fo) == ObjectClass::Function

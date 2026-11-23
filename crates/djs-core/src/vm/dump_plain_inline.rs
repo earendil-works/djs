@@ -100,6 +100,7 @@ const PURE_NAMES: &[&str] = &[
 
 /// Whether evaluating value text `rhs` later during the load gives the same value and does
 /// nothing else.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn pure(rhs: &str) -> bool {
     // (A function's creation reads nothing: its names are read when it runs, from where
     // it is written; `reads` checks those where that matters.)
@@ -111,6 +112,7 @@ pub(super) fn pure(rhs: &str) -> bool {
 }
 
 /// Whether evaluating value text `rhs` only makes a value (reading names, calling nothing).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn shape(rhs: &str) -> bool {
     let t = rhs.trim();
     let starts = |p: &str| t.starts_with(p);
@@ -144,6 +146,7 @@ pub(super) fn shape(rhs: &str) -> bool {
 
 /// Whether value text `rhs` is a function or class without a name of its own (a name
 /// would be inferred where it is written as an initializer or a property's value).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn anonymous(rhs: &str) -> bool {
     let t = rhs.trim();
     let t = t.strip_prefix("async").map_or(t, str::trim_start);
@@ -161,6 +164,7 @@ fn anonymous(rhs: &str) -> bool {
 /// `rhs` written in place of `text[s..e]`: a function as an element, an argument or an
 /// initializer as it is (no parentheses: djs compiles it lazily, D2995), else as
 /// [`operand`].
+#[cfg_attr(djs_optsize, optimize(size))]
 fn operand_at(text: &str, s: usize, e: usize, rhs: &str) -> String {
     let prev = text[..s].trim_end();
     let next = text[e..].trim_start();
@@ -176,6 +180,7 @@ fn operand_at(text: &str, s: usize, e: usize, rhs: &str) -> String {
 }
 
 /// `rhs` as an operand: in parentheses unless it is one already.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn operand(rhs: &str) -> String {
     let t = rhs.trim();
     let b = t.as_bytes();
@@ -205,6 +210,7 @@ pub(super) fn operand(rhs: &str) -> String {
 
 impl W<'_> {
     /// Counts the `$dump.X` references of everything the writer writes from.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn count_uses(&mut self) {
         let ir = self.ir;
         let mut texts: Vec<&str> = Vec::new();
@@ -282,17 +288,20 @@ impl W<'_> {
 
     /// Whether `$dump.name` is read once besides its own line (`own`: whether its line is
     /// among the counted texts).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn single(&self, name: &str, own: bool) -> bool {
         self.inl.uses.get(&name_hash(name)).copied() == Some(1 + u32::from(own))
     }
 
     /// Whether `$dump.F.key` (a factory's member) is read once.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn single_key(&self, fac: &str, key: &str) -> bool {
         self.inl.key_uses.get(&key_hash(fac, key)).copied() == Some(1)
     }
 
     /// Member `key` of factory `fac` where it is a closure of a merged scope placed in a
     /// block of activation `a`'s continuation: its scope, index and the block.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn block_prop(&self, a: usize, fac: &str, key: &str) -> Option<(super::Sc, usize, usize)> {
         let &f = self.fac_by_name.get(fac)?;
         for (si, sc) in self.ir.factories[f].scopes.iter().enumerate() {
@@ -315,6 +324,7 @@ impl W<'_> {
     /// The activation whose continuation is member `key` of factory `fac`, placed in a
     /// block of activation `a`'s continuation at or above `block`, its text written, and
     /// reading no name a block between declares.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn block_k(&self, a: usize, block: usize, fac: &str, key: &str) -> Option<usize> {
         let a2 = self.kkeys.iter().position(|k| k == key)?;
         let (hsc, _) = self.acts[a2].home?;
@@ -331,6 +341,7 @@ impl W<'_> {
 
     /// Whether a block of activation `a`'s continuation in `(from, to]` declares one of
     /// `names` (a closure written there would see that binding instead).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn declared_between(&self, a: usize, from: usize, to: usize, names: &[String]) -> bool {
         let blocks = &self.acts[a].blocks;
         (from + 1..=to).any(|b| {
@@ -343,6 +354,7 @@ impl W<'_> {
     /// Whether a block of activation `a`'s continuation in `(from, to]` declares a name
     /// `text` reads (not only as an object literal's key): written there, `text` would
     /// see that binding instead. (By the few names declared, not a scan of `text`, 0215.)
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn shadowed(&self, a: usize, from: usize, to: usize, text: &str) -> bool {
         let blocks = &self.acts[a].blocks;
         let b = text.as_bytes();
@@ -360,6 +372,7 @@ impl W<'_> {
     }
 
     /// The block of activation `a`'s continuation that declares slot `sname`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn block_of(&self, a: usize, sname: &str) -> Option<usize> {
         self.acts[a]
             .blocks
@@ -372,6 +385,7 @@ impl W<'_> {
     /// `$dump.s2.todos` → `async function todos(path) {…}`, the member left out of its
     /// block's `Object.assign`. A function's creation evaluates nothing, so it may be
     /// later; the names it reads must be the same bindings here.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn props_in_place(&mut self, a: usize, block: usize, text: &str) -> String {
         if !text.contains("$dump.") {
             return String::from(text);
@@ -454,6 +468,7 @@ impl W<'_> {
     /// K writes the value of temporary `name` of activation `a` that the count took as
     /// evaluated again (D2836): the values it names are read once more, and none goes in
     /// place any more.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn kept_temp(&mut self, a: usize, name: &str) {
         let act = &self.ir.acts[a];
         if !act.rereads.iter().any(|r| r == name) {
@@ -473,6 +488,7 @@ impl W<'_> {
     }
 
     /// Notes the names of activation `a`'s continuation `text` (written in place) reads.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn note_reads(&mut self, a: usize, text: &str) {
         let scope = self.kscopes[a].clone();
         for n in super::refs(text).names {
@@ -484,6 +500,7 @@ impl W<'_> {
 
     /// The value `v` of binding slot `sname` (`<cell>sname` for a shared one) of activation
     /// `a`'s continuation, with closures written in place ([`W::props_in_place`]), once.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn props_in_binding(&mut self, a: usize, sname: &str, v: &str) -> String {
         let key = cat!("<k>", sname);
         if let Some(s) = self.vcache[a].get(&key) {
@@ -501,6 +518,7 @@ impl W<'_> {
     /// `text`, a part of activation `a`'s continuation in its block `block`, with the
     /// members of merged scopes that a binding of K declared at or above `block` holds
     /// named by that binding (D3003): `$dump.s2.todos` → `todos`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn bindings_in_k(
         &mut self,
         a: usize,
@@ -609,6 +627,7 @@ impl W<'_> {
     /// Whether the original's text after activation `a`'s site names `name` (a binding
     /// K is likely to keep): after the site's construct, or in a loop around it (K copies
     /// the loop again, its operand too); not in the site's operand otherwise.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn read_after_site(&self, a: usize, name: &str) -> bool {
         use crate::compiler::NodeKind;
         let act = &self.ir.acts[a];
@@ -647,6 +666,7 @@ impl W<'_> {
 
     /// Makes `$dump.name`'s line a candidate for its one use again, now that a reference
     /// to it was written as a binding's name (D3003).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn repend(&mut self, name: &str) {
         if !self.single(name, true) || self.inl.pend.iter().any(|p| p.name == name) {
             return;
@@ -680,6 +700,7 @@ impl W<'_> {
     /// parameter liveness left out held it, a reference became a binding's name): the
     /// value's effect alone, or nothing (D3003). Fails where a value written in place is
     /// still read by name (a bug). One count, kept as lines go (0215).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn drop_unread(
         &self,
         body: &mut [String],
@@ -780,6 +801,7 @@ impl W<'_> {
     }
 
     /// Starts a list of lines (a callback's, or the top level).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn open_list(&mut self) {
         self.inl.stack.push(Vec::new());
         self.inl.effects.push(Vec::new());
@@ -789,6 +811,7 @@ impl W<'_> {
     /// Starts the list of a callback's part `part`: host calls deferred outside may be
     /// written in it where every one waiting is read in it (so none is left to be written
     /// outside, before the part runs, though it comes after one written in it).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn open_part(&mut self, part: &[super::Plan]) {
         let depth = self.inl.stack.len();
         let all = !self.inl.hooks.is_empty()
@@ -804,6 +827,7 @@ impl W<'_> {
     }
 
     /// Whether an entry of `part` reads `$dump.name`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn part_reads(&self, part: &[super::Plan], name: &str) -> bool {
         let r = cat!("$dump.", name);
         let has = |t: &str| {
@@ -829,6 +853,7 @@ impl W<'_> {
 
     /// Defers line `text` of reopened host call `name` (value `rhs`, read once) until the
     /// line that reads it (D3004).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn defer_hook(&mut self, name: String, text: String, rhs: String) {
         let depth = self.inl.stack.len() - 1;
         self.inl.hook_names.insert(name.clone());
@@ -837,6 +862,7 @@ impl W<'_> {
 
     /// Writes the deferred host calls `text` reads, and those before them (their order is
     /// the host's).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flush_hooks(&mut self, text: &str) {
         if self.inl.hooks.is_empty() {
             return;
@@ -861,6 +887,7 @@ impl W<'_> {
 
     /// Writes every deferred host call: a line with a host call of its own comes after
     /// them.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flush_all_hooks(&mut self) {
         if let Some(n) = self.inl.hooks.len().checked_sub(1) {
             self.flush_upto(n);
@@ -870,6 +897,7 @@ impl W<'_> {
     /// (Each into its own list: a callback's lines run after the lines of the list
     /// around it that follow it, so a host call written there would come after the
     /// later ones written outside.)
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn flush_upto(&mut self, i: usize) {
         let hooks: Vec<_> = self.inl.hooks.drain(..=i).collect();
         for h in &hooks {
@@ -884,6 +912,7 @@ impl W<'_> {
     }
 
     /// Ends the current list: its lines (those written in place left out).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn close_list(&mut self) -> Vec<String> {
         let depth = self.inl.stack.len() - 1;
         // (A deferred host call of this list, and those before it, are written in it.)
@@ -905,6 +934,7 @@ impl W<'_> {
 
     /// Writes line `text` of the current list; `effect`: whether it does more than make a
     /// value; `def`: the value it names and its text, a candidate for its one use.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn put_line(
         &mut self,
         text: String,
@@ -915,6 +945,7 @@ impl W<'_> {
     }
 
     /// [`W::put_line`] for a value whose text binds names `bound` itself.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn put_line_binding(
         &mut self,
         text: String,
@@ -929,6 +960,7 @@ impl W<'_> {
     }
 
     /// [`W::put_line_binding`] into the list at `depth`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn put_line_at(
         &mut self,
         depth: usize,
@@ -961,6 +993,7 @@ impl W<'_> {
     ///
     /// `in_k`: `text` is a value of a continuation's text, whose bindings could hide the
     /// names a value reads: only values that read none but builtins go there.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn inline_refs(&mut self, text: &str, first: Option<usize>, in_k: bool) -> String {
         if in_k {
             self.inline_with(text, first, Reads::Only(PURE_NAMES))
@@ -973,6 +1006,7 @@ impl W<'_> {
     /// K may bind the names `scope`: a value may go there that reads, besides builtins and
     /// what it binds itself, no name of `scope` (and not `this`, `arguments`, `super`, or
     /// K's own `$djs_` helpers).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn inline_site(
         &mut self,
         text: &str,
@@ -983,6 +1017,7 @@ impl W<'_> {
         self.inline_with(text, first, Reads::Scope(&bound))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn inline_with(&mut self, text: &str, first: Option<usize>, reads: Reads) -> String {
         if self.inl.pend.is_empty() && self.inl.hooks.is_empty() {
             return String::from(text);
@@ -1118,6 +1153,7 @@ impl W<'_> {
     /// (`b`, the list being written) makes for it alone (D3002): K runs that part right
     /// before its site, and where nothing effectful comes between (no code of K's blocks
     /// below `b`), the value is made at the site instead, as its first evaluation.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn site_from_callback(&mut self, a: usize, b: usize) {
         let ir = self.ir;
         let act = &ir.acts[a];
@@ -1161,6 +1197,7 @@ impl W<'_> {
     /// dump's in its blocks, no callback): the operand is then the line's first
     /// evaluation (D3001), and K's bindings it names are known before K's arguments are
     /// (D3003: a function both K's parameter and named in the operand is written once).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn site_first(&mut self, a: usize) {
         let ir = self.ir;
         let act = &ir.acts[a];
@@ -1197,6 +1234,7 @@ impl W<'_> {
 
     /// The names activation `a`'s continuation may bind anywhere: any declaration of its
     /// function, any slot's name (and its own `$djs_` helpers).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn k_scope(&self, a: usize) -> &super::super::StrSet {
         &self.kscopes[a]
     }
@@ -1204,6 +1242,7 @@ impl W<'_> {
     /// Whether the lines of a part of activation `a`'s callback may be written in its
     /// continuation where it calls them (D3002): they read no name K may bind, and nothing
     /// that is K's own there (`this`, `arguments`, `super`, `new.target`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn callback_in_k(&self, a: usize, lines: &[String]) -> bool {
         let scope = self.k_scope(a);
         lines.iter().all(|l| {
@@ -1217,6 +1256,7 @@ impl W<'_> {
     }
 
     /// Whether item `kind`'s line does more than make a value.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn effectful(kind: &IK, text: &str) -> bool {
         match kind {
             IK::Def(_) => !shape(def_rhs(text).unwrap_or("")),
@@ -1235,6 +1275,7 @@ impl W<'_> {
 
     /// Slot `name`'s value `v` of activation `a`, with the values that wait for their use
     /// written in place (once per slot: K's generator may ask again).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn inlined_slot(&mut self, a: usize, name: &str, v: &str) -> String {
         if let Some(s) = self.vcache[a].get(name) {
             return s.clone();
@@ -1256,32 +1297,39 @@ impl W<'_> {
 pub(super) struct Counts(super::super::Index);
 
 impl Counts {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn key(h: u64) -> u64 {
         h.max(1)
     }
 
     /// Counts for about `n` names.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn with_capacity(n: usize) -> Self {
         Counts(super::super::Index::with_capacity(n))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn get(&self, h: &u64) -> Option<&u32> {
         self.0.get_ref(Self::key(*h)).filter(|&&c| c != u32::MAX)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn get_mut(&mut self, h: &u64) -> Option<&mut u32> {
         self.0.get_mut(Self::key(*h)).filter(|c| **c != u32::MAX)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn contains_key(&self, h: &u64) -> bool {
         self.get(h).is_some()
     }
 
     /// Whether `h` is counted more than zero times.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn contains(&self, h: &u64) -> bool {
         self.get(h).is_some_and(|&c| c > 0)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn add(&mut self, h: u64) {
         match self.get_mut(&h) {
             Some(c) => *c += 1,
@@ -1289,11 +1337,13 @@ impl Counts {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn set(&mut self, h: u64, v: u32) {
         self.0.insert(Self::key(h), v);
     }
 
     /// Removes `h` (its value: `u32::MAX`, which no count reaches).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn remove(&mut self, h: &u64) {
         if let Some(c) = self.get_mut(h) {
             *c = u32::MAX;
@@ -1301,6 +1351,7 @@ impl Counts {
     }
 
     /// The hashes present (not removed), in no particular order.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn keys(&self) -> impl Iterator<Item = u64> + '_ {
         self.0.entries().filter(|e| e.1 != u32::MAX).map(|e| e.0)
     }
@@ -1316,6 +1367,7 @@ pub(super) struct NameSet {
 }
 
 impl NameSet {
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn insert(&mut self, name: String) -> bool {
         let h = name_hash(&name);
         let new = self.set.insert(name);
@@ -1325,6 +1377,7 @@ impl NameSet {
         new
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn remove(&mut self, name: &str) -> bool {
         let gone = self.set.remove(name);
         if gone && let Some(c) = self.hashes.get_mut(&name_hash(name)) {
@@ -1333,12 +1386,14 @@ impl NameSet {
         gone
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn contains(&self, name: &str) -> bool {
         self.hashes.contains(&name_hash(name)) && self.set.contains(name)
     }
 }
 
 /// A name's hash (FNV-1a), a map key cheaper than the name.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn name_hash(n: &str) -> u64 {
     n.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
@@ -1347,6 +1402,7 @@ pub(super) fn name_hash(n: &str) -> u64 {
 
 /// Calls `f` with the name of each `$dump.X` reference of `text`, by substring (as
 /// [`dump_refs`]).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn for_dump_refs<'t>(text: &'t str, mut f: impl FnMut(&'t str)) {
     let b = text.as_bytes();
     for at in super::dollar_indices(text, "$dump.") {
@@ -1362,11 +1418,13 @@ pub(super) fn for_dump_refs<'t>(text: &'t str, mut f: impl FnMut(&'t str)) {
 
 /// The `$dump.X` references of `text` by substring (`[start, end)`, the name's end): every
 /// one [`scan_spans`] finds, and those in strings and comments too.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn dump_refs(text: &str) -> Vec<(usize, usize)> {
     dump_ref_spans(text).collect()
 }
 
 /// [`dump_refs`] one by one.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn dump_ref_spans(text: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
     let b = text.as_bytes();
     super::dollar_indices(text, "$dump.")
@@ -1379,12 +1437,14 @@ fn dump_ref_spans(text: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
 
 /// A factory member's hash (`$dump.F.key`), for [`Inline::key_uses`]: a collision only
 /// adds uses, as with names.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn key_hash(fac: &str, key: &str) -> u64 {
     name_hash(fac).rotate_left(17) ^ name_hash(key) ^ 0x2545_F491_4F6C_DD1D
 }
 
 /// Whether `text` names `name` only as an object literal's key (`{ path: "b.md" }`): the
 /// references `refs` finds err on the side of keys.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn only_keys(text: &str, name: &str) -> bool {
     let b = text.as_bytes();
     let mut any = false;
@@ -1408,6 +1468,7 @@ pub(super) fn only_keys(text: &str, name: &str) -> bool {
 
 /// Value text `rhs` as an expression statement (in parentheses where it would start
 /// another statement).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn statement(rhs: &str) -> String {
     let t = rhs.trim();
     let other = ["{", "function", "class", "async", "let"]
@@ -1421,6 +1482,7 @@ pub(super) fn statement(rhs: &str) -> String {
 }
 
 /// The value of a `$dump.X = value;` line.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn def_rhs(text: &str) -> Option<&str> {
     text.strip_prefix("$dump.")?;
     let (_, v) = super::split_def(text)?;
@@ -1429,6 +1491,7 @@ pub(super) fn def_rhs(text: &str) -> Option<&str> {
 
 /// Where in a line `$dump.X = value;` or `void value;` its value starts (its first
 /// evaluation, [`first_run`]).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn first_eval(text: &str) -> Option<usize> {
     let v = match text.strip_prefix("void ") {
         Some(v) => v,
@@ -1445,6 +1508,7 @@ pub(super) fn first_eval(text: &str) -> Option<usize> {
 /// (`$dump.a3.then(…)`: its receiver), or a builtin call's or an array's leading operands
 /// (`Promise.all([$dump.p4, $dump.p5])`) with literals among them. Effectful values may
 /// go there, in this order.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn first_run(text: &str, first: usize, spans: &[(usize, usize)]) -> Vec<usize> {
     let b = text.as_bytes();
     let mut i = first;

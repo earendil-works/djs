@@ -9,6 +9,7 @@ use crate::compiler::Part;
 impl G<'_, '_> {
     /// The declarators of `var` declaration path node `i` from the site on, as
     /// assignments: K's prefix declares the names (with the values of those before).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn var_list(&mut self, i: usize, n: &Node) -> R<Vec<P>> {
         let k = self
             .next_part(i)
@@ -56,6 +57,7 @@ impl G<'_, '_> {
 
     /// A `for-in`/`for-of` head without its own bindings as an assignment target: a
     /// `var` head's names are K's.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn var_head_target(&self, head: Part, text: &str) -> P {
         let t = text.trim_start();
         if let Some(rest) = t.strip_prefix("var")
@@ -68,6 +70,7 @@ impl G<'_, '_> {
     }
 
     /// A `while`/`do` loop at its test: the rest of that test, then the loop as it is.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn loop_test(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
         let t = n
             .parts
@@ -100,6 +103,7 @@ impl G<'_, '_> {
 
     /// A `for (init; test; update)` loop's init, test and update as K writes them around
     /// a site in its body (`init`: its bindings from the frame).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn for_parts(&mut self, n: &Node, init: Vec<P>) -> (P, P, P) {
         let test = match n.parts.iter().position(|p| p.role == Role::Test) {
             Some(t) => self.rest_part(n, t),
@@ -114,6 +118,7 @@ impl G<'_, '_> {
 
     /// A `for (init; test; update)` loop with the site in its head: in its init (the
     /// loop not begun), or its test or update (the rest of it, then the loop on).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn for_head(&mut self, i: usize, n: &Node, k: usize, label: Option<P>) -> R<P> {
         let lbl = label.unwrap_or_else(|| s(""));
         let body = n
@@ -184,6 +189,7 @@ impl G<'_, '_> {
     }
 
     /// `for (let/const ...)`'s bindings with their values from the frame, as K's init.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn for_init_from_frame(&mut self, n: &Node) -> R<P> {
         let mut init: Vec<P> = Vec::new();
         if n.decls.is_empty() {
@@ -217,6 +223,7 @@ impl G<'_, '_> {
     }
 
     /// A `for-in`/`for-of`/`for await` at its iterable: the loop with the rest of it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn loop_iterable(&mut self, i: usize, n: &Node, k: usize, label: Option<P>) -> R<P> {
         let it = n.parts[k];
         let e = self.expr(i + 1)?;
@@ -232,6 +239,7 @@ impl G<'_, '_> {
 
     /// `++`/`--` of a member whose object or key holds the site: the reference again
     /// (its object saved), then the update.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn update(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         let op = n
             .parts
@@ -289,6 +297,7 @@ impl G<'_, '_> {
     /// A tagged template with the site in a substitution: the call K makes with the
     /// saved tag, `this`, template object and substitutions before the site (the
     /// template object is the original's, as the dump wrote it).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn tagged(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         if n.parts[k].role != Role::Subst {
             return no("a site in a tagged template's tag (0203)");
@@ -336,6 +345,7 @@ impl G<'_, '_> {
 
     /// A site in a `catch` parameter's pattern: the rest of the pattern declares the
     /// parameter's names in a block of K, the catch block after it (a `finally` around).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn catch_param(&mut self, i: usize, n: &Node) -> R<P> {
         let part = |r: Role| n.parts.iter().position(|p| p.role == r);
         let cb = part(Role::CatchBody).ok_or("plain dumps: a catch without its block")?;

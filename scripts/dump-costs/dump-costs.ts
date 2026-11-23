@@ -266,7 +266,7 @@ const pct = (xs: number[], p: number) => {
 };
 const col = (ps: Point[], k: keyof Point) => ps.map((p) => p[k]);
 
-let report = `djs-wasm: A ${relative(root, dumpPath)}, B ${relative(root, mainPath)} + ${relative(root, dumpPath)}; node ${process.version}\n`;
+let report = `djs-wasm: ${relative(root, mainPath)}; node ${process.version}\n`;
 {
   const t = performance.now();
   for (let i = 0; i < 20; i++) new Sandbox(toolOpts({ module: main })).dispose();

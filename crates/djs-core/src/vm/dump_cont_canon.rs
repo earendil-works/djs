@@ -62,6 +62,7 @@ pub(super) struct Out {
 impl G<'_, '_> {
     /// The continuation's pieces: `parts` rendered (no blank lines of K's own), K's
     /// helpers declared where the marker is.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flatten(self, parts: P) -> Out {
         let mut r = Render {
             ftext: &self.act.ftext,
@@ -153,6 +154,7 @@ impl G<'_, '_> {
 }
 
 /// The values `p` writes in K's text ([`P::Val`]).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn vals_of<'p>(p: &'p P, out: &mut Vec<&'p str>) {
     match p {
         P::Val(t, _) => out.push_out(t.as_str()),
@@ -177,6 +179,7 @@ struct Render<'t> {
 }
 
 impl Render<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn text(&mut self, t: &str) {
         let t = if self.nl {
             t.trim_start_matches('\n')
@@ -189,6 +192,7 @@ impl Render<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn item(&mut self, p: Piece, text: &str) {
         let run = core::mem::take(&mut self.run);
         self.pieces.push_out(Piece::Run(run));
@@ -198,6 +202,7 @@ impl Render<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn walk(&mut self, p: &P) {
         match p {
             P::S(t) | P::Decl(_, t) | P::Val(t, _) => self.text(t),
@@ -232,6 +237,7 @@ impl Render<'_> {
 
 /// The text of `pieces` and its segments `[kStart, fStart, len]`; sets the scaffold
 /// records' offsets in K and the literals' texts in `cmap`.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn layout(
     pieces: &[Piece],
     ftext: &str,
@@ -302,6 +308,7 @@ pub(super) fn layout(
 
 /// Writes activation `act`'s continuation and checks that its canonical activation makes
 /// it again (D2913).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
     let mut w = run(act, ctx, None)?;
     // (Replayed, the tape reads 0 past its end.)
@@ -343,6 +350,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
 /// Where `w`'s pieces differ from `r`'s, which has the same shape: `[piece, length]` of
 /// each run or literal whose text differs, unless it reads as `r`'s with a token (a
 /// name, a reference, a literal) for each placeholder ([`scan`]).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn holes(w: &Out, r: &Out, ftext: &str) -> R<Vec<u32>> {
     if w.pieces.len() != r.pieces.len() {
         return Err(cat!(w.pieces.len(), " pieces, ", r.pieces.len(), " again"));
@@ -398,6 +406,7 @@ fn holes(w: &Out, r: &Out, ftext: &str) -> R<Vec<u32>> {
 
 /// The length of the text at `at` of `k` that reads as `pattern` with a token for each
 /// placeholder: fixed parts as `same` compares them.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn scan(pattern: &str, at: usize, same: &dyn Fn(usize, &str) -> bool, k: &str) -> Option<usize> {
     let mut cur = at;
     for (n, part) in pattern.split(PH).enumerate() {
@@ -422,6 +431,7 @@ fn scan(pattern: &str, at: usize, same: &dyn Fn(usize, &str) -> bool, k: &str) -
 /// (`async function (…) {…}`, `new Map([…])`). The writer leaves out a hole only where
 /// this gives the value's length in its own text, so the reader, scanning the same text,
 /// finds the same.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn token_len(t: &str) -> usize {
     let b = t.as_bytes();
     let mut i = 0;
@@ -562,6 +572,7 @@ fn token_len(t: &str) -> usize {
 
 /// Where the template literal text from `i` (after a backtick or a substitution's `}`)
 /// ends: after its closing backtick (`false`) or after a `${` (`true`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn template_end(b: &[u8], mut i: usize) -> Option<(usize, bool)> {
     while i < b.len() {
         match b[i] {
@@ -751,6 +762,7 @@ struct Canon<'a> {
 }
 
 impl Ctx for Canon<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn slot(&mut self, name: &str) -> Option<String> {
         self.act
             .slots
@@ -758,30 +770,39 @@ impl Ctx for Canon<'_> {
             .any(|s| s.name == name)
             .then(|| String::from(PH))
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn cell(&mut self, _: &str) -> Option<Option<String>> {
         None
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn after_go(&self, _: &str) -> bool {
         false
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn rereads(&self, _: &str) -> bool {
         false
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn arg(&mut self, name: &str) -> Option<String> {
         self.slot(name)
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn made_in(&self, _: &str) -> Option<usize> {
         None
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn block(&mut self, _: usize, _: &[BDecl]) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn go(&self, _: usize) -> String {
         String::new()
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn awaiting(&mut self, _: &[String]) -> String {
         String::from(PH)
     }
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn site_reads(&self) -> Vec<String> {
         Vec::new()
     }

@@ -40,6 +40,7 @@ pub(super) struct Step {
 
 impl Dumper<'_> {
     /// Whether `v` is a closure of the runtime whose text is `text`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn runtime_closure(&self, v: Value, text: &str) -> Option<Obj> {
         let o = v.as_object()?;
         (self.h.object_class(o) == ObjectClass::Function
@@ -48,6 +49,7 @@ impl Dumper<'_> {
     }
 
     /// `fromSync`'s iterator: its sync iterator and `next`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn runtime_from_sync(&self, o: Obj) -> Option<(Value, Value)> {
         let h = self.h;
         if h.object_class(o) != ObjectClass::Ordinary
@@ -93,6 +95,7 @@ impl Dumper<'_> {
 
     /// A reaction `(f, r)` that is the runtime's `fromAsync` waiting: its state in the
     /// slots of the engine's Record (the promise first, which its `resolve` settles).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn runtime_from_async(&self, f: Value, r: Value) -> Option<[Value; 11]> {
         let h = self.h;
         let ok = self.runtime_closure(f, FROM_ASYNC_OK)?;
@@ -131,12 +134,14 @@ impl Dumper<'_> {
     }
 
     /// `closeThrow`'s handler: its sync iterator.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn runtime_close_throw(&self, v: Value) -> Option<Value> {
         let f = self.runtime_closure(v, CLOSE_THROW)?;
         captured_value(self.h, f, "it")
     }
 
     /// A reaction `(f, r)` that is a step of `fromSync` in flight.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn runtime_step(&self, f: Value, r: Value) -> Option<Step> {
         let h = self.h;
         let fo = self.runtime_closure(f, STEP_FULFILLED)?;
@@ -163,6 +168,7 @@ impl Dumper<'_> {
 
     /// The pending promise that `v`, a resolve (`kind` 0) or reject (1) function of
     /// `new Promise`, settles, if it has not been resolved yet.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn resolving(&self, v: Value, kind: usize) -> Option<Value> {
         let h = self.h;
         let o = v.as_object()?;

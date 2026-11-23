@@ -50,6 +50,7 @@ macro_rules! cat {
 
 /// How the checker compiles a dump: a Script, TypeScript when it holds functions of
 /// TypeScript scripts (D2615).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn dump_options(typescript: bool) -> crate::compiler::CompileOptions<'static> {
     crate::compiler::CompileOptions {
         typescript,
@@ -105,11 +106,13 @@ pub struct BaseNames<'a> {
     pub globals: &'a [(u32, &'a str, u64, u8)],
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn no_host_fn_name(_: u32) -> Option<String> {
     None
 }
 
 impl Default for DumpOptions<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn default() -> Self {
         DumpOptions {
             host: &[],
@@ -157,6 +160,7 @@ pub struct ResumedSite {
 pub struct DumpError(pub Vec<String>);
 
 impl DumpError {
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn message(&self) -> String {
         let mut s = String::from("cannot dump:");
         for r in &self.0 {
@@ -171,11 +175,13 @@ impl Vm {
     /// What the VM's dumps keep for the next one, and putting it back: a benchmark times
     /// each of its repetitions as the first dump at that point (dump_perf.rs).
     #[cfg(test)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(crate) fn dump_cache(&self) -> Cache {
         self.dump_cache.borrow().clone()
     }
 
     #[cfg(test)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(crate) fn set_dump_cache(&self, c: Cache) {
         *self.dump_cache.borrow_mut() = c;
     }
@@ -183,6 +189,7 @@ impl Vm {
     /// Dumps the global bindings `names` (all of the VM's own, if `None`: the global
     /// lexical record and the global object's properties the base does not have) and
     /// the user globals their functions read.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn dump(
         &self,
         opts: &DumpOptions<'_>,
@@ -194,6 +201,7 @@ impl Vm {
     /// [`Vm::dump`] with what the dump holds in flight, for hosts and readers: the
     /// activations it resumes (where each stopped) and the counts. The text itself has
     /// no comments about them (0180 moves comments out of the format).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn dump_report(
         &self,
         opts: &DumpOptions<'_>,
@@ -223,6 +231,7 @@ impl Vm {
     /// Dumps explicit values as bindings `name = value` (a harness's selection). A value
     /// may be a captured variable's box (`Value::internal`), for bindings of a function
     /// scope: closures that capture it refer to it by name.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn dump_values(
         &self,
         opts: &DumpOptions<'_>,
@@ -361,10 +370,12 @@ struct Builtin<'t> {
 
 impl BaseNames<'static> {
     /// The index of base cell `cell`'s builtin.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn index(&self, cell: u32) -> Option<usize> {
         self.builtins.binary_search_by_key(&cell, |b| b.0).ok()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get(&self, i: usize) -> Builtin<'static> {
         let path = self.builtins[i].1;
         Builtin {
@@ -389,6 +400,7 @@ const ROOT_BOX: u32 = 3 << 30;
 const TAG: u32 = 3 << 30;
 
 /// The key of a cell offset or atom id in an [`Index`] (0 is the empty slot).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn key(n: u32) -> u64 {
     u64::from(n) + 1
 }
@@ -402,10 +414,12 @@ struct Index {
 }
 
 impl Index {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn slot(&self, key: u64) -> usize {
         (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32) as usize & (self.slots.len() - 1)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get(&self, key: u64) -> Option<u32> {
         if self.slots.is_empty() {
             return None;
@@ -424,6 +438,7 @@ impl Index {
     }
 
     /// A table for about `n` keys: no growing up to them.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn with_capacity(n: usize) -> Self {
         Index {
             slots: alloc::vec![(0, 0); (n * 2).next_power_of_two().max(64)],
@@ -432,6 +447,7 @@ impl Index {
     }
 
     /// Where `key`'s value is.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn find(&self, key: u64) -> Option<usize> {
         if self.slots.is_empty() {
             return None;
@@ -450,19 +466,23 @@ impl Index {
     }
 
     /// The keys and values, in no particular order.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn entries(&self) -> impl Iterator<Item = (u64, u32)> + '_ {
         self.slots.iter().copied().filter(|e| e.0 != 0)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get_ref(&self, key: u64) -> Option<&u32> {
         self.find(key).map(|i| &self.slots[i].1)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get_mut(&mut self, key: u64) -> Option<&mut u32> {
         self.find(key).map(|i| &mut self.slots[i].1)
     }
 
     /// Sets the value of `key`, replacing an earlier one.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn insert(&mut self, key: u64, v: u32) {
         if (self.len + 1) * 2 > self.slots.len() {
             let size = (self.slots.len() * 2).max(64);
@@ -501,6 +521,7 @@ pub(super) struct StrSet {
     more: Vec<u32>,
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn str_hash(n: &str) -> u64 {
     n.bytes()
         .fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
@@ -512,6 +533,7 @@ fn str_hash(n: &str) -> u64 {
 impl StrSet {
     /// The slot of `k`, live or removed.
     #[inline(never)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn slot(&self, k: &str) -> Option<usize> {
         let i = self.index.get(str_hash(k))? as usize;
         if self.keys[i] == k {
@@ -523,12 +545,14 @@ impl StrSet {
             .find(|&j| self.keys[j] == k)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn contains(&self, k: &str) -> bool {
         self.slot(k).is_some_and(|i| self.live[i])
     }
 
     /// Adds `k`: its slot, and whether it was not in the set.
     #[inline(never)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn add(&mut self, k: &str) -> (usize, bool) {
         if let Some(i) = self.slot(k) {
             let new = !self.live[i];
@@ -549,10 +573,12 @@ impl StrSet {
         (i, true)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn insert(&mut self, k: impl AsRef<str>) -> bool {
         self.add(k.as_ref()).1
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn remove(&mut self, k: &str) -> bool {
         match self.slot(k) {
             Some(i) if self.live[i] => {
@@ -564,11 +590,13 @@ impl StrSet {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn len(&self) -> usize {
         self.len
     }
 
     /// The keys in the set, in the order they were first added.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn iter(&self) -> impl Iterator<Item = &String> + '_ {
         self.keys
             .iter()
@@ -577,6 +605,7 @@ impl StrSet {
             .map(|k| k.0)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn extend<S: AsRef<str>>(&mut self, ks: impl IntoIterator<Item = S>) {
         for k in ks {
             self.add(k.as_ref());
@@ -591,6 +620,7 @@ pub(super) struct StrMap<V> {
 }
 
 impl<V> Default for StrMap<V> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn default() -> Self {
         StrMap {
             keys: StrSet::default(),
@@ -600,15 +630,18 @@ impl<V> Default for StrMap<V> {
 }
 
 impl<V> StrMap<V> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn get(&self, k: &str) -> Option<&V> {
         self.vals[self.keys.slot(k)?].as_ref()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn contains_key(&self, k: &str) -> bool {
         self.get(k).is_some()
     }
 
     /// Sets `k` to `v`, replacing an earlier value.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn insert(&mut self, k: &str, v: V) {
         let (i, _) = self.keys.add(k);
         if i == self.vals.len() {
@@ -694,6 +727,7 @@ const RESERVED: &[&str] = &[
     "await",
 ];
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn is_ident(s: &str) -> bool {
     let mut cs = s.bytes();
     matches!(cs.next(), Some(c) if c.is_ascii_alphabetic() || c == b'_' || c == b'$')
@@ -702,15 +736,18 @@ fn is_ident(s: &str) -> bool {
 }
 
 /// Whether `s` contains `pat` (a plain scan: the needles are two or three bytes).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn has(s: &str, pat: &str) -> bool {
     s.as_bytes().windows(pat.len()).any(|w| w == pat.as_bytes())
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn tf(b: bool) -> &'static str {
     if b { "true" } else { "false" }
 }
 
 /// `items` separated by `sep`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn join(items: &[String], sep: &str) -> String {
     let mut s = String::with_capacity(
         items.iter().map(String::len).sum::<usize>() + sep.len() * items.len(),
@@ -725,6 +762,7 @@ fn join(items: &[String], sep: &str) -> String {
 }
 
 /// A JavaScript string literal for UTF-16 code units.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn quote_units(units: impl Iterator<Item = u16>) -> String {
     let mut out = String::from("\"");
     let mut units = units.peekable();
@@ -766,10 +804,12 @@ fn quote_units(units: impl Iterator<Item = u16>) -> String {
 
 /// A host value by its name (D2971): `$djs.host("tools.read")`, which the loading host
 /// resolves while the dump runs.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn host_ref(name: &str) -> String {
     cat!("$djs.host(", quote(name), ")")
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn quote(s: &str) -> String {
     if s.is_ascii() {
         return quote_latin1(s.as_bytes());
@@ -778,12 +818,14 @@ fn quote(s: &str) -> String {
 }
 
 /// Whether Latin-1 unit `b` is written as itself inside a quoted string.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn plain(b: u8) -> bool {
     (0x20..0x7f).contains(&b) && b != b'"' && b != b'\\'
 }
 
 /// [`quote_units`] of one-byte units, copying runs of plain ASCII as they are: data
 /// dumps quote megabytes of strings (0198).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn quote_latin1(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() + bytes.len() / 16 + 2);
     out.push_out('"');
@@ -815,6 +857,7 @@ fn quote_latin1(bytes: &[u8]) -> String {
 
 /// The quoted literal of string key `k`: from its heap string, so that a lone surrogate
 /// stays one (its text would be U+FFFD, 0215).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn quote_atom(h: &Heap, k: Atom) -> String {
     match h.atom_string_of(k) {
         Some(s) => quote_str(h, s),
@@ -823,6 +866,7 @@ fn quote_atom(h: &Heap, k: Atom) -> String {
 }
 
 /// The quoted literal of heap string `s`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn quote_str(h: &Heap, s: crate::value::Str) -> String {
     match h.str_view(s) {
         Some(crate::heap::StrView::Latin1(b)) => quote_latin1(b),
@@ -830,6 +874,7 @@ fn quote_str(h: &Heap, s: crate::value::Str) -> String {
     }
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn number(n: f64) -> String {
     if n == 0.0 && n.is_sign_negative() {
         "-0".into()
@@ -843,6 +888,7 @@ fn number(n: f64) -> String {
 }
 
 /// `.key` or `["key"]`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn member(key: &str) -> String {
     if is_ident(key) {
         cat!(".", key)
@@ -853,6 +899,7 @@ fn member(key: &str) -> String {
 
 /// (Only ArrayBuffers, which the slim build does not have, are written as base64.)
 #[cfg(feature = "full")]
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     // Into bytes, three at a time (0198: a megabyte buffer pushed char by char was most
@@ -883,6 +930,7 @@ pub(super) fn base64(bytes: &[u8]) -> String {
 
 /// Whether the source of a function gets its name from where it is defined (an arrow
 /// or `function (...)`), rather than from its text.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn anonymous_form(kind: u32, src: &str) -> bool {
     if kind == func_flags::KIND_ARROW {
         return true;
@@ -900,6 +948,7 @@ fn anonymous_form(kind: u32, src: &str) -> bool {
 }
 
 /// The name a function declaration's text gives it (`function foo(`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn declared_name(kind: u32, src: &str) -> Option<&str> {
     if kind != func_flags::KIND_NORMAL {
         return None;
@@ -914,6 +963,7 @@ fn declared_name(kind: u32, src: &str) -> Option<&str> {
 }
 
 /// The heap cell of an object, symbol or internal value.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn cell_of(v: Value) -> Option<u32> {
     v.as_object()
         .map(|o| o.offset())
@@ -922,6 +972,7 @@ fn cell_of(v: Value) -> Option<u32> {
 }
 
 /// How a builtin's path can be written in a dump.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn named(path: &str) -> Named {
     let p = path
         .strip_prefix("get ")
@@ -1025,10 +1076,12 @@ struct Dumper<'a> {
 impl<'a> Dumper<'a> {
     /// What the format's helpers are members of: the host's `$djs` (the dump runtime,
     /// D2903).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn rt(&self) -> &'static str {
         "$djs."
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn new(vm: &'a Vm, opts: &DumpOptions<'a>) -> Result<Dumper<'a>, DumpError> {
         let h = &vm.heap;
         let refuse = |m: &str| DumpError(alloc::vec![String::from(m)]);
@@ -1099,6 +1152,7 @@ impl<'a> Dumper<'a> {
 
     /// The heap the dump compiles texts into: a fresh one (compiling needs only its atoms,
     /// D3020).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn scratch_heap(&mut self) -> Option<&mut Heap> {
         if self.scratch.is_none() {
             self.scratch = Heap::new().ok();
@@ -1106,6 +1160,7 @@ impl<'a> Dumper<'a> {
         self.scratch.as_mut()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn refuse(&mut self, path: String, why: &str) {
         let line = cat!(path, ": ", why);
         if !self.refusals.contains(&line) {
@@ -1114,6 +1169,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// What `cell` is to the dump: its tag and index.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn cell(&self, cell: u32) -> Option<(u32, usize)> {
         // (The base's builtins are below `base_end`: the base table's, not in `cells`.)
         if cell < self.base_end {
@@ -1123,6 +1179,7 @@ impl<'a> Dumper<'a> {
         Some((t & TAG, (t & !TAG) as usize))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn builtin(&self, cell: u32) -> Option<Builtin<'_>> {
         match self.cell(cell)? {
             (BUILTIN, i) => Some(self.builtins.get(i)),
@@ -1131,6 +1188,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The user's globals (what the base does not have), and the host's values by name.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn read_globals(&mut self, base_globals: &[(u32, &str, u64, u8)]) {
         let h = self.h;
         let g = self.vm.global();
@@ -1178,6 +1236,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn global_binding(&mut self, k: Atom, value: Value, decl: Decl) {
         let name = atom_text(self.h, k);
         // A host name on the global object is the host's; a lexical binding of that
@@ -1204,6 +1263,7 @@ impl<'a> Dumper<'a> {
     /// Marks `v`, a host root or a value reached from one, as the host's: written as
     /// `expr` (`$djs.host("tools")`, `$djs.host("tools").list`), never dumped.
     /// Host value `i`'s expression (`$djs.host("tools").read`), made when it is written.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn host_expr(&self, i: usize) -> String {
         match &self.host_exprs[i] {
             HostExpr::Root(e) => e.clone(),
@@ -1211,6 +1271,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn host_values(&mut self, v: Value, expr: HostExpr, depth: u32) {
         let Some(o) = v.as_object() else { return };
         // A host function is written by its identity wherever it is bound (D2970).
@@ -1238,6 +1299,7 @@ impl<'a> Dumper<'a> {
 
     /// The expression for builtin `i`: its path, or `$dump.bN`, captured at the top of
     /// the dump before user code runs.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn builtin_expr(&mut self, i: usize) -> String {
         let b = self.builtins.get(i);
         if b.named == Named::Path {
@@ -1257,6 +1319,7 @@ impl<'a> Dumper<'a> {
 
     // ---------------------------------------------------------------- discovery
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn add_global_root(&mut self, g: usize) {
         if self.globals[g].root.is_some() {
             return;
@@ -1279,6 +1342,7 @@ impl<'a> Dumper<'a> {
         self.drain();
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn add_root(&mut self, name: &str, decl: Decl, v: Value) {
         if self.roots.iter().any(|r| r.name == name) {
             return;
@@ -1298,6 +1362,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Adds a root and notes its value (visited by the next `drain`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn push_root(&mut self, name: String, decl: Decl, value: Value) {
         let i = self.roots.len();
         if value.is_uninitialized() {
@@ -1318,12 +1383,14 @@ impl<'a> Dumper<'a> {
 
     /// Records a reference to `v`; its node, if it is one the dump writes. (`path` is
     /// called at most once; one copy of the body for every caller's closure.)
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn note(&mut self, v: Value, path: impl FnOnce() -> String) -> Option<usize> {
         let mut path = Some(path);
         self.note_dyn(v, &mut || path.take().map(|p| p()).unwrap_or_default())
     }
 
     #[inline(never)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn note_dyn(&mut self, v: Value, path: &mut dyn FnMut() -> String) -> Option<usize> {
         match v.kind() {
             Kind::Object | Kind::Symbol | Kind::Internal => {}
@@ -1388,6 +1455,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Visits the nodes found so far (and the ones they lead to).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn drain(&mut self) {
         while self.visited < self.nodes.len() {
             let i = self.visited;
@@ -1396,6 +1464,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn edge(&mut self, from: usize, v: Value, path: impl FnOnce() -> String) -> Option<usize> {
         let mut path = Some(path);
         self.edge_dyn(from, v, &mut || {
@@ -1404,6 +1473,7 @@ impl<'a> Dumper<'a> {
     }
 
     #[inline(never)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn edge_dyn(
         &mut self,
         from: usize,
@@ -1416,6 +1486,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// A key as a path segment: `.name`, `["a b"]`, `[Symbol.iterator]`, `[Symbol(tag)]`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn key_path(&self, k: Atom) -> String {
         let h = self.h;
         match h.atom_symbol(k) {
@@ -1435,6 +1506,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// A key as code after an expression: `.name`, `["a b"]`, `[sym]`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn key_member(&mut self, k: Atom) -> String {
         match self.h.atom_symbol(k) {
             Some(s) => cat!("[", self.expr(Value::symbol(s), None, None), "]"),
@@ -1451,6 +1523,7 @@ impl<'a> Dumper<'a> {
 
     /// The edges of `o`'s own properties (but the ones `skip` takes: name and array
     /// index) and of a prototype its literal or constructor would not give it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn props(&mut self, n: usize, o: Obj, skip: &dyn Fn(Atom, Option<u32>) -> bool) {
         let h = self.h;
         for k in keys_but_elements(h, o) {
@@ -1495,6 +1568,7 @@ impl<'a> Dumper<'a> {
 
     /// The edge of a symbol key. A key may be written twice (in a literal and in an
     /// attribute patch), so it counts twice: a unique symbol is made once, by name.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn key_edge(&mut self, n: usize, k: Atom) {
         if let Some(s) = self.h.atom_symbol(k) {
             let base = self.nodes[n].path.clone();
@@ -1505,6 +1579,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The prototype a literal or constructor call of `o`'s class gives it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn class_proto(&self, o: Obj) -> Option<Intrinsic> {
         let h = self.h;
         Some(match h.object_class(o) {
@@ -1534,6 +1609,7 @@ impl<'a> Dumper<'a> {
         })
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn default_proto(&self, o: Obj, p: Option<Obj>) -> bool {
         let h = self.h;
         match h.object_class(o) {
@@ -1549,6 +1625,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn visit(&mut self, n: usize) {
         let h = self.h;
         let v = self.nodes[n].v;
@@ -1698,6 +1775,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn closure(&mut self, n: usize, o: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -1821,6 +1899,7 @@ impl<'a> Dumper<'a> {
     /// enclosing code evaluated (a class's member keys, an object literal method's key):
     /// the dump evaluates them again, where other bindings are in scope. Only keys whose
     /// value cannot differ pass: literals and well-known symbols (D2623).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn computed_keys(&mut self, path: &str, o: Obj) {
         let h = self.h;
         let t = h.closure_template(o);
@@ -1861,6 +1940,7 @@ impl<'a> Dumper<'a> {
     /// The length of an arguments object as a call makes it (indexes `0..length` with
     /// default attributes, `length`, `callee` and `Symbol.iterator` untouched), else
     /// `None`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn arguments_len(&self, o: Obj) -> Option<u32> {
         let h = self.h;
         let len = h
@@ -1880,6 +1960,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// A private key that holds a method or accessor (a brand), not a field.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn is_brand(&self, k: Atom) -> bool {
         self.h.atom_symbol(k).is_some_and(|s| {
             self.h.symbol_private_flags(s) & crate::heap::cells::flags::SYM_PRIVATE_METHOD != 0
@@ -1888,6 +1969,7 @@ impl<'a> Dumper<'a> {
 
     /// After discovery: the members of every class (what its evaluation makes), and the
     /// refusal of class-scope closures no class makes.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn assign_members(&mut self) {
         let h = self.h;
         for c in 0..self.nodes.len() {
@@ -1993,6 +2075,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The classes of the private keys the dumped objects hold.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn resolve_privates(&mut self) {
         let h = self.h;
         for c in 0..self.nodes.len() {
@@ -2023,6 +2106,7 @@ impl<'a> Dumper<'a> {
 
     /// Whether node `m` holds closure `e` in a hidden binding of a class (`<fields 0>`,
     /// `<#m>`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn edge_is_hidden(&self, m: usize, e: usize) -> bool {
         let h = self.h;
         let (Some(f), Some(target)) = (self.nodes[m].v.as_object(), self.nodes[e].v.as_object())
@@ -2047,6 +2131,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Whether own property `k` of function `f` is one its definition makes.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn default_fn_key(&self, f: Obj, k: Atom) -> bool {
         k == atoms::LENGTH
             || k == atoms::NAME
@@ -2055,6 +2140,7 @@ impl<'a> Dumper<'a> {
 
     /// [`Dumper::fn_protos`]: the default `prototype` objects of the functions the dump
     /// writes from their text.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn find_fn_protos(&mut self) {
         let h = self.h;
         for n in 0..self.nodes.len() {
@@ -2079,6 +2165,7 @@ impl<'a> Dumper<'a> {
 
     /// A function's `prototype` as its definition makes it: absent, or an object with
     /// only `constructor` (back to the function), or an empty generator prototype.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn default_fn_prototype(&self, f: Obj) -> bool {
         let h = self.h;
         let Some(atom) = h.own_keys(f).into_iter().find(|k| *k == atoms::PROTOTYPE) else {
@@ -2097,12 +2184,14 @@ impl<'a> Dumper<'a> {
                 && h.get_own_property(p, keys[0]).and_then(|p| p.value()) == Some(Value::object(f)))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn template_names(&self, t: u32) -> Vec<String> {
         template_names(self.h, t)
     }
 
     /// Adds the user globals template `t` (and its children) reads or writes by name
     /// as roots, visited after the current node.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn global_refs(&mut self, t: u32) {
         let h = self.h;
         let t = compiled(h, t);
@@ -2133,6 +2222,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Makes user global `g` a root, visited after the current node.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn global_root(&mut self, g: usize) {
         if self.globals[g].root.is_none() {
             let name = self.globals[g].name.clone();
@@ -2148,6 +2238,7 @@ impl<'a> Dumper<'a> {
     /// The globals that lazy template `t`, which never ran, or a function inside it reads
     /// or writes, in the order its code would (D2993): it compiled on its own, with the
     /// functions inside it, in a heap of its own.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn lazy_globals(&mut self, t: u32) -> Arc<Vec<String>> {
         if let Some(i) = self.lazy_at.get(key(t)) {
             return self.lazy_globals[i as usize].clone();
@@ -2158,6 +2249,7 @@ impl<'a> Dumper<'a> {
         g
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn lazy_globals_of(&mut self, t: u32) -> Vec<String> {
         #[cfg(feature = "lazy")]
         {
@@ -2204,6 +2296,7 @@ impl<'a> Dumper<'a> {
 
     /// The free names of template `t` (a closure's): its captures, and the globals it or
     /// a function inside it reads or writes.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn template_free_names(&mut self, t: u32) -> FreeNames {
         let h = self.h;
         let mut globals: Vec<String> = Vec::new();
@@ -2238,8 +2331,10 @@ impl<'a> Dumper<'a> {
 
     /// Closure groups (closures that share a captured box, transitively) and the nodes
     /// on cycles (Tarjan's strongly connected components, iterative).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn analyze(&mut self) {
         let n = self.nodes.len();
+        #[cfg_attr(djs_optsize, optimize(size))]
         fn find(p: &mut [usize], mut x: usize) -> usize {
             while p[x] != x {
                 p[x] = p[p[x]];
@@ -2375,6 +2470,7 @@ impl<'a> Dumper<'a> {
 
     // ---------------------------------------------------------------- emission
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn finish(mut self) -> Result<Dumped, DumpError> {
         self.drain();
         self.assign_members();
@@ -2473,6 +2569,7 @@ impl<'a> Dumper<'a> {
 
     /// `text`, a plain dump whose function texts are TypeScript's, as JavaScript; `None`
     /// if its TypeScript is more than types.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn strip_types(&mut self, text: &str) -> Result<Option<String>, DumpError> {
         let fail = |why: &str| DumpError(alloc::vec![cat!("plain dump: ", why)]);
         // (The checker used the scratch heap up: a fresh one, only for the parse.)
@@ -2521,6 +2618,7 @@ impl<'a> Dumper<'a> {
     /// `$djs.source(name, hash, params[, 1])` for codemode body `f`, or the one function a
     /// host's wrapper script makes (D2882, D2886), when the dump refers to
     /// the scripts the host ran instead of writing their text.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn source_ref(&self, f: Obj) -> Option<String> {
         if !self.source_refs {
             return None;
@@ -2580,6 +2678,7 @@ impl<'a> Dumper<'a> {
     /// exist after loading if it existed before (a root, a host global, a builtin global).
     /// Anything else would load as a function that reads another binding than it did, so
     /// the dump is refused instead.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn check(&mut self, text: &str) {
         let h = self.h;
         let fns: Vec<usize> = (0..self.nodes.len())
@@ -2678,12 +2777,14 @@ impl<'a> Dumper<'a> {
 
     /// The suspension maps of `src` compiled with `params` and the options `bits`, from
     /// the VM's `Cache` or compiled in the scratch heap (and kept there).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn maps_of(&mut self, src: &str, params: &str, bits: u32) -> Option<Arc<Vec<FunctionMap>>> {
         self.maps_entry(src, params, bits).0
     }
 
     /// [`Dumper::maps_of`], whether they are partial (D2994), and the lazy functions'
     /// globals (D2993).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn maps_entry(
         &mut self,
         src: &str,
@@ -2707,6 +2808,7 @@ impl<'a> Dumper<'a> {
 
     /// The complete maps of `src` (an eager compile in the scratch heap), kept in the
     /// VM's cache in place of what it had.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn compile_maps(
         &mut self,
         src: &str,
@@ -2724,6 +2826,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Keeps `maps` of `src` in the VM's cache (replacing an entry for the same text).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn set_maps(
         &mut self,
         src: &str,
@@ -2756,6 +2859,7 @@ impl<'a> Dumper<'a> {
 
     /// The checker's table of the skeleton `text`: every function it writes, by the hash
     /// of its text, with its free names; or why it does not compile.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn checked(&mut self, text: &str) -> Result<CheckTable, String> {
         let Some(mut scratch) = self.scratch.take().or_else(|| Heap::new().ok()) else {
             return Err(String::from("no memory to check it"));
@@ -2793,11 +2897,13 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fresh(&mut self, prefix: &str) -> String {
         self.next += 1;
         cat!("$dump.", prefix, self.next)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn key_expr(&mut self, k: Atom) -> String {
         match self.h.atom_symbol(k) {
             Some(s) => self.expr(Value::symbol(s), None, None),
@@ -2807,6 +2913,7 @@ impl<'a> Dumper<'a> {
 
     /// The key in an object literal: `name`, `"a b"`, `[Symbol.iterator]`.
     /// [`Dumper::key_member`], kept per dump for string atoms.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn member_of(&mut self, k: Atom) -> Arc<str> {
         if self.h.atom_symbol(k).is_some() {
             return Arc::from(self.key_member(k));
@@ -2821,6 +2928,7 @@ impl<'a> Dumper<'a> {
         m
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn literal_key(&mut self, k: Atom) -> Arc<str> {
         let h = self.h;
         match h.atom_symbol(k) {
@@ -2846,6 +2954,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn descriptor(&mut self, p: &Property) -> String {
         match *p {
             // Descriptors are written in patches, after every value is made: a value
@@ -2883,6 +2992,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_root(&mut self, r: usize) {
         if self.roots[r].state != State::New {
             return;
@@ -2965,6 +3075,7 @@ impl<'a> Dumper<'a> {
 
     /// A frame shares variables of scope group `g`: a plain dump makes its closures in
     /// continuations.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn merged(&self, g: usize) -> bool {
         self.groups[g]
             .boxes
@@ -2973,11 +3084,13 @@ impl<'a> Dumper<'a> {
     }
 
     /// A closure a plain dump makes in a continuation: data gets it by a patch.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn plain_patched(&self, n: usize) -> bool {
         let g = self.nodes[n].group;
         g != usize::MAX && self.nodes[n].member.is_none() && self.merged(g)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn node_of(&self, v: Value) -> Option<usize> {
         match self.cell(cell_of(v)?)? {
             (NODE, n) => Some(n),
@@ -2985,6 +3098,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn free_closure(&self, n: usize) -> bool {
         self.nodes[n].group == usize::MAX
             && self.nodes[n]
@@ -2993,12 +3107,14 @@ impl<'a> Dumper<'a> {
                 .is_some_and(|o| self.h.object_class(o) == ObjectClass::Function)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_kind(&self, n: usize) -> u32 {
         let o = self.nodes[n].v.as_object().expect("a function");
         let t = self.h.closure_template(o);
         func_flags::kind(u32::from(self.h.arena().get::<u16>(t, FuncTemplate::FLAGS)))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_source(&self, n: usize) -> Option<String> {
         self.fns_read.set(self.fns_read.get() + 1);
         let f = self.nodes[n].v.as_object()?;
@@ -3036,6 +3152,7 @@ impl<'a> Dumper<'a> {
     /// binding or key an anonymous function would be named after) and a location
     /// (`loc`: an expression that reaches the value afterwards, for patches). Empty for
     /// a value on a cycle that is being written: the caller patches it in later.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn expr(&mut self, v: Value, loc: Option<&str>, ctx_name: Option<&str>) -> String {
         match v.kind() {
             Kind::Undefined => return "undefined".into(),
@@ -3139,6 +3256,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Whether node `n` needs no patches when written in a context without a location.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn simple(&self, n: usize, ctx_name: Option<&str>) -> bool {
         let h = self.h;
         let Some(o) = self.nodes[n].v.as_object() else {
@@ -3202,6 +3320,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_name(&self, n: usize) -> String {
         let h = self.h;
         let o = self.nodes[n].v.as_object().expect("a function");
@@ -3216,6 +3335,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Whether function `n` has its own `name` and it is the empty string.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_name_is_empty(&self, n: usize) -> bool {
         let h = self.h;
         let o = self.nodes[n].v.as_object().expect("a function");
@@ -3225,6 +3345,7 @@ impl<'a> Dumper<'a> {
         )
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_name_matches(&self, n: usize, ctx_name: Option<&str>) -> bool {
         let Some(src) = self.fn_source(n) else {
             return false;
@@ -3234,6 +3355,7 @@ impl<'a> Dumper<'a> {
 
     /// Own properties of a function beyond its definition, and a `name` the context
     /// does not give it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_patches(&mut self, n: usize, ctx_name: Option<&str>) {
         let h = self.h;
         let o = self.nodes[n].v.as_object().expect("a function");
@@ -3262,6 +3384,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn prop_patch(&mut self, loc: &str, k: Atom, p: &Property) {
         let line = match *p {
             Property::Data { value, flags } if flags == PropFlags::ALL => {
@@ -3278,6 +3401,7 @@ impl<'a> Dumper<'a> {
         self.patches.push_out(line);
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_group(&mut self, g: usize) {
         if self.groups[g].state != State::New {
             return;
@@ -3862,6 +3986,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn is_class_node(&self, n: usize) -> bool {
         self.nodes[n]
             .v
@@ -3870,6 +3995,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The node of a class's parent (its `[[Prototype]]`), if it is one.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn class_parent(&self, n: usize) -> Option<usize> {
         let o = self.nodes[n].v.as_object()?;
         self.node_of(Value::object(self.h.get_prototype_of(o)?))
@@ -3878,6 +4004,7 @@ impl<'a> Dumper<'a> {
     /// A class's text as an expression. A derived class's heritage path is bound to the
     /// parent it has now: `((B) => class A extends B {...})(parent)`, so the text
     /// stays verbatim and `extends` evaluates to the right class.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn class_text(&mut self, n: usize) -> String {
         let h = self.h;
         let src = self.fn_source(n).unwrap_or_default();
@@ -3941,6 +4068,7 @@ impl<'a> Dumper<'a> {
     /// does not make: its name if the text gives another, static fields and the
     /// properties added since (attributes kept), members deleted since, prototypes,
     /// private fields and brands, extensibility.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn class_done(&mut self, n: usize, loc: &str, ctx_name: Option<&str>) {
         let h = self.h;
         let o = self.nodes[n].v.as_object().expect("a class");
@@ -4090,6 +4218,7 @@ impl<'a> Dumper<'a> {
 
     /// The private fields and brands of object `o`: refused, but a class's own static
     /// ones its evaluation makes (D2878).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn private_patches_of(&mut self, o: Obj) {
         let Some(n) = self.node_of(Value::object(o)) else {
             return;
@@ -4148,6 +4277,7 @@ impl<'a> Dumper<'a> {
 
     /// The literal class `c`'s text initializes its static private field `name` with
     /// (`static #n = 0;`), if it is one: what its evaluation sets the field to.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn static_private_literal(&self, c: usize, name: &str) -> Option<String> {
         let src = self.fn_source(c)?;
         let at = src.find(&cat!("static ", name))?;
@@ -4165,6 +4295,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// A function's source as an expression: methods and accessors through `$dump.fn`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_expr(&mut self, n: usize, src: &str) -> String {
         match self.fn_kind(n) {
             func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER => {
@@ -4175,6 +4306,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Writes node `n` (state New) as an expression; `loc` reaches it afterwards.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn render(&mut self, n: usize, loc: Option<&str>, ctx_name: Option<&str>) -> String {
         self.nodes[n].state = State::Busy;
         let loc = String::from(loc.unwrap_or_default());
@@ -4210,6 +4342,7 @@ impl<'a> Dumper<'a> {
 
     /// A private name held as a value (a frame's binding or operand): plain JavaScript
     /// has no expression for it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn private_name_expr(&mut self, n: usize) -> String {
         let p = self.nodes[n].path.clone();
         self.refuse(p, "plain dumps: a private name as a value (0203)");
@@ -4217,6 +4350,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Whether closure `n` has a home object (a method that uses `super`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn has_home(&self, n: usize) -> bool {
         self.nodes[n].v.as_object().is_some_and(|o| {
             self.h.object_class(o) == ObjectClass::Function
@@ -4230,6 +4364,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// A method's home object.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn home_of(&self, n: usize) -> Option<Value> {
         if !self.has_home(n) {
             return None;
@@ -4241,6 +4376,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The `Symbol.for` key of a registered symbol, quoted.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn registered(&self, s: Value) -> Option<String> {
         let h = self.h;
         let reg = intrinsic(h, Intrinsic::SymbolRegistry).as_object()?;
@@ -4252,6 +4388,7 @@ impl<'a> Dumper<'a> {
         None
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn render_object(&mut self, n: usize, o: Obj, loc: &str, ctx_name: Option<&str>) -> String {
         let h = self.h;
         let class = h.object_class(o);
@@ -4423,6 +4560,7 @@ impl<'a> Dumper<'a> {
 
     /// Properties, prototype and extensibility of an object written as a constructor
     /// call, as patches.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn extra(&mut self, o: Obj, loc: &str) {
         let h = self.h;
         let class = h.object_class(o);
@@ -4457,6 +4595,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn array(&mut self, o: Obj, loc: &str) -> String {
         let h = self.h;
         let len = h.array_length(o);
@@ -4504,6 +4643,7 @@ impl<'a> Dumper<'a> {
         out
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn collection(&mut self, o: Obj, loc: &str) -> String {
         let h = self.h;
         let is_map = h.object_class(o) == ObjectClass::Map;
@@ -4545,6 +4685,7 @@ impl<'a> Dumper<'a> {
     /// A typed array or DataView: a small typed array that is its buffer's only view as
     /// its elements, else a view of its buffer.
     #[cfg(feature = "full")]
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn view(&mut self, o: Obj, loc: &str) -> Option<String> {
         let h = self.h;
         let class = h.object_class(o);
@@ -4613,6 +4754,7 @@ impl<'a> Dumper<'a> {
     /// yet (a class's prototype while the class is made in a continuation, a value on a
     /// cycle through it) is written as a reference resolved when the dump is finished
     /// (0209: an empty text here wrote `get: ,` and `Object.setPrototypeOf(o, )`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn expr_or_loc(&mut self, v: Value) -> String {
         let e = self.expr(v, None, None);
         if !e.is_empty() {
@@ -4627,6 +4769,7 @@ impl<'a> Dumper<'a> {
 
     /// `line` with every reference of [`Dumper::expr_or_loc`] replaced by its node's
     /// location; a node that never got one is refused.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn resolve_later(&mut self, line: &str) -> String {
         let mut out = String::with_capacity(line.len());
         let mut parts = line.split(LATER);
@@ -4646,6 +4789,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The refusals, with references resolved where they can be.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn refused(&mut self) -> DumpError {
         let mut r = core::mem::take(&mut self.refusals);
         for l in &mut r {
@@ -4671,6 +4815,7 @@ impl<'a> Dumper<'a> {
 
     /// What makes `o`'s attributes from writable ones: 2 `Object.freeze`, 1
     /// `Object.seal`, 0 `Object.preventExtensions`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn freeze_level(&self, o: Obj) -> u8 {
         let h = self.h;
         let keys = h.own_keys(o);
@@ -4690,6 +4835,7 @@ impl<'a> Dumper<'a> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn freeze_line(&self, o: Obj, loc: &str) -> String {
         let f = match self.freeze_level(o) {
             2 => "Object.freeze(",
@@ -4700,6 +4846,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Properties of a non-literal object (a Map's, a regexp's) as patches.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn other_props(&mut self, o: Obj, loc: &str, skip: &dyn Fn(Atom, Option<u32>) -> bool) {
         let h = self.h;
         for k in keys_but_elements(h, o) {
@@ -4714,6 +4861,7 @@ impl<'a> Dumper<'a> {
 
     /// An ordinary object as a literal; attributes, accessors that do not fit and links
     /// that close cycles are patched (a placeholder keeps the key order).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn literal(&mut self, o: Obj, loc: &str) -> String {
         let h = self.h;
         // Written in place, not joined: data objects are many (0198). `{ ` and the
@@ -4882,6 +5030,7 @@ impl<'a> Dumper<'a> {
     /// whose home is the holder (it uses `super`) also where something else names it, if
     /// the holder has a location (`named`): the others read it there (`holder.key`), and it
     /// can't be made anywhere else (0215: a suspended one, whose continuation names it).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn inline_method(&self, c: usize, key: &str, kind: u32, holder: Obj, named: bool) -> bool {
         if !self.free_closure(c) || self.nodes[c].member.is_some() {
             return false;
@@ -4897,6 +5046,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// Whether closure `c`'s text is a method (getter, setter) definition of `key`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn method_text(&self, c: usize, key: &str, kind: u32) -> bool {
         if self.fn_kind(c) != kind {
             return false;
@@ -4923,6 +5073,7 @@ impl<'a> Dumper<'a> {
 
 /// Element `i` of array `o` whose dense elements are `el`: a frozen array keeps its
 /// elements as properties, the dense slots holding holes.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn array_element(h: &Heap, o: Obj, el: Ref, i: u32) -> Value {
     match el.get() {
         Some(el) if i < h.value_array_len(el) && !h.value_array_get(el, i).is_hole() => {
@@ -4961,6 +5112,7 @@ impl Cache {
     /// The globals of the lazy functions of a script the VM compiled lazily (D2993), with
     /// no maps yet: a dump compiles them when it needs them (a partial set, D2994).
     #[cfg(feature = "lazy")]
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn keep_globals(
         &mut self,
         bits: u32,
@@ -4988,6 +5140,7 @@ impl Cache {
         ));
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn keep(
         &mut self,
         bits: u32,
@@ -5039,6 +5192,7 @@ pub(super) type ScriptGlobals = Arc<Vec<(u32, u32, Vec<String>)>>;
 type CheckTable = (Index, Vec<(u32, u32, FreeNames, u32)>);
 
 /// The checker's table of the functions of the dump `text`: their spans and free names.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn check_index(fns: impl Iterator<Item = (u32, u32, FreeNames)>, text: &str) -> CheckTable {
     let mut by_text = Index::default();
     let mut written: Vec<(u32, u32, FreeNames, u32)> = Vec::new();
@@ -5070,6 +5224,7 @@ fn check_index(fns: impl Iterator<Item = (u32, u32, FreeNames)>, text: &str) -> 
 }
 
 /// Template `t`, or for a lazy template that ran, its compiled template (D2990).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn compiled(h: &Heap, t: u32) -> u32 {
     if template::code(h, t) == [crate::bytecode::Op::Lazy as u8] {
         let c: Ref = h.arena().get(t, FuncTemplate::IC);
@@ -5081,12 +5236,14 @@ fn compiled(h: &Heap, t: u32) -> u32 {
 }
 
 /// Whether `t` is a lazy template that never ran (D2990): no code to read.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn unrun(h: &Heap, t: u32) -> bool {
     template::code(h, t) == [crate::bytecode::Op::Lazy as u8]
         && h.arena().get::<Ref>(t, FuncTemplate::IC).get().is_none()
 }
 
 #[cfg(test)]
+#[cfg_attr(djs_optsize, optimize(size))]
 fn free_names(h: &Heap, t: u32) -> FreeNames {
     let mut globals = Vec::new();
     let mut stack = alloc::vec![t];
@@ -5110,6 +5267,7 @@ fn free_names(h: &Heap, t: u32) -> FreeNames {
 }
 
 /// The names of template `t`'s captures that are identifiers.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn capture_names(h: &Heap, t: u32) -> Vec<String> {
     let a = h.arena();
     let locals = u32::from(a.get::<u16>(t, FuncTemplate::LOCALS));
@@ -5125,6 +5283,7 @@ fn capture_names(h: &Heap, t: u32) -> Vec<String> {
 }
 
 /// The globals template `t`'s own code reads or writes by name, in code order.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn code_globals(h: &Heap, t: u32) -> impl Iterator<Item = Atom> + '_ {
     crate::bytecode::insns(template::code(h, t))
         .flatten()
@@ -5136,6 +5295,7 @@ fn code_globals(h: &Heap, t: u32) -> impl Iterator<Item = Atom> + '_ {
 }
 
 /// The current value of closure `f`'s captured variable `name`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn captured_value(h: &Heap, f: Obj, name: &str) -> Option<Value> {
     let t = h.closure_template(f);
     let a = h.arena();
@@ -5149,6 +5309,7 @@ fn captured_value(h: &Heap, f: Obj, name: &str) -> Option<Value> {
 }
 
 /// The names of a template's locals and then its captures (its debug info).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn template_names(h: &Heap, t: u32) -> Vec<String> {
     let a = h.arena();
     match template::debug_info(h, t).names.get() {
@@ -5164,6 +5325,7 @@ pub(super) fn template_names(h: &Heap, t: u32) -> Vec<String> {
 
 /// `o`'s own keys, without a typed array's element indexes, which the dump writes as its
 /// buffer (and every caller skips): a megabyte array made a million index atoms (0198).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn keys_but_elements(h: &Heap, o: Obj) -> Vec<Atom> {
     if h.object_class(o) == ObjectClass::TypedArray {
         h.ordinary_own_keys(o)
@@ -5175,6 +5337,7 @@ fn keys_but_elements(h: &Heap, o: Obj) -> Vec<Atom> {
 /// The text of heap string `s`: [`Heap::str_to_string`], with ASCII in one piece copied
 /// as is (0198: dumps convert scripts and names; core's conversion decodes unit by unit,
 /// and a fast path there would cost the shipped modules' size budget).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn text_of(h: &Heap, s: crate::value::Str) -> String {
     // (Latin-1 above 0x7F is not UTF-8 of the same characters: ASCII only.)
     if let Some(crate::heap::StrView::Latin1(b)) = h.str_view(s)
@@ -5187,6 +5350,7 @@ pub(super) fn text_of(h: &Heap, s: crate::value::Str) -> String {
 }
 
 /// [`Heap::atom_name`] through [`text_of`].
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn atom_text(h: &Heap, a: Atom) -> String {
     match h.atom_string_of(a) {
         Some(s) => text_of(h, s),
@@ -5195,6 +5359,7 @@ pub(super) fn atom_text(h: &Heap, a: Atom) -> String {
 }
 
 /// FNV-1a of a function's text (an [`Index`] key; 0 is the empty key).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn hash_text(s: &str) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in s.bytes() {
@@ -5216,6 +5381,7 @@ impl Sources {
     /// The text the dump writes for function `f`: its source; for a codemode body, which
     /// has none of its own (its span is the whole script), the async function it runs
     /// as, `async function (tools, console) {\n<body>\n}` (D2617).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fn_text(&self, h: &Heap, f: Obj) -> Option<String> {
         let t = h.closure_template(f);
         let a = h.arena();
@@ -5266,6 +5432,7 @@ impl Sources {
 /// A codemode body's text with its leading import declarations blanked (D3597): their
 /// names are the body's parameters (the host bound them), and an async function cannot
 /// hold an import. Spaces in their place keep every offset and line.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn blank_body_imports(src: &str, typescript: bool) -> String {
     if !src.contains("import") {
         return String::from(src);
@@ -5293,6 +5460,7 @@ fn blank_body_imports(src: &str, typescript: bool) -> String {
 /// An arrow's `text` (at `at` in its script) with the `arguments` of its frame's function
 /// (at `start`; `offs`, relative to it) read as K's `$djs_arguments` (0215). (A nested
 /// function's own `arguments` is not among them.)
+#[cfg_attr(djs_optsize, optimize(size))]
 fn rename_arguments(text: &str, at: u32, start: u32, offs: &[u32]) -> String {
     let mut out = String::new();
     let mut last = 0;
@@ -5313,6 +5481,7 @@ fn rename_arguments(text: &str, at: u32, start: u32, offs: &[u32]) -> String {
 /// Whether computed key `[...]` has the same value wherever it is evaluated: a string or
 /// number literal, or a well-known symbol (`Symbol.iterator`, unless a global hides
 /// `Symbol`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn stable_key(key: &str, symbol_shadowed: bool) -> bool {
     let inner = key
         .strip_prefix('[')
@@ -5360,12 +5529,14 @@ fn stable_key(key: &str, symbol_shadowed: bool) -> bool {
 }
 
 /// A function's text position: its script and source span.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn fn_span(h: &Heap, f: Obj) -> (u32, u32, u32) {
     let d = template::debug_info(h, h.closure_template(f));
     (d.script.get().unwrap_or(0), d.src_start, d.src_end)
 }
 
 /// Whether `f` is a method, getter or setter written inside the text at `span`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn is_method_of(h: &Heap, f: Obj, span: (u32, u32, u32)) -> bool {
     if h.object_class(f) != ObjectClass::Function {
         return false;
@@ -5386,7 +5557,9 @@ fn is_method_of(h: &Heap, f: Obj, span: (u32, u32, u32)) -> bool {
 
 /// The words of a class's head: its name (if any) and its heritage path (`extends a.b`).
 /// `None` for a heritage that is not a name or a path.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn class_head(src: &str) -> Option<(Option<&str>, Option<&str>)> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ident(s: &str) -> (&str, &str) {
         let end = s
             .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
@@ -5425,6 +5598,7 @@ fn class_head(src: &str) -> Option<(Option<&str>, Option<&str>)> {
 }
 
 /// A derived class's heritage path.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn heritage(src: &str) -> Option<&str> {
     class_head(src)?.1
 }

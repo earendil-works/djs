@@ -11,6 +11,7 @@ use alloc::string::String;
 const MAX_DEPTH: u32 = 512;
 
 /// Whether `text` is JSON that reads the same as a JavaScript expression; the reason if not.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(crate) fn check(text: &str) -> Result<(), &'static str> {
     let mut p = Parser {
         b: text.as_bytes(),
@@ -33,16 +34,19 @@ struct Parser<'a> {
 const NOT_JSON: &str = "the call's state is not JSON";
 
 impl Parser<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn peek(&self) -> Option<u8> {
         self.b.get(self.at).copied()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ws(&mut self) {
         while matches!(self.peek(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
             self.at += 1;
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn eat(&mut self, c: u8) -> bool {
         let yes = self.peek() == Some(c);
         if yes {
@@ -51,6 +55,7 @@ impl Parser<'_> {
         yes
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn word(&mut self, w: &[u8]) -> Result<(), &'static str> {
         if self.b[self.at..].starts_with(w) {
             self.at += w.len();
@@ -60,6 +65,7 @@ impl Parser<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn value(&mut self, depth: u32) -> Result<(), &'static str> {
         if depth > MAX_DEPTH {
             return Err("the call's state nests too deeply");
@@ -117,6 +123,7 @@ impl Parser<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn digits(&mut self) -> usize {
         let start = self.at;
         while matches!(self.peek(), Some(b'0'..=b'9')) {
@@ -125,6 +132,7 @@ impl Parser<'_> {
         self.at - start
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn number(&mut self) -> Result<(), &'static str> {
         self.eat(b'-');
         if !self.eat(b'0') && self.digits() == 0 {
@@ -146,6 +154,7 @@ impl Parser<'_> {
     }
 
     /// A string; its value only as far as it may be `__proto__` (keys), else empty.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn string(&mut self) -> Result<String, &'static str> {
         if !self.eat(b'"') {
             return Err(NOT_JSON);

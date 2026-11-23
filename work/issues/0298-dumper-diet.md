@@ -166,6 +166,17 @@ vm/dump*.rs, compiler/smap*.rs, lazy.rs, registry.rs, compile_cache.rs): 661,320
 Guide: none of the pages' prose changed (dumps.md's dumper size is the status number
 `dump/extra-gzip`, which the status refresh measures).
 
+### 2026-11-23 pdiet: step 4 early, `#[optimize(size)]` (D3660): 717,284 -> 702,049 B (-15.2 KB)
+
+Landed before the structural step since it is independent of it (a new dump function gets
+the attribute line too: work/scratch/0298/optsize.py puts it on every fn of vm/dump*.rs
+that lacks it). 588 functions in 18 files; `--cfg djs_optsize` from wasm-build-env.sh,
+`check-cfg` in djs-core's Cargo.toml. Dump time in wasm, dump-costs.ts (the cases and the
+harvested corpus, 3 reps, alternating, load 20-70): without 450.6/412.8/329.2 total ms, with
+401.9/341.1/341.0: no difference beyond the noise. scripts/dump-costs/dump-costs.ts read a
+`dumpPath` that 0297 had removed: its report line now names the one module (outside the
+touches, one line).
+
 ## Follow-ups
 
 ## Result

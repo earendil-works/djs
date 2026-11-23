@@ -9,6 +9,7 @@ use crate::heap::{Heap, ObjectClass, Property};
 use crate::value::{Obj, Sym, Value};
 
 /// Whether `f` is a class constructor.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn is_class(h: &Heap, f: Obj) -> bool {
     h.object_class(f) == ObjectClass::Function && {
         let t = h.closure_template(f);
@@ -39,6 +40,7 @@ pub(super) struct ClassPrivate {
 /// its constructor, its methods and accessors, and the hidden closures they hold (field
 /// initializers, private methods) capture. A private name no closure of the class
 /// captures can no longer be read by anyone.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn class_privates(h: &Heap, c: Obj) -> Vec<ClassPrivate> {
     let mut out: Vec<ClassPrivate> = Vec::new();
     let mut queue: Vec<Obj> = alloc::vec![c];

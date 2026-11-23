@@ -15,6 +15,7 @@ use super::*;
 impl G<'_, '_> {
     /// The `using` record of the scope path node `i` opens: the one named by an offset
     /// in the node and in no node nested in it on the path.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn using_record(&self, i: usize) -> Option<usize> {
         let n = self.node(i);
         let (a, b) = (n.start, n.end);
@@ -35,6 +36,7 @@ impl G<'_, '_> {
 
     /// [`G::using_record`], whether there is one a decision on the tape (the canonical
     /// activation has a record for each slot, the frame only for those in flight; D2913).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn steer_using(&mut self, i: usize) -> R<Option<usize>> {
         let u = self.using_record(i);
         match (self.steer(u32::from(u.is_some())), u) {
@@ -47,6 +49,7 @@ impl G<'_, '_> {
     /// The declarations that add resources `triples` again. K's scope record stands
     /// for the original's at offset `fpos` (a `using` record, named by its first
     /// binding).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn using_decls(&mut self, triples: &[(String, String, i32)], fpos: u32) -> R<P> {
         let mut parts = Vec::new();
         for (x, (v, m, k)) in triples.iter().enumerate() {
@@ -68,6 +71,7 @@ impl G<'_, '_> {
 
     /// The resources of the scope path node `i` opens, added again at its start in K
     /// (the site in the scope's code, no disposal begun).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn using_readd(&mut self, i: usize) -> R<P> {
         let Some(u) = self.steer_using(i)? else {
             return Ok(s(""));
@@ -86,6 +90,7 @@ impl G<'_, '_> {
 
     /// Resources `t`, their number a decision on the tape (D2913): written again, each
     /// one's value, method and kind are placeholders.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn steer_triples(&mut self, t: &[(String, String, i32)]) -> Vec<(String, String, i32)> {
         let n = self.steer(t.len() as u32) as usize;
         if self.replay.is_none() {
@@ -97,6 +102,7 @@ impl G<'_, '_> {
 
     /// The rest of the disposal of the scope path node `i` opens (the site is its
     /// disposal's await), and the completion that entered it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn using_disposal(&mut self, i: usize) -> R<P> {
         let u = self
             .steer_using(i)?
@@ -204,6 +210,7 @@ impl G<'_, '_> {
 }
 
 /// The offset a slot is named by (`using.record@39`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn slot_pos(slot: &str) -> u32 {
     slot.rsplit_once('@')
         .and_then(|x| x.1.parse().ok())

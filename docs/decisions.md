@@ -14345,3 +14345,16 @@ unclassified feature), compat_tests.rs and the rule to bump `COMPAT_VERSION` (AG
 TESTING.md "Image compatibility") are removed. The build hash leaves out the features
 that change no result (unsafe-heap, dump, lazy, prelude, intrinsic-names, cold-unicode),
 so the base built natively still loads into the shipped module.
+## D3660: The dumper's functions are optimized for size in the shipped module
+date: 2026-11-23 · by: pdiet · issue: 0298
+Every function of crates/djs-core/src/vm/dump*.rs (not the tests) carries
+`#[cfg_attr(djs_optsize, optimize(size))]` (LLVM `minsize`, opt-level "z" for that function
+and its closures). scripts/wasm-build-env.sh sets `--cfg djs_optsize` only where it already
+uses RUSTC_BOOTSTRAP (the shipped module, D2333/D3090), and djs-core's lib.rs turns on the
+nightly `optimize_attribute` under that cfg; with DJS_STABLE_ONLY=1, natively and in every
+other build the attribute is inactive and the code is the same as without it. The dumper
+runs once per dump, never in a run's loop: the shipped module 717,284 -> 702,049 B gzip
+(-15.2 KB), dump times in wasm (scripts/dump-costs/dump-costs.ts over the cases and the
+harvested corpus, load 20-70) within the noise of the runs (total dump ms 329-413 without,
+341-402 with). Not on compiler/smap*.rs: the parser's recording hooks there are called by
+every compile (+0.7 KB more was all they gave).

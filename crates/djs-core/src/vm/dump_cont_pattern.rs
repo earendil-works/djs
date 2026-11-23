@@ -22,6 +22,7 @@ use crate::compiler::Part;
 
 impl G<'_, '_> {
     /// The rest of pattern node `i` (the site inside it): its target and its source.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn pattern(&mut self, i: usize) -> R<(P, P)> {
         let n = self.node(i).clone();
         match n.kind {
@@ -38,6 +39,7 @@ impl G<'_, '_> {
     /// A pattern element's target with its default, path node `j` inside it: the
     /// element, and whether its value was taken already (else the read is still to
     /// come: the site is in a reference target).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn pattern_element(&mut self, j: usize) -> R<(P, bool)> {
         let nd = self.node(j).clone();
         match nd.kind {
@@ -94,6 +96,7 @@ impl G<'_, '_> {
 
     /// A target the site is not in, whose default holds the site: a name or pattern as
     /// it is, a reference target as the reference the original evaluated.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn pattern_target(&mut self, tp: Part) -> R<P> {
         let text = String::from(self.text(tp.start, tp.end).trim());
         if is_ident(&text) || text.starts_with('{') || text.starts_with('[') {
@@ -117,6 +120,7 @@ impl G<'_, '_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn array_pattern(&mut self, i: usize, n: &Node) -> R<(P, P)> {
         let k = self
             .next_part(i)
@@ -175,6 +179,7 @@ impl G<'_, '_> {
         Ok((P::L(target), source))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn object_pattern(&mut self, i: usize, n: &Node) -> R<(P, P)> {
         let k = self
             .next_part(i)
@@ -333,6 +338,7 @@ impl G<'_, '_> {
 
     /// The key of a pattern property as an expression of the key (its name quoted, a
     /// string literal as it is, a number converted as a key).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn key_expr(&self, p: Part) -> R<String> {
         let t = self.text(p.start, p.end).trim();
         Ok(if is_ident(t) {
@@ -347,6 +353,7 @@ impl G<'_, '_> {
     /// Bindings of the declarator whose target is pattern path node `i` that the
     /// pattern initialized before the site: those declared in its parts before the one
     /// that holds the site, at every level down to the site.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn pattern_done_bindings(&self, i: usize) -> Vec<String> {
         let mut spans: Vec<(u32, u32)> = Vec::new();
         for j in i..self.act.site.path.len() {
@@ -379,6 +386,7 @@ impl G<'_, '_> {
 }
 
 /// The binding of a shorthand property (`a` of `a = 1`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn shorthand_name(t: &str) -> String {
     let t = t.trim();
     String::from(t.split(['=', ' ']).next().unwrap_or(t).trim())

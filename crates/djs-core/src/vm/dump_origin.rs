@@ -53,6 +53,7 @@ enum CVal {
 }
 
 /// The own data property `name` of `o`.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn own(h: &Heap, o: Obj, name: &str) -> Option<Value> {
     h.own_keys(o)
         .into_iter()
@@ -65,6 +66,7 @@ pub(super) fn own(h: &Heap, o: Obj, name: &str) -> Option<Value> {
 }
 
 /// The elements of a dense array.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn elements(h: &Heap, v: Value) -> Option<Vec<Value>> {
     let o = v.as_object()?;
     if h.object_class(o) != ObjectClass::Array {
@@ -80,16 +82,19 @@ pub(super) fn elements(h: &Heap, v: Value) -> Option<Vec<Value>> {
     )
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn number(v: Value) -> Option<u32> {
     let n = v.as_number()?;
     (n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n).then_some(n as u32)
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn string(h: &Heap, v: Value) -> Option<String> {
     v.as_string().map(|s| text_of(h, s))
 }
 
 /// A list of numbers.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn numbers(h: &Heap, v: Value) -> Option<Vec<u32>> {
     elements(h, v)?.into_iter().map(number).collect()
 }
@@ -101,6 +106,7 @@ enum J {
     S(String),
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn items(json: &str) -> Option<Vec<J>> {
     let json = json.strip_prefix(',').unwrap_or(json);
     if json.is_empty() {
@@ -117,6 +123,7 @@ fn items(json: &str) -> Option<Vec<J>> {
 }
 
 /// The value of a literal a continuation wrote in place of a temporary (D2913).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn literal_value(t: &str) -> Option<Value> {
     Some(match t {
         "undefined" => Value::UNDEFINED,
@@ -136,6 +143,7 @@ fn literal_value(t: &str) -> Option<Value> {
 }
 
 /// The layout of a continuation made again (D2913), as origin tracking reads it.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn record_of(h: &Heap, k: Obj, l: cont::canon::Layout) -> Option<Record> {
     // A string literal is one of K's constants, or an atom where K uses it as a key
     // (its text has no escapes, `literal`).
@@ -196,6 +204,7 @@ fn record_of(h: &Heap, k: Obj, l: cont::canon::Layout) -> Option<Record> {
 /// on, a copy other than the scaffold at K offset `k` (a later iteration of an outer
 /// loop runs the construct as the original's text): the scaffold's constants are stale
 /// there (0215).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn in_copy(segs: &[u32], kpos: u32, foff: u32, k: u32) -> bool {
     segs.chunks(3).any(|s| {
         s.len() == 3
@@ -206,6 +215,7 @@ fn in_copy(segs: &[u32], kpos: u32, foff: u32, k: u32) -> bool {
 }
 
 /// Offset `k` of `K`'s text in `f`'s, through the stretches `K` copied.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn to_f(segs: &[u32], k: u32) -> Option<u32> {
     segs.chunks(3)
         .find(|s| s.len() == 3 && s[0] <= k && k < s[0] + s[2])
@@ -213,12 +223,14 @@ fn to_f(segs: &[u32], k: u32) -> Option<u32> {
 }
 
 /// The slot name's construct and offset (`call.arg@41`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn split(name: &str) -> Option<(&str, u32)> {
     let (c, off) = name.rsplit_once('@')?;
     Some((c, off.parse().ok()?))
 }
 
 /// The `$dump.L` wrapper of a loop scaffold: the iterator record it continues.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn unwrap_loop(h: &Heap, r: Value) -> Option<(Value, Value)> {
     let next = own(h, r.as_object()?, "next")?.as_object()?;
     if h.object_class(next) != ObjectClass::Function {
@@ -233,6 +245,7 @@ pub(super) fn unwrap_loop(h: &Heap, r: Value) -> Option<(Value, Value)> {
 impl Dumper<'_> {
     /// Activation `s` of a continuation, as an activation of its origin: the frame in
     /// the origin's layout, its site and syntax. `Ok(None)`: not a continuation.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn origin_frame(
         &mut self,
         s: &suspend::Suspended,
@@ -572,6 +585,7 @@ impl Dumper<'_> {
     }
 
     /// The place of site `ksite` among the sites of its kind at its offset in `k`'s map.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn nth_site_at(&mut self, k: Obj, ksite: &Site) -> usize {
         let h = self.h;
         let t = h.closure_template(k);
@@ -592,6 +606,7 @@ impl Dumper<'_> {
 
     /// The value of the origin's temporary `x`; a completion's kind that names a
     /// statement (a `break` or `continue`, D2733) by its offset in `K` names it in `f`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn origin_temp(
         &self,
         rec: &Record,
@@ -633,6 +648,7 @@ impl Dumper<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn origin_temp_k(
         &self,
         rec: &Record,
@@ -780,6 +796,7 @@ impl Dumper<'_> {
 }
 
 /// Whether sites of kinds `a` (the origin's) and `b` (K's) are the same suspension.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn same_kind(a: SiteKind, b: SiteKind) -> bool {
     a == b
 }

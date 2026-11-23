@@ -152,10 +152,12 @@ pub(super) struct Refs {
     pub names: Vec<String>,
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn ident_start(c: u8) -> bool {
     c.is_ascii_alphabetic() || c == b'_' || c == b'$' || c >= 0x80
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn ident_part(c: u8) -> bool {
     ident_start(c) || c.is_ascii_digit()
 }
@@ -164,12 +166,14 @@ fn ident_part(c: u8) -> bool {
 /// sources): strings, template text, comments and regular expressions are skipped; a
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn refs(text: &str) -> Refs {
     scan(text, false, &|_| true, &mut |_, _| {}, true, false)
 }
 
 /// Where `text` reads `$dump.X` (as [`refs`] finds them): `[start, end)` of each, the
 /// name's end (not a key after it).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     if !has_dollar(text, "$dump.") {
@@ -188,6 +192,7 @@ pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
 
 /// [`scan_spans`] outside function and class bodies: the references a text's own
 /// evaluation makes (a continuation's text inside it has its layout already, D3003).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     if !has_dollar(text, "$dump.") {
@@ -206,6 +211,7 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
 
 /// The names `text`'s own evaluation reads: outside function and class bodies (read when
 /// they run), object literals' keys left out.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn eager_names(text: &str) -> Vec<String> {
     scan(text, true, &|_| true, &mut |_, _| {}, false, true).names
 }
@@ -214,12 +220,14 @@ pub(super) fn eager_names(text: &str) -> Vec<String> {
 /// bodies and class bodies (read when they run). A text of the dump, a value: a
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
 #[cfg(test)]
+#[cfg_attr(djs_optsize, optimize(size))]
 fn eager_refs(text: &str) -> Refs {
     scan(text, true, &|_| true, &mut |_, _| {}, true, false)
 }
 
 /// [`refs`]'s or [`eager_refs`]'s with only the names `keep` takes (a data literal's
 /// keys are names: most texts' names are wanted by no one, 0215).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn scan(
     text: &str,
     skip_fns: bool,
@@ -489,6 +497,7 @@ fn scan(
 
 /// Whether the entry of hash `h` that would go at `next` of `list` is not in `list` yet:
 /// `seen` holds a hash's first entry; where another one shares it, `list` is searched.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn first_seen<T>(
     seen: &mut super::Index,
     h: u64,
@@ -508,6 +517,7 @@ fn first_seen<T>(
 }
 
 /// Whether the word `b[s..e]` is an object literal's key (`{ key: …`, `, key: …`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn key_at(b: &[u8], s: usize, e: usize) -> bool {
     let next = b[e..]
         .iter()
@@ -523,6 +533,7 @@ fn key_at(b: &[u8], s: usize, e: usize) -> bool {
 
 /// Whether `text` reads a name `allowed` does not hold (object literals' keys are no
 /// reads), 0215: by `scan` without collecting names.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn reads_other(text: &str, allowed: &[&str]) -> bool {
     !scan(
         text,
@@ -541,6 +552,7 @@ pub(super) fn reads_other(text: &str, allowed: &[&str]) -> bool {
 /// the dots, 0215: a data line is long.)
 /// `text.split_once(" = ")`, at once for a line `$dump.X = …` (0215: a substring search
 /// sets up a searcher per text).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn split_def(text: &str) -> Option<(&str, &str)> {
     if let Some(rest) = text.strip_prefix("$dump.") {
         let (name, at) = ident_at(rest, 0);
@@ -556,6 +568,7 @@ pub(super) fn split_def(text: &str) -> Option<(&str, &str)> {
 /// which `find(char)` searches fast (0215: a substring search sets up a searcher per
 /// text, most of the cost for the many short items of a data dump). (No match of `pat`
 /// overlaps another: none has a `$` after its first byte.)
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn dollar_indices<'t>(text: &'t str, pat: &'t str) -> impl Iterator<Item = usize> + 't {
     let mut at = 0;
     let b = text.as_bytes();
@@ -573,14 +586,17 @@ pub(super) fn dollar_indices<'t>(text: &'t str, pat: &'t str) -> impl Iterator<I
 }
 
 /// `text.contains(pat)` for a `pat` that starts with `$` ([`dollar_indices`]).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn has_dollar(text: &str, pat: &str) -> bool {
     dollar_indices(text, pat).next().is_some()
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn find_dollar(text: &str, pat: &str) -> Option<usize> {
     dollar_indices(text, pat).next()
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn effect_marker(t: &str) -> bool {
     let b = t.as_bytes();
     let mut from = 0;
@@ -604,6 +620,7 @@ fn effect_marker(t: &str) -> bool {
 
 /// Where the string literal whose text starts at `i` ends (after its closing `q`): by
 /// [`find_byte`], not byte by byte (0215: a data-heavy dump is mostly strings).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn string_end(text: &str, i: usize, q: char) -> usize {
     let b = text.as_bytes();
     let mut from = i;
@@ -623,6 +640,7 @@ fn string_end(text: &str, i: usize, q: char) -> usize {
 
 /// The first byte `x` of `b` at or after `from`: eight bytes at a time (0215: a data
 /// dump is mostly strings, and a searcher set up per string cost more than the search).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn find_byte(b: &[u8], from: usize, x: u8) -> Option<usize> {
     const ONES: u64 = 0x0101_0101_0101_0101;
     const HIGH: u64 = 0x8080_8080_8080_8080;
@@ -643,6 +661,7 @@ pub(super) fn find_byte(b: &[u8], from: usize, x: u8) -> Option<usize> {
 }
 
 /// Skips a template literal's text from `i` to its end or its next `${`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn template_text(b: &[u8], mut i: usize, tpl: &mut Vec<u32>, depth: u32) -> usize {
     while i < b.len() {
         match b[i] {
@@ -658,6 +677,7 @@ fn template_text(b: &[u8], mut i: usize, tpl: &mut Vec<u32>, depth: u32) -> usiz
     i
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn ident_at(text: &str, i: usize) -> (&str, usize) {
     let b = text.as_bytes();
     let mut j = i;
@@ -866,6 +886,7 @@ struct W<'x> {
 type R<T> = Result<T, String>;
 
 /// Whether `t` is a function expression (its body runs only when called).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn is_fn_text(t: &str) -> bool {
     let t = t.trim_start();
     // `(0, f)`: an anonymous function kept anonymous (D2902).
@@ -913,12 +934,14 @@ fn is_fn_text(t: &str) -> bool {
     rest.trim_start().starts_with("=>")
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn refuse<T>(why: &str) -> R<T> {
     Err(String::from(why))
 }
 
 /// Writes the plain dump: `lines` are the format 2 lines (`out`, then the tail of
 /// builtin changes, patches and finals); `write_k` writes a continuation.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn write(
     ir: &Ir,
     lines: &[String],
@@ -1040,15 +1063,18 @@ pub(super) fn write(
 }
 
 impl W<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn scope(&self, sc: Sc) -> &Scope {
         &self.ir.factories[sc.0].scopes[sc.1]
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn parent_scope(&self, sc: Sc) -> Option<Sc> {
         let p = self.scope(sc).parent;
         (p != usize::MAX).then_some((sc.0, p))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn box_var(&self, b: usize) -> Option<(Sc, usize)> {
         self.boxes
             .iter()
@@ -1056,12 +1082,14 @@ impl W<'_> {
             .map(|&(_, sc, v)| (sc, v))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn is_merged(&self, sc: Sc) -> bool {
         self.merged[sc.0][sc.1]
     }
 
     // ------------------------------------------------------------ items
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn read_items(&mut self, lines: &[String]) -> R<()> {
         // (The first record of a line.)
         let mut recs: Vec<Option<Rec>> = alloc::vec![None; lines.len()];
@@ -1120,6 +1148,7 @@ impl W<'_> {
 
     /// The function's home and cells of every activation, the merged scopes, and the
     /// blocks of each continuation (a dry run of the generator).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn activations(&mut self) -> R<()> {
         let ir = self.ir;
         for (a, act) in ir.acts.iter().enumerate() {
@@ -1190,6 +1219,7 @@ impl W<'_> {
         Ok(())
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn dry(&mut self, a: usize) -> R<()> {
         let write_k = self.write_k;
         let act = &self.ir.acts[a];
@@ -1205,6 +1235,7 @@ impl W<'_> {
 
     /// A slot's value as continuation text: one that reads a name is evaluated before
     /// the continuation (its own declarations could shadow the name).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn slot_value(&mut self, a: usize, name: &str, inline: bool) -> Option<String> {
         let act = &self.ir.acts[a];
         let sl = act.slots.iter().find(|s| s.name == name)?;
@@ -1252,6 +1283,7 @@ struct C<'w, 'x> {
 }
 
 impl Ctx for C<'_, '_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn slot(&mut self, name: &str) -> Option<String> {
         if !self.dry && !self.w.vcache[self.a].contains_key(name) {
             self.w.kept_temp(self.a, name);
@@ -1259,6 +1291,7 @@ impl Ctx for C<'_, '_> {
         self.w.slot_value(self.a, name, !self.dry)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn cell(&mut self, sname: &str) -> Option<Option<String>> {
         let &(_, sc, v) = self.w.acts[self.a].cells.iter().find(|c| c.0 == sname)?;
         let var = &self.w.scope(sc).vars[v];
@@ -1275,14 +1308,17 @@ impl Ctx for C<'_, '_> {
         Some(Some(self.w.props_in_binding(self.a, &key, &v)))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn after_go(&self, sname: &str) -> bool {
         self.w.acts[self.a].after_go.iter().any(|n| n == sname)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn rereads(&self, slot: &str) -> bool {
         self.w.ir.acts[self.a].rereads.iter().any(|n| n == slot)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn made_in(&self, text: &str) -> Option<usize> {
         let made = &self.w.acts[self.a].made;
         if made.is_empty() {
@@ -1295,6 +1331,7 @@ impl Ctx for C<'_, '_> {
             .max()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn arg(&mut self, name: &str) -> Option<String> {
         // (As listed: the call's arguments get their values in place when it is written,
         // outside K, where K's bindings do not matter, D3003.)
@@ -1305,6 +1342,7 @@ impl Ctx for C<'_, '_> {
         Some(sl.value.clone())
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn block(&mut self, index: usize, info: &[BDecl]) -> R<Vec<String>> {
         if self.dry {
             if !self.w.acts[self.a].blocks_done {
@@ -1319,6 +1357,7 @@ impl Ctx for C<'_, '_> {
         Ok(lines)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn go(&self, block: usize) -> String {
         if self.dry {
             String::new()
@@ -1331,6 +1370,7 @@ impl Ctx for C<'_, '_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn site_reads(&self) -> Vec<String> {
         if self.dry {
             return Vec::new();
@@ -1338,6 +1378,7 @@ impl Ctx for C<'_, '_> {
         self.w.acts[self.a].site_reads.clone()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn awaiting(&mut self, scope: &[String]) -> String {
         let act = &self.w.ir.acts[self.a];
         let aw = act.awaiting.clone().unwrap_or_else(|| "undefined".into());
@@ -1368,6 +1409,7 @@ impl Ctx for C<'_, '_> {
 }
 
 /// What a top-level line of the format 2 text is.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn classify(l: &str) -> IK {
     if let Some(rest) = l.strip_prefix("$dump.") {
         let (name, after) = ident_at(rest, 0);
@@ -1387,6 +1429,7 @@ fn classify(l: &str) -> IK {
     IK::Stmt
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn declared_fn_name(l: &str) -> Option<String> {
     let rest = l.strip_prefix("async ").unwrap_or(l);
     let rest = rest.strip_prefix("function")?;
@@ -1398,6 +1441,7 @@ fn declared_fn_name(l: &str) -> Option<String> {
 // ---------------------------------------------------------------- placement
 
 impl W<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn parent_of(&mut self, pl: Pl) -> R<Option<Pl>> {
         Ok(match pl {
             Pl::Block(a, i) if i > 0 => Some(Pl::Block(a, i - 1)),
@@ -1411,6 +1455,7 @@ impl W<'_> {
         })
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ancestors(&mut self, pl: Pl) -> R<Vec<Pl>> {
         let mut out = alloc::vec![pl];
         let mut p = pl;
@@ -1425,6 +1470,7 @@ impl W<'_> {
     }
 
     /// The innermost of `pls`, which must lie on one chain of places.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn innermost(&mut self, pls: &[Pl], what: &str) -> R<Option<Pl>> {
         let mut uniq: Vec<Pl> = Vec::new();
         for &p in pls {
@@ -1444,6 +1490,7 @@ impl W<'_> {
         Err(cat!(what, ": scopes of different frames"))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn factory_place(&mut self, sc: Sc) -> R<Pl> {
         if self.is_merged(sc) {
             self.place_of_group(sc)
@@ -1453,6 +1500,7 @@ impl W<'_> {
     }
 
     /// The scopes whose variables code of `sc` can capture: it and its merged ancestors.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn chain(&self, sc: Sc) -> Vec<Sc> {
         let mut out = Vec::new();
         let mut p = Some(sc);
@@ -1466,15 +1514,18 @@ impl W<'_> {
         out
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn dead(&self, sc: Sc, v: usize) -> bool {
         self.owner[sc.0][sc.1][v].is_none()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn has_dead(&self, sc: Sc) -> bool {
         (0..self.scope(sc).vars.len()).any(|v| self.dead(sc, v))
     }
 
     /// The place of code of merged scope `sc` that captures `caps`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn place_of_code(&mut self, sc: Sc, caps: &[usize]) -> R<Pl> {
         let chain = self.chain(sc);
         let mut pls = Vec::new();
@@ -1505,6 +1556,7 @@ impl W<'_> {
     }
 
     /// The place of the block of merged scope `sc`'s variables no frame takes.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn place_of_group(&mut self, sc: Sc) -> R<Pl> {
         if let Some(&(_, pl)) = self.group_place.iter().find(|g| g.0 == sc) {
             return Ok(pl);
@@ -1565,6 +1617,7 @@ impl W<'_> {
 
     /// The code of a scope that is placed (its closures, its unmerged nested scopes),
     /// with the variables each captures.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn factory_code(&self, sc: Sc) -> Vec<(Put, Vec<usize>)> {
         let mut out = Vec::new();
         for (i, p) in self.scope(sc).props.iter().enumerate() {
@@ -1579,6 +1632,7 @@ impl W<'_> {
     }
 
     /// What the code of scope `sc` and its nested scopes captures from outside them.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn free_caps(&self, sc: Sc) -> Vec<usize> {
         let inside = |w: &Self, b: usize| {
             let mut p = w.box_var(b).map(|x| x.0);
@@ -1615,6 +1669,7 @@ impl W<'_> {
         out
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn code_place(&mut self, put: Put, caps: &[usize]) -> R<Pl> {
         let sc = match put {
             Put::Prop(sc, _) | Put::Sub(sc) => sc,
@@ -1635,6 +1690,7 @@ impl W<'_> {
     }
 
     /// Where activation `a`'s continuation is written: where its function is.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn place_of_act(&mut self, a: usize) -> R<Pl> {
         if let Some(pl) = self.act_place[a] {
             return Ok(pl);
@@ -1661,6 +1717,7 @@ impl W<'_> {
         Ok(pl)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn place_all(&mut self) -> R<()> {
         let ir = self.ir;
         for (f, fac) in ir.factories.iter().enumerate() {
@@ -1790,6 +1847,7 @@ struct Walk {
 }
 
 impl Walk {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn new(n: usize) -> Self {
         Walk {
             mark: alloc::vec![0; n],
@@ -1798,6 +1856,7 @@ impl Walk {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn needs(&mut self, items: &[Item], from: usize, target: usize) -> bool {
         self.stack.clear();
         self.stack.push(from);
@@ -1835,6 +1894,7 @@ struct Providers {
 }
 
 impl Providers {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn hash(k: &Key) -> u64 {
         let h = match k {
             Key::Loc(n) => inline::name_hash(n),
@@ -1848,6 +1908,7 @@ impl Providers {
         h.max(1)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn find_by(&self, h: u64, same: impl Fn(&Key) -> bool) -> Option<usize> {
         let mut e = self.index.get(h.max(1))?;
         while e != u32::MAX {
@@ -1860,15 +1921,18 @@ impl Providers {
         None
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn find(&self, k: &Key) -> Option<usize> {
         self.find_by(Self::hash(k), |x| x == k)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get(&self, k: &Key) -> Option<&usize> {
         self.find(k).map(|e| &self.entries[e].1)
     }
 
     /// [`Providers::get`] of `Key::Loc(name)`, without making the key.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get_loc(&self, name: &str) -> Option<usize> {
         self.find_by(
             inline::name_hash(name),
@@ -1877,11 +1941,13 @@ impl Providers {
         .map(|e| self.entries[e].1)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn get_mut(&mut self, k: &Key) -> Option<&mut usize> {
         self.find(k).map(|e| &mut self.entries[e].1)
     }
 
     /// Adds `k`'s item unless it has one.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn or_insert(&mut self, k: Key, item: usize) {
         if self.find(&k).is_some() {
             return;
@@ -1892,6 +1958,7 @@ impl Providers {
         self.entries.push_out((k, item, prev));
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn insert(&mut self, k: Key, item: usize) {
         match self.get_mut(&k) {
             Some(d) => *d = item,
@@ -1910,6 +1977,7 @@ enum Key {
 
 impl Key {
     /// The key as one string (for a [`super::StrSet`]).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn text(&self) -> String {
         match self {
             Key::Loc(n) => cat!("L", n),
@@ -1920,12 +1988,14 @@ impl Key {
 }
 
 impl W<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn keys_of(&self, text: &str) -> Vec<Key> {
         self.keys_in(text, true)
     }
 
     /// The keys of `text`; with `globals` false only its `$dump` references: the
     /// globals a function's text names are read when it runs, after the load.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
         if !globals && !has_dollar(text, "$dump.") {
             return Vec::new();
@@ -1973,11 +2043,13 @@ impl W<'_> {
 
     /// The activation whose continuation makes key `key` of factory `name`; `Ok(None)`
     /// when the factory makes it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn creator_of(&mut self, name: &str, key: &str) -> R<Option<usize>> {
         Ok(self.creator_block(name, key)?.map(|x| x.0))
     }
 
     /// [`W::creator_of`] and the block of its continuation the key is made in.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn creator_block(&mut self, name: &str, key: &str) -> R<Option<(usize, usize)>> {
         let ir = self.ir;
         let Some(&f) = self.fac_by_name.get(name) else {
@@ -2023,10 +2095,12 @@ impl W<'_> {
         Ok(None)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn act_item(&self, a: usize) -> usize {
         self.act_items.get(a).copied().unwrap_or(usize::MAX)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn dep_items(&mut self, keys: &[Key], me: usize, providers: &Providers) -> R<Vec<usize>> {
         let mut out = Vec::new();
         // (Each item once: marked with this call's stamp, 0215.)
@@ -2066,6 +2140,7 @@ impl W<'_> {
     }
 
     /// The text of what is placed at `pl` and below (for dependencies).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn placed_text(&self, pl: Pl, out: &mut String, depth: u32) {
         if depth > 64 {
             return;
@@ -2097,6 +2172,7 @@ impl W<'_> {
 
     /// What a factory's text evaluates when it runs: its class statements and the
     /// values of its variables and members that are not functions.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn scope_eager(&self, sc: Sc, out: &mut String) {
         for (k, s) in self.ir.factories[sc.0].scopes.iter().enumerate() {
             if k != sc.1 && s.parent == sc.1 && !self.is_merged((sc.0, k)) {
@@ -2128,6 +2204,7 @@ impl W<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn scope_text(&self, sc: Sc, out: &mut String) {
         for (k, s) in self.ir.factories[sc.0].scopes.iter().enumerate() {
             if k == sc.1 || s.parent == sc.1 && !self.is_merged((sc.0, k)) {
@@ -2148,6 +2225,7 @@ impl W<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn schedule(&mut self) -> R<Vec<Plan>> {
         let ir = self.ir;
         let mut list: Vec<(Key, usize)> = Vec::new();
@@ -2408,6 +2486,7 @@ impl W<'_> {
     /// Pull scheduling: items in the dump's order, each after what it needs; an
     /// activation needed before its own place is called there, with a callback for
     /// what lies between.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn pull(&mut self, skip: &[usize]) -> R<Vec<Plan>> {
         let mut s = Sched {
             emitted: alloc::vec![false; self.items.len()],
@@ -2468,6 +2547,7 @@ impl W<'_> {
         Ok(s.out.pop().unwrap_or_default())
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ensure(&mut self, s: &mut Sched, deps: &[usize], upto: usize) -> R<()> {
         for &d in deps {
             if s.emitted[d] {
@@ -2575,6 +2655,7 @@ const INTRINSICS: &[(&str, &str)] = &[
 ];
 
 /// A builtin's registry path (D2371) as a plain expression.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn builtin_expr(path: &str) -> R<String> {
     let (getter, p) = match path.split_once(' ') {
         Some((g @ ("get" | "set"), rest)) => (Some(g), rest),
@@ -2608,6 +2689,7 @@ fn builtin_expr(path: &str) -> R<String> {
 }
 
 impl W<'_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit(&mut self, plan: &[Plan], ts: bool) -> R<String> {
         let mut hoisted: Vec<String> = Vec::new();
         self.open_list();
@@ -2711,6 +2793,7 @@ impl W<'_> {
 
     /// The lines of `list` into the list being written (D3001: a value may go where its one
     /// use is, its own line left out).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_items(&mut self, list: &[Plan], depth: u32, hoisted: &mut Vec<String>) -> R<()> {
         let ir = self.ir;
         for p in list {
@@ -2890,6 +2973,7 @@ impl W<'_> {
     /// An entry runs in the part of the latest block it or the entries it depends on need;
     /// statements and calls keep their order among themselves (property order, side
     /// effects).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn split_callback(&mut self, a: usize, cb: &[Plan]) -> R<Vec<Vec<Plan>>> {
         let mut items: Vec<Vec<usize>> = Vec::new();
         let mut parts: Vec<usize> = Vec::new();
@@ -2986,6 +3070,7 @@ impl W<'_> {
 
     /// The items an entry of a plan stands for: an item, or an activation and what its
     /// callback holds.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn plan_items(&self, e: &Plan) -> Vec<usize> {
         match e {
             Plan::Item(i) => alloc::vec![*i],
@@ -3000,6 +3085,7 @@ impl W<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn kref(&self, a: usize) -> String {
         let act = &self.ir.acts[a];
         match self.acts[a].home {
@@ -3011,6 +3097,7 @@ impl W<'_> {
     /// The origin's function for `K.$djs`: the run's own when the dump reaches it by a
     /// name, else made from its text in place (D3001): a function either way, whose
     /// template the next dump reads the site maps of (origin tracking, D2870).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fref(&self, a: usize) -> (String, Option<String>) {
         let act = &self.ir.acts[a];
         let e = act.fexpr.as_str();
@@ -3023,6 +3110,7 @@ impl W<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn call_text(&mut self, a: usize) -> R<Vec<String>> {
         let ir = self.ir;
         let act = &ir.acts[a];
@@ -3147,10 +3235,12 @@ impl W<'_> {
         Ok(lines)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn is_arrow(&self, a: usize) -> bool {
         self.ir.acts[a].fkind == func_flags::KIND_ARROW
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ktext(&mut self, a: usize) -> R<KText> {
         if let Some(k) = &self.acts[a].k {
             return Ok(k.clone());
@@ -3179,6 +3269,7 @@ impl W<'_> {
 
     /// An unmerged scope's factory: its merged nested scopes left out (their code moved
     /// into continuations), the continuations of functions it holds added.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn factory_text(&mut self, sc: Sc) -> R<String> {
         let ir = self.ir;
         let fac = &ir.factories[sc.0];
@@ -3221,6 +3312,7 @@ impl W<'_> {
 
     /// Member `i` of scope `sc` as written in a continuation's block (a class statement
     /// written as an expression is named by its local there).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn prop_text(&self, sc: Sc, i: usize) -> String {
         let text = self.scope(sc).props[i].text.clone();
         match self
@@ -3234,6 +3326,7 @@ impl W<'_> {
     }
 
     /// What the dump writes at a place (a block of a continuation, a dead group).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_place(&mut self, pl: Pl) -> R<Vec<String>> {
         let ir = self.ir;
         let mut lines = Vec::new();

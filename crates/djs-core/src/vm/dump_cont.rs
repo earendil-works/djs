@@ -34,6 +34,7 @@ mod yield_star;
 
 type R<T> = Result<T, String>;
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn no<T>(why: &str) -> R<T> {
     Err(cat!("plain dumps: ", why))
 }
@@ -65,18 +66,21 @@ enum P {
     Val(String, Vec<String>),
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn s(t: &'static str) -> P {
     P::T(t)
 }
 
 /// Writes activation `act`'s continuation, with what a re-dump needs to make its layout
 /// again (D2913, dump_cont_canon.rs).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
     canon::generate(act, ctx)
 }
 
 /// A continuation as pieces: generated text, copies of the original, marks. `replay`:
 /// the tape of a first run, to write the same shape again.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
     if act.site.gap.is_some() {
         return no(
@@ -219,6 +223,7 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
 /// Whether `text` may assign the binding `name` (conservatively: an assignment or update
 /// operator after or an update operator before an occurrence, an occurrence before `of`
 /// or `in`, or inside brackets an assignment follows, a destructuring target).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn may_assign(text: &str, name: &str) -> bool {
     let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
     let b = text.as_bytes();
@@ -303,6 +308,7 @@ fn may_assign(text: &str, name: &str) -> bool {
 }
 
 /// Whether `text` holds the identifier `name` (not as part of a longer one).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn has_ident(text: &str, name: &str) -> bool {
     let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
     let (b, n) = (text.as_bytes(), name.as_bytes());
@@ -367,6 +373,7 @@ struct G<'a, 'c> {
 
 impl G<'_, '_> {
     /// [`has_ident`] of the function's text.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn f_names(&self, name: &str) -> bool {
         if name.starts_with("$djs") && !*self.fdjs.get_or_init(|| self.act.ftext.contains("$djs")) {
             return false;
@@ -376,12 +383,14 @@ impl G<'_, '_> {
 }
 
 impl G<'_, '_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ftext(&self) -> &str {
         &self.act.ftext
     }
 
     /// `base`, or `base_k` if the function's text names it already (a continuation
     /// of a continuation has the first one's scaffold names).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn fresh(&self, base: String) -> String {
         if !self.f_names(&base) {
             return base;
@@ -396,24 +405,29 @@ impl G<'_, '_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn node(&self, i: usize) -> &Node {
         let step = self.act.site.path[i];
         &self.act.syntax.nodes[step.node as usize]
     }
 
     /// The part of path node `i` that holds node `i + 1`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn next_part(&self, i: usize) -> Option<usize> {
         self.act.site.path[i].part.map(usize::from)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn is_site(&self, i: usize) -> bool {
         i + 1 == self.act.site.path.len()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn text(&self, a: u32, b: u32) -> &str {
         self.ftext().get(a as usize..b as usize).unwrap_or("")
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn mark(&mut self, kind: &'static str, f: u32) -> P {
         // A record of K's own construct only where K can stop again inside it.
         if !self.marks && matches!(kind, "k" | "tmp") {
@@ -426,6 +440,7 @@ impl G<'_, '_> {
     /// Decision `v`, taken on a value, that shapes K: recorded on the tape, or, writing
     /// again, the recorded one (D2913). Past the tape's end: 0 (the record leaves out
     /// the tape's trailing zeros).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn steer(&mut self, v: u32) -> u32 {
         match &mut self.replay {
             Some((tape, at)) => {
@@ -442,6 +457,7 @@ impl G<'_, '_> {
 
     /// The site's awaited operand; the names K may bind where it stands go with the
     /// question (a value written there in place must not read them, D3001).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn awaiting(&mut self) -> String {
         let mut scope: Vec<String> = self.params.iter().map(|p| p.0.clone()).collect();
         for st in &self.act.site.path {
@@ -457,6 +473,7 @@ impl G<'_, '_> {
     }
 
     /// A completion's kind (a number, D2733), a decision on the tape.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn steer_kind(&mut self, kind: &str) -> R<String> {
         let k = match kind.parse::<u32>() {
             Ok(k) if self.replay.is_none() => k,
@@ -467,15 +484,18 @@ impl G<'_, '_> {
     }
 
     /// Whether K evaluates temporary `slot` again (D2836), a decision on the tape.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn rereads(&mut self, slot: &str) -> bool {
         let v = self.replay.is_none() && self.ctx.rereads(slot);
         self.steer(u32::from(v)) == 1
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn has(&mut self, name: &str) -> bool {
         self.act.slots.iter().any(|s| s.name == name)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn take(&mut self, name: &str) -> R<String> {
         match self.ctx.slot(name) {
             Some(v) => {
@@ -490,6 +510,7 @@ impl G<'_, '_> {
 
     /// Whether the dump's callback makes what `text` reads only in a part of a block
     /// below the current one (D2907).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn made_later(&self, text: &str) -> bool {
         let cur = self.block_index.saturating_sub(1);
         self.ctx.made_in(text).is_some_and(|p| p > cur)
@@ -498,6 +519,7 @@ impl G<'_, '_> {
     /// A loop scaffold's constants, `const a = x, b = y;`: declared with `let` and
     /// assigned once the part of the dump's callback that makes what they read has run,
     /// where that is a block below the current one (D2907).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn scaffold_consts(&mut self, pairs: &[(String, String)]) -> String {
         let cur = self.block_index.saturating_sub(1);
         let later = pairs
@@ -531,6 +553,7 @@ impl G<'_, '_> {
     /// A loop's saved `next` method; `undefined` where the frame has none: the compiler
     /// leaves out a `next` no later step calls (a body that always leaves the loop), and
     /// the scaffold's helper then never calls it either.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn next_method(&mut self, slot: &str) -> R<String> {
         if self.has(slot) {
             self.take(slot)
@@ -543,6 +566,7 @@ impl G<'_, '_> {
     /// right before the statement (the dump's values are reachable only while it loads).
     /// (A re-dump reads a literal back from K's text, D2913: a string from K's
     /// constants.)
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn tmp(&mut self, construct: &str, off: u32) -> R<P> {
         let slot = cat!(construct, "@", off);
         let v = self.take(&slot)?;
@@ -557,12 +581,14 @@ impl G<'_, '_> {
     }
 
     /// [`G::tmp`] as text, which K uses inside text of its own: always a constant.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn tmp_text(&mut self, construct: &str, off: u32) -> R<String> {
         let slot = cat!(construct, "@", off);
         let v = self.take(&slot)?;
         Ok(self.temp_of(slot, v))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn temp_of(&mut self, slot: String, v: String) -> String {
         let name = self.new_temp();
         self.temps.push_out(cat!(name, " = ", v));
@@ -571,6 +597,7 @@ impl G<'_, '_> {
     }
 
     /// A fresh name for a temporary of the site's statement.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn new_temp(&mut self) -> String {
         loop {
             let name = cat!("$djs_t", self.ntemps);
@@ -585,6 +612,7 @@ impl G<'_, '_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn flush_temps(&mut self) -> P {
         let mut t = String::new();
         if !self.temps.is_empty() {
@@ -600,6 +628,7 @@ impl G<'_, '_> {
 
     /// The statement at the site, after the temporaries. (The dump's callback ran at
     /// the ends of the blocks, D2907.)
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn with_go(&mut self, parts: P) -> P {
         let t = self.flush_temps();
         P::L(alloc::vec![t, parts])
@@ -607,6 +636,7 @@ impl G<'_, '_> {
 
     /// The original's text `[a, b)`, with `arguments` renamed (the continuation's own
     /// would be another object).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn rest(&mut self, a: u32, b: u32) -> P {
         if self.arrow {
             return P::V(a, b);
@@ -628,6 +658,7 @@ impl G<'_, '_> {
         P::L(out)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn rest_part(&mut self, n: &Node, k: usize) -> P {
         let p = n.parts[k];
         self.rest(p.start, p.end)
@@ -636,6 +667,7 @@ impl G<'_, '_> {
     // ---------------------------------------------------------------- bindings
 
     /// The slot of binding `name` declared by scope `scope`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn binding_slot(&mut self, name: &str, scope: u32) -> Option<String> {
         let shadowed = cat!(name, "@", scope);
         if self.has(&shadowed) {
@@ -646,6 +678,7 @@ impl G<'_, '_> {
 
     /// The declarations of a block of K: the live bindings with their values, the dump's
     /// code for this block, bindings whose values exist only after the dump's callback.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn declare(&mut self, decls: &[(String, DeclKind, u32, bool)]) -> R<P> {
         let mut early: Vec<P> = Vec::new();
         let mut late: Vec<P> = Vec::new();
@@ -844,6 +877,7 @@ impl G<'_, '_> {
 
     /// A line of binding `name`: prunable where the frame has one binding of the name
     /// (origin tracking reads a binding K leaves out as one not yet initialized).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn decl_line(&self, name: &str, line: String) -> P {
         if self.unique(name) {
             P::Decl(String::from(name), line)
@@ -853,6 +887,7 @@ impl G<'_, '_> {
     }
 
     /// Whether the frame has one binding of `name` (none of `name@scope`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn unique(&self, name: &str) -> bool {
         let prefix = cat!(name, "@");
         name != "$djs_arguments"
@@ -864,6 +899,7 @@ impl G<'_, '_> {
     }
 
     /// The bindings of the function body, statement `j` holding the site.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn body_decls(&mut self, n: &Node, j: Option<usize>) -> Vec<(String, DeclKind, u32, bool)> {
         let mut out: Vec<(String, DeclKind, u32, bool)> = Vec::new();
         for d in &n.decls {
@@ -883,6 +919,7 @@ impl G<'_, '_> {
         out
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn block_decls(n: &Node, j: usize) -> Vec<(String, DeclKind, u32, bool)> {
         n.decls
             .iter()
@@ -896,6 +933,7 @@ impl G<'_, '_> {
 
     // ---------------------------------------------------------------- statements
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn body(&mut self) -> R<P> {
         let n = self.node(0).clone();
         let Some(k) = self.next_part(0) else {
@@ -915,6 +953,7 @@ impl G<'_, '_> {
     }
 
     /// A statement list from part `k` (holding path node `i`) on.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn list(
         &mut self,
         n: &Node,
@@ -942,6 +981,7 @@ impl G<'_, '_> {
         Ok(P::L(out))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn stmt(&mut self, i: usize, label: Option<P>) -> R<P> {
         let n = self.node(i).clone();
         let k = self.next_part(i);
@@ -1133,6 +1173,7 @@ impl G<'_, '_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn decl_stmt(&mut self, i: usize, n: &Node, kind: DeclKind) -> R<P> {
         let mut out = self.decl_list(i, n, kind)?;
         out.push_out(s(";"));
@@ -1141,6 +1182,7 @@ impl G<'_, '_> {
 
     /// Declaration path node `i` with the site in it, without its `;` (also a `for`'s
     /// head). A `var`'s names are declared by K's prefix: it is assignments.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn decl_list(&mut self, i: usize, n: &Node, kind: DeclKind) -> R<Vec<P>> {
         if kind == DeclKind::Var {
             return self.var_list(i, n);
@@ -1236,6 +1278,7 @@ impl G<'_, '_> {
     }
 
     /// The value of binding `name` of the site's declaration, initialized already.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn decl_value(&mut self, name: &str) -> R<String> {
         let scope = self.enclosing_scope_of(name);
         Ok(match self.binding_slot(name, scope) {
@@ -1256,6 +1299,7 @@ impl G<'_, '_> {
 
     /// The scope offset of a binding declared by the statement list around path node
     /// `i`: the innermost enclosing node that declares it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn enclosing_scope_of(&self, name: &str) -> u32 {
         for i in (0..self.act.site.path.len()).rev() {
             if let Some(d) = self.node(i).decls.iter().find(|d| d.name == name) {
@@ -1265,6 +1309,7 @@ impl G<'_, '_> {
         0
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn for_stmt(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
         let k = self.next_part(i).unwrap_or(0);
         if n.parts[k].role != Role::Body {
@@ -1375,6 +1420,7 @@ impl G<'_, '_> {
     /// A for-of or for-in around the site: the rest of this iteration runs first, then
     /// the loop goes on over the saved iterator record as a real loop (`break`,
     /// `return` and exceptions close the iterator as the original's do).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn for_of(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
         // At the loop itself: its head's `using` resources disposed after an iteration.
         let disposing = self.is_site(i);
@@ -1516,6 +1562,7 @@ impl G<'_, '_> {
     /// `for (Head of $djs_I(it, next)) Body` over the saved record, is the loop going on.
     /// The record is bound to constants of K, which origin tracking reads back while K is
     /// in the rest (`["for-of", fo, ko, 0, it, next]`, ko the loop's start).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn for_of_rest(
         &mut self,
         i: usize,
@@ -1600,6 +1647,7 @@ impl G<'_, '_> {
     /// goes on over the saved async iterator record (an async-from-sync one is the
     /// dump's `$dump.fromSync`), bound to constants of K that origin tracking reads back
     /// (the scaffold record `["for-await", fo, ko, 0, it, next]`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn for_await(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
         let fo = n.start;
         let lbl = label.unwrap_or_else(|| s(""));
@@ -1738,6 +1786,7 @@ impl G<'_, '_> {
 
     /// A `for await` stopped while its iterator's `return()` is awaited: on an exception
     /// (rethrown after), a jump out of the loop (taken after) or a `break`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn for_await_close(&mut self, n: &Node, lbl: &P) -> R<P> {
         let fo = n.start;
         let site = self.mark("site", fo);
@@ -1833,6 +1882,7 @@ impl G<'_, '_> {
 
     /// The label of the statement at offset `o` on the site's path (a labelled
     /// statement's first label, or a loop's).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn label_at(&self, o: u32) -> R<String> {
         let path = &self.act.site.path;
         for j in 0..path.len() {
@@ -1855,6 +1905,7 @@ impl G<'_, '_> {
         no("a jump to a statement off the site's path")
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn try_stmt(&mut self, i: usize, n: &Node) -> R<P> {
         let k = self.next_part(i).unwrap_or(0);
         let part = |r: Role| n.parts.iter().position(|p| p.role == r);
@@ -1944,6 +1995,7 @@ impl G<'_, '_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn switch_stmt(&mut self, i: usize, n: &Node) -> R<P> {
         let k = self.next_part(i).unwrap_or(0);
         match n.parts[k].role {
@@ -1974,6 +2026,7 @@ impl G<'_, '_> {
     /// A site in case test `k`: the switch again with the saved discriminant, the tests
     /// that failed before it never matching (`case {}`: a fresh object), the site's
     /// test rewritten and the rest as they are.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn switch_case(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         if n.decls.iter().any(|d| d.kind == DeclKind::Function) {
             return no("a function declared in a switch whose case test awaits (0203)");
@@ -2048,6 +2101,7 @@ impl G<'_, '_> {
     /// `break`/`continue` to the statement at offset `o`, from inside path node `i`:
     /// without a label where the innermost loop (or switch, for `break`) is that
     /// statement, as K's scaffolds nest like the original's statements.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn jump_to(&self, i: usize, o: u32, cont: bool) -> R<String> {
         let kw = if cont { "continue" } else { "break" };
         for j in (0..i).rev() {
@@ -2074,6 +2128,7 @@ impl G<'_, '_> {
 
     // ---------------------------------------------------------------- expressions
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn expr(&mut self, i: usize) -> R<P> {
         let n = self.node(i).clone();
         if self.is_site(i) && n.kind == NodeKind::YieldStar {
@@ -2123,6 +2178,7 @@ impl G<'_, '_> {
     }
 
     /// [`G::expr`] of node `n` (path node `i`, the site in its part `k`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn expr_at(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         let n = n.clone();
         let role = n.parts[k].role;
@@ -2295,6 +2351,7 @@ impl G<'_, '_> {
     /// `super[<site>]`: K is a method whose home object's prototype is the base the
     /// original read (`Act::super_proto`), called with the original's `this`, so the
     /// `super` it evaluates again is the one the original evaluated.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn super_member(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         if n.parts[k].role != Role::Property {
             return no("a site in super's base");
@@ -2310,6 +2367,7 @@ impl G<'_, '_> {
         ]))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn call(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         let new = n.kind == NodeKind::New;
         let callee = n.parts.iter().position(|p| p.role == Role::Callee);
@@ -2432,6 +2490,7 @@ impl G<'_, '_> {
     }
 
     /// An argument or element holding the site (`...` kept for a spread).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn arg(&mut self, i: usize, n: &Node, m: usize) -> R<P> {
         let e = self.expr(i + 1)?;
         Ok(if n.parts[m].role == Role::Spread {
@@ -2443,6 +2502,7 @@ impl G<'_, '_> {
 
     /// A mark where K's construct `kc` keeps what the original's temporary `fslot`
     /// keeps (origin tracking, should K stop again inside its rewritten statement).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn ktemp(&mut self, fslot: String, kc: &str) -> P {
         let m = self.mark("tmp", 0);
         if let P::Mark(x) = m {
@@ -2455,6 +2515,7 @@ impl G<'_, '_> {
     /// expression does: an argument, an element, a property's value, an initializer, an
     /// expression statement, a `return`'s or `throw`'s operand, an assignment's right
     /// side, a template's substitution.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn takes_bare(&self, i: usize) -> bool {
         if i == 0 {
             return false;
@@ -2480,6 +2541,7 @@ impl G<'_, '_> {
 
     /// Argument `m` of call `n`, evaluated before the site: its text again where it reads
     /// the saved value (D2836), else its temporary.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn operand(&mut self, construct: &str, n: &Node, m: usize) -> R<P> {
         let p = n.parts[m];
         let slot = cat!(construct, "@", p.start);
@@ -2491,6 +2553,7 @@ impl G<'_, '_> {
     }
 
     /// Marks slot `name` consumed without writing its value: K evaluates it again.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn consume(&mut self, name: &str) {
         if !self.used.iter().any(|u| u == name) {
             self.used.push_out(String::from(name));
@@ -2499,6 +2562,7 @@ impl G<'_, '_> {
 
     /// A construct of K's own whose temporaries origin tracking rebuilds from the
     /// original's frame (K's `$djs_R(` call, its fixed arguments).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn kmark(&mut self) -> P {
         self.mark("k", 0)
     }
@@ -2506,12 +2570,14 @@ impl G<'_, '_> {
     /// Element `p` of K's own array literal standing for the original's temporary
     /// `fslot` (an argument or element evaluated at or after the site): recorded for
     /// origin tracking, should K stop again before the literal is complete.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn as_element(&mut self, fslot: String, p: P) -> P {
         self.as_kslot(fslot, "array.element", p)
     }
 
     /// [`G::as_element`] for K's construct `kc` at the mark (an argument of K's call
     /// written as the original's, `call.arg`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn as_kslot(&mut self, fslot: String, kc: &str, p: P) -> P {
         let m = self.mark("tmp", 0);
         if let P::Mark(x) = m {
@@ -2520,6 +2586,7 @@ impl G<'_, '_> {
         P::L(alloc::vec![m, p])
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn array(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         let lit = cat!("array.literal@", n.start);
         if self.has(&lit) {
@@ -2572,6 +2639,7 @@ impl G<'_, '_> {
         Ok(P::L(out))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn assign(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         if n.parts[k].role == Role::Left
             && matches!(
@@ -2696,6 +2764,7 @@ impl G<'_, '_> {
     /// The site in an assignment's member target (`(await o).p = v`, `o[await k] = v`):
     /// nothing of the store happened yet, so K's assignment is the original's from the
     /// site on, with its operator as written (a compound one reads the old value itself).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn assign_target_site(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         let role = |r: Role| n.parts.iter().position(|p| p.role == r);
         let (Some(o), Some(pr), Some(op), Some(r)) = (
@@ -2761,6 +2830,7 @@ impl G<'_, '_> {
         ]))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn object(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         // The literal as written, where its properties before the site read again what
         // the object made so far holds (D2836, dump_reread.rs).
@@ -2910,6 +2980,7 @@ impl G<'_, '_> {
 }
 
 /// `p` as text, without the lines of binding `skip` (for liveness, D2911).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
     match p {
         P::S(t) => out.push_str(t),
@@ -2945,6 +3016,7 @@ fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
 }
 
 /// The bindings `p` declares itself (not in nested scopes).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn decl_names(p: &P, out: &mut Vec<String>) {
     match p {
         P::Decl(n, _) => {
@@ -2962,6 +3034,7 @@ fn decl_names(p: &P, out: &mut Vec<String>) {
 }
 
 /// Leaves out every line of binding `name` in `p`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn drop_decls(p: &mut P, name: &str) {
     match p {
         P::Decl(n, _) if n == name => *p = s(""),
@@ -2981,6 +3054,7 @@ fn drop_decls(p: &mut P, name: &str) {
 /// Liveness (D2911): leaves out the frame bindings scope `p` declares (and the scopes in
 /// it) that nothing in the scope reads: their declarations, assignments and, in a scope
 /// whose names are all gone, its braces.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn prune(p: &mut P, ftext: &str) {
     let mut names = Vec::new();
     match &*p {
@@ -3016,6 +3090,7 @@ fn prune(p: &mut P, ftext: &str) {
 }
 
 /// [`render`] of all of `p`, with where each binding's line is: `[start, end, name]`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn render_lines(p: &P, ftext: &str, out: &mut String, lines: &mut Vec<(usize, usize, String)>) {
     match p {
         P::Decl(n, t) => {
@@ -3037,6 +3112,7 @@ fn render_lines(p: &P, ftext: &str, out: &mut String, lines: &mut Vec<(usize, us
 }
 
 /// Where the identifier `name` occurs in `text` (not as part of a longer one).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn ident_at<'t>(text: &'t str, name: &'t str) -> impl Iterator<Item = usize> + 't {
     let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
     let b = text.as_bytes();
@@ -3047,6 +3123,7 @@ fn ident_at<'t>(text: &'t str, name: &'t str) -> impl Iterator<Item = usize> + '
 }
 
 /// [`prune`] for the scopes in `p`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn prune_nested(p: &mut P, ftext: &str) {
     match p {
         P::L(list) => {
@@ -3059,6 +3136,7 @@ fn prune_nested(p: &mut P, ftext: &str) {
     }
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn push_joined(out: &mut Vec<P>, list: Vec<P>) {
     for (x, p) in list.into_iter().enumerate() {
         if x > 0 {
@@ -3069,6 +3147,7 @@ fn push_joined(out: &mut Vec<P>, list: Vec<P>) {
 }
 
 /// A value that can stand in place of a temporary.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn literal(v: &str) -> bool {
     matches!(v, "undefined" | "true" | "false" | "null")
         || v.parse::<f64>().is_ok()
@@ -3080,6 +3159,7 @@ fn literal(v: &str) -> bool {
 }
 
 /// A value the dump's factories make (`$dump.s3.f`): written after the block's code.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn has_factory_ref(v: &str) -> bool {
     let b = v.as_bytes();
     let mut i = 0;
@@ -3095,6 +3175,7 @@ fn has_factory_ref(v: &str) -> bool {
     false
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn kind_name(k: NodeKind) -> &'static str {
     match k {
         NodeKind::Body => "a function body",
@@ -3138,6 +3219,7 @@ fn kind_name(k: NodeKind) -> &'static str {
 }
 
 /// The names the dump's code `lines` declares (`let x = …`, `class C …`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn declared_names(lines: &[String]) -> Vec<&str> {
     let mut out = Vec::new();
     for l in lines {
@@ -3164,6 +3246,7 @@ fn declared_names(lines: &[String]) -> Vec<&str> {
 /// bindings whose names it reads (those names err on the side of too many: a function's
 /// own name, a parameter; where nothing can come next, they give way, and then the order
 /// as written).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn block_order(content: &[String], late: &[(String, String)]) -> Vec<Result<usize, usize>> {
     let (c, l) = (content.len(), late.len());
     if l == 0 {
@@ -3237,6 +3320,7 @@ fn block_order(content: &[String], late: &[(String, String)]) -> Vec<Result<usiz
 /// Whether value `v` reads a member the dump's code `lines` makes: `$dump.F.K` (or `$dump.F`
 /// itself) where a line assigns members to `F` and names `K` (by its text: a member it
 /// does not make only keeps the order as it was).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn waits_for(v: &str, lines: &[String]) -> bool {
     let refs = super::plain::refs(v).dump;
     if refs.is_empty() {

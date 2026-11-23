@@ -18,6 +18,7 @@ use crate::compiler::{ClassSpan, ClassSpanKind};
 impl Dumper<'_> {
     /// Computes the text a plain dump writes for every class it holds that has static
     /// code ([`Dumper::fn_source`] returns it).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn blank_class_statics(&mut self) {
         let h = self.h;
         for n in 0..self.nodes.len() {
@@ -81,6 +82,7 @@ impl Dumper<'_> {
     }
 
     /// The spans of `src`'s static code, in its offsets.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn class_spans(&mut self, src: &str, bits: u32) -> Option<Vec<ClassSpan>> {
         let scratch = self.scratch_heap()?;
         // An anonymous class's text is an expression only.
@@ -102,6 +104,7 @@ impl Dumper<'_> {
 
 /// A literal the dump can keep as written: a number, a simple string, `true`, `false`,
 /// `null`, `undefined` (evaluating it has no effect).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn literal(t: &str) -> bool {
     let t = t.trim().trim_end_matches(';').trim_end();
     matches!(t, "true" | "false" | "null" | "undefined")

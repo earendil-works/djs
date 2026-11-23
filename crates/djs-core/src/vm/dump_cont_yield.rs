@@ -9,6 +9,7 @@ use super::*;
 use crate::compiler::SiteKind;
 
 impl G<'_, '_> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn yield_star_site(&mut self, n: &Node) -> R<P> {
         let ret = self.yield_star_await_nth()? == Some(1);
         let site = &self.act.site;
@@ -52,6 +53,7 @@ impl G<'_, '_> {
 
     /// Which await of an inner result an async `yield*` site is: the inner results come
     /// after `next` (0), `return` (1) and `throw` (2), in that order, at the node's end.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn yield_star_await_nth(&self) -> R<Option<usize>> {
         let site = &self.act.site;
         if site.kind != SiteKind::YieldStarAwait {

@@ -32,6 +32,7 @@ enum Read<'t> {
     Member(&'t str, &'t str),
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn parse(text: &str) -> Option<Read<'_>> {
     let t = text.trim();
     if is_ident(t) {
@@ -43,6 +44,7 @@ fn parse(text: &str) -> Option<Read<'_>> {
 
 /// Whether `text` is a literal: a string without escapes, a decimal number, `true`,
 /// `false`, `null`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn is_literal(text: &str) -> bool {
     let t = text.trim();
     let quoted = |q: char| {
@@ -58,6 +60,7 @@ fn is_literal(text: &str) -> bool {
 }
 
 /// Strict equality of a saved operand and a value read now.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn same(h: &Heap, a: Value, b: Value) -> bool {
     if a == b {
         return true;
@@ -71,6 +74,7 @@ fn same(h: &Heap, a: Value, b: Value) -> bool {
 impl Dumper<'_> {
     /// The temporaries of activation frame `named` (values by `val`) that its
     /// continuation may evaluate again from `ftext` (D2836): see the module comment.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn rereads(
         &self,
         f: Option<Obj>,
@@ -231,6 +235,7 @@ impl Dumper<'_> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn assign_rereads(
         &self,
         f: Option<Obj>,
@@ -325,6 +330,7 @@ impl Dumper<'_> {
     /// before it a plain key (a name or a string) with a literal or a name that holds the
     /// object's value of it now, or a shorthand one.
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn object_rereads(
         &self,
         f: Option<Obj>,
@@ -394,6 +400,7 @@ impl Dumper<'_> {
 
     /// The value identifier `name` reads in the continuation, if it reads one without
     /// side effects: the frame's binding, a variable `f` captured, a global.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn read_name(
         &self,
         f: Option<Obj>,
@@ -440,6 +447,7 @@ impl Dumper<'_> {
 
     /// What `recv[key]` finds, where it finds a data property on a frozen object through
     /// frozen objects only (after `recv` itself, which has no own `key`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn frozen_get(&self, recv: Value, key: crate::heap::Atom) -> Option<Value> {
         let h = self.h;
         let mut o = recv.as_object()?;
@@ -462,6 +470,7 @@ impl Dumper<'_> {
     /// Whether `recv.key` finds `want` on a frozen object through frozen objects only
     /// (after `recv` itself, which may be the session's if it has no own `key`); `want`
     /// undefined: or finds nothing.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn frozen_lookup(&self, recv: Value, key: &str, want: Value) -> bool {
         let h = self.h;
         let Some(mut o) = recv.as_object() else {

@@ -53,6 +53,7 @@ const USING_FIELDS: [(&str, u32); 8] = [
 
 /// The prototype an iterator helper is made with: %WrapForValidIteratorPrototype% for
 /// `Iterator.from`'s wrapper (kind 0), else %IteratorHelperPrototype%.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn helper_proto(h: &crate::heap::Heap, o: Obj) -> Value {
     if h.object_slot(o, 0).as_int() == Some(0) {
         Value::object(intrinsic_obj(h, Intrinsic::WrapForValidIteratorProto))
@@ -84,6 +85,7 @@ const FROM_ASYNC_SLOTS: u32 = 11;
 /// A for-in loop's key iterator (interp/run.rs `for_in_start`): its object (`undefined`
 /// for a string's or a primitive's) and the keys it has yet to visit. `None`: a Proxy's
 /// (a Record its traps walk).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn for_in_parts(h: &Heap, v: Value) -> Option<(Value, Vec<Value>)> {
     if let Some(o) = v.as_object() {
         // A plain dump's `$dump.forIn(o, keys)` (a continuation's loop, origin
@@ -145,6 +147,7 @@ pub(super) struct Flight<'a> {
 }
 
 impl<'a> Flight<'a> {
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn new(host_fn_name: &'a dyn Fn(u32) -> Option<String>) -> Flight<'a> {
         Flight {
             host_fn_name,
@@ -168,14 +171,17 @@ impl<'a> Flight<'a> {
 
     /// Open calls, activations, pending promises.
     /// The highest id of the open calls the dump reopens (0 if none).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn last_call_id(&self) -> u32 {
         self.calls.iter().map(|c| c.id).max().unwrap_or(0)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn counts(&self) -> (usize, usize, usize) {
         (self.calls.len(), self.acts.len(), self.pends.len())
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn take_sites(&mut self) -> Vec<ResumedSite> {
         core::mem::take(&mut self.sites)
     }
@@ -270,6 +276,7 @@ impl Dumper<'_> {
 
     /// The roots of what is in flight: the open host calls and the host's handles. A
     /// dump needs an idle VM (D2561).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flight_roots(&mut self, opts: &DumpOptions<'_>) {
         let vm = self.vm;
         let h = self.h;
@@ -334,6 +341,7 @@ impl Dumper<'_> {
 
     // ---------------------------------------------------------------- discovery
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn visit_pending(&mut self, n: usize, o: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -398,6 +406,7 @@ impl Dumper<'_> {
     /// heap with the options it was compiled with.
     /// With a partial set (a plain dump loaded lazily, D2994) the map of `t`'s function
     /// is added if it is missing.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn script_maps(&mut self, t: u32) -> Option<&[FunctionMap]> {
         let h = self.h;
         let info = template::debug_info(h, t);
@@ -430,6 +439,7 @@ impl Dumper<'_> {
     /// lazy template whose compile made its code (the innermost one around it) and of the
     /// functions inside it, compiled again on their own (D2994). Without one, all of the
     /// script's maps from an eager compile.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn complete_maps(&mut self, i: usize, a: u32, b: u32) {
         let h = self.h;
         let script = self.fl.maps[i].0;
@@ -464,6 +474,7 @@ impl Dumper<'_> {
 
     /// Makes sure the maps of the function that made closure template `t` (the one whose
     /// code evaluates its computed keys) are there, for a partial set.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn creator_maps(&mut self, t: u32) {
         let h = self.h;
         let Some(script) = template::debug_info(h, t).script.get() else {
@@ -486,6 +497,7 @@ impl Dumper<'_> {
     /// The globals a lazy load recorded for the lazy function at `a..b` of `script`
     /// (D2993), if the VM's cache has that script's entry (looked up once per script).
     #[cfg(feature = "lazy")]
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn recorded_globals(&mut self, script: u32, a: u32, b: u32) -> Option<Vec<String>> {
         let i = match self.fl.maps.iter().position(|m| m.0 == script) {
             Some(i) => i,
@@ -517,11 +529,13 @@ impl Dumper<'_> {
             .map(|g| g.2.clone())
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn lazy_index(&mut self) -> &LazyIndex {
         let h = self.h;
         self.fl.lazy.get_or_insert_with(|| LazyIndex::new(h))
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn visit_activation(&mut self, n: usize, g: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -773,6 +787,7 @@ impl Dumper<'_> {
 
     /// A generator object whose prototype is not its function's `prototype` (which
     /// `$dump.resume` and a new call give it) is refused.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn check_generator_proto(&mut self, path: &str, g: Obj, f: Value) {
         let h = self.h;
         let want = f
@@ -789,6 +804,7 @@ impl Dumper<'_> {
     }
 
     /// The site where activation `s` stopped, checked against its frame.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn activation_site(
         &mut self,
         path: &str,
@@ -875,6 +891,7 @@ impl Dumper<'_> {
     /// async function (`fn_text`), whose map must have the same site with the same
     /// slots. Its bindings' scopes are the function's (they are offsets
     /// from its start); its position stays the body's, for the report.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn body_site(
         &mut self,
         path: &str,
@@ -948,6 +965,7 @@ impl Dumper<'_> {
 
     /// An object the dump runtime made (dump_flight_runtime.rs), visited as what it
     /// stands for; false for any other.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn visit_runtime_made(&mut self, n: usize, o: Obj) -> bool {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -987,6 +1005,7 @@ impl Dumper<'_> {
         true
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn visit_builtin_closure(&mut self, n: usize, o: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -1025,6 +1044,7 @@ impl Dumper<'_> {
         });
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn visit_iterator(&mut self, n: usize, o: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -1063,6 +1083,7 @@ impl Dumper<'_> {
 
     // ---------------------------------------------------------------- analysis
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn pend_of(&self, v: Value) -> Option<usize> {
         let n = self.node_of(v)?;
         let o = self.nodes[n].v.as_object()?;
@@ -1072,6 +1093,7 @@ impl Dumper<'_> {
 
     /// Array.fromAsync's state from its closures' data: the engine's Record, or the
     /// index of the state the dump runtime's `fromAsync` holds.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn async_from_state(&self, data: Value) -> Option<[Value; FROM_ASYNC_SLOTS as usize]> {
         if let Some(i) = data.as_int() {
             return self.fl.from_async.get(i as usize).copied();
@@ -1084,6 +1106,7 @@ impl Dumper<'_> {
         Some(out)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn clo_of(&self, v: Value) -> Option<&Clo> {
         let n = self.node_of(v)?;
         let o = self.nodes[n].v.as_object()?;
@@ -1094,6 +1117,7 @@ impl Dumper<'_> {
             .then(|| &self.fl.clos[self.nodes[n].fl])
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn act_of(&self, v: Value) -> Option<usize> {
         let n = self.node_of(v)?;
         let o = self.nodes[n].v.as_object()?;
@@ -1102,6 +1126,7 @@ impl Dumper<'_> {
     }
 
     /// Who made each pending promise, and what each reaction is.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn analyze_flight(&mut self) {
         let h = self.h;
         for c in 0..self.fl.calls.len() {
@@ -1230,6 +1255,7 @@ impl Dumper<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn combo_path(&self, c: usize) -> String {
         match self.node_of(self.fl.combos[c].cap) {
             Some(n) => self.nodes[n].path.clone(),
@@ -1238,6 +1264,7 @@ impl Dumper<'_> {
     }
 
     /// Records element `data` (an element Record) of a combinator; its index.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn combo_element(&mut self, kind: usize, data: Value, p: usize, j: usize) -> Option<usize> {
         let h = self.h;
         let r = data.as_object()?;
@@ -1271,6 +1298,7 @@ impl Dumper<'_> {
     // ---------------------------------------------------------------- emission
 
     /// Writes the open calls, first and in their order.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flight_start(&mut self) {
         self.analyze_flight();
         for c in 0..self.fl.calls.len() {
@@ -1281,6 +1309,7 @@ impl Dumper<'_> {
     }
 
     /// The rest of the reactions of every promise the dump made, then the handles.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flight_finish(&mut self) {
         loop {
             let mut progress = false;
@@ -1311,6 +1340,7 @@ impl Dumper<'_> {
     }
 
     /// Pushes a line that writes no binding.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn line(&mut self, text: String, fns_before: u32) {
         self.out.push_out(text);
         self.skeleton
@@ -1318,6 +1348,7 @@ impl Dumper<'_> {
     }
 
     /// The expression of an in-flight node.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn flight_expr(&mut self, n: usize) -> String {
         let h = self.h;
         let o = self.nodes[n].v.as_object().expect("an object");
@@ -1352,11 +1383,13 @@ impl Dumper<'_> {
     /// The iterator a `for await` over a sync iterable makes (CreateAsyncFromSyncIterator):
     /// a Record `[iterator, next]` with %AsyncFromSyncIteratorPrototype%.
     /// The dump runtime's `fromSync` iterator counts as one (dump_flight_runtime.rs).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub(super) fn is_from_sync(&self, o: Obj) -> bool {
         self.async_from_sync_parts(o).is_some()
     }
 
     /// An async-from-sync iterator's sync iterator and `next`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn async_from_sync_parts(&self, o: Obj) -> Option<(Value, Value)> {
         let h = self.h;
         if h.object_class(o) == ObjectClass::Record
@@ -1370,6 +1403,7 @@ impl Dumper<'_> {
 
     /// An async-from-sync iterator: the dump's own, `$dump.fromSync(it, next)`, which steps
     /// the same way (the object is never visible to user code).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn async_from_sync_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
@@ -1397,6 +1431,7 @@ impl Dumper<'_> {
 
     /// The resource Record of `using` declarations: `$dump.using(resources, state)`, the
     /// state's slots by name where they hold something.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn using_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
@@ -1465,6 +1500,7 @@ impl Dumper<'_> {
         text
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn closure_expr(&mut self, k: usize) -> String {
         let h = self.h;
         let Clo { node, kind, data } = self.fl.clos[k];
@@ -1521,6 +1557,7 @@ impl Dumper<'_> {
         }
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn iterator_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
@@ -1590,6 +1627,7 @@ impl Dumper<'_> {
     /// The elements from `index` on of `target`, where it is an array nothing but its
     /// iterator holds: dense, ordinary (its prototype `Array.prototype`, extensible, no
     /// properties but its elements and `length`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn lone_array_rest(&self, target: Value, index: i32) -> Option<Vec<Value>> {
         let h = self.h;
         let o = target.as_object()?;
@@ -1613,6 +1651,7 @@ impl Dumper<'_> {
     /// An iterator helper (`map`, `take`, `Iterator.from`'s wrapper, `concat`, `zip`, …):
     /// `$dump.iteratorHelper([slots])`, its state machine's slots as they are
     /// (builtins/iterator.ts).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn helper_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
@@ -1628,6 +1667,7 @@ impl Dumper<'_> {
     /// A RegExp String Iterator (`matchAll`): `$dump.regexpIterator(re, s, flags)` over
     /// the regexp it made (with its `lastIndex`), the string, its global, unicode and
     /// done bits.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn regexp_iterator_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
@@ -1668,6 +1708,7 @@ impl Dumper<'_> {
 
     /// A Map or Set iterator: made on the collection and advanced past the live entries
     /// it has passed (advancing runs no user code).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn collection_iterator_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
@@ -1739,6 +1780,7 @@ impl Dumper<'_> {
     }
 
     /// Makes pending promise `p` (once); its location.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn make(&mut self, p: usize) -> String {
         let n = self.fl.pends[p].node;
         if self.fl.pends[p].made {
@@ -1835,6 +1877,7 @@ impl Dumper<'_> {
 
     /// The location of node `n`, chosen now if it has none yet (so that patches can name
     /// a value that is made later).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn reserve(&mut self, n: usize, prefix: &str) -> String {
         if self.nodes[n].loc.is_empty() {
             self.nodes[n].loc = self.fresh(prefix);
@@ -1842,6 +1885,7 @@ impl Dumper<'_> {
         self.nodes[n].loc.clone()
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn made(&mut self, p: usize, loc: String) {
         let n = self.fl.pends[p].node;
         self.nodes[n].loc = loc;
@@ -1851,6 +1895,7 @@ impl Dumper<'_> {
     }
 
     /// Adds the reactions of `q` before `k`, in their order.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn react_upto(&mut self, q: usize, k: usize) {
         if self.make(q).is_empty() {
             let path = self.nodes[self.fl.pends[q].node].path.clone();
@@ -1883,6 +1928,7 @@ impl Dumper<'_> {
     }
 
     /// The reaction `j` of `q` is added now.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn subscribed(&mut self, q: usize, j: usize) {
         if self.fl.pends[q].cursor != j {
             let path = self.nodes[self.fl.pends[q].node].path.clone();
@@ -1892,6 +1938,7 @@ impl Dumper<'_> {
     }
 
     /// `p.then(f, r)` (or `p.finally(f)`) again: its derived promise.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_then(&mut self, q: usize, j: usize) {
         let h = self.h;
         let before = self.fns_read.get();
@@ -1991,6 +2038,7 @@ impl Dumper<'_> {
 
     /// A combinator called again: settled elements by their values, pending ones by
     /// their promises.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_combo(&mut self, c: usize) {
         if self.fl.combos[c].state != State::New {
             return;
@@ -2045,6 +2093,7 @@ impl Dumper<'_> {
 
     /// An element that settled, written so the combinator records the same: its value,
     /// or for a rejection a rejected promise.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn settled_element(&mut self, kind: usize, v: Value) -> String {
         let h = self.h;
         let get = |o: Obj, k: &str| {
@@ -2079,6 +2128,7 @@ impl Dumper<'_> {
     }
 
     /// `$dump.resume(fn, {...})` for activation `a`: its location.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_act(&mut self, a: usize) -> String {
         let n = self.fl.acts[a].node;
         match self.fl.acts[a].state {
@@ -2372,6 +2422,7 @@ impl Dumper<'_> {
 
     /// A generator that has not started (called again) or has finished (a new one,
     /// finished at once, with its prototype).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn emit_unstarted(&mut self, a: usize) -> String {
         let n = self.fl.acts[a].node;
         self.fl.acts[a].state = State::Busy;
@@ -2459,6 +2510,7 @@ impl Dumper<'_> {
 
     /// Where an activation stopped (`Vm::dump_report`): its function, the site, and the
     /// site's line, column and source line in its script.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn site_info(&self, f: Obj, site: &Site, loc: &str) -> ResumedSite {
         let h = self.h;
         let t = h.closure_template(f);
@@ -2502,6 +2554,7 @@ impl Dumper<'_> {
 
     /// A frame slot's value: `$dump.TDZ`, a Box's cell when closures share it, else the
     /// value.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn slot_expr(&mut self, v: Value, boxed: bool) -> String {
         let h = self.h;
         let inner = match (boxed, v.as_internal()) {
@@ -2529,6 +2582,7 @@ impl Dumper<'_> {
     /// The names of the sites of `site`'s kind at its offset in `f`, in order (a `for
     /// await`'s closes: of an exception, of a jump out, of a `break`, the last two where
     /// used; an async `yield*`'s awaits of the results of `next`, `return`, `throw`).
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn peer_sites(&mut self, f: Obj, site: &Site) -> Vec<String> {
         let h = self.h;
         let t = h.closure_template(f);
@@ -2553,6 +2607,7 @@ impl Dumper<'_> {
 /// A `using` resource as the original added it: a continuation adds it again through
 /// `$djs.U(value, method)` (its dispose method a closure of those two), which is read
 /// back here so re-dumps add the original again.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn unwrap_using(h: &Heap, v: Value, m: Value) -> (Value, Value) {
     let wrapped = || {
         let f = m.as_object()?;
@@ -2567,6 +2622,7 @@ fn unwrap_using(h: &Heap, v: Value, m: Value) -> (Value, Value) {
 }
 
 /// The home object of method `f` (one that uses `super`).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn home_object(h: &Heap, f: Obj) -> Option<Obj> {
     if h.object_class(f) != ObjectClass::Function {
         return None;
@@ -2580,12 +2636,14 @@ pub(super) fn home_object(h: &Heap, f: Obj) -> Option<Obj> {
     h.object_slot(f, captures).as_object()
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn s_state_awaiting(s: &suspend::Suspended) -> bool {
     s.state == suspend::AWAITING
 }
 
 /// Whether a function's parameter list (in its source text) runs no code when called:
 /// no defaults, no destructuring.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn simple_params(src: &str) -> bool {
     let Some(open) = src.find('(') else {
         return false;
@@ -2613,6 +2671,7 @@ fn simple_params(src: &str) -> bool {
 /// their capture of the box; the dump writes the class from its text, which makes its
 /// own. So after the statement the frame's slot is dead and is written as undefined
 /// (a statement run again, in a loop, writes it again).
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn class_hidden(name: &str) -> bool {
     [
         "<fields ",
@@ -2631,12 +2690,14 @@ pub(super) fn class_hidden(name: &str) -> bool {
 
 /// Where the iterator of a loop's or `yield*`'s `next` slot is (an async-from-sync
 /// iterator brings its own `next`).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn from_sync_partner(named: &[NamedSlot], next: &NamedSlot) -> Option<Place> {
     let want = next.partner("iterator")?;
     named.iter().find(|x| x.name == want).map(|x| x.place)
 }
 
 /// Hidden locals the loader makes itself.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub(super) fn computed_hidden(name: &str) -> bool {
     matches!(
         name,
@@ -2649,6 +2710,7 @@ pub(super) fn computed_hidden(name: &str) -> bool {
 /// hold what an earlier entry left there (a loop's earlier iteration) when the compiler
 /// saw no read that needs the TDZ marker: that value is not the binding's (0215, a
 /// first iteration's object made its class's scope ambiguous).
+#[cfg_attr(djs_optsize, optimize(size))]
 fn undeclared_at(sx: &crate::compiler::Syntax, site: &Site, slot: &Slot, v: Value) -> bool {
     let Slot::Binding { name, scope } = slot else {
         return false;
@@ -2707,6 +2769,7 @@ fn undeclared_at(sx: &crate::compiler::Syntax, site: &Site, slot: &Slot, v: Valu
 }
 
 /// The source, parameters and option bits of Script `script`.
+#[cfg_attr(djs_optsize, optimize(size))]
 fn script_inputs(h: &Heap, script: u32) -> (Option<String>, String, u32) {
     let a = h.arena();
     let params: Ref = a.get(script, Script::PARAMS);
@@ -2731,6 +2794,7 @@ pub(super) struct LazyIndex {
 }
 
 impl LazyIndex {
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn new(h: &Heap) -> LazyIndex {
         use crate::heap::CellKind;
         use crate::heap::cells::FuncTemplate;
@@ -2770,6 +2834,7 @@ impl LazyIndex {
     }
 
     /// The innermost lazy template of `script` whose span holds `a..b`.
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn root(&self, script: u32, a: u32, b: u32) -> Option<u32> {
         self.lazy
             .iter()
@@ -2778,6 +2843,7 @@ impl LazyIndex {
             .map(|l| l.3)
     }
 
+    #[cfg_attr(djs_optsize, optimize(size))]
     fn parent(&self, t: u32) -> Option<u32> {
         let i = self.parents.partition_point(|e| e.0 < t);
         self.parents.get(i).filter(|e| e.0 == t).map(|e| e.1)

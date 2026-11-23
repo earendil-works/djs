@@ -186,6 +186,7 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
 ];
 
 /// The runtime as a Script whose completion value is the helpers object.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub fn script_text() -> String {
     script_of(&[true; HELPERS.len()])
 }
@@ -193,6 +194,7 @@ pub fn script_text() -> String {
 /// [`script_text`] with only the helpers `dump` names (`$djs.NAME`) and the ones their
 /// texts name: a load compiles a few helpers instead of all of them (0215). Generous: a
 /// name in a string or a parameter that is also a helper's adds that helper.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub fn script_text_for(dump: &str) -> String {
     let mut want = [false; HELPERS.len()];
     let mut todo: Vec<usize> = Vec::new();
@@ -224,6 +226,7 @@ pub fn script_text_for(dump: &str) -> String {
     script_of(&want)
 }
 
+#[cfg_attr(djs_optsize, optimize(size))]
 fn script_of(want: &[bool]) -> String {
     let mut s = String::from("\"use strict\";\n(() => {\n");
     s.push_str(SHARED);
@@ -254,6 +257,7 @@ fn script_of(want: &[bool]) -> String {
 
 /// The runtime as an ES module for hosts without djs (js/src/dump-runtime.js): one named
 /// export per helper and `helpers`, all of them by name.
+#[cfg_attr(djs_optsize, optimize(size))]
 pub fn module_text() -> String {
     let mut s = String::from(
         "// The plain dump runtime (D2834, D2903): the helpers a plain dump calls as `$djs.NAME`.\n\
@@ -316,6 +320,7 @@ impl Vm {
     /// Ends a plain dump's load, once its Script was evaluated (D2916): deletes the
     /// globals the load used, the host's `$djs` and the dump's `$dump`. A dump of the VM
     /// refuses either name.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn end_dump_load(&mut self) -> Result<(), crate::heap::HeapError> {
         let g = self.global();
         for name in ["$djs", "$dump"] {
@@ -328,12 +333,14 @@ impl Vm {
     /// A new object holding the plain dump runtime's helpers (D2903), for the host to add
     /// its hooks to and define as the global `$djs` while a plain dump loads. Evaluates
     /// the runtime: call it while the VM is not running (before loading the dump).
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn dump_runtime(&mut self) -> Result<Value, String> {
         self.dump_runtime_from(&script_text())
     }
 
     /// [`Vm::dump_runtime`] with only the helpers dump `text` names (0215): what a host
     /// that has the dump calls.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn dump_runtime_for(&mut self, text: &str) -> Result<Value, String> {
         self.dump_runtime_from(&script_text_for(text))
     }
@@ -341,6 +348,7 @@ impl Vm {
     /// [`Vm::dump_runtime`] from the runtime's [`script_text`] the host passes: the wasm
     /// module's host has it (js/src/dump-runtime.js `script`), so the module does not
     /// carry it.
+    #[cfg_attr(djs_optsize, optimize(size))]
     pub fn dump_runtime_from(&mut self, script: &str) -> Result<Value, String> {
         // (Plain messages: formatting the errors' Debug would pull their code into the
         // shipped module, and the runtime is fixed text that fails only without memory.)
