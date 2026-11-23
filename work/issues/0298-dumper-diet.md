@@ -1,6 +1,6 @@
 # 0298: The dumper's size: same dumps, far less code
 
-status: in-progress
+status: done
 agent: pdiet
 branch: issue/0298-dumper-diet
 depends-on: -
@@ -243,4 +243,51 @@ tests/plain-refusals.txt stay.
 
 ## Follow-ups
 
+- Dump cost: native dump instructions +6% (16,490 -> 17,485 M), re-dump +4.5% (17,984 ->
+  18,793 M) since merge 1; about half is `cat!` without sizing its string first, the rest
+  the hash sets, `sort_cold`'s dyn comparison and `note` behind a dyn call. If dump time
+  matters later, a presized `cat!` for the few sites that join large pieces wins most of
+  it back.
+- The declined B items (owner, 2026-11-24) stay measured options: no free-names check
+  -4.1 KB, no operand re-reading -4.2 KB, no TS type stripping -2.2 KB.
+- The factory's format-2 text (`emit_group`'s `text`/`body`/`ret`) is read by the writer
+  only in emit_items' `$djs.resume(` test and split_callback's keys_in; feeding those from
+  the IR would drop it (~2-3 K raw).
+- A new function in vm/dump*.rs needs `#[cfg_attr(djs_optsize, optimize(size))]` (D3660;
+  work/scratch/0298/optsize.py adds it to every fn that lacks it).
+
 ## Result
+
+Done as the owner decided (2026-11-24): no B items. The dumper (the `dump` feature's share
+of the shipped module) went from 334.6 KB to about **270 KB gzip (-64 KB, -19%)**, 0297's
+compile-cache removal (~17 KB) included; the module is **698,440 B gzip** (ceiling
+699,464). Every merge's dumps are byte-identical to d481d1fe's over the corpus (3,777
+dumps), the v2 programs (196) and the sleep example; all gated.
+
+Merges:
+1. 5c25856c: `DumpOptions::base` and the base-walk fallback gone (-6.4 KB); `note`/`edge`
+   one body (-6.5 KB); `cat!` = `crate::text::cat!` (-2.2 KB); no BTreeMap/BTreeSet or
+   core sorts in dump code (`StrSet`/`StrMap`, `sort::sort_cold`, -18.4 KB): 750,859 ->
+   717,284 B.
+2. cf3e2d76: `#[optimize(size)]` on every function of vm/dump*.rs in the shipped build
+   only (`--cfg djs_optsize`, D3660): -> 701,709 B (-15.2 KB).
+3. 0b15dec1: the parser's suspension-map hooks record out of line (only their check is
+   in the ~220 parser call sites); `note`/`edge` take `&dyn Fn`: 701,738 -> 698,440 B
+   (-3.3 KB).
+4. dd9480eb: 0297's leftovers in the dump files (guide links, tests/dump paths, refusals
+   files and test names without `plain`).
+
+Cost: native dump instructions +6%, re-dump +4.5% (Follow-ups); wasm dump times within the
+noise; dump size unchanged (same text).
+
+Stopped, with reasons: (A) a denser style, measured: all 85 piece-list builders of cont::G
+as templates gave -539 B; under minsize the per-site style is cheap and the bytes are the
+logic. (The structured-references redesign) 88 text-scan sites, most over texts holding
+user function source, so the scanning is intrinsic; ~5-10 KB net at high risk. Declined
+by the owner (B, measured as variant builds): no free-names check -4.1 KB, no operand
+re-reading -4.2 KB, no TS type stripping -2.2 KB; single-use inlining (~8-10 KB) would
+make every dump bigger; the canon double write is origin tracking itself. A third (111 KB)
+was not reachable with the same capabilities and output.
+
+Guide: no prose changed (the dumper's size in dumps.md is the status number
+`dump/extra-gzip`, which the status refresh measures).
