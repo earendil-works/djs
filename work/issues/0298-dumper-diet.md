@@ -177,6 +177,36 @@ harvested corpus, 3 reps, alternating, load 20-70): without 450.6/412.8/329.2 to
 `dumpPath` that 0297 had removed: its report line now names the one module (outside the
 touches, one line).
 
+### 2026-11-23 pdiet: after merge 2: where the rest is, calibration of a restyle
+
+Dumper now (cf3e2d76): 701,709 vs 427,879 B gzip without `dump` = 273.8 KB (from 334.6:
+-60.8 KB, 0297's compile-cache removal included). Raw with glue (attr.py, minsize build):
+dump.rs 106 K, dump_cont.rs 102 K (+canon 15, heads 12, pattern 11, using 7.5), plain 73 K,
+cat! sites (text.rs:151-152) 60 K, flight 47 K, plain_inline 31 K, smap_syntax 22 K, origin
+16.5 K, sort.rs 16 K (sort_cold instances), smap 14.5 K, reread 8.4 K. Instruction mix of
+the dump functions: local.get 25%, i32.const 17%, loads/stores ~20%; 1,470 dealloc call
+sites, 1,900 Piece::put calls.
+
+Calibration (coordinator chose A: dense style, byte-identical): converting all 85
+`P::L(vec![s(".."), x, ...])` builders of cont::G into one-constant templates
+(work/scratch/0298/tplconv.py) gave -539 B; an out-of-line `str` Piece::put +81 B; the cat!
+variants +-2 KB. Under minsize the per-site style is cheap: the bytes are the logic. Told
+the coordinator; a restyle would give ~5-10 KB. The factory's format-2 text (emit_group's
+`text`/`body`/`ret`) is still read by the writer in two places (emit_items' `$djs.resume(`
+test, split_callback's keys_in), so dropping it is a small structural change (~2-3 K raw).
+
+Small wins on the branch since merge 2:
+- note/edge take `&dyn Fn() -> String` (no wrapper per closure): -411 B.
+- compiler/smap_syntax.rs, smap.rs: the parser's recording hooks (syn_open/kind/scope/part/
+  close/decl/erased, names_push/pop, site) were `#[inline]` with their bodies, copied into
+  ~220 parser call sites; now only the check is inline, the recording `#[inline(never)]`
+  (a normal compile does the same check and no more): -2.9 KB (701,298 -> 698,391).
+Both byte-identical (corpus, v2, sleep).
+
+Waiting on the owner for the B items (subsystems that could go: canon double-write check,
+the free-names checker, single-use inlining, operand re-reading, TS type stripping,
+node-loadability); none started.
+
 ## Follow-ups
 
 ## Result
