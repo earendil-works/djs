@@ -14,7 +14,7 @@ at three levels:
 A script survives a span when every function's hash is equal at both ends; "frames"
 survival requires `pc` equality only for functions that contain an await or yield (the
 ones that can hold a frame at an idle point) and `iface` equality for the rest.
-Writes a report to stdout; --pairs lists every consecutive pair with a change.
+Writes a report to stdout. Usage: analyze.py [FIRST-ISSUE]
 """
 import os, re, sys, hashlib, json
 from collections import defaultdict
@@ -91,6 +91,8 @@ def same(a, b, level):
 def main():
     points = [l.split() for l in open(os.path.join(S, "points.txt")) if l.strip()]
     points = [p for p in points if os.path.isdir(os.path.join(S, "disasm", p[1]))]
+    if len(sys.argv) > 1:  # the first issue of the window
+        points = [p for p in points if p[2] >= sys.argv[1]]
     data, cases = load(points)
     levels = ["exact", "pc", "frames"]
     n = len(points)
@@ -128,5 +130,28 @@ def main():
                 allok += ok == len(cases)
             row.append(f"{100*sum(fr)/len(fr):.1f}% | {100*allok/(n-span):.0f}%")
         print(f"{span} | " + " | ".join(row) + f" | {n-span}")
+
+    # Combined: a script survives when its functions survive at the `frames` level and
+    # no codemode-visible schema change lies in the span (schema.py; such a change is
+    # counted against every script, which overstates it).
+    sys.path.insert(0, os.path.dirname(__file__))
+    import schema
+    snaps = {p[1]: schema.snapshot(p[1]) for p in points}
+    cats = ["cells", "slots", "registry path", "closures", "records", "state consts"]
+    print("\n## combined (frames level and no codemode-visible schema change)")
+    print("span | scripts | all scripts")
+    for span in (1, 5, 10, 20, 30, 40, 60, 90):
+        if span >= n:
+            break
+        fr, allok = [], 0
+        for i in range(n - span):
+            a, b = points[i][1], points[i + span][1]
+            if any(c in schema.breaks(snaps[a], snaps[b]) for c in cats):
+                fr.append(0.0)
+                continue
+            ok = sum(1 for cs in cases if same(data[a][cs], data[b][cs], "frames"))
+            fr.append(ok / len(cases))
+            allok += ok == len(cases)
+        print(f"{span} | {100*sum(fr)/len(fr):.1f}% | {100*allok/(n-span):.0f}%")
 
 main()

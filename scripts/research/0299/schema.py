@@ -299,4 +299,5 @@ def main():
             row.append(f"{span}: {100*ok/(n-span):.0f}%")
         print(f"{g}: " + ", ".join(row))
 
-main()
+if __name__ == "__main__":
+    main()
