@@ -138,20 +138,33 @@ def main():
     import schema
     snaps = {p[1]: schema.snapshot(p[1]) for p in points}
     cats = ["cells", "slots", "registry path", "closures", "records", "state consts"]
-    print("\n## combined (frames level and no codemode-visible schema change)")
-    print("span | scripts | all scripts")
+    # Schema hits read by hand and found invisible to a logical snapshot of a codemode run.
+    triaged = {
+        "88356782": "0151: a closure's template moved from slot 0 to ELEMENTS; a closure record names its template by (script, function), so it does not change",
+        "f037273d": "0232: the new 7-slot record lives only while Promise.all/any/allSettled set up; AsyncFunctionThrow was the engine's own call, not held by a waiting heap",
+        "f5b973ef": "0248: module evaluation records; a codemode run holds no module state",
+        "852e4a12": "0280: FLAG_CONSTRUCT went; a constructor's frame never waits at an idle point and the other flag bits kept their values",
+    }
+    for sha, why in triaged.items():
+        print(f"triaged {why}")
+    print("\n## combined (frames level and no codemode-visible schema change; raw, then with the triaged hits ignored)")
+    print("span | scripts | all scripts | scripts (triaged) | all (triaged)")
     for span in (1, 5, 10, 20, 30, 40, 60, 90):
         if span >= n:
             break
-        fr, allok = [], 0
+        fr, allok, frt, allt = [], 0, [], 0
         for i in range(n - span):
             a, b = points[i][1], points[i + span][1]
-            if any(c in schema.breaks(snaps[a], snaps[b]) for c in cats):
+            ok = sum(1 for cs in cases if same(data[a][cs], data[b][cs], "frames"))
+            hit = any(any(c in schema.breaks(snaps[points[j][1]], snaps[points[j + 1][1]]) for c in cats)
+                      for j in range(i, i + span) if points[j + 1][1] not in triaged)
+            frt.append(0.0 if hit else ok / len(cases))
+            allt += not hit and ok == len(cases)
+            if any(c in schema.breaks(snaps[a], snaps[b]) for c in cats) or hit:
                 fr.append(0.0)
                 continue
-            ok = sum(1 for cs in cases if same(data[a][cs], data[b][cs], "frames"))
             fr.append(ok / len(cases))
             allok += ok == len(cases)
-        print(f"{span} | {100*sum(fr)/len(fr):.1f}% | {100*allok/(n-span):.0f}%")
+        print(f"{span} | {100*sum(fr)/len(fr):.1f}% | {100*allok/(n-span):.0f}% | {100*sum(frt)/len(frt):.1f}% | {100*allt/(n-span):.0f}%")
 
 main()
