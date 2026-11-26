@@ -104,7 +104,7 @@ Prior work you must read first (deleted from the tree by 0297, in git history):
 ## Result
 docs/heap-snapshots-revisited.md sections 1 (psychoscript) and 2 (stability evidence).
 Research scripts on this branch only, `scripts/research/0299/` (points.sh, build.sh,
-disasm_all.py, analyze.py, schema.py; removed before the merge, see the branch history);
+disasm_all.py, analyze.py, schema.py; removed before the merge, in main's history);
 the psychoscript harness and the size script in work/scratch/0299 (psy/exp/harvest.ts,
 sizes.py). Headline: keyed by per-function name-normalized bytecode (required only for
 functions with a frame) and names, a snapshot of a corpus script would have broken at

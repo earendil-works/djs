@@ -457,8 +457,9 @@ function that waits.
 
 ### Reproducing
 
-The scripts are on branch `issue/0299-snapshot-stability`, in `scripts/research/0299/`
-(not merged); outputs go to work/scratch/0299.
+The scripts lived in `scripts/research/0299/` and were removed before the merge; they are
+in main's history (`git log --all -- scripts/research/0299` finds the last version, also
+kept on branch `issue/0299-snapshot-stability`). Outputs go to work/scratch/0299.
 
 ```sh
 R=scripts/research/0299; S=work/scratch/0299
