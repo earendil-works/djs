@@ -6,6 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0299 | Heap snapshots revisited (1): psychoscript, bytecode/schema stability over djs history | psnapr | .worktrees/psnapr |
+| 0300 | Heap snapshots revisited (2): logical snapshot of a waiting run keyed by bytecode, small (prototype) | psnap | .worktrees/psnap |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
