@@ -22,6 +22,12 @@ declared type changed. Additions, offsets, ids and order do not count.
   consts    named constants that spell out stored state's meaning (frame header, activation
             and promise states and slots, Map/Set layout, store flags): one gone or with
             another value is a change;
+  ops       bytecode/ops.rs: the opcode table; an op whose byte moved, or whose
+            immediates changed (reported apart: a name-normalized bytecode hash does
+            not see op numbers, a hash of the raw bytes does);
+  intrinsic ids  bytecode/intrinsics.rs: an intrinsic whose id moved (same);
+  layout    the layout hash and field offsets, for contrast: what an image depends on and a
+            snapshot by names does not;
   records   builtins/*.ts: per file, the `NewRecord(n)` sizes and the highest
             RecordGet/RecordSet index (a proxy for the records' slot meanings).
 Prints per-pair changes and the survival over spans.
@@ -137,12 +143,37 @@ def consts(sha):
             out[f"{os.path.basename(f)}:{name}"] = " ".join(val.split())
     return out
 
+OP = re.compile(r"^\s{4}[A-Z]\w* (\w+) ?\(([^)]*)\)\s+pop", re.M)
+
+def ops(sha):
+    """The opcode table in byte order: (disassembler name, immediate kinds)."""
+    t = show(sha, "crates/djs-core/src/bytecode/ops.rs")
+    if t is None or "ops! {" not in t:
+        return None
+    body = t[t.index("\nops! {"):]
+    return [[m.group(1).rstrip("_"), " ".join(k.split(":")[-1].strip() for k in m.group(2).split(",") if k.strip())]
+            for m in OP.finditer(body)]
+
+def intrinsic_table(sha):
+    t = show(sha, "crates/djs-core/src/bytecode/intrinsics.rs")
+    m = t and re.search(r"pub const INTRINSICS: &\[IntrinsicInfo\] = &\[(.*?)\n\];", t, re.S)
+    return re.findall(r'i\("(\w+)"', m.group(1)) if m else None
+
+def layout_offsets(sha):
+    t = show(sha, "js/src/layout.generated.ts")
+    if t is None:
+        return None
+    j = json.loads(t[t.index("{"):t.rindex("}") + 1])
+    return {"hash": j.get("layoutHash"), "offsets": {f"{k}.{f}": d.get("offset") for k, c in j.get("cells", {}).items()
+            for f, d in c.get("fields", {}).items()}}
+
 def snapshot(sha):
     path = os.path.join(S, "schema", sha + ".json")
     if os.path.exists(path):
         return json.load(open(path))
     d = {"cells": cells(sha), "slots": slots(sha), "registry": registry(sha),
-         "closures": closures(sha), "records": records(sha), "consts": consts(sha)}
+         "closures": closures(sha), "records": records(sha), "consts": consts(sha),
+         "ops": ops(sha), "intrinsics": intrinsic_table(sha), "layout": layout_offsets(sha)}
     os.makedirs(os.path.dirname(path), exist_ok=True)
     json.dump(d, open(path, "w"))
     return json.load(open(path))
@@ -197,6 +228,27 @@ def breaks(a, b):
                 out["state consts"].append(f"gone {k}")
             elif w != v:
                 out["state consts"].append(f"{k}: {v} -> {w}")
+    if a.get("ops") and b.get("ops"):
+        na = {n: (i, k) for i, (n, k) in enumerate(a["ops"])}
+        nb = {n: (i, k) for i, (n, k) in enumerate(b["ops"])}
+        moved = [n for n in na if n in nb and nb[n][0] != na[n][0]]
+        enc = [n for n in na if n in nb and nb[n][1] != na[n][1]]
+        gone = [n for n in na if n not in nb]
+        if moved:
+            out["op numbers"].append(f"{len(moved)} moved, e.g. {moved[0]}")
+        if enc or gone:
+            out["op encoding"].append(f"{len(enc)} other immediates, {len(gone)} gone: {(enc + gone)[:3]}")
+    if a.get("intrinsics") and b.get("intrinsics"):
+        ia = {n: i for i, n in enumerate(a["intrinsics"])}
+        ib = {n: i for i, n in enumerate(b["intrinsics"])}
+        moved = [n for n in ia if n in ib and ib[n] != ia[n]]
+        if moved:
+            out["intrinsic ids"].append(f"{len(moved)} moved")
+    if a.get("layout") and b.get("layout"):
+        if a["layout"]["hash"] != b["layout"]["hash"]:
+            out["layout hash"].append("changed")
+        if any(b["layout"]["offsets"].get(k, v) != v for k, v in a["layout"]["offsets"].items()):
+            out["field offsets"].append("moved")
     if a["records"] is not None and b["records"] is not None:
         for f, v in a["records"].items():
             w = b["records"].get(f)
@@ -205,7 +257,7 @@ def breaks(a, b):
     return out
 
 CATS = ["cells", "cells added", "cells (vm)", "cells (code)", "slots", "slots added", "slot docs", "registry path", "registry internal", "registry intrinsic",
-        "closures", "closure order", "records", "state consts"]
+        "closures", "closure order", "records", "state consts", "op numbers", "op encoding", "intrinsic ids", "layout hash", "field offsets"]
 
 def main():
     points = [l.split() for l in open(os.path.join(S, "points.txt")) if l.strip()]
@@ -225,11 +277,15 @@ def main():
     print("\n## pairs (of %d) with a change, by category" % (n - 1))
     for c in CATS:
         print(f"{c}: {sum(1 for b in per if c in b)}")
-    groups = {"strict (all but slot docs and VM cells)": [c for c in CATS if c not in ("slot docs", "cells (vm)", "cells (code)", "cells added", "slots added")],
+    groups = {"strict (all but slot docs and VM cells)": [c for c in CATS if c not in ("slot docs", "cells (vm)", "cells (code)", "cells added", "slots added", "op numbers", "op encoding", "intrinsic ids", "layout hash", "field offsets")],
               "strict + additions (a table-driven codec needs a default for a new field)":
-                  [c for c in CATS if c not in ("slot docs", "cells (vm)", "cells (code)")],
+                  [c for c in CATS if c not in ("slot docs", "cells (vm)", "cells (code)", "op numbers", "op encoding", "intrinsic ids", "layout hash", "field offsets")],
+              "raw bytecode ids (what a hash of the encoded bytes would also see)": ["op numbers", "op encoding", "intrinsic ids"],
               "codemode-visible (cells, slots, user paths, closures, records)":
                   ["cells", "slots", "registry path", "closures", "records", "state consts"]}
+    built = sum(1 for i in range(n - 1) if subprocess.run(["git", "-C", ROOT, "diff", "--quiet", points[i][1], points[i + 1][1],
+                "--", "crates/djs-core/src", "crates/djs-libm/src", "builtins", "crates/djs-prelude"]).returncode)
+    print(f"\npairs where the engine sources changed (a build-keyed snapshot breaks): {built} of {n-1}")
     print("\n## survival over spans: share of start points with no change in the group")
     for g, cats in groups.items():
         row = []
