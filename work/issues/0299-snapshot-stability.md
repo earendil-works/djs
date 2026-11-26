@@ -1,6 +1,6 @@
 # 0299: Heap snapshots revisited (1): what psychoscript does, and how often a bytecode-keyed snapshot would break
 
-status: open
+status: in-progress
 agent: psnapr
 branch: issue/0299-snapshot-stability
 depends-on: -
