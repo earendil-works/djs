@@ -1,6 +1,6 @@
 # 0299: Heap snapshots revisited (1): what psychoscript does, and how often a bytecode-keyed snapshot would break
 
-status: in-progress
+status: done
 agent: psnapr
 branch: issue/0299-snapshot-stability
 depends-on: -
@@ -29,14 +29,14 @@ Prior work you must read first (deleted from the tree by 0297, in git history):
   D3643 in docs/decisions.md.
 
 ## Acceptance criteria
-- [ ] **psychoscript, read properly** (TS `src/snapshot*.ts`, `src/snapshot/codec.ts`, and
+- [x] **psychoscript, read properly** (TS `src/snapshot*.ts`, `src/snapshot/codec.ts`, and
       the Rust port `rust/crates/psychoscript/src/snapshot.rs`): what a snapshot holds, how
       code, builtins, the base, host calls in flight and frames are named, what its compat
       key is (build id vs per-source bytecode hash), its size on comparable scripts (run it:
       `bun` is installed; e.g. their README's suspend example and a few of our harvested
       codemode scripts), what it refuses, how much code the codec is. What djs can take
       from it and what does not transfer (a JS-object VM vs djs's cell heap).
-- [ ] **Bytecode stability over djs's history.** For the djs commits that merged an issue
+- [x] **Bytecode stability over djs's history.** For the djs commits that merged an issue
       since 2026-11-01 (the `coordinator: NNNN done` commits, ~47; take a subset if builds
       are too slow, at least every merge of the last ~20 issues plus a few older ones),
       build the CLI (dev profile is fine, a separate target dir under work/scratch/0299/,
@@ -52,12 +52,12 @@ Prior work you must read first (deleted from the tree by 0297, in git history):
       - the same for "the functions that hold a frame or a closure at an idle point"
         if you can tell them apart cheaply (otherwise all functions, say so).
       Compare with goldilocks' table (build hash breaks 70%, relocations 28% per issue).
-- [ ] **Schema stability proxies** over the same commits: the cell layout table
+- [x] **Schema stability proxies** over the same commits: the cell layout table
       (js/src/layout.generated.ts or the Rust layout table), the builtin registry paths
       (tests/builtins/registry.tsv), the intrinsic names: how often each changed in a way a
       logical snapshot keyed by *names* would notice (a removed/renamed name or a field whose
       meaning changed; additions do not count).
-- [ ] Write sections 1 (psychoscript) and 2 (stability evidence) of
+- [x] Write sections 1 (psychoscript) and 2 (stability evidence) of
       `docs/heap-snapshots-revisited.md` (create it with a short header; 0300 adds its own
       sections; the coordinator writes the summary). Numbers with the commands that
       reproduce them. Merge the doc (doc-only merges gate in seconds); research scripts stay
@@ -73,7 +73,42 @@ Prior work you must read first (deleted from the tree by 0297, in git history):
 - Do not stop on scope: narrow it and report what you left out.
 
 ## Log
+- Read the prior reports (portable-snapshots, goldilocks, D2560, D2700, D3641, D3643) and
+  psychoscript's TS snapshot (snapshot.ts, codec.ts, snapshot/snapshot.ts,
+  intrinsic-names.ts) and the Rust port's snapshot.rs. Ran the TS reference under bun on
+  the README example and all 300 harvested cases (first and last idle point, FIFO answers
+  like djs's runner): 286/286 x 2 restore and continue the same, modulo wall-clock prints.
+- Merge points: the last commit of each issue on main (linear history), 0102..0298 = 196
+  points. Built djs-cli (dev, niced, -j 6, one worktree and target dir) at all of them:
+  none failed, 4-18 s each. Disassembled today's 331 corpus scripts with every build.
+- disasm prints regexp literal constants as `internal@<heap offset>`: normalized.
+- Hash levels exact / pc / frames (await-holding functions need pc equality, the others
+  their interface). Schema proxies with git show: layout names/types, object class slot
+  counts and docs, registry paths, closure kinds, NewRecord sizes, state constants, plus
+  op/intrinsic numbering and layout offsets for contrast.
+- Found: 10 of 195 pairs changed any corpus bytecode, 6 a frame-holding function; since
+  0200, 4 of 95 and 1 (0259). Five of the ten were changes made for continuation dumps
+  (0170, 0192-0194, 0205). Raw-byte hashing would break on op renumbering (5 pairs) and
+  intrinsic id moves (15). Named schemas: no codemode-visible removal survived a hand
+  triage; the weak spot is positional object/record slots (0151 moved one, 0236 added one).
+- Wrote sections 1-2 of docs/heap-snapshots-revisited.md, with placeholders 3-5 for 0300.
+  Guide pages: none affected.
 
 ## Follow-ups
+- A gate leg that pins the corpus's name-normalized bytecode per function (the hash of
+  scripts/research/0299/analyze.py), so a change of a waiting function's bytecode is a
+  visible decision. Only worth it if heap snapshots are adopted.
+- A machine-readable slot table for object classes and builtin closure records (today
+  prose in heap/object.rs and positional `RecordGet` indexes): what a by-name snapshot needs.
 
 ## Result
+docs/heap-snapshots-revisited.md sections 1 (psychoscript) and 2 (stability evidence).
+Research scripts on this branch only, `scripts/research/0299/` (points.sh, build.sh,
+disasm_all.py, analyze.py, schema.py; removed before the merge, see the branch history);
+the psychoscript harness and the size script in work/scratch/0299 (psy/exp/harvest.ts,
+sizes.py). Headline: keyed by per-function name-normalized bytecode (required only for
+functions with a frame) and names, a snapshot of a corpus script would have broken at
+3% of merges (0102..0298) and 1% since 0200 (one merge, 0259, 17 of 331 scripts), vs 75-81%
+for a build key; every corpus script survives a 10-issue span in 78-88% of windows.
+Left out: issues before 0102, atom-id churn, the Rust port's sizes, capture descriptors
+and flags in the hash, semantic changes that keep every name.
