@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0299 | Heap snapshots revisited (1): psychoscript, bytecode/schema stability over djs history | psnapr | .worktrees/psnapr |
 | 0300 | Heap snapshots revisited (2): logical snapshot of a waiting run keyed by bytecode, small (prototype) | psnap | .worktrees/psnap |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
@@ -64,6 +63,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0299 | Heap snapshots revisited (1): psychoscript analysis; bytecode/schema stability over 196 merges | d258225a (agent psnapr; docs/heap-snapshots-revisited.md §1-2: awaiting functions' named bytecode changed at 6/195 merges (1/95 since 0200); psychoscript 3.6 KB zstd median vs plain dump 2.8 KB) |
 | 0298 | The dumper's size: same dumps, far less code | 4e9735f4..8636abd6 (agent pdiet; 4 merges; D3660 optimize(size) on dump code; dumper 334.6 -> ~270 KB gz, module 698,440 B gz; dump instructions +6% native; B items declined by the owner) |
 | 0297 | Remove everything that exists for backwards compatibility | b141172f..e22ce519 (agent pcompat; 8 merges; D3640-D3645: ABI 9, build-hash images, no slim build, no js/pi, dumps under D024 until declared stable, registry without tombstones, retired-design docs deleted; 767,573 -> 750,859 B gz before 0298) |
 | 0297 | missingMember's TypeError stack showed the Sandbox's Proxy trap frame: the reader takes an error's own `stack` first | 54e4a8a5 (agent pns; D3624; no size change; follow-up: compile the helper under its own name) |
