@@ -104,6 +104,11 @@ No compatibility code (owner: earlier releases need not load).
   design table. tests/corpus: 83 cases' comments name the plain-dump fuzzer or dumps as
   their provenance; left as they are, since editing them shifts the source spans that
   tests/snapshot/frame-bytecode.txt pins (and the cases stay valid tests).
+- The first merge's gate failed "native vs wasm images": djs-abidrive (native) had
+  djs-difftest's `lazy` feature, the wasm module no longer has it, and a lazy build gives
+  lazily compilable functions their own constant pools, so the raw images differed (the
+  canonical hashes agreed). build:difftest now builds djs-abidrive without `lazy`
+  (native-vs-wasm.sh's own build too); D3732 says so.
 - Ran: djs-docs and djs-cli tests, e2e (default: plain, GC stress, suspend), the JS tests on
   the dev wasm (110 pass), nesting on the shipped module, fmt, gate legs paths/targets.
 

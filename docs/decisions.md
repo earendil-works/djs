@@ -14652,7 +14652,10 @@ called). Without dumps nothing in the shipped module profits: measured at 0304, 
 compilation costs +5.0 KB gzip (515,646 against 510,652 B) and codemode memory is the same
 in every row. So the shipped and docs modules leave djs-core's `lazy` out; native builds
 keep it as a per-VM option, and the gate's snapshot and difftest legs still run lazy VMs
-(D3721). Supersedes D2993.
+(D3721). A build with the `lazy` feature gives every lazily compilable function a constant
+pool of its own even in eager VMs, so its images differ from an eager build's: the gate's
+native-vs-wasm comparison builds djs-abidrive without `lazy`, as the module is built.
+Supersedes D2993.
 
 ## D3733: Modules with snapshots keep the 128 KiB stack
 date: 2026-11-27 · by: psnap · issue: 0304

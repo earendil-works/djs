@@ -208,8 +208,14 @@ def jobs():
           group=tgt, build=True),
         J("build:core-tests", f"CARGO_TARGET_DIR=target/gate-core cargo test -p djs-core --lib --no-run --quiet"
           f" {cargo_json} > {G}/core-tests.json", group="target/gate-core", build=True),
-        J("build:difftest", f"CARGO_TARGET_DIR=target/gate-difftest cargo build -p djs-difftest --bins --quiet"
-          f" {cargo_json} > {G}/difftest.json && {exe} {G}/difftest.json djs-difftest djs-abidrive",
+        # djs-abidrive drives djs-wasm natively with the dev wasm module's features: without
+        # `lazy`, whose builds give lazily compilable functions constant pools of their own,
+        # so their images differ from the eager module's (D3732).
+        J("build:difftest", f"CARGO_TARGET_DIR=target/gate-difftest cargo build -p djs-difftest --bin djs-difftest"
+          f" --quiet {cargo_json} > {G}/difftest.json && {exe} {G}/difftest.json djs-difftest"
+          f" && CARGO_TARGET_DIR=target/gate-difftest cargo build -p djs-difftest --bin djs-abidrive"
+          f" --no-default-features --features unicode --quiet {cargo_json} > {G}/abidrive.json"
+          f" && {exe} {G}/abidrive.json djs-abidrive",
           group="target/gate-difftest", build=True),
         J("build:test262", f"CARGO_TARGET_DIR=target/gate-test262 cargo build -p djs-test262 --quiet"
           f" {cargo_json} > {G}/test262.json && {exe} {G}/test262.json djs-test262",

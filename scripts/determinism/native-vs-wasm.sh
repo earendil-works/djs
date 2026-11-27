@@ -11,8 +11,11 @@ wasm=${1:?usage: native-vs-wasm.sh <djs_wasm.wasm>}
 if [ -n "${DJS_ABIDRIVE:-}" ]; then
   native=$DJS_ABIDRIVE
 else
-  cargo build --quiet -p djs-difftest --bin djs-abidrive
-  native=target/debug/djs-abidrive
+  # Without `lazy`, as the wasm modules are built (D3732): a lazy build lays out constant
+  # pools differently.
+  CARGO_TARGET_DIR=target/abidrive cargo build --quiet -p djs-difftest --bin djs-abidrive \
+    --no-default-features --features unicode
+  native=target/abidrive/debug/djs-abidrive
 fi
 fail=0
 for case in floats_body general_body deep_body weakref; do
