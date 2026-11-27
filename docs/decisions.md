@@ -14546,3 +14546,64 @@ and `RecordSet` take the same constant indexes, and `NewRecord` reads its slot c
 schema table and writes the kind into the header it writes anyway. The ceiling is that plus
 the slack, 776,276 B, as D3705 raised it for 0301; 0304 removes the dumper and lowers it.
 The codemode-memory rows stay (no new wasm page).
+
+## D3720: A host's run is snapshotted with its host values named, and loads into the host's VM
+date: 2026-11-28 · by: psnap · issue: 0303
+A snapshot of a host's run (`SnapshotOptions::host`) names what the host made instead of
+writing it, as dumps name host values (D2971): its host values by name (the Sandbox's
+namespaces, their `missingMember` Proxies, `values`, module namespaces, the JSON boundary's
+converting functions; the CLI's `tools` and `console`), every object reachable from one
+through own data properties as a member by its path (dumps went two levels deep; a
+snapshot keeps the identity of all of it), host functions by identity wherever they are,
+an open call's function by identity (`HostCall.FN` has type `hostfn`), and the handles
+the host names for the run (the handle table is not written); plus the host's own data,
+a string (the Sandbox: the calls' states, `fuelUsed`, the deterministic clock). Such a
+snapshot loads only into the host's own VM (`Vm::load_snapshot(base, bytes, sources,
+&HostValues)`), a fresh one made with the same setup: its host values, functions (by
+identity, so their ids may differ) and handles stay its own, and the run's state (the
+global patches, interpreter state, host calls, per-VM realm values) comes from the
+snapshot; a plain VM snapshot loads only with `from_snapshot`, and each refuses the other.
+Why not the whole heap: pi's `ALL_TOOLS` (every tool's description) and its namespaces with
+their converting closures would be in every snapshot, and the sandbox's own tables
+(handles, function ids) would have to travel and be rebuilt. `snapshot::needs(bytes)`
+lists the scripts stored by hash and the host names, so a host finds the sources and makes
+what it makes lazily (module values) before the load; the `Vm` record carries the
+frozen-builtins and weak-reference modes, which a host VM must match. FORMAT 2.
+
+## D3721: Snapshots of lazily compiled VMs
+date: 2026-11-28 · by: psnap · issue: 0303
+The shipped module compiles functions at their first call (D2990, D2993), and every snapshot
+of it refused ("a lazy function template"). A lazy template is now written like any
+closure's (script, span, interface hash); the import compiles every script eagerly, so a
+function a lazy parent made at its first call is a template of the script there; and the
+interface hash reads only the capture names (a lazy template that captures nothing has no
+name table) with a synthetic binding's number left out (`<fields 3>`: counted per compiled
+unit, which differs between a lazy function's compile and its script's). Frame-holding
+functions are never lazy (async functions and generators stay eager), so the bytecode pin
+is unchanged. The gate leg "snapshots" runs the corpus and the programs with
+`DJS_LAZY=1` too.
+
+## D3722: The Sandbox persists runs as snapshots
+date: 2026-11-28 · by: psnap · issue: 0303
+`Run.snapshot({ sources?, states? })` and `Task.suspend`/`checkpoint({ sources? })` return a
+`Uint8Array`; `sandbox.loadSnapshot(bytes)` returns the idle Run with its open calls (same
+ids, states) and `fuelUsed`; `resume`/`Sandbox.resume` take a snapshot (or, until 0304, a
+dump string); `describeSnapshot(bytes)` is for people. `sources` defaults to true (a
+snapshot that loads anywhere); `false` writes hashes, found among the scripts the process
+ran and the `sources` option. Snapshots need no frozen builtins. A missing source or host
+value is a `misuse` error before anything loads; a refusal of the load itself leaves the
+sandbox dead (the VM may be half loaded). The wasm instance's first VM takes the base as
+its arena (D2060), so the sandbox hands the base over again (`provideBase`) before its
+first snapshot operation and the instance keeps only the paths (`BaseInfo::from_owned`):
+first snapshot of an instance ~0.7 ms, later ones ~0.06 ms, a load ~0.8 ms (pi's setup,
+shipped module). djs-wasm ABI 10: `vm_snapshot(vm, len)`, `vm_load_snapshot(vm, len)`,
+`djs_snapshot_needs`, `djs_snapshot_describe`; `vm_from_snapshot` goes. `debugger;` pauses
+and `vm_call_site` no longer need the `dump` feature; the docs module is `docs,snapshot`.
+
+## D3723: The size ceiling rises by host snapshots
+date: 2026-11-28 · by: psnap · issue: 0303
+The shipped module grows 775,252 -> 785,077 B gzip (+9.8 KB): the load into a host's VM and
+its host-value resolution, the host names on export, `needs`, `describe` (now reachable from
+the module), the four operations and their staging tables (+23 KB raw code, measured per
+function against main). The ceiling is that plus the slack, 786,101 B, as D3705 and D3713
+raised it; 0304 removes the dumper and lowers it. The codemode-memory rows stay.
