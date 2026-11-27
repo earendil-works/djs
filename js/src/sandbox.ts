@@ -345,6 +345,16 @@ export interface LoadRunOptions {
   fuelUsed?: number;
 }
 
+/** How a snapshot is written (`Run.snapshot`, `Task.suspend`). */
+export interface SnapshotOptions {
+  /**
+   * Store the scripts' texts (default). `false`: only their hashes, and the loading sandbox
+   * finds each script by its name and hash among the ones this process ran and the
+   * `sources` option's (smaller, for a host that keeps its scripts).
+   */
+  sources?: boolean;
+}
+
 /** What `Sandbox.load` recreated: the open host calls of a dump (0171, D2890). */
 export interface LoadedDump {
   calls: OpenCall[];
@@ -592,6 +602,11 @@ interface Exports {
   vm_canonical_hash(vm: number): number;
   djs_build_hash(): number;
   vm_tables_need(vm: number): number;
+  /** A logical snapshot (D3700, D3720): staging holds the flags and the host's names. */
+  vm_snapshot?(vm: number, len: number): number;
+  vm_load_snapshot?(vm: number, len: number): number;
+  djs_snapshot_needs?(len: number): number;
+  djs_snapshot_describe?(len: number): number;
   djs_elastic_stack(on: number): void;
   djs_stack(len: number): number;
   /** The base snapshot (D1321), coded in the module (D2252). */
@@ -701,6 +716,8 @@ interface RunCore {
   deliver(id: number, ok: boolean, value: unknown, at?: number): void;
   /** `states`: the host's state of open calls, by id, as JSON text (D2770). */
   dump(states?: [number, string][]): string;
+  /** The run as a snapshot (D3720), with the host's states of open calls by id. */
+  snapshot(states: [number, unknown][], opts: SnapshotOptions): Uint8Array;
 }
 
 type RunEnd = { state: "idle" } | { state: "done"; value: unknown; exited?: boolean } | { state: "threw"; error: SandboxError };
@@ -790,6 +807,19 @@ export class Run {
     return this.#core.dump(Object.entries(states).map(([id, v]) => [Number(id), stateJson(Number(id), v)]));
   }
 
+  /**
+   * The waiting run as a logical snapshot (D3700, D3720): its state as data, for
+   * `loadSnapshot` or `resume` in a fresh sandbox made with the same options, in this or
+   * another process. The sandbox's host functions, namespaces, `values` and module
+   * namespaces are named, not written: the loading sandbox has its own. Only while idle.
+   * `states` are the host's states of open calls, by id (JSON data): the load gives each
+   * back with its call (`OpenCall.state`); `fuelUsed` travels with the run.
+   */
+  snapshot(opts: SnapshotOptions & { states?: Record<number, unknown> } = {}): Uint8Array {
+    if (this.state !== "idle") throw new SandboxError("misuse", `the run is ${this.state}: only an idle run can be snapshotted`);
+    return this.#core.snapshot(Object.entries(opts.states ?? {}).map(([id, v]) => [Number(id), v]), opts);
+  }
+
   /** Records how a step ended. */
   end(e: RunEnd): void {
     this.state = e.state;
@@ -810,18 +840,20 @@ interface LiveCall {
 /** A dump a task was asked for: `suspend` (the task stops) or `checkpoint`. */
 interface DumpRequest {
   stop: boolean;
-  resolve(text: string): void;
+  opts: SnapshotOptions;
+  resolve(snapshot: Uint8Array): void;
   reject(e: unknown): void;
 }
 
 /**
  * A run the sandbox drives (D2771): `Sandbox.start` begins one, `Sandbox.resume`
- * continues one from a dump. It calls the async host functions as the script calls them
- * and passes their results back, like `runAsync`; `result` is the outcome. While it waits
- * on host calls it can be suspended (`suspend()`): the sandbox writes it as a dump, with
- * each open call's state from its function's `save` hook, and stops. `Sandbox.resume`
- * continues the dump in a new sandbox, any time later and in any process: each open call
- * is continued by its function's `resume` hook (or made again, or rejected).
+ * continues one from a snapshot. It calls the async host functions as the script calls
+ * them and passes their results back, like `runAsync`; `result` is the outcome. While it
+ * waits on host calls it can be suspended (`suspend()`): the sandbox writes it as a
+ * snapshot (D3720), with each open call's state from its function's `save` hook, and
+ * stops. `Sandbox.resume` continues the snapshot in a new sandbox, any time later and in
+ * any process: each open call is continued by its function's `resume` hook (or made
+ * again, or rejected).
  */
 export class Task {
   /** The sandbox the task runs in (dispose it when done). */
@@ -849,19 +881,19 @@ export class Task {
 
   /**
    * Suspends the task at its next idle point (no script work left, only host calls to
-   * wait for): calls `save` for every open call, dumps the run with those states and
-   * stops. The open calls' signals are aborted and their results ignored; `result`
-   * rejects with kind `suspended`. Resolves to the dump (a Script, for
-   * `Sandbox.resume`). Rejects, and the task goes on, when the run cannot be dumped (or a
-   * `save` throws); rejects when the run ends first.
+   * wait for): calls `save` for every open call, snapshots the run with those states
+   * and stops. The open calls' signals are aborted and their results ignored; `result`
+   * rejects with kind `suspended`. Resolves to the snapshot (for `Sandbox.resume`).
+   * Rejects, and the task goes on, when the run cannot be snapshotted (or a `save`
+   * throws); rejects when the run ends first.
    */
-  suspend(): Promise<string> {
-    return new Promise((resolve, reject) => this.#request({ stop: true, resolve, reject }));
+  suspend(opts: SnapshotOptions = {}): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => this.#request({ stop: true, opts, resolve, reject }));
   }
 
-  /** `suspend` without stopping: a dump at the next idle point, and the task goes on. */
-  checkpoint(): Promise<string> {
-    return new Promise((resolve, reject) => this.#request({ stop: false, resolve, reject }));
+  /** `suspend` without stopping: a snapshot at the next idle point, and the task goes on. */
+  checkpoint(opts: SnapshotOptions = {}): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => this.#request({ stop: false, opts, resolve, reject }));
   }
 }
 
@@ -946,10 +978,10 @@ export class Sandbox {
    * dumped): `(await Sandbox.resume(dump, opts)).result`. See `resume`. A dump is code:
    * resume only dumps you trust.
    */
-  static async resume(dump: string, opts: SandboxOptions = {}): Promise<Task> {
+  static async resume(snapshot: Uint8Array | string, opts: SandboxOptions = {}): Promise<Task> {
     const sandbox = await this.create(opts);
     try {
-      return sandbox.resume(dump);
+      return sandbox.resume(snapshot);
     } catch (e) {
       sandbox.dispose();
       throw e;
@@ -962,9 +994,38 @@ export class Sandbox {
    * made again (`call`) when the function has no `resume`, and rejected when it is a
    * plain function (the sandbox cannot know whether calling it again is safe).
    */
-  resume(dump: string): Task {
-    const { calls, result } = this.loadRunDump(dump);
+  resume(snapshot: Uint8Array | string): Task {
+    if (typeof snapshot !== "string") {
+      const core = this.loadSnapshotRun(snapshot);
+      return this.task(core, [...core.open.values()]);
+    }
+    const { calls, result } = this.loadRunDump(snapshot);
     return this.task(this.startRun(calls, result), calls);
+  }
+
+  /**
+   * Loads a snapshot of a run (`Run.snapshot`, `Task.suspend`, D3720) into this sandbox,
+   * a fresh one made with the same options as the one that took it, for the host to
+   * drive: the run is idle, waiting on the same open calls with the same ids (`run.calls`,
+   * with their states), and its `fuelUsed` goes on from the snapshot's. No hooks run.
+   * The sandbox's host functions, namespaces and values are its own (by identity); the
+   * snapshot refuses to load when it names one this sandbox does not have, or a script
+   * neither stored nor found (`sources`). A refusal leaves the sandbox unusable.
+   */
+  loadSnapshot(snapshot: Uint8Array): Run {
+    return this.loadSnapshotRun(snapshot).run;
+  }
+
+  /**
+   * A snapshot described for people: its sections and sizes, record types, builtins,
+   * functions and the run's state. Any sandbox of the module that wrote it can read it.
+   */
+  describeSnapshot(snapshot: Uint8Array): string {
+    const x = this.x;
+    if (x.djs_snapshot_describe === undefined) throw new SandboxError("misuse", "this djs-wasm module has no snapshots");
+    this.stage(snapshot);
+    if (x.djs_snapshot_describe(snapshot.length) !== 0) throw new SandboxError("misuse", `not a snapshot: ${outText(x)}`);
+    return outText(x);
   }
 
   /**
@@ -1480,7 +1541,7 @@ export class Sandbox {
         const hooks = this.hooks.get(fnId);
         if (!loaded) r = this.invoke(fnId, open.args, live.call);
         else if (hooks === undefined) {
-          throw new Error(`${open.fn}: the call was open when the run was dumped, and the host function has no hooks to continue it`);
+          throw new Error(`${open.fn}: the call was open when the run was suspended, and the host function has no hooks to continue it`);
         } else if (hooks.resume) r = hooks.resume(open.state, live.call);
         else r = this.invoke(fnId, open.args, live.call);
       } catch (e) {
@@ -1514,15 +1575,15 @@ export class Sandbox {
       poke();
     };
     this.cancelTask = () => stop(new SandboxError("misuse", "the sandbox was disposed"));
-    // The dump at an idle point: each open call's state, from `save` or `call.state`.
-    const dump = (): string => {
-      const states: [number, string][] = [];
+    // The snapshot at an idle point: each open call's state, from `save` or `call.state`.
+    const snapshot = (opts: SnapshotOptions): Uint8Array => {
+      const states: [number, unknown][] = [];
       for (const { call } of calls.values()) {
         const save = this.hooks.get(this.fnNames.indexOf(call.fn) + 1)?.save;
         const state = save ? save(call) : call.state;
-        if (state !== undefined) states.push([call.id, stateJson(call.id, state)]);
+        if (state !== undefined) states.push([call.id, state]);
       }
-      return this.dumpRun(core, states);
+      return this.snapshotRun(core, states, opts);
     };
     const loop = async () => {
       for (;;) {
@@ -1538,16 +1599,16 @@ export class Sandbox {
         while (finished.length === 0 && !ended) {
           const asked = requests.splice(0);
           if (asked.length > 0) {
-            let text: string;
-            try {
-              text = dump();
-            } catch (e) {
-              for (const r of asked) r.reject(e);
-              continue;
+            for (const r of asked) {
+              try {
+                r.resolve(snapshot(r.opts));
+              } catch (e) {
+                r.reject(e);
+                r.stop = false;
+              }
             }
-            for (const r of asked) r.resolve(text);
             if (asked.some((r) => r.stop)) {
-              stop(new SandboxError("suspended", "the task was suspended into a dump"));
+              stop(new SandboxError("suspended", "the task was suspended into a snapshot"));
               return;
             }
             continue;
@@ -1630,6 +1691,10 @@ export class Sandbox {
       dump: (states) => {
         if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
         return this.dumpRun(core, states);
+      },
+      snapshot: (states, opts) => {
+        if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
+        return this.snapshotRun(core, states, opts);
       },
     };
     core.run = new Run(core);
@@ -1836,6 +1901,152 @@ export class Sandbox {
    */
   private dumpRun(core: RunCore, states: [number, string][] = []): string {
     return this.dumpText([], [["run", core.result]], states);
+  }
+
+  /**
+   * `Run.snapshot()`: `vm_snapshot` of a host's run (D3720). The host names its functions
+   * by identity and its host values (namespaces, `values`, module namespaces, converting
+   * functions) by name; it holds the run's result promise when it has one (a run loaded
+   * from a dump); its data are the calls' states, the fuel used and the clock.
+   */
+  private snapshotRun(core: RunCore, states: [number, unknown][], opts: SnapshotOptions): Uint8Array {
+    const x = this.x;
+    if (x.vm_snapshot === undefined) throw new SandboxError("misuse", "this djs-wasm module has no snapshots");
+    for (const [id, v] of states) stateJson(id, v);
+    const data: SnapshotData = { states, fuelUsed: core.used };
+    if (this.clock !== undefined) data.clock = this.clock;
+    const w = new StagingWriter();
+    w.u32((opts.sources === false ? 0 : 1) | 2);
+    w.u32(this.fnNames.length);
+    this.fnNames.forEach((name, i) => {
+      w.u32(i + 1);
+      w.text(name);
+    });
+    const values = this.hostValues();
+    w.u32(values.length);
+    for (const [name, h] of values) {
+      w.u32(h);
+      w.text(name);
+    }
+    const handles: [string, number][] = core.result !== 0 ? [["run", core.result]] : [];
+    w.u32(handles.length);
+    for (const [name, h] of handles) {
+      w.u32(h);
+      w.text(name);
+    }
+    w.text(JSON.stringify(data));
+    const n = this.guard(() => {
+      this.stage(w.bytes());
+      return x.vm_snapshot!(this.vm, w.length);
+    });
+    if (n < 0) throw new SandboxError("misuse", `cannot snapshot the run:\n${outText(x)}`);
+    return new Uint8Array(x.memory.buffer, x.djs_out_ptr(), n).slice();
+  }
+
+  /** The host values by name a snapshot names (D3720): the converting functions, the namespaces, `values` and module namespaces. */
+  private hostValues(): [string, number][] {
+    return [...[...this.wrappers].map(([id, h]): [string, number] => [this.fnNames[id - 1], h]), ...this.namespaces];
+  }
+
+  /** Loads a snapshot of a run into this sandbox (D3720): the run, idle, with its open calls. */
+  private loadSnapshotRun(snapshot: Uint8Array): RunCore & { run: Run } {
+    const x = this.x;
+    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
+    if (x.vm_load_snapshot === undefined || x.djs_snapshot_needs === undefined) {
+      throw new SandboxError("misuse", "this djs-wasm module has no snapshots");
+    }
+    // What it needs: the scripts it names by hash, and host values made lazily (modules).
+    this.stage(snapshot);
+    if (x.djs_snapshot_needs(snapshot.length) !== 0) throw new SandboxError("misuse", `cannot load the snapshot: ${outText(x)}`);
+    const r = new OutReader(x);
+    const scripts = r.list();
+    const names = r.list();
+    this.prepareHostValues(names);
+    const missing = names.filter((n) => this.hostValue(n) === undefined && !this.fnNames.includes(n));
+    if (missing.length > 0) {
+      throw new SandboxError("misuse", `cannot load the snapshot: this sandbox has no host value or function ${missing.join(", ")}`);
+    }
+    const sources: Uint8Array[] = [];
+    for (const name of new Set(scripts)) {
+      const given = this.opts.sources?.(name);
+      if (given !== undefined) sources.push(textEncoder.encode(given));
+      for (const code of ranScripts.get(name) ?? []) if (code !== given) sources.push(textEncoder.encode(code));
+      if (given === undefined && !ranScripts.has(name)) {
+        throw new SandboxError("misuse", `cannot load the snapshot: it continues the script ${JSON.stringify(name)}, which this host does not have (pass the sandbox option \`sources\`, or snapshot with the sources)`);
+      }
+    }
+    // Before the load: the namespaces this sandbox has not frozen yet are, as they were.
+    this.sealNamespaces();
+    const w = new StagingWriter();
+    w.bytes_(snapshot);
+    w.u32(sources.length);
+    for (const src of sources) w.bytes_(src);
+    w.u32(this.fnNames.length);
+    this.fnNames.forEach((name, i) => {
+      w.u32(i + 1);
+      w.u32(this.fnHandles.get(i + 1) ?? 0);
+      w.text(name);
+    });
+    const values = this.hostValues();
+    w.u32(values.length);
+    for (const [name, h] of values) {
+      w.u32(h);
+      w.text(name);
+    }
+    const st = this.guard(() => {
+      this.stage(w.bytes());
+      return x.vm_load_snapshot!(this.vm, w.length);
+    });
+    if (st !== 0) {
+      const why = outText(x);
+      // The VM may be half loaded: nothing runs in it again.
+      this.dead = `a snapshot failed to load into this sandbox: ${why}`;
+      throw new SandboxError("misuse", `cannot load the snapshot:\n${why}`);
+    }
+    const out = new OutReader(x);
+    const held = new Map<string, number>();
+    for (let n = out.u32(); n > 0; n--) {
+      const h = out.u32();
+      held.set(out.text(), h);
+    }
+    const ids: number[] = [];
+    for (let n = out.u32(); n > 0; n--) ids.push(out.u32());
+    const data = JSON.parse(out.text() || "{}") as SnapshotData;
+    const states = new Map(data.states ?? []);
+    const calls = ids.map((id): OpenCall => {
+      const { fnId, args } = this.callInfo(id);
+      const call: OpenCall = { id, fn: this.fnNames[fnId - 1] ?? `#${fnId}`, args };
+      if (states.has(id)) call.state = states.get(id);
+      return call;
+    });
+    if (data.clock !== undefined && this.clock !== undefined) this.clock = data.clock;
+    const core = this.startRun(calls, held.get("run") ?? 0);
+    core.used = Math.max(0, data.fuelUsed ?? 0);
+    return core;
+  }
+
+  /**
+   * Makes the host values of modules a snapshot names (`specifier#export` functions,
+   * namespaces by specifier) that this sandbox has not made yet, as `prepareModules`
+   * does for dumps.
+   */
+  private prepareHostValues(names: string[]): void {
+    if (this.opts.modules === undefined) return;
+    for (const name of names) {
+      if (this.hostValue(name) !== undefined || this.fnNames.includes(name)) continue;
+      const hash = name.lastIndexOf("#");
+      if (hash > 0) {
+        const spec = name.slice(0, hash);
+        const mod = this.hostModule(spec);
+        const e = mod?.exports[name.slice(hash + 1)];
+        if (mod !== undefined && e !== undefined && typeof e !== "string" && Object.hasOwn(mod.exports, name.slice(hash + 1))) {
+          this.moduleExport(spec, mod, name.slice(hash + 1));
+        }
+      } else {
+        const mod = this.hostModule(name);
+        if (mod !== undefined) this.moduleNamespace(name, mod);
+      }
+    }
   }
 
   /**
@@ -2888,4 +3099,67 @@ function outWords(x: Exports, n: number): number[] {
 
 function outText(x: Exports): string {
   return textDecoder.decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
+}
+
+/** The host's data in a snapshot of a run (D3720): the calls' states, the fuel used, the clock. */
+interface SnapshotData {
+  states?: [number, unknown][];
+  fuelUsed?: number;
+  clock?: number;
+}
+
+/** Little-endian words and length-prefixed byte strings for the snapshot operations' staging. */
+class StagingWriter {
+  private parts: Uint8Array[] = [];
+  length = 0;
+  u32(n: number): void {
+    const b = new Uint8Array(4);
+    new DataView(b.buffer).setUint32(0, n, true);
+    this.push(b);
+  }
+  bytes_(b: Uint8Array): void {
+    this.u32(b.length);
+    this.push(b);
+  }
+  text(s: string): void {
+    this.bytes_(textEncoder.encode(s));
+  }
+  private push(b: Uint8Array): void {
+    this.parts.push(b);
+    this.length += b.length;
+  }
+  bytes(): Uint8Array {
+    const out = new Uint8Array(this.length);
+    let at = 0;
+    for (const p of this.parts) {
+      out.set(p, at);
+      at += p.length;
+    }
+    return out;
+  }
+}
+
+/** Reads the out buffer's words and length-prefixed strings (a copy: later calls reuse it). */
+class OutReader {
+  private readonly b: Uint8Array;
+  private at = 0;
+  constructor(x: Exports) {
+    this.b = new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()).slice();
+  }
+  u32(): number {
+    const v = new DataView(this.b.buffer, this.at, 4).getUint32(0, true);
+    this.at += 4;
+    return v;
+  }
+  text(): string {
+    const n = this.u32();
+    const t = textDecoder.decode(this.b.subarray(this.at, this.at + n));
+    this.at += n;
+    return t;
+  }
+  list(): string[] {
+    const out: string[] = [];
+    for (let n = this.u32(); n > 0; n--) out.push(this.text());
+    return out;
+  }
 }
