@@ -79,7 +79,7 @@ pub fn run(src: &str, ts: bool) -> String {
     out
 }
 
-/// Host function ids of [`snapshot`]'s and [`dump`]'s VMs.
+/// Host function ids of [`snapshot`]'s VMs.
 const DEBUGGER: u32 = 2;
 
 /// The snapshot `src` is at its `nth` pause (from 1), described (`snapshot::describe`,
@@ -156,101 +156,6 @@ pub fn snapshot(src: &str, nth: usize, ts: bool) -> String {
                         format!("{} bytes\n{text}", bytes.len())
                     }
                     Err(e) => format!("(refused: {})\n", e.0.join("; ")),
-                };
-            }
-            Status::Done(_) => return "(the run ended without pausing)\n".into(),
-            Status::Threw(e) => return format!("Uncaught {}\n", vm.display(e)),
-            Status::HostOutOfMemory => return "out of host memory\n".into(),
-        }
-    }
-}
-
-/// The continuation dump `src` writes at its `nth` pause (from 1): a `debugger;` in an
-/// async function awaits the host's `debugger` there (D3050), and the run is dumped while
-/// it waits, as the live examples' Dump tab does with the Sandbox: frozen builtins,
-/// `console` a namespace of host functions, the body by reference (`$djs.source`), the
-/// run's promise as the dump's value. The text, or why there is none.
-pub fn dump(src: &str, nth: usize, ts: bool) -> String {
-    // As the editor has it: without the block's final newline, which the script's hash in
-    // `$djs.source` would count.
-    let src = src.strip_suffix('\n').unwrap_or(src);
-    use djs_core::vm::dump::{BaseNames, DumpOptions};
-    let mut vm = djs_prelude::new_vm(VmOptions {
-        frozen_builtins: true,
-        ..VmOptions::default()
-    })
-    .expect("out of memory");
-    vm.set_now(0.0);
-    let console = vm.new_object().expect("out of memory");
-    let log = vm
-        .new_host_function(CONSOLE_LOG, "log")
-        .expect("out of memory");
-    vm.define(console, "log", log).expect("out of memory");
-    vm.define_global("console", Value::object(console))
-        .expect("out of memory");
-    let pause = vm
-        .new_async_host_function(DEBUGGER, "debugger")
-        .expect("out of memory");
-    vm.define_global("debugger", pause).expect("out of memory");
-    let opts = CompileOptions {
-        debugger_awaits: true,
-        ..body_options(ts)
-    };
-    let main = match vm.compile(src.as_bytes(), &opts) {
-        Ok(f) => f,
-        Err(e) => return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
-    };
-    // (`this` undefined, as the Sandbox calls a body.)
-    vm.call(main, Value::UNDEFINED, &[])
-        .expect("the VM is idle");
-    let mut pauses = 0;
-    let mut spent = 0;
-    loop {
-        match vm.run(1_000_000) {
-            Status::OutOfFuel if spent < 20 => spent += 1,
-            Status::OutOfFuel => return "(out of fuel)\n".into(),
-            Status::HostCall { call_id, .. } => {
-                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED))
-                    .expect("parked on this call");
-            }
-            Status::Idle => {
-                let open = vm.pending_host_calls();
-                let Some(&id) = open.first() else {
-                    return "(the run waits for nothing)\n".into();
-                };
-                pauses += 1;
-                if pauses < nth {
-                    vm.resolve_host_call(id, Ok(Value::UNDEFINED))
-                        .expect("an open call");
-                    continue;
-                }
-                let run = match vm.outcome() {
-                    Some(Ok(v)) => v,
-                    _ => return "(the run has no result promise)\n".into(),
-                };
-                let name = |id: u32| match id {
-                    CONSOLE_LOG => Some("console.log".to_string()),
-                    DEBUGGER => Some("debugger".to_string()),
-                    _ => None,
-                };
-                let roots = [("console", Value::object(console))];
-                let handles = [("run", run)];
-                let opts = DumpOptions {
-                    host: &["console", "debugger"],
-                    host_roots: &roots,
-                    host_fn_name: &name,
-                    handles: &handles,
-                    call_states: &[],
-                    source_refs: true,
-                    base_names: BaseNames {
-                        builtins: djs_prelude::BASE_NAMES,
-                        globals: djs_prelude::BASE_GLOBALS,
-                    },
-                    check: true,
-                };
-                return match vm.dump(&opts, None) {
-                    Ok(text) => text,
-                    Err(e) => format!("(refused: {})\n", e.message()),
                 };
             }
             Status::Done(_) => return "(the run ended without pausing)\n".into(),

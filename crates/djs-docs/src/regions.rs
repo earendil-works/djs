@@ -5,7 +5,7 @@
 //! the page's preceding `js` block. It is checked in, so a page reads the same on GitHub,
 //! and `djs-docs check` fails when it is stale.
 //!
-//! `run` and `dump` regions (example output) are only rewritten with `--examples`: a
+//! `run` and `snapshot` regions (example output) are only rewritten with `--examples`: a
 //! changed output is a behavior change someone should look at, so the gate fails on it
 //! instead of regenerating it after a rebase.
 
@@ -38,9 +38,9 @@ pub struct Ctx {
     pub warnings: Vec<String>,
     /// Status numbers, computed on the first `gen:status` region (D2101).
     status: Option<crate::status::Status>,
-    /// Rewrite `run` and `dump` regions too.
+    /// Rewrite `run` and `snapshot` regions too.
     pub examples: bool,
-    /// `run` and `dump` regions whose output changed (page names).
+    /// `run` and `snapshot` regions whose output changed (page names).
     pub changed_examples: Vec<String>,
 }
 
@@ -369,7 +369,7 @@ fn generate(
                 }
             }
         }
-        "run" | "disasm" | "dump" => {
+        "run" | "disasm" | "snapshot" => {
             let Some((src, ts)) = last_js else {
                 cx.errors.push(format!(
                     "{page}: gen:{name} without a js or ts block before it"
@@ -379,8 +379,9 @@ fn generate(
             if name == "disasm" {
                 return fenced("text", &crate::run::disasm(src, ts));
             }
-            let new = if name == "dump" {
-                // `gen:dump [N]`: the dump at the block's Nth `debugger;` pause.
+            let new = if name == "snapshot" {
+                // `gen:snapshot [N]`: the snapshot at the block's Nth `debugger;` pause,
+                // described.
                 let nth = match args {
                     [] => 1,
                     [n] => n.parse().unwrap_or(0),
@@ -388,11 +389,11 @@ fn generate(
                 };
                 if nth == 0 {
                     cx.errors.push(format!(
-                        "{page}: gen:dump takes one optional pause number (from 1)"
+                        "{page}: gen:snapshot takes one optional pause number (from 1)"
                     ));
                     return old.to_string();
                 }
-                fenced("js", &crate::run::dump(src, nth, ts))
+                fenced("text", &crate::run::snapshot(src, nth, ts))
             } else {
                 fenced("text", &crate::run::run(src, ts))
             };

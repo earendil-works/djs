@@ -5,7 +5,7 @@
 //!                              unchanged, links and references valid; renders every page
 //! djs-docs regen [--examples]  rewrite the generated regions and diagrams in place;
 //!                              --examples also rewrites example output (`gen:run`,
-//!                              `gen:dump`)
+//!                              `gen:snapshot`)
 //! djs-docs build [--out DIR] [--wasm FILE]
 //!                              the static site (default target/docs-site), with live
 //!                              examples on djs-wasm (default: the `wasm` profile build)

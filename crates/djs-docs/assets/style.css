@@ -371,12 +371,12 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
   background: var(--semantic-color-text-negative); content: "";
 }
 .live-error { color: var(--semantic-color-text-negative); }
-/* A pause at `debugger;` in the output, the dump under it, and the tip on what it is. */
+/* A pause at `debugger;` in the output, the snapshot under it, and the tip on what it is. */
 .live-pause { color: var(--semantic-color-text-secondary); font-style: italic; }
-.live-pause a.live-dump-link { color: inherit; text-decoration: underline; }
-.live-dump-box { border-block-start: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); }
-.live-dump-box > summary { cursor: pointer; padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); color: var(--semantic-color-text-secondary); }
-.live-dump-box pre { max-block-size: 22rem; overflow: auto; }
+.live-pause a.live-snap-link { color: inherit; text-decoration: underline; }
+.live-snap-box { border-block-start: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); }
+.live-snap-box > summary { cursor: pointer; padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); color: var(--semantic-color-text-secondary); }
+.live-snap-box pre { max-block-size: 22rem; overflow: auto; }
 .live button.live-run.is-paused { background: var(--semantic-color-background-fill-primary-positive); }
 .live-info { position: relative; color: var(--semantic-color-text-secondary); text-decoration: none; cursor: help; padding-inline: var(--semantic-dimension-space-control-gap-small); }
 .live-info::after {

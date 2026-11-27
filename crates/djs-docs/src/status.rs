@@ -402,14 +402,15 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
         "recorded" => Ok(recorded(st, pi)),
-        "engines-size" | "engines-startup" | "engines-run" | "engines-memory" | "engines-dumps"
-        | "engines-ops" => engines(st, what),
+        "engines-size" | "engines-startup" | "engines-run" | "engines-memory" | "engines-ops" => {
+            engines(st, what)
+        }
         "bridge-in" | "bridge-out" | "bridge-rate" | "bridge-memory" | "bridge-e2e" => {
             bridge(st, what)
         }
         _ => Err(format!(
             "gen:status {what}: expected conformance, speed, size, inventory, recorded, \
-             engines-size|startup|run|memory|dumps|ops or bridge-in|out|rate|memory|e2e"
+             engines-size|startup|run|memory|ops or bridge-in|out|rate|memory|e2e"
         )),
     }
 }
@@ -514,7 +515,6 @@ fn size(st: &Status) -> Result<String, String> {
         "wasm/code",
         "wasm/data",
         "wasm/base-coded",
-        "dump/extra-gzip",
     ];
     let v: Vec<f64> = keys
         .iter()
@@ -530,7 +530,7 @@ fn size(st: &Status) -> Result<String, String> {
         &format!(
             "`djs_wasm.wasm`, the one module djs ships, is {} ({} gzip, {} brotli): {} of code, \
              {} of data, and the base snapshot (the initialized realm with all builtins, {}) \
-             coded to {} in a custom section; the dumper takes {} of its gzip. Module sizes {}.",
+             coded to {} in a custom section. Module sizes {}.",
             kb(v[0]),
             kb(v[1]),
             kb(v[2]),
@@ -538,7 +538,6 @@ fn size(st: &Status) -> Result<String, String> {
             kb(v[4]),
             kb(st.base_bytes as f64),
             kb(v[5]),
-            kb(v[6]),
             provenance(st, &keys)
         ),
         "",
@@ -636,7 +635,6 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
         }
     };
     let mib = |v: f64| format!("{:.1}", v / 1048576.0);
-    let kib = |v: f64| format!("{:.1}", v / 1024.0);
     let header = |first: &str| {
         let mut s = format!("| {first} |");
         for (_, label) in ENGINES {
@@ -722,7 +720,7 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
                 },
             )
         }
-        "engines-ops" => {
+        _ => {
             let mut s = String::from(
                 "| operation | djs, ms | QuickJS, ms | djs / QuickJS |\n| --- | ---: | ---: | ---: |\n",
             );
@@ -739,33 +737,6 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
             (
                 s,
                 "Milliseconds per loop of the operation (js/bench/engines/ops.ts), the setup's time subtracted; QuickJS: the faster of the two latest releases",
-            )
-        }
-        _ => {
-            let mut s = String::from(
-                "| workload | idle points | dump, KiB (max) | gzip, KiB (max) | write, ms | load, ms |\n| --- | ---: | ---: | ---: | ---: | ---: |\n",
-            );
-            for w in WORKLOADS {
-                let k = |m: &str| format!("engines/djs/{w}/dump-{m}");
-                if st.num(&k("points")).is_none() {
-                    let _ = writeln!(s, "| {w} | 0 | | | | |");
-                    continue;
-                }
-                let _ = writeln!(
-                    s,
-                    "| {w} | {} | {} ({}) | {} ({}) | {} | {} |",
-                    get(k("points"))?,
-                    kib(get(k("raw-p50"))?),
-                    kib(get(k("raw-max"))?),
-                    kib(get(k("gzip-p50"))?),
-                    kib(get(k("gzip-max"))?),
-                    ms(get(k("ms"))?),
-                    ms(get(k("load-ms"))?)
-                );
-            }
-            (
-                s,
-                "Medians over a workload's idle points; load: a new sandbox with the run loaded",
             )
         }
     };
@@ -1110,52 +1081,6 @@ pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
             );
             (alt, svg)
         }
-        "engines-dumps" => {
-            let rows: Vec<(&str, usize)> = WORKLOADS.iter().map(|w| (*w, 0)).collect();
-            let col = |m: &str, scale: f64| -> Result<Vec<Option<f64>>, String> {
-                WORKLOADS
-                    .iter()
-                    .map(|w| {
-                        let k = format!("engines/djs/{w}/dump-{m}");
-                        if st.num(&format!("engines/djs/{w}/dump-points")).is_none() {
-                            Ok(None)
-                        } else {
-                            get(k).map(|v| Some(v / scale))
-                        }
-                    })
-                    .collect()
-            };
-            let alt = "djs's continuation dumps per workload: size, and the time to write and to load one";
-            let svg = bars(
-                &Meta {
-                    name: &name,
-                    title: alt,
-                    desc: "Horizontal bars per workload: the median dump size in KiB on a logarithmic scale, the median write and load times in ms. A workload that never waits has no dump. The table below has the exact numbers.",
-                },
-                &rows,
-                &[
-                    Panel {
-                        title: "dump, KiB",
-                        values: col("raw-p50", 1024.0)?,
-                        log: true,
-                        format: |v| format!("{v:.1}"),
-                    },
-                    Panel {
-                        title: "write, ms",
-                        values: col("ms", 1.0)?,
-                        log: false,
-                        format: short,
-                    },
-                    Panel {
-                        title: "load, ms",
-                        values: col("load-ms", 1.0)?,
-                        log: false,
-                        format: short,
-                    },
-                ],
-            );
-            (alt, svg)
-        }
         "bridge-in" | "bridge-out" => {
             let dir = &what["bridge-".len()..];
             let groups: Vec<&str> = BRIDGE_PAYLOADS.iter().map(|(_, l)| *l).collect();
@@ -1293,13 +1218,6 @@ mod tests {
                 );
             }
         }
-        for w in WORKLOADS.iter().filter(|w| **w != "inspect") {
-            for m in [
-                "points", "raw-p50", "raw-max", "gzip-p50", "gzip-max", "ms", "load-ms",
-            ] {
-                rec += &format!("engines/djs/{w}/dump-{m}\t3\tabc\t2026-11-06\n");
-            }
-        }
         rec += "engines/bridge/load\t2.0\tabc\t2026-11-06\n";
         for (p, _) in BRIDGE_PAYLOADS {
             rec += &format!("engines/bridge/payload/{p}/bytes\t1000000\tabc\t2026-11-06\n");
@@ -1341,11 +1259,6 @@ mod tests {
             "{run}"
         );
         assert!(
-            generate(&st, "engines-dumps", false)
-                .unwrap()
-                .contains("| inspect | 0 |")
-        );
-        assert!(
             generate(&st, "engines-size", false)
                 .unwrap()
                 .contains("| djs | 1 KB |")
@@ -1355,7 +1268,6 @@ mod tests {
             "engines-startup",
             "engines-run",
             "engines-memory",
-            "engines-dumps",
         ] {
             let c = chart(&st, what).unwrap().unwrap();
             assert_eq!(c.file, format!("gen/chart-{what}.svg"));

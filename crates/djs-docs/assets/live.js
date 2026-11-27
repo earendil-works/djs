@@ -336,7 +336,7 @@ async function runPausing(ex, l, id) {
   const { el } = ex;
   const pane = (n) => el.querySelector(`[data-pane="${n}"]`);
   const setStatus = (t) => (el.querySelector(".live-status").textContent = t);
-  const box = el.querySelector(".live-dump-box");
+  const box = el.querySelector(".live-snap-box");
   const { Sandbox, module } = l;
   const src = ex.ta.value;
   const lines = [];
@@ -354,15 +354,15 @@ async function runPausing(ex, l, id) {
     box.querySelector("code").textContent = d.text;
   };
   pane("out").onclick = (ev) => {
-    const a = ev.target.closest?.("a.live-dump-link");
+    const a = ev.target.closest?.("a.live-snap-link");
     if (!a) return;
     ev.preventDefault();
-    showSnap(Number(a.dataset.dump));
+    showSnap(Number(a.dataset.snap));
     box.open = true;
     box.querySelector("pre").scrollTop = 0;
     box.scrollIntoView({ block: "nearest" });
   };
-  const snapLink = (i) => `<a href="#" class="live-dump-link" data-dump="${i}">snapshot ${i + 1}</a>`;
+  const snapLink = (i) => `<a href="#" class="live-snap-link" data-snap="${i}">snapshot ${i + 1}</a>`;
   /** Where the run waits at its open pauses, as text: lines and columns of the example. */
   const where = (task) => {
     const sites = [];
@@ -512,7 +512,7 @@ async function run(ex) {
       await runPausing(ex, l, id);
       return;
     }
-    el.querySelector(".live-dump-box").hidden = true;
+    el.querySelector(".live-snap-box").hidden = true;
     let lines = [];
     const out = (...a) => lines.push(esc(a.map(show).join(" ")));
     let slices = 0;

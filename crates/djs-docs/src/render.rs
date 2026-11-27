@@ -296,14 +296,14 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
     // An example with a `debugger;` shows the snapshot it is at its first pause (D3050,
     // D3720), described: built here, so that the page shows it without JavaScript too;
     // live.js replaces it with the snapshot of each pause.
-    let dump = if has_debugger(code) {
+    let snap = if has_debugger(code) {
         format!(
-            "<details class=\"live-dump-box\"><summary>The snapshot at the first \
-             <code>debugger;</code></summary><pre class=\"code live-dump\"><code>{}</code></pre></details>\n",
+            "<details class=\"live-snap-box\"><summary>The snapshot at the first \
+             <code>debugger;</code></summary><pre class=\"code live-snap\"><code>{}</code></pre></details>\n",
             esc(&crate::run::snapshot(code, 1, ts))
         )
     } else {
-        "<details class=\"live-dump-box\" hidden><summary></summary><pre class=\"code live-dump\"><code></code></pre></details>\n".to_string()
+        "<details class=\"live-snap-box\" hidden><summary></summary><pre class=\"code live-snap\"><code></code></pre></details>\n".to_string()
     };
     let tab = |id: &str, label: &str, selected: bool| {
         format!(
@@ -331,7 +331,7 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
          <div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre></div>\n\
          <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}\
          <span class=\"live-status\" role=\"status\"></span></div>\n\
-         {}{}{}{}{dump}</div>\n",
+         {}{}{}{}{snap}</div>\n",
         tab("out", "Output", true),
         tab("bytecode", "Bytecode", false),
         tab("heap", "Heap", false),
