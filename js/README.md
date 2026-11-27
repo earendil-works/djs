@@ -51,10 +51,6 @@ const snapshot = await task.suspend(); // later, anywhere: (await Sandbox.resume
 ```
 
 A host-driven run (`sandbox.begin`) has `run.snapshot()` and `sandbox.loadSnapshot(bytes)`.
-The package's module also writes continuation dumps (`run.dump()`, with frozen builtins),
-JavaScript that recreates a run; to continue one in a JavaScript engine other than djs,
-the package exports the dump runtime's `helpers` (and `script`, the same as a Script;
-`scriptFor(dump)`, only the helpers a dump needs).
 
 ## Loading the module
 

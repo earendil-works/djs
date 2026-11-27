@@ -9,17 +9,13 @@
 // Per workload and engine: run time (set the tool answers, evaluate the program, drain the
 // jobs, read the result) and the linear memory after the run, medians over N fresh VMs
 // after a warm-up (a host process that has run the engine before: V8 has tiered its code
-// up). Every engine's result must be the string node computes. For djs also: the
-// continuation dumps at every idle point of each workload, run through the Sandbox with
-// async host tools (the shipped module, which has the dumper): dump time and size,
-// load time (a new sandbox with the run loaded).
+// up). Every engine's result must be the string node computes.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { cpus, loadavg, platform, release } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { constants as Z, brotliCompressSync, gzipSync } from "node:zlib";
-import { Sandbox, type SandboxOptions } from "../../src/sandbox.ts";
 import { answer, catalog, record, stripBody } from "../../../tests/bench/codemode/tools.ts";
 import { allJs, bodyProgram, djs, type Engine, monty } from "./engines.ts";
 
@@ -144,83 +140,6 @@ for (const e of engines) {
   console.error(`${e.name}: done`);
 }
 
-// ---- djs dumps -----------------------------------------------------------------------------
-
-interface DumpResult {
-  points: number;
-  rawP50: number;
-  rawMax: number;
-  gzipP50: number;
-  gzipMax: number;
-  dumpMsP50: number;
-  resumeMsP50: number;
-}
-const dumps: Record<string, DumpResult> = {};
-if (engines.some((e) => e.name === "djs")) {
-  const mainPath = djs().files[0];
-  const main = await WebAssembly.compile(readFileSync(mainPath));
-  const tools = ["read", "bash", "edit", "write", "web_search", "query_rows", "render_view", "read_image"];
-  const time = (f: () => void) => {
-    const t0 = now();
-    f();
-    return now() - t0;
-  };
-  for (const w of W) {
-    const opts: SandboxOptions = {
-      module: main,
-      typescript: w.ts,
-      deterministic: { startedAt: 1_762_000_000_000, seed: 42 },
-      // Dumps need frozen builtins.
-      frozenBuiltins: true,
-      console: { log() {}, info() {}, warn() {}, error() {} },
-      functions: { text: () => undefined, image: () => undefined },
-      asyncFunctions: Object.fromEntries(tools.map((t) => [`tools.${t}`, () => 0])),
-    };
-    const sb = new Sandbox(opts);
-    const run = sb.begin(w.source, { ALL_TOOLS: catalog() });
-    const raw: number[] = [];
-    const gzs: number[] = [];
-    const dumpMs: number[] = [];
-    const resumeMs: number[] = [];
-    while (run.state === "idle") {
-      let text = "";
-      let best = Infinity;
-      for (let i = 0; i < (quick ? 1 : 5); i++)
-        best = Math.min(best, time(() => {
-          text = run.dump();
-        }));
-      const bytes = new TextEncoder().encode(text);
-      raw.push(bytes.length);
-      gzs.push(gz(bytes));
-      dumpMs.push(best);
-      let bestResume = Infinity;
-      for (let i = 0; i < (quick ? 1 : 5); i++) {
-        // A new sandbox with the dumped run loaded, idle on its open calls: what a host
-        // does before it settles them.
-        const t0 = now();
-        const fresh = await Sandbox.create(opts);
-        fresh.loadRun(text);
-        bestResume = Math.min(bestResume, now() - t0);
-        fresh.dispose();
-      }
-      resumeMs.push(bestResume);
-      // Settle one call at a time, oldest first: every open call is an idle point of its own.
-      const c = run.calls[0];
-      const name = c.fn.replace(/^tools\./, "");
-      try {
-        run.settle(c.id, { ok: true, value: answer(name, (c.args[0] ?? {}) as Record<string, unknown>) });
-      } catch (err) {
-        run.settle(c.id, { ok: false, value: String((err as Error).message) });
-      }
-      await run.advance();
-    }
-    if (run.state !== "done") throw new Error(`${w.name}: the dump run ended ${run.state}: ${String(run.error)}`);
-    sb.dispose();
-    if (raw.length)
-      dumps[w.name] = { points: raw.length, rawP50: median(raw), rawMax: Math.max(...raw), gzipP50: median(gzs), gzipMax: Math.max(...gzs), dumpMsP50: median(dumpMs), resumeMsP50: median(resumeMs) };
-  }
-}
-
 // ---- Report --------------------------------------------------------------------------------
 
 const kb = (n: number) => (n / 1024).toFixed(0);
@@ -233,13 +152,8 @@ out += `\nrun ms (median of ${REPS})\n\n| workload | ${results.map((r) => r.name
 for (const w of W) out += `| ${w.name} | ${results.map((r) => (r.workloads[w.name] ? ms(r.workloads[w.name]!.runMs) + (r.workloads[w.name]!.ok ? "" : " (differs)") : "")).join(" | ")} |\n`;
 out += `\nlinear memory after the run, MiB\n\n| workload | ${results.map((r) => r.name).join(" | ")} |\n| --- |${results.map(() => " ---: |").join("")}\n`;
 for (const w of W) out += `| ${w.name} | ${results.map((r) => (r.workloads[w.name] ? mib(r.workloads[w.name]!.memory) : "")).join(" | ")} |\n`;
-if (Object.keys(dumps).length) {
-  out += "\ndjs dumps at every idle point\n\n| workload | points | raw KiB p50 / max | gzip KiB p50 / max | dump ms p50 | resume ms p50 |\n| --- | ---: | ---: | ---: | ---: | ---: |\n";
-  for (const [k, d] of Object.entries(dumps))
-    out += `| ${k} | ${d.points} | ${(d.rawP50 / 1024).toFixed(1)} / ${(d.rawMax / 1024).toFixed(1)} | ${(d.gzipP50 / 1024).toFixed(1)} / ${(d.gzipMax / 1024).toFixed(1)} | ${ms(d.dumpMsP50)} | ${ms(d.resumeMsP50)} |\n`;
-}
 console.log(out);
 console.log(`load at the end ${loadavg().map((x) => x.toFixed(1)).join(" ")}`);
 const json = opt("--json");
-if (json) writeFileSync(json, JSON.stringify({ machine, load: [startLoad, loadavg()[0]], reps: REPS, engines: results, dumps, workloads: W.map((w) => ({ name: w.name, bytes: w.source.length, data: w.data.length })) }, null, 1));
+if (json) writeFileSync(json, JSON.stringify({ machine, load: [startLoad, loadavg()[0]], reps: REPS, engines: results, workloads: W.map((w) => ({ name: w.name, bytes: w.source.length, data: w.data.length })) }, null, 1));
 if (results.some((r) => Object.values(r.workloads).some((x) => x && !x.ok))) process.exitCode = 1;

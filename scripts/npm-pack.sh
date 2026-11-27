@@ -2,7 +2,7 @@
 # Builds the npm package @earendil-works/djs (js/, D2842, D3105) and packs it:
 #   scripts/npm-pack.sh [--module MODULE] [--out DIR]
 # 1. the one wasm module djs ships, wasm/djs.wasm: scripts/build-wasm.sh's (release, build-std,
-#    with the dumper, as it ships, D3600), or the given file (--module: the gate packs its own
+#    as it ships, D3600), or the given file (--module: the gate packs its own
 #    build);
 # 2. the JavaScript and its declarations: tsc over js/src (js/tsconfig.build.json), with
 #    TypeScript from js/package-lock.json (npm ci, once);
@@ -40,8 +40,6 @@ pkg=$out/package
 rm -rf "$pkg"
 mkdir -p "$pkg/wasm"
 js/node_modules/.bin/tsc -p js/tsconfig.build.json --outDir "$pkg/dist"
-# The dump runtime is JavaScript generated from Rust, with declarations beside it.
-cp js/src/dump-runtime.js js/src/dump-runtime.d.ts "$pkg/dist/"
 # tsc keeps the sources' `./x.ts` specifiers in the declarations; the package has `./x.js`
 # (D3105).
 node -e '

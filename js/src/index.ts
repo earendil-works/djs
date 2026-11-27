@@ -1,15 +1,13 @@
 // The package's entry point (`@earendil-works/djs`): the Sandbox API with the one module
-// djs ships, wasm/djs.wasm (with the dumper), as its default; `$DJS_WASM` overrides it.
+// djs ships, wasm/djs.wasm, as its default; `$DJS_WASM` overrides it.
 // The module's literal `new URL("../wasm/djs.wasm", import.meta.url)` is here, not in
 // sandbox.ts, so that bundlers copy it as an asset of the package and running from the
-// repository's sources does not need it (D3106, D3602). Also the dump runtime's helpers,
-// for hosts that continue a dump in their own JavaScript engine.
+// repository's sources does not need it (D3106, D3602).
 
 import { Sandbox as Base, loadModule as load } from "./sandbox.ts";
 import { envVar } from "./env.ts";
 
 export * from "./sandbox.ts";
-export { helpers, script, scriptFor } from "./dump-runtime.js";
 
 /** The package's module: `$DJS_WASM`, else its djs.wasm. */
 export function defaultWasmPath(): string | URL {

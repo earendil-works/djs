@@ -40,10 +40,8 @@ for what in "$@"; do
     # `$DJS_WASM` stays unread without a prompt.
     deno) deno run --allow-read=. main.js ;;
     js-tests)
-      rm -rf js examples tests && mkdir -p js/test examples tests/dump
+      rm -rf js examples tests && mkdir -p js/test examples
       cp -R "$repo/examples/sleep-snapshot" examples/
-      # golden-host.test.ts's programs and their dumps.
-      cp -R "$repo/tests/dump/golden-host" tests/dump/
       rm -rf examples/sleep-snapshot/out
       for f in "$repo"/js/test/*.test.ts; do
         # (imports.test.ts and nesting.test.ts test internal helpers beside the Sandbox.)
@@ -60,8 +58,7 @@ for what in "$@"; do
         const fs = require("fs");
         for (const f of process.argv.slice(1)) {
           const s = fs.readFileSync(f, "utf8")
-            .replace(/"(?:\.\.\/)+(?:js\/)?src\/sandbox\.ts"/g, "\"@earendil-works/djs\"")
-            .replace(/"(?:\.\.\/)+(?:js\/)?src\/dump-runtime\.js"/g, "\"@earendil-works/djs\"");
+            .replace(/"(?:\.\.\/)+(?:js\/)?src\/sandbox\.ts"/g, "\"@earendil-works/djs\"");
           const left = /"(?:\.\.\/)+(?:js\/)?src\/[^"]*"/.exec(s);
           if (left) { console.error(`${f}: imports ${left[0]}, which the package does not export`); process.exit(1); }
           fs.writeFileSync(f, s);

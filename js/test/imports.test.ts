@@ -1,5 +1,5 @@
 // Code mode bodies import host modules (0292, D3597): leading import declarations bind
-// host values the `modules` resolver names, as the body's parameters; dumps name them by
+// host values the `modules` resolver names, as the body's parameters; snapshots name them by
 // identity (`specifier#export`) and namespaces by specifier, and load with no rewrite.
 
 import { test } from "node:test";
@@ -69,13 +69,13 @@ test("imports bind host functions and namespaces; the resolver is asked once, la
     import gh from "@mcp/github";
     import * as linear from "@mcp/linear";
     import { read, now } from "local";
-    const hits = await search_issues({ q: "dumps" });
+    const hits = await search_issues({ q: "snapshots" });
     const made = await linear.create_issue({ title: hits[0] });
     return [hits, made, now(), read === tools.read, typeof get, typeof gh, Object.keys(linear), Object.isFrozen(linear),
       linear.create_issue === linear.create_issue, typeof search_issues];
   `;
   const run = sb.begin(code, { extra: 1 });
-  assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["@mcp/github#search_issues", [{ q: "dumps" }]]]);
+  assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["@mcp/github#search_issues", [{ q: "snapshots" }]]]);
   await finish(run, (fn) => (fn === "@mcp/github#search_issues" ? ["issue 1"] : "made"));
   assert.equal(run.state, "done", String(run.error));
   assert.deepEqual(run.value, [["issue 1"], "made", 7, true, "function", "function", ["create_issue", "list"], true, true, "function"]);
@@ -112,7 +112,7 @@ test("TypeScript bodies erase type-only imports", async () => {
   sb.dispose();
 });
 
-test("a run with imports dumps at every idle point and loads with no rewrite", async () => {
+test("a run with imports snapshots at every idle point and loads with no rewrite", async () => {
   const code = `// imports, then the body
 import { search_issues } from "@mcp/github";
 import * as linear from "@mcp/linear";
@@ -135,28 +135,23 @@ return [made, search === search_issues, ns === linear, Object.keys(ns)];`;
         module,
         frozenBuiltins: true,
         console: quiet,
-        inlineSources: inline,
         jsonBoundary: json,
         modules: modules(),
         sources: (n) => (n === "imports.js" ? code : undefined),
       });
       for (let k = 0; k < 2; k++) {
-        const what = `inline ${inline} json ${json} at idle point ${k + 1}`;
+        const what = `sources ${inline} json ${json} at idle point ${k + 1}`;
         const sb = new Sandbox(opts());
         const run = sb.begin(code, {}, { filename: "imports.js" });
         for (let i = 0; i < k; i++) {
           for (const c of run.calls) run.settle(c.id, { ok: true, value: answer(c.fn, c.args) });
           await run.advance();
         }
-        const dump = run.dump();
-        if (!inline) assert.match(dump, /\$djs\.source\("imports\.js", "[0-9a-f]{8}", "search_issues,linear"\)/, what);
-        else assert.doesNotMatch(dump, /\bimport\s*\{/, `${what}: the inlined body has no import`);
-        if (k === 1) assert.match(dump, /\$djs\.host\("@mcp\/linear"\)/, what);
-        assert.match(dump, /\$djs\.host\("@mcp\/github#search_issues"\)/, what);
+        const snap = run.snapshot({ sources: inline });
         sb.dispose();
         // A fresh sandbox has made none of the modules' values: the load makes them.
         const again = new Sandbox(opts());
-        const resumed = again.loadRun(dump);
+        const resumed = again.loadSnapshot(snap);
         await finish(resumed, answer);
         assert.equal(resumed.state, "done", `${what}: ${String(resumed.error)}`);
         assert.deepEqual(resumed.value, want, what);
@@ -166,12 +161,12 @@ return [made, search === search_issues, ns === linear, Object.keys(ns)];`;
   }
 });
 
-test("a dump that names a module the loading sandbox cannot resolve does not load", async () => {
+test("a snapshot that names a module the loading sandbox cannot resolve does not load", async () => {
   const code = `import { search_issues } from "@mcp/github"; return await search_issues();`;
-  const sb = new Sandbox({ module: await loadModule(), frozenBuiltins: true, console: quiet, modules: modules(), inlineSources: true });
-  const dump = sb.begin(code).dump();
+  const sb = new Sandbox({ module: await loadModule(), frozenBuiltins: true, console: quiet, modules: modules() });
+  const snap = sb.begin(code).snapshot();
   sb.dispose();
   const without = new Sandbox({ module: await loadModule(), frozenBuiltins: true, console: quiet });
-  assert.throws(() => without.loadRun(dump), /search_issues/);
+  assert.throws(() => without.loadSnapshot(snap), /search_issues/);
   without.dispose();
 });

@@ -463,9 +463,9 @@ test("large host strings land in the heap in place when ASCII (D2551), others th
   sb.dispose();
 });
 
-test("slices of a long text reach the host and survive dumps (D2542)", async () => {
+test("slices of a long text reach the host and survive snapshots (D2542)", async () => {
   const text = Array.from({ length: 200 }, (_, i) => `line ${i} `.padEnd(60, "x")).join("\n");
-  const sb = await Sandbox.create({ frozenBuiltins: true });
+  const sb = await Sandbox.create({ asyncFunctions: { wait: () => 0 } });
   const seen: unknown[] = [];
   sb.defineFunction("see", (v) => {
     seen.push(v);
@@ -476,8 +476,11 @@ test("slices of a long text reach the host and survive dumps (D2542)", async () 
     json: JSON.stringify({ a: text.slice(0, 300), b: [1, 2] }),
   });
   assert.deepEqual(seen, [[text.split("\n")[3], text.slice(0, 300)]]);
-  const restored = await Sandbox.create({ functions: { see: () => null } });
-  restored.load(sb.dump());
+  const snap = sb.begin("await wait();").snapshot();
+  const restored = await Sandbox.create({ functions: { see: () => null }, asyncFunctions: { wait: () => 0 } });
+  const run = restored.loadSnapshot(snap);
+  run.settle(run.calls[0].id, { ok: true, value: 0 });
+  await run.advance();
   assert.deepEqual(restored.run("return [lines.length, lines[199], doc.a.length, lines[5].slice(2, 40)]"), [
     200,
     text.split("\n")[199],

@@ -1,5 +1,5 @@
 // Host-driven runs for durable code mode (0291, D3592-D3595): host errors carry their data
-// properties, `values` are host data a dump names, the JSON boundary, `RunExit`, and
+// properties, `values` are host data a snapshot names, the JSON boundary, `RunExit`, and
 // bounded steps.
 
 import { test } from "node:test";
@@ -55,7 +55,7 @@ test("a host error's own data properties reach the script's catch", async () => 
 
 const TOOLS = [{ name: "read", description: "reads" }, { name: "ask", description: "asks a person" }];
 
-test("values are deep-frozen globals that dumps name and loads must be given again", async () => {
+test("values are deep-frozen globals that snapshots name and loads must be given again", async () => {
   const module = await loadModule();
   const opts: SandboxOptions = { module, frozenBuiltins: true, console: quiet, asyncFunctions: { "tools.ask": () => 0 }, values: { ALL_TOOLS: TOOLS, LIMIT: 3 } };
   const sb = new Sandbox(opts);
@@ -68,20 +68,19 @@ test("values are deep-frozen globals that dumps name and loads must be given aga
   `;
   const run = sb.begin(code, {}, { filename: "values.js" });
   assert.deepEqual(run.calls[0].args, [["read", "ask"]]);
-  const dump = run.dump();
-  assert.match(dump, /\$djs\.host\("ALL_TOOLS"\)/);
-  assert.doesNotMatch(dump, /asks a person/, "the data is not written");
+  const snap = run.snapshot();
+  assert.ok(!Buffer.from(snap).includes("asks a person"), "the data is not written");
   sb.dispose();
 
   const again = new Sandbox(opts);
-  const resumed = again.loadRun(dump);
+  const resumed = again.loadSnapshot(snap);
   await finish(resumed, () => "yes");
   assert.deepEqual(resumed.value, [[true, true, 3, true], "yes", true, true, "read"]);
   again.dispose();
 
-  // A sandbox without the value cannot load the dump.
+  // A sandbox without the value cannot load the snapshot.
   const without = new Sandbox({ ...opts, values: { LIMIT: 3 } });
-  assert.throws(() => without.loadRun(dump), /unknown host value ALL_TOOLS/);
+  assert.throws(() => without.loadSnapshot(snap), /no host value or function ALL_TOOLS/);
   without.dispose();
 });
 
@@ -160,7 +159,7 @@ test("the JSON boundary converts the run's result; a result JSON cannot carry fa
   sb.dispose();
 });
 
-test("converting functions are host values: one per identity, named in dumps, === across a load", async () => {
+test("converting functions are host values: one per identity, named in snapshots, === across a load", async () => {
   const module = await loadModule();
   const opts: SandboxOptions = {
     module,
@@ -174,24 +173,22 @@ test("converting functions are host values: one per identity, named in dumps, ==
   const code = `
     const read = tools.read, search = search_issues;
     const a = await read({ at: new Date(0) });
-    const b = await search({ q: "dumps", seen: new Set([1]) });
+    const b = await search({ q: "snapshots", seen: new Set([1]) });
     return [a, b, read === tools.read, search === search_issues, read.name, typeof read];
   `;
   const run = sb.begin(code, {}, { filename: "json.js" });
   assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["tools.read", [{ at: "1970-01-01T00:00:00.000Z" }]]]);
-  const dump = run.dump();
-  assert.match(dump, /\$djs\.host\("tools\.read"\)|\$djs\.host\("tools"\)/);
-  assert.match(dump, /\$djs\.host\("@mcp\/github#search_issues"\)/);
-  assert.doesNotMatch(dump, /stringify/, "the boundary's code is not in the dump");
+  const snap = run.snapshot();
+  assert.ok(!Buffer.from(snap).includes("stringify"), "the boundary's code is not in the snapshot");
   sb.dispose();
   const again = new Sandbox(opts);
-  const resumed = again.loadRun(dump);
+  const resumed = again.loadSnapshot(snap);
   assert.deepEqual(resumed.calls.map((c) => [c.fn, c.args]), [["tools.read", [{ at: "1970-01-01T00:00:00.000Z" }]]]);
   await finish(resumed, (fn, args) => `${fn} ${JSON.stringify(args)}`);
   assert.equal(resumed.state, "done", String(resumed.error));
   assert.deepEqual(resumed.value, [
     'tools.read [{"at":"1970-01-01T00:00:00.000Z"}]',
-    '@mcp/github#search_issues [{"q":"dumps","seen":{}}]',
+    '@mcp/github#search_issues [{"q":"snapshots","seen":{}}]',
     true,
     true,
     "read",

@@ -83,12 +83,12 @@ test("the globals the sandbox binds are non-writable and non-configurable, also 
   ];
   const sb = new Sandbox(opts);
   assert.deepEqual(sb.run(probe), expected);
-  // A dump and load: the loading sandbox binds them the same way.
+  // A snapshot and load: the loading sandbox binds them the same way.
   const run = sb.begin(`const a = await tools.ask(); ${probe.replace("return out;", "return [a, out];")}`);
-  const dump = run.dump();
+  const snap = run.snapshot();
   sb.dispose();
   const again = new Sandbox(opts);
-  const loaded = again.loadRun(dump);
+  const loaded = again.loadSnapshot(snap);
   await finish(loaded, () => "yes");
   assert.deepEqual(loaded.value, ["yes", expected]);
   again.dispose();
@@ -150,10 +150,10 @@ test("namespaces have a null prototype; missingMember is not asked about Object.
   const expected = [null, null, null, undefined, undefined, false, ["ask"], "tools.nope does not exist"];
   const sb = new Sandbox(opts);
   const run = sb.begin(`import * as x from "@m/x"; const a = await tools.ask(); ${probe.replace("return out;", "return [a, out];")}`);
-  const dump = run.dump();
+  const snap = run.snapshot();
   sb.dispose();
   const again = new Sandbox(opts);
-  const loaded = again.loadRun(dump);
+  const loaded = again.loadSnapshot(snap);
   await finish(loaded, () => "yes");
   assert.equal(loaded.state, "done", String(loaded.error));
   assert.deepEqual(loaded.value, ["yes", expected]);

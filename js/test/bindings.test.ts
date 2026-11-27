@@ -1,6 +1,6 @@
 // Host bindings (0213, D2970-D2972): a host function is identified by a name its host
 // chooses; scripts find it where the sandbox binds it (globals, namespaces, body bindings,
-// the stand-in for imports), and dumps and snapshots name it by identity, so a run that
+// the stand-in for imports), and snapshots name it by identity, so a run that
 // holds a bare `myTool` is suspended and resumes like one that uses `tools.x`.
 
 import { test } from "node:test";
@@ -62,7 +62,7 @@ test("the written rule: dotted names make namespace globals, other identities no
   sb.dispose();
 });
 
-test("a run with body bindings dumps at every idle point and continues identically", async () => {
+test("a run with body bindings snapshots at every idle point and continues identically", async () => {
   const want = ["my a", "fetched b", "my c", true, true, "undefined", "undefined"];
   for (let k = 0; k < 3; k++) {
     const sb = new Sandbox(await options());
@@ -72,19 +72,17 @@ test("a run with body bindings dumps at every idle point and continues identical
       run.settle(c.id, { ok: true, value: c.fn === MY_TOOL ? `my ${String(c.args[0])}` : `fetched ${String(c.args[0])}` });
       await run.advance();
     }
-    const text = run.dump();
-    assert.match(text, /\$djs\.host\("@sdk\/our-stuff#myTool"\)/);
-    assert.match(text, /\$djs\.host\("sdk"\)/);
+    const snap = run.snapshot();
     sb.dispose();
     const again = new Sandbox(await options());
-    const resumed = again.loadRun(text);
+    const resumed = again.loadSnapshot(snap);
     while (resumed.state === "idle") {
       const c = resumed.calls[0];
       resumed.settle(c.id, { ok: true, value: c.fn === MY_TOOL ? `my ${String(c.args[0])}` : `fetched ${String(c.args[0])}` });
       await resumed.advance();
     }
     assert.equal(resumed.state, "done", String(resumed.error));
-    assert.deepEqual(resumed.value, want, `dumped after ${k} results`);
+    assert.deepEqual(resumed.value, want, `snapshotted after ${k} results`);
     again.dispose();
   }
 });
@@ -102,9 +100,9 @@ test("a suspended task with body bindings resumes in a sandbox", async () => {
   };
   const withStuck = { ...opts, asyncFunctions: { ...opts.asyncFunctions, [MY_TOOL]: stuck } };
   const task = new Sandbox(withStuck).start(code, {}, { filename: "task.js" });
-  const dump = await task.suspend();
+  const snap = await task.suspend();
   await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
-  const again = await Sandbox.resume(dump, opts);
+  const again = await Sandbox.resume(snap, opts);
   assert.deepEqual(await again.result, ["my a (resumed)", true]);
   again.sandbox.dispose();
 });

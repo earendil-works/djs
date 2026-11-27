@@ -1,6 +1,6 @@
 // Host-driven runs (0179, docs/host.md "Host-driven runs"):
 // `begin` runs to an idle point, the host settles the open async calls itself, `advance`
-// continues; `Sandbox.resume` continues a run from a dump (a plain Script, D2830).
+// continues; `Sandbox.loadSnapshot` continues a run from a snapshot.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -54,41 +54,27 @@ test("a rejected call and a script exception end the run as threw", async () => 
   assert.equal(sb.begin("return 7").value, 7);
 });
 
-// Hand-written: the body stopped at its await, as a continuation (D2830) of what is left.
-const DUMP = `"djs-dump";
-globalThis.$dump = {};
-try {
-$dump.p3 = $djs.resume(3, "sleep", [5]);
-$dump.K = async function (ms) {
-  const r = (await $dump.p3);
-  console.log("after", r);
-  return r + 1;
-};
-$dump.K.call(undefined, 5);
-} finally { delete globalThis.$dump; delete globalThis.$djs; }
-`;
-
-test("resume continues a dumped run with the same open calls", async () => {
+test("a snapshotted run loads with the same open calls", async () => {
   const module = await loadModule();
+  const first = new Sandbox({ module, console: capture().console, asyncFunctions: { sleep: () => 0 } });
+  const snap = first.begin(BODY, { ms: 5 }).snapshot();
+  first.dispose();
   const out = capture();
   const sandbox = new Sandbox({ module, console: out.console, asyncFunctions: { sleep: () => 0 } });
-  const run = sandbox.loadRun(DUMP);
+  const run = sandbox.loadSnapshot(snap);
   assert.equal(run.state, "idle");
-  assert.deepEqual(run.calls, [{ id: 3, fn: "sleep", args: [5] }]);
-  run.settle(3, { ok: true, value: 1 });
+  assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["sleep", [5]]]);
+  run.settle(run.calls[0].id, { ok: true, value: 1 });
   await run.advance();
   assert.equal(run.value, 2);
   assert.deepEqual(out.lines, ["after 1"]);
-  assert.equal(sandbox.run("return typeof $dump"), "undefined");
 });
 
-test("resume refuses a dump without a run, and unknown host functions", async () => {
+test("resume refuses a snapshot that names host functions the sandbox lacks", async () => {
   const module = await loadModule();
-  await assert.rejects(Sandbox.resume("\"djs-dump\";\nvar x = 1;", { module }), /holds no run/);
-  await assert.rejects(Sandbox.resume(DUMP, { module }), /unknown host function sleep/);
-  const sb = new Sandbox({ module, asyncFunctions: { sleep: () => 0 } });
-  const { calls } = sb.load(DUMP);
-  assert.deepEqual(calls, [{ id: 3, fn: "sleep", args: [5] }]);
+  const first = new Sandbox({ module, console: capture().console, asyncFunctions: { sleep: () => 0 } });
+  const snap = first.begin(BODY, { ms: 5 }).snapshot();
+  await assert.rejects(Sandbox.resume(snap, { module }), /no host value or function sleep/);
 });
 
 test("begin names the script for stack traces", async () => {
@@ -97,7 +83,7 @@ test("begin names the script for stack traces", async () => {
   assert.match(String(run.value), /sleep\.js:2/);
 });
 
-test("dotted names make a namespace object; dumps and loads name the call so", async () => {
+test("dotted names make a namespace object; snapshots and loads name the call so", async () => {
   const module = await loadModule();
   const asyncFunctions = { "tools.sleep": () => 0, "tools.other": () => 0 };
   const sb = new Sandbox({ module, asyncFunctions });
@@ -131,14 +117,14 @@ test("a host-driven run records a journal that replay runs", async () => {
   assert.deepEqual((run.value as unknown[]).slice(0, 4), ["A", "B", "AB!", 2]);
 });
 
-test("dumping a recorded run leaves its state alone: the journal still replays", async () => {
+test("snapshotting a recorded run leaves its state alone: the journal still replays", async () => {
   const module = await loadModule();
   const opts = { module, frozenBuiltins: true, console: capture().console, deterministic: { startedAt: 1, seed: 1 }, now: 2, asyncFunctions: { "tools.get": () => 0 } };
   const journal: JournalEntry[] = [];
   const sb = new Sandbox(opts);
   const run = sb.begin("const a = await tools.get(1); return a + (await tools.get(2));", {}, { journal });
   const before = sb.canonicalHash();
-  const text = run.dump();
+  const snap = run.snapshot();
   assert.equal(sb.canonicalHash(), before);
   run.settle(run.calls[0].id, { ok: true, value: 10 });
   await run.advance();
@@ -146,8 +132,8 @@ test("dumping a recorded run leaves its state alone: the journal still replays",
   await run.advance();
   assert.equal(run.value, 15);
   assert.equal(await new Sandbox(opts).replay(journal), 15);
-  // And the dump continues elsewhere.
-  const again = new Sandbox(opts).loadRun(text);
+  // And the snapshot continues elsewhere.
+  const again = new Sandbox(opts).loadSnapshot(snap);
   again.settle(again.calls[0].id, { ok: true, value: 1 });
   await again.advance();
   again.settle(again.calls[0].id, { ok: true, value: 2 });

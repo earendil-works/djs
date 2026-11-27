@@ -6,7 +6,6 @@ import { elasticStack, trapText } from "./trap.ts";
 import { djsExports } from "./abi.ts";
 import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
-import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
 import { envVar } from "./env.ts";
 import { ImportSyntaxError, leadingImports, lineColumn } from "./imports.ts";
 
@@ -18,10 +17,10 @@ export type HostFunction = (...args: unknown[]) => unknown;
 
 /**
  * An async host call as an `AsyncHostFunction`'s hooks see it (D2771): what the script
- * called, and the host's state of the call, which a dump keeps.
+ * called, and the host's state of the call, which a snapshot keeps.
  */
 export interface HostCall<S = unknown> {
-  /** The VM's call id; a dump keeps it. */
+  /** The VM's call id; a snapshot keeps it. */
   readonly id: number;
   /** The host function's name, as given in `asyncFunctions`. */
   readonly fn: string;
@@ -29,31 +28,31 @@ export interface HostCall<S = unknown> {
   /** When this sandbox started (or, after a load, resumed) the call: ms, the host's `Date.now()`. */
   readonly startedAt: number;
   /**
-   * The host's state of the call: JSON data that a dump writes with the call (as
+   * The host's state of the call: JSON data that a snapshot writes with the call (as
    * `save`'s default) and a load gives back to `resume`. Set it at any time; a resumed
-   * call starts with the state it was dumped with.
+   * call starts with the state it was snapshotted with.
    */
   state: S | undefined;
   /**
    * Aborted when this sandbox stops waiting for the call: the task was suspended into a
-   * dump (the call continues from there) or the sandbox was disposed.
+   * snapshot (the call continues from there) or the sandbox was disposed.
    */
   readonly signal: AbortSignal;
 }
 
 /**
- * An async host function with hooks for continuation dumps (D2771): a task the sandbox
+ * An async host function with hooks for suspended tasks (D2771): a task the sandbox
  * drives (`start`, `Sandbox.resume`) can be suspended while calls of it are open, and
- * continued from the dump in another sandbox or process. `S` is the type of the calls'
+ * continued from the snapshot in another sandbox or process. `S` is the type of the calls'
  * state.
  */
 export interface AsyncHostFunction<S = unknown> {
   /** Starts the call: its result, or a promise of it. `this` is the call. */
   call(this: HostCall<S>, ...args: unknown[]): unknown;
-  /** The call's state when a dump is taken: JSON data. Default: `call.state`. */
+  /** The call's state when a snapshot is taken: JSON data. Default: `call.state`. */
   save?(call: HostCall<S>): S | undefined;
   /**
-   * Continues the call after a load, from the `state` it was dumped with: its result, or
+   * Continues the call after a load, from the `state` it was snapshotted with: its result, or
    * a promise of it. Without `resume` the call is made again (`call`); a plain function
    * (no hooks) is not continued: its call rejects.
    */
@@ -105,13 +104,13 @@ export interface SandboxOptions {
   /**
    * Fuel budget of one run, after which it fails with "out of fuel" (the call is
    * abandoned; the sandbox stays usable): exact, and across all the steps of a
-   * host-driven run (`Run.fuelUsed`; `loadRun`'s `fuelUsed` carries it over a dump and
-   * load). Default: none.
+   * host-driven run (`Run.fuelUsed`, which a snapshot carries over to the loaded run).
+   * Default: none.
    */
   maxFuel?: number;
   /**
    * Host functions, by identity (D2970): any string (`tools.read`, `@sdk/our-stuff#myTool`),
-   * which calls, journals and dumps name the function by. A call parks the VM until the
+   * which calls, journals and snapshots name the function by. A call parks the VM until the
    * function returns. An identity `ns.member` of two identifiers makes the function member
    * `member` of the namespace object `ns`, which the sandbox makes for its first member.
    * Where scripts find functions and namespaces is `globals` and `bindings`.
@@ -122,7 +121,7 @@ export interface SandboxOptions {
    * once and the script goes on, so several calls can be outstanding (`Promise.all`
    * over tools). The function may return a value or a promise. Identities as in `functions`.
    * An `AsyncHostFunction` (`{ call, save, resume }`) adds the hooks that let a task
-   * suspended into a dump continue its open calls after a load.
+   * suspended into a snapshot continue its open calls after a load.
    */
   asyncFunctions?: Record<string, HostFunction | AsyncHostFunction>;
   /**
@@ -143,8 +142,8 @@ export interface SandboxOptions {
   /**
    * Host data bound as globals: deep-frozen copies of values the host gives every run
    * (`ALL_TOOLS`), each a global of its name and a host value of that identity (for
-   * `bindings`). Dumps refer to them as `$djs.host(name)` and never write them, so a
-   * sandbox that loads such a dump must be given them again. A name that is also a host
+   * `bindings`). Snapshots name them and never write them, so a sandbox that loads such
+   * a snapshot must be given them again. A name that is also a host
    * function's or namespace's identity, or a bound global, is a misuse. Default: none.
    */
   values?: Record<string, unknown>;
@@ -156,8 +155,8 @@ export interface SandboxOptions {
    * `undefined`). A value JSON cannot carry (a cycle, a BigInt) fails at the call: a sync
    * function's call throws the TypeError, an async one's returns a promise rejected with
    * it, and a result fails the run. The functions scripts see are then the sandbox's
-   * converting functions, one per identity, which dumps name as `$djs.host(identity)`
-   * like the functions themselves. `console` is not converted, nor the functions whose
+   * converting functions, one per identity, which snapshots name by identity like the
+   * functions themselves. `console` is not converted, nor the functions whose
    * identities `{ except: [...] }` lists (`text`, `store`: they get plain wire values,
    * `NaN` and functions included). Default false: arguments and results cross as wire
    * values (a Date as a `Date`, a function as an `Opaque`).
@@ -169,8 +168,8 @@ export interface SandboxOptions {
    * returns the message of the TypeError the read throws, or `undefined` for the read to
    * give `undefined` as usual. Not asked for symbols, members of `Object.prototype`,
    * `then` and `toJSON`, so `await`, `JSON.stringify` and `in` work as they do. The
-   * namespaces are then Proxies over their frozen member objects; a dump still names
-   * them as `$djs.host(identity)`. Applies to the namespaces of dotted identities
+   * namespaces are then Proxies over their frozen member objects; a snapshot still names
+   * them by identity. Applies to the namespaces of dotted identities
    * (`console` included), not to `values` or module namespaces. Default: none.
    */
   missingMember?: (namespace: string, member: string) => string | undefined;
@@ -178,7 +177,7 @@ export interface SandboxOptions {
    * More member names of namespace members: identity `ns.member` -> names that are not
    * identifiers (`{ "tools.my_tool": ["my-tool"] }`), defined in `ns` right after
    * `member`, enumerable, holding the same function (`tools["my-tool"] === tools.my_tool`).
-   * An alias is no identity of its own: calls, journals and dumps name the function by
+   * An alias is no identity of its own: calls, journals and snapshots name the function by
    * `ns.member`. Default: none.
    */
   aliases?: Record<string, string[]>;
@@ -186,11 +185,10 @@ export interface SandboxOptions {
    * The host modules codemode bodies import (D3597): `import { a } from "spec"`, `import *
    * as ns from "spec"` and `import d from "spec"` at the top of a body bind host values,
    * as parameters of the body after `params` and `bindings`. Called once per specifier
-   * (lazily: for the modules scripts import, and for those a loaded dump names); an
+   * (lazily: for the modules scripts import, and for those a loaded snapshot names); an
    * unknown module (`undefined`) or export is a `syntax` error of the run. A namespace
-   * import is one frozen object per specifier, a host value named by the specifier, so
-   * dumps write `$djs.host(specifier)`; an export's function is a host value by its
-   * identity. Default: no modules.
+   * import is one frozen object per specifier, a host value named by the specifier (as
+   * snapshots name it); an export's function is a host value by its identity. Default: no modules.
    */
   modules?: (specifier: string) => HostModule | undefined;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
@@ -235,19 +233,14 @@ export interface SandboxOptions {
    */
   frozenBuiltins?: boolean;
   /**
-   * The scripts a loaded dump may refer to (D2834, D2882): a dump names the codemode body
-   * it continues by `$djs.source(name, hash)` instead of carrying its text a second time,
-   * and loading it needs that script again. The scripts this sandbox ran are known; for a
-   * dump from another process, return the code the script `name` (`BeginOptions.filename`,
-   * default `"sandbox.js"`) had. A script that is not the one the dump refers to (another
-   * text, parameters or options) is refused.
+   * The scripts a loaded snapshot may refer to: a snapshot taken with `sources: false`
+   * names the scripts it continues by name and hash instead of storing their texts, and
+   * loading it needs those scripts again. The scripts the sandboxes of this process ran
+   * are known; for a snapshot from another process, return the code the script `name`
+   * (`BeginOptions.filename`, default `"sandbox.js"`) had. A script that is not the one
+   * the snapshot refers to (another text) is refused.
    */
   sources?: (name: string) => string | undefined;
-  /**
-   * Dumps write the codemode body's text instead of `$djs.source(name, hash)`: a dump
-   * that loads without the script (larger). Default false.
-   */
-  inlineSources?: boolean;
   /**
    * Run deterministically (D1680): with the same code, parameters and results in the same
    * order, a run does the same thing every time. `Math.random` is seeded from `seed`, the
@@ -272,12 +265,10 @@ export interface SandboxOptions {
   /**
    * Makes `debugger;` a pause (D3050): in an async function, the statement awaits a call
    * of this function, bound as the global `debugger` with the identity `"debugger"`. While
-   * it is open, the run is idle at the statement and can be dumped there (a task's
-   * `suspend`, `Run.dump`); a dump writes the pause as any open call, and a sandbox with
-   * this option that loads it pauses again at the next `debugger;`. Outside async
-   * functions the statement does nothing, as without the option. Needs a `module` with the
-   * dumper (the shipped module has it), since a dump compiles the script again with the same
-   * options.
+   * it is open, the run is idle at the statement and can be snapshotted there (a task's
+   * `suspend`, `Run.snapshot`); a snapshot keeps the pause as any open call, and a sandbox
+   * with this option that loads it pauses again at the next `debugger;`. Outside async
+   * functions the statement does nothing, as without the option.
    */
   debugger?: HostFunction | AsyncHostFunction;
 }
@@ -320,12 +311,12 @@ export interface RunOptions {
 
 /** An async host call the script made that has no result yet (`Run.calls`). */
 export interface OpenCall {
-  /** The VM's call id: `settle` takes it, and a dump keeps it. */
+  /** The VM's call id: `settle` takes it, and a snapshot keeps it. */
   id: number;
   /** The host function's name, as given in `asyncFunctions` (`sleep`, `tools.read`). */
   fn: string;
   args: unknown[];
-  /** A loaded call's state, as dumped (D2770); absent when the dump has none. */
+  /** A loaded call's state, as snapshotted (D2770); absent when the snapshot has none. */
   state?: unknown;
 }
 
@@ -333,16 +324,6 @@ export interface OpenCall {
 export interface Settlement {
   ok: boolean;
   value: unknown;
-}
-
-/** Options of `Sandbox.loadRun`. */
-export interface LoadRunOptions {
-  /**
-   * The fuel the run had used when it was dumped (`Run.fuelUsed`): the loaded run goes on
-   * from there, so `maxFuel` bounds the run across dumps and loads (D3614). A dump does
-   * not carry it; the host keeps it with the dump. Default 0: a fresh budget.
-   */
-  fuelUsed?: number;
 }
 
 /** How a snapshot is written (`Run.snapshot`, `Task.suspend`). */
@@ -353,11 +334,6 @@ export interface SnapshotOptions {
    * `sources` option's (smaller, for a host that keeps its scripts).
    */
   sources?: boolean;
-}
-
-/** What `Sandbox.load` recreated: the open host calls of a dump (0171, D2890). */
-export interface LoadedDump {
-  calls: OpenCall[];
 }
 
 /**
@@ -440,16 +416,10 @@ const ABI_VERSION = 10;
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
 /**
- * A plain dump's host hooks (D2832, D2890): the global object `$djs` with `resume(id,
- * name, args, state)` and `seed(lo, hi)`, defined while the dump's Script runs. Their
- * function ids are outside the host functions' (ids are places in `fnNames`).
+ * `SandboxOptions.missingMember`, as the namespaces' Proxies call it; not a host function
+ * of an identity. Its function id is outside the host functions' (ids are places in
+ * `fnNames`).
  */
-const PLAIN_HOOKS = "$djs";
-const HOOK_RESUME = 0x7fff_fff0;
-const HOOK_SEED = 0x7fff_fff1;
-const HOOK_SOURCE = 0x7fff_fff2;
-const HOOK_HOST = 0x7fff_fff3;
-/** `SandboxOptions.missingMember`, as the namespaces' Proxies call it; not a host function of an identity. */
 const HOOK_MISSING = 0x7fff_fff4;
 /**
  * `vm_define`'s flags: bit 0 enumerable (D3592), bit 1 freeze the object afterwards
@@ -468,7 +438,7 @@ const NULL_PROTO = 1;
  * when JSON cannot carry it (a thrown value); 5: a Proxy over the namespace object `a`
  * named `b` whose reads of missing members ask `c` (`missingMember`). It takes the builtins it uses when it is made, before any
  * script runs, so a script that replaces `JSON.stringify` does not change the boundary.
- * Nothing a dump writes holds it: the converting functions are host values (D3592, D3593).
+ * Nothing a snapshot writes holds it: the converting functions are host values (D3592, D3593).
  */
 const HELPER = `"use strict";
 (() => {
@@ -503,42 +473,19 @@ const NAMESPACE_MEMBER = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 /**
- * The codemode bodies the sandboxes of this process ran, by name, newest first: what a
- * dump's `$djs.source(name, hash)` refers to (D2882). A sandbox in another process gets
- * them from the `sources` option. A few per name are kept.
+ * The codemode bodies the sandboxes of this process ran, by name, newest first: the
+ * candidates for a snapshot that names its scripts by name and hash (`sources: false`).
+ * A sandbox in another process gets them from the `sources` option. A few per name are
+ * kept.
  */
 const ranScripts = new Map<string, string[]>();
 const SCRIPTS_KEPT = 16;
-
-/**
- * The hash of `$djs.source(name, hash, params)` (D2882, `vm::script_hash`): FNV-1a 64 of
- * the UTF-8 of the parameter names (`,`-joined), the compile option bits in decimal and
- * the source, `\0`-separated, folded to 32 bits (D2839), as 8 hex digits.
- */
-export function scriptHash(source: string, params: string, bits: number): string {
-  let h = 0xcbf29ce484222325n;
-  const step = (bytes: Uint8Array) => {
-    for (const b of bytes) h = BigInt.asUintN(64, (h ^ BigInt(b)) * 0x100000001b3n);
-  };
-  step(textEncoder.encode(params));
-  step(new Uint8Array([0]));
-  step(textEncoder.encode(String(bits)));
-  step(new Uint8Array([0]));
-  step(textEncoder.encode(source));
-  return BigInt.asUintN(32, h ^ (h >> 32n)).toString(16).padStart(8, "0");
-}
 
 function rememberScript(name: string, code: string): void {
   const list = (ranScripts.get(name) ?? []).filter((c) => c !== code);
   list.unshift(code);
   if (list.length > SCRIPTS_KEPT) list.length = SCRIPTS_KEPT;
   ranScripts.set(name, list);
-}
-
-/** A plain dump (D2830): `"djs-dump";`, and whether its text is TypeScript. */
-export function plainDump(text: string): { typescript: boolean } | undefined {
-  const m = /^\s*"djs-dump( typescript)?";/.exec(text);
-  return m ? { typescript: m[1] !== undefined } : undefined;
 }
 
 interface Exports {
@@ -553,9 +500,6 @@ interface Exports {
   djs_debug_panic(): void;
   vm_new(memoryLimit: number, live: number, flags: number): number;
   vm_frozen_builtins(vm: number): number;
-  vm_dump(vm: number, len: number): number;
-  /** Whether dumps refer to the scripts the host ran (`$djs.source`, D2882). */
-  vm_set_dump_source_refs(vm: number, on: number): void;
   /** `line:col:file` of the activation waiting on a call, in the out buffer (D3054). */
   vm_call_site(vm: number, callId: number): number;
   vm_free(vm: number): void;
@@ -566,8 +510,6 @@ interface Exports {
   vm_global(vm: number): number;
   /** `flags` bit 0 (D3623): a null prototype. */
   vm_new_object(vm: number, flags?: number): number;
-  /** The plain dump runtime, `$djs`'s helpers (D2903). */
-  vm_dump_runtime(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
   /** `flags` bit 0 (D3592): enumerable; bit 1 (D3611): freeze `obj` afterwards. */
@@ -592,11 +534,7 @@ interface Exports {
   vm_set_now(vm: number, ms: number): void;
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
-  vm_restore_math_random(vm: number, lo: number, hi: number): void;
   vm_outcome(vm: number): number;
-  /** Loading plain dumps (D2890). */
-  vm_open_call(vm: number, parked: number, fnId: number): number;
-  vm_set_next_call_id(vm: number, id: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
@@ -688,11 +626,6 @@ const textDecoder = new TextDecoder();
 interface RunCore {
   /** The open async calls, oldest first, until their results are delivered. */
   open: Map<number, OpenCall>;
-  /**
-   * A resumed run's result promise, the handle its dump named `run` (freed at the end);
-   * 0 for a run this sandbox started, whose result is the entry call's outcome.
-   */
-  result: number;
   /** Fuel used so far: `maxFuel` is per run, across all its steps. */
   used: number;
   /**
@@ -714,8 +647,6 @@ interface RunCore {
   settle(id: number, s: Settlement): void;
   /** Passes a result back; `at`: a replayed result's clock. */
   deliver(id: number, ok: boolean, value: unknown, at?: number): void;
-  /** `states`: the host's state of open calls, by id, as JSON text (D2770). */
-  dump(states?: [number, string][]): string;
   /** The run as a snapshot (D3720), with the host's states of open calls by id. */
   snapshot(states: [number, unknown][], opts: SnapshotOptions): Uint8Array;
 }
@@ -726,7 +657,7 @@ type RunEnd = { state: "idle" } | { state: "done"; value: unknown; exited?: bool
  * A run the host drives itself (docs/host.md "Host-driven runs"; the part 0179
  * needs of 0175): `Sandbox.begin` runs a body to its first idle point, the host settles
  * the open async calls in any order and advances it, and while it is idle it can be
- * dumped (`dump()`) and continued elsewhere (`Sandbox.resume`). The async host functions
+ * snapshotted (`snapshot()`) and continued elsewhere (`Sandbox.loadSnapshot`). The async host functions
  * are never called by the run: `calls` lists them and the host answers, so that a call
  * can outlive the process that issued it. Sync host functions are called as in `run`.
  */
@@ -753,9 +684,8 @@ export class Run {
   }
 
   /**
-   * The fuel the run used so far, across its steps (and, after `loadRun`, the
-   * `fuelUsed` it was loaded with): what `maxFuel` bounds (D3614). A host that dumps the
-   * run keeps it with the dump and gives it back to `loadRun`.
+   * The fuel the run used so far, across its steps (and, after `loadSnapshot`, the
+   * snapshot's): what `maxFuel` bounds (D3614). A snapshot carries it.
    */
   get fuelUsed(): number {
     return this.#core.used;
@@ -796,18 +726,6 @@ export class Run {
   }
 
   /**
-   * The waiting run as a dump (a plain Script, D2830; docs/continuation-dumps.md): its
-   * suspended activations, open calls and data as JavaScript, for `loadRun` in another
-   * sandbox or process. Only while idle, and only with `frozenBuiltins` (D2836). `states` are the host's states of open calls, by id (JSON
-   * data, D2770): the dump writes each with its call, and the load gives it back
-   * (`OpenCall.state`).
-   */
-  dump(states: Record<number, unknown> = {}): string {
-    if (this.state !== "idle") throw new SandboxError("misuse", `the run is ${this.state}: only an idle run can be dumped`);
-    return this.#core.dump(Object.entries(states).map(([id, v]) => [Number(id), stateJson(Number(id), v)]));
-  }
-
-  /**
    * The waiting run as a logical snapshot (D3700, D3720): its state as data, for
    * `loadSnapshot` or `resume` in a fresh sandbox made with the same options, in this or
    * another process. The sandbox's host functions, namespaces, `values` and module
@@ -837,8 +755,8 @@ interface LiveCall {
   abort: AbortController;
 }
 
-/** A dump a task was asked for: `suspend` (the task stops) or `checkpoint`. */
-interface DumpRequest {
+/** A snapshot a task was asked for: `suspend` (the task stops) or `checkpoint`. */
+interface SnapshotRequest {
   stop: boolean;
   opts: SnapshotOptions;
   resolve(snapshot: Uint8Array): void;
@@ -860,14 +778,14 @@ export class Task {
   readonly sandbox: Sandbox;
   /**
    * The run's result. Rejects with a SandboxError: `threw` for an exception, `suspended`
-   * when the task was suspended into a dump (this rejection counts as handled).
+   * when the task was suspended into a snapshot (this rejection counts as handled).
    */
   readonly result: Promise<unknown>;
   readonly #calls: Map<number, LiveCall>;
-  readonly #request: (r: DumpRequest) => void;
+  readonly #request: (r: SnapshotRequest) => void;
 
   /** Made by `Sandbox.start` and `Sandbox.resume`. */
-  constructor(sandbox: Sandbox, result: Promise<unknown>, calls: Map<number, LiveCall>, request: (r: DumpRequest) => void) {
+  constructor(sandbox: Sandbox, result: Promise<unknown>, calls: Map<number, LiveCall>, request: (r: SnapshotRequest) => void) {
     this.sandbox = sandbox;
     this.result = result;
     this.#calls = calls;
@@ -919,8 +837,6 @@ export class Sandbox {
   private clock: number | undefined;
   /** The journal of the current run, being recorded or replayed (D1730). */
   private journal: Journal | null = null;
-  /** The first hook a dump's load could not serve (D3001). */
-  private hookError: Error | undefined = undefined;
   /**
    * The host values that are namespaces, by identity, as handles: the objects this
    * sandbox made for dotted function names (`tools`; with `missingMember` the Proxies
@@ -951,7 +867,7 @@ export class Sandbox {
   /** The specifiers whose namespace objects this sandbox made (in `namespaces`). */
   private readonly moduleNamespaces = new Set<string>();
   private readonly fnAsync = new Map<number, boolean>();
-  /** The globals the sandbox bound to host functions and namespaces (a dump's host globals). */
+  /** The globals the sandbox bound to host functions and namespaces. */
   private readonly globalNames = new Set<string>();
   /** Whether the instance has what snapshots need of the base (`snapshotBase`). */
   private snapshotsReady = false;
@@ -975,12 +891,12 @@ export class Sandbox {
   }
 
   /**
-   * Continues a task from its dump (`Task.suspend()`, or a host-driven `Run.dump()`) in
-   * a new sandbox made from `opts` (the same host functions, by name, as the one that
-   * dumped): `(await Sandbox.resume(dump, opts)).result`. See `resume`. A dump is code:
-   * resume only dumps you trust.
+   * Continues a task from its snapshot (`Task.suspend()`, or a host-driven
+   * `Run.snapshot()`) in a new sandbox made from `opts` (the same host functions, by name,
+   * as the one that took it): `(await Sandbox.resume(snapshot, opts)).result`. See
+   * `resume`.
    */
-  static async resume(snapshot: Uint8Array | string, opts: SandboxOptions = {}): Promise<Task> {
+  static async resume(snapshot: Uint8Array, opts: SandboxOptions = {}): Promise<Task> {
     const sandbox = await this.create(opts);
     try {
       return sandbox.resume(snapshot);
@@ -991,18 +907,14 @@ export class Sandbox {
   }
 
   /**
-   * Loads a dumped run into this sandbox (a fresh one) and drives it (D2771): each open
-   * call is continued by its function's `resume` hook with the state it was dumped with,
-   * made again (`call`) when the function has no `resume`, and rejected when it is a
-   * plain function (the sandbox cannot know whether calling it again is safe).
+   * Loads a snapshot of a run into this sandbox (a fresh one) and drives it (D2771): each
+   * open call is continued by its function's `resume` hook with the state it was
+   * snapshotted with, made again (`call`) when the function has no `resume`, and rejected
+   * when it is a plain function (the sandbox cannot know whether calling it again is safe).
    */
-  resume(snapshot: Uint8Array | string): Task {
-    if (typeof snapshot !== "string") {
-      const core = this.loadSnapshotRun(snapshot);
-      return this.task(core, [...core.open.values()]);
-    }
-    const { calls, result } = this.loadRunDump(snapshot);
-    return this.task(this.startRun(calls, result), calls);
+  resume(snapshot: Uint8Array): Task {
+    const core = this.loadSnapshotRun(snapshot);
+    return this.task(core, [...core.open.values()]);
   }
 
   /**
@@ -1028,30 +940,6 @@ export class Sandbox {
     this.stage(snapshot);
     if (x.djs_snapshot_describe(snapshot.length) !== 0) throw new SandboxError("misuse", `not a snapshot: ${outText(x)}`);
     return outText(x);
-  }
-
-  /**
-   * Loads a dumped run into this sandbox (a fresh one) for the host to drive: the run is
-   * idle, waiting on the same open calls with the same ids (`run.calls`, with their
-   * states); the host settles them, issues them again or rejects them. No hooks run.
-   * `fuelUsed` continues the run's fuel count (`Run.fuelUsed` when it was dumped).
-   */
-  loadRun(dump: string, opts: LoadRunOptions = {}): Run {
-    const { calls, result } = this.loadRunDump(dump);
-    const core = this.startRun(calls, result);
-    core.used = Math.max(0, opts.fuelUsed ?? 0);
-    return core.run;
-  }
-
-  /** Loads a dump that holds a run: its open calls and the run's result promise. */
-  private loadRunDump(dump: string): { calls: OpenCall[]; result: number } {
-    const { calls, handles } = this.loadDump(dump);
-    const result = handles.get("run") ?? 0;
-    this.guard(() => {
-      for (const [name, h] of handles) if (name !== "run") this.x.vm_handle_free(this.vm, h);
-    });
-    if (result === 0) throw new SandboxError("misuse", "the dump holds no run (no handle named run)");
-    return { calls, result };
   }
 
   /**
@@ -1094,7 +982,7 @@ export class Sandbox {
     this.cons = cons;
     const builtins: Record<string, HostFunction> = {};
     for (const m of CONSOLE_METHODS) builtins[`console.${m}`] = (...a) => (cons[m] ?? cons.log).apply(cons, a);
-    // `console` is a namespace like `tools` (a host root of dumps, D2971).
+    // `console` is a namespace like `tools` (a host value snapshots name, D2971).
     for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false, false);
     for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
     for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
@@ -1104,8 +992,8 @@ export class Sandbox {
     const globals = { ...(opts.globals ?? this.defaultGlobals()) };
     if (opts.debugger !== undefined) globals.debugger = "debugger";
     for (const [name, identity] of Object.entries(globals)) this.bindGlobal(name, identity);
-    // Host data (`values`): deep-frozen copies, host roots like the namespaces, so a dump
-    // names them (`$djs.host(name)`) instead of writing them.
+    // Host data (`values`): deep-frozen copies, host values like the namespaces, so a
+    // snapshot names them instead of writing them.
     for (const [name, value] of Object.entries(opts.values ?? {})) {
       if (this.hostValue(name) !== undefined || this.globalNames.has(name)) {
         throw new SandboxError("misuse", `value ${name}: the name of a host function, namespace or global already`);
@@ -1393,40 +1281,6 @@ export class Sandbox {
     });
   }
 
-  /**
-   * Before a dump loads: makes the host values of modules it names (`$djs.host(...)`,
-   * `$djs.resume(..., identity, ...)`) that this sandbox has not made yet, by the
-   * identities modules give them (D3597): `specifier#export` is export `export` of module
-   * `specifier`, a name without `#` a namespace. The loading Script cannot wait for them:
-   * they are made while the VM runs nothing.
-   */
-  private prepareModules(dump: string): void {
-    if (this.opts.modules === undefined) return;
-    const names = new Set<string>();
-    for (const m of dump.matchAll(/\$djs\.(?:host|resume)\((?:\d+,\s*)?("(?:[^"\\\n]|\\.)*")/g)) {
-      try {
-        names.add(JSON.parse(m[1].replace(/\\x([0-9a-fA-F]{2})/g, "\\u00$1")) as string);
-      } catch {
-        // Not a name this could make.
-      }
-    }
-    for (const name of names) {
-      if (this.hostValue(name) !== undefined || this.fnNames.includes(name)) continue;
-      const hash = name.lastIndexOf("#");
-      if (hash > 0) {
-        const spec = name.slice(0, hash);
-        const mod = this.hostModule(spec);
-        const e = mod?.exports[name.slice(hash + 1)];
-        if (mod !== undefined && e !== undefined && typeof e !== "string" && Object.hasOwn(mod.exports, name.slice(hash + 1))) {
-          this.moduleExport(spec, mod, name.slice(hash + 1));
-        }
-      } else {
-        const mod = this.hostModule(name);
-        if (mod !== undefined) this.moduleNamespace(name, mod);
-      }
-    }
-  }
-
   private bindGlobal(name: string, identity: string): void {
     const h = this.hostValue(identity);
     if (h === undefined) throw new SandboxError("misuse", `global ${name}: no host function or namespace ${identity}`);
@@ -1481,8 +1335,8 @@ export class Sandbox {
    */
   begin(code: string, params: Record<string, unknown> = {}, opts: BeginOptions = {}): Run {
     this.beginJournal(code, params, opts);
-    this.enter(code, params, false, opts.filename);
-    const core = this.startRun([], 0);
+    this.enter(code, params, opts.filename);
+    const core = this.startRun([]);
     if (opts.start === false) {
       core.run.state = "ready";
       return core.run;
@@ -1503,13 +1357,13 @@ export class Sandbox {
    * Starts `code` as a codemode function body (as `runAsync`) in a task the sandbox
    * drives (D2771): it calls the async host functions as the script calls them, and
    * `task.result` is the outcome. Unlike `runAsync`, the task can be suspended into a
-   * dump while it waits (`task.suspend()`) and continued later (`Sandbox.resume`). The
+   * snapshot while it waits (`task.suspend()`) and continued later (`Sandbox.resume`). The
    * first step runs now: a compile error throws. One task or run at a time.
    */
   start(code: string, params: Record<string, unknown> = {}, opts: BeginOptions = {}): Task {
     this.beginJournal(code, params, opts);
-    this.enter(code, params, false, opts.filename);
-    return this.task(this.startRun([], 0), []);
+    this.enter(code, params, opts.filename);
+    return this.task(this.startRun([]), []);
   }
 
   /**
@@ -1520,7 +1374,7 @@ export class Sandbox {
   private task(core: RunCore & { run: Run }, loaded: OpenCall[]): Task {
     const calls = new Map<number, LiveCall>();
     const finished: { id: number; ok: boolean; value: unknown }[] = [];
-    const requests: DumpRequest[] = [];
+    const requests: SnapshotRequest[] = [];
     let ended = false;
     let wake: (() => void) | null = null;
     const poke = () => {
@@ -1597,7 +1451,7 @@ export class Sandbox {
           else settle.reject(end.error);
           return;
         }
-        // Idle: deliver what came in meanwhile, serve dump requests, or wait.
+        // Idle: deliver what came in meanwhile, serve snapshot requests, or wait.
         while (finished.length === 0 && !ended) {
           const asked = requests.splice(0);
           if (asked.length > 0) {
@@ -1643,12 +1497,11 @@ export class Sandbox {
     return task;
   }
 
-  /** Makes a run, waiting on `calls`, with its result promise `result` (0: the entry call's). */
-  private startRun(calls: OpenCall[], result: number): RunCore & { run: Run } {
+  /** Makes a run, waiting on `calls`; its result is the entry call's outcome. */
+  private startRun(calls: OpenCall[]): RunCore & { run: Run } {
     const core: RunCore & { run: Run } = {
       open: new Map(calls.map((c) => [c.id, c])),
       dropped: new Map(),
-      result,
       used: 0,
       run: undefined as unknown as Run,
       advance: async (step) => {
@@ -1690,10 +1543,6 @@ export class Sandbox {
           j.push({ type: "async", callId: id, fn: call.fn, args: call.args, ok, value: errorJson(ok, value), now: now! });
         }
       },
-      dump: (states) => {
-        if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
-        return this.dumpRun(core, states);
-      },
       snapshot: (states, opts) => {
         if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
         return this.snapshotRun(core, states, opts);
@@ -1731,7 +1580,7 @@ export class Sandbox {
     const finished: { callId: number; ok: boolean; value: unknown }[] = [];
     // The calls of functions with hooks, whose signals abort when the run stops waiting.
     const live = new Map<number, LiveCall>();
-    const core = this.startRun([], 0);
+    const core = this.startRun([]);
     core.beforeSlice = () => {
       for (const { callId, ok, value } of finished.splice(0)) {
         inflight.delete(callId);
@@ -1822,21 +1671,15 @@ export class Sandbox {
    * while async calls are still open), as `{ h, threw }` with a handle the caller frees;
    * undefined while it is pending.
    */
-  private settledResult(run: RunCore): { h: number; threw: boolean } | undefined {
+  private settledResult(): { h: number; threw: boolean } | undefined {
     const x = this.x;
     const vm = this.vm;
-    const own = run.result !== 0;
-    const p = own ? run.result : x.vm_outcome(vm);
+    const p = x.vm_outcome(vm);
     if (p === 0) return undefined;
     const ps = x.vm_promise_state(vm, p);
-    if (ps < 2) {
-      if (!own) x.vm_handle_free(vm, p);
-      return undefined;
-    }
-    const h = outWords(x, 1)[0];
+    const h = ps < 2 ? 0 : outWords(x, 1)[0];
     x.vm_handle_free(vm, p);
-    run.result = 0;
-    return { h, threw: ps === 3 };
+    return ps < 2 ? undefined : { h, threw: ps === 3 };
   }
 
   /**
@@ -1885,31 +1728,17 @@ export class Sandbox {
     if (j?.mode === "record") j.push({ type: "check", delivered: j.delivered, issued: j.issued, hash: this.canonicalHash() });
   }
 
-  /** The run has ended: frees its result handle; the sandbox can run again. */
+  /** The run has ended: the sandbox can run again. */
   private endRun(): void {
-    const a = this.active;
     this.active = null;
     this.journal = null;
-    if (a !== null && a.result !== 0 && this.dead === null) {
-      this.x.vm_handle_free(this.vm, a.result);
-      a.result = 0;
-    }
-  }
-
-  /**
-   * `Run.dump()`: the waiting run as a dump, its result promise named "run" (handle
-   * 0: the entry call's outcome, which takes no handle, so a dump leaves the heap as it
-   * was and a journal's later checks still replay).
-   */
-  private dumpRun(core: RunCore, states: [number, string][] = []): string {
-    return this.dumpText([], [["run", core.result]], states);
   }
 
   /**
    * `Run.snapshot()`: `vm_snapshot` of a host's run (D3720). The host names its functions
    * by identity and its host values (namespaces, `values`, module namespaces, converting
-   * functions) by name; it holds the run's result promise when it has one (a run loaded
-   * from a dump); its data are the calls' states, the fuel used and the clock.
+   * functions) by name, and holds no values of its own; its data are the calls' states,
+   * the fuel used and the clock.
    */
   private snapshotRun(core: RunCore, states: [number, unknown][], opts: SnapshotOptions): Uint8Array {
     const x = this.x;
@@ -1930,12 +1759,7 @@ export class Sandbox {
       w.u32(h);
       w.text(name);
     }
-    const handles: [string, number][] = core.result !== 0 ? [["run", core.result]] : [];
-    w.u32(handles.length);
-    for (const [name, h] of handles) {
-      w.u32(h);
-      w.text(name);
-    }
+    w.u32(0);
     w.text(JSON.stringify(data));
     this.snapshotBase();
     const n = this.guard(() => {
@@ -2019,10 +1843,11 @@ export class Sandbox {
       throw new SandboxError("misuse", `cannot load the snapshot:\n${why}`);
     }
     const out = new OutReader(x);
-    const held = new Map<string, number>();
+    // The values the snapshot's host held (none from a sandbox): not this sandbox's.
     for (let n = out.u32(); n > 0; n--) {
       const h = out.u32();
-      held.set(out.text(), h);
+      out.text();
+      this.guard(() => x.vm_handle_free(this.vm, h));
     }
     const ids: number[] = [];
     for (let n = out.u32(); n > 0; n--) ids.push(out.u32());
@@ -2035,15 +1860,16 @@ export class Sandbox {
       return call;
     });
     if (data.clock !== undefined && this.clock !== undefined) this.clock = data.clock;
-    const core = this.startRun(calls, held.get("run") ?? 0);
+    const core = this.startRun(calls);
     core.used = Math.max(0, data.fuelUsed ?? 0);
     return core;
   }
 
   /**
    * Makes the host values of modules a snapshot names (`specifier#export` functions,
-   * namespaces by specifier) that this sandbox has not made yet, as `prepareModules`
-   * does for dumps.
+   * namespaces by specifier) that this sandbox has not made yet, by the identities modules
+   * give them (D3597): `specifier#export` is export `export` of module `specifier`, a name
+   * without `#` a namespace. They are made before the load, while the VM runs nothing.
    */
   private prepareHostValues(names: string[]): void {
     if (this.opts.modules === undefined) return;
@@ -2062,281 +1888,6 @@ export class Sandbox {
         if (mod !== undefined) this.moduleNamespace(name, mod);
       }
     }
-  }
-
-  /**
-   * The VM's global bindings (or the ones in `names`) as JavaScript that recreates them
-   * when `load`ed into another sandbox (docs/continuation-dumps.md; a later djs only once
-   * the dump format is declared stable, D3643):
-   * functions as their source text, closures and data as code, builtins by name. The
-   * host's functions and `console` are not written: the loading sandbox provides them
-   * under the same names. Needs `frozenBuiltins` (D2836). Throws a "misuse" error listing
-   * every value that cannot be written, by its path (a weak collection, a Proxy, ...).
-   */
-  dump(names: string[] = []): string {
-    return this.dumpText(names, [], []);
-  }
-
-  /**
-   * `vm_dump`. staging: the globals the host defines and the names to dump (comma
-   * separated, a line each), then this sandbox's host function names (tab separated, id
-   * order: an open call or a host function held as a value is written by name), then
-   * the values to name for the host (`handle:name`, tab separated), then the host roots
-   * (the namespace objects, `handle:name`, written as `$djs.host(name)`, D2971), then the open calls'
-   * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
-   */
-  private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
-    // Dumps need frozen builtins (D2836): the VM's mode.
-    if (this.x.vm_frozen_builtins(this.vm) !== 1) {
-      throw new SandboxError("misuse", "cannot dump: dumps need frozen builtins (SandboxOptions.frozenBuiltins, D2836)");
-    }
-    const x = this.x;
-    x.vm_set_dump_source_refs(this.vm, this.opts.inlineSources ? 0 : 1);
-    const host = this.globalNames;
-    const text = [
-      [...host].join(","),
-      names.join(","),
-      this.fnNames.join("\t"),
-      handles.map(([name, h]) => `${h}:${name}`).join("\t"),
-      // The converting functions first, by identity; then the namespaces and values.
-      [...[...this.wrappers].map(([id, h]): [string, number] => [this.fnNames[id - 1], h]), ...this.namespaces]
-        .map(([name, h]) => `${h}:${name}`)
-        .join("\t"),
-      states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
-      states.map(([, json]) => json).join(""),
-    ].join("\n");
-    const r = this.guard(() => x.vm_dump(this.vm, this.stageText(text)));
-    if (r !== 0) throw new SandboxError("misuse", `cannot dump:\n${outText(x)}`);
-    return outText(x);
-  }
-
-  /**
-   * A plain dump's `$djs.source(name, hash, params)` (D2882): the codemode body `name`
-   * compiled again as this sandbox runs bodies, the one whose hash is the dump's (the
-   * `sources` option's code first, then the scripts this process ran, newest first).
-   */
-  private serveSource(callId: number, args: unknown[]): void {
-    const x = this.x;
-    const vm = this.vm;
-    const [name, hash, params] = args;
-    const fail = (why: string) => this.failHook(callId, new Error(`source: ${why}`));
-    if (typeof name !== "string" || typeof hash !== "string") return void fail("not a name and a hash");
-    const candidates: string[] = [];
-    const given = this.opts.sources?.(name);
-    if (given !== undefined) candidates.push(given);
-    for (const code of ranScripts.get(name) ?? []) if (code !== given) candidates.push(code);
-    if (candidates.length === 0) {
-      return void fail(`the dump continues the script ${JSON.stringify(name)}, which this host does not have (pass the sandbox option \`sources\`, or dump with \`inlineSources\`)`);
-    }
-    const o = this.opts;
-    const goal = 1 | (o.typescript ? 2 : 0) | (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) | (o.emitDecoratorMetadata ? 8 : 0) | (o.debugger ? 16 : 0);
-    // The script's compile options as the dump's hash counts them (`CompileOptions::bits`).
-    const bits = 1 | (goal & 2 ? 4 : 0) | (goal & 12 ? 8 : 0) | (goal & 8 ? 16 : 0) | (goal & 16 ? 64 : 0);
-    const ps = typeof params === "string" ? params : "";
-    const code = candidates.find((c) => scriptHash(c, ps, bits) === hash);
-    if (code === undefined) return void fail(`the host's script ${JSON.stringify(name)} is not the one the dump refers to (another text, parameters or options)`);
-    const n = textEncoder.encode(name);
-    const head = textEncoder.encode(ps.split(",").filter((p) => p !== "").join("\n"));
-    const src = textEncoder.encode(code);
-    const all = new Uint8Array(n.length + head.length + src.length);
-    all.set(n);
-    all.set(head, n.length);
-    all.set(src, n.length + head.length);
-    const f = this.guard(() => {
-      this.stage(all);
-      return x.vm_compile_file(vm, goal, n.length, head.length, src.length);
-    });
-    if (f === 0) return void fail(outText(x));
-    this.guard(() => {
-      x.vm_resolve_host_call(vm, callId, 1, f);
-      x.vm_handle_free(vm, f);
-    });
-  }
-
-  /**
-   * A plain dump's `$djs.host(name)` (D2971): the object this sandbox made for host
-   * function `name` (its identity) or for the namespace `name` (`tools`, `console`).
-   */
-  private serveHost(callId: number, args: unknown[]): void {
-    const [name] = args;
-    const h = typeof name === "string" ? this.hostValue(name) : undefined;
-    if (h === undefined) return void this.failHook(callId, new Error(`host: unknown host value ${String(name)}`));
-    this.guard(() => this.x.vm_resolve_host_call(this.vm, callId, 1, h));
-  }
-
-  /**
-   * A hook that cannot be served: its call throws, and the load fails once the Script ran
-   * (a hook the dump calls inside a continuation, D3001, throws into its activation, not
-   * the Script).
-   */
-  private failHook(callId: number, e: Error): void {
-    this.hookError ??= e;
-    this.complete(callId, false, e, false);
-  }
-
-  /**
-   * Loads a dump (the text of `dump()`): runs it as a Script (D2890), so its bindings
-   * become globals of this sandbox. A dump is code: load only dumps you trust, into a
-   * fresh sandbox. Not recorded in a journal. Returns the open host calls the dump
-   * recreated (its open calls name this sandbox's host functions); `Sandbox.resume`
-   * continues a dumped run. The dumper is not needed.
-   */
-  load(dump: string): LoadedDump {
-    const { calls, handles } = this.loadDump(dump);
-    this.guard(() => {
-      for (const h of handles.values()) this.x.vm_handle_free(this.vm, h);
-    });
-    return { calls };
-  }
-
-  /** Loads a dump: the open calls it recreated and the handles it named (the caller frees them). */
-  private loadDump(dump: string): { calls: OpenCall[]; handles: Map<string, number> } {
-    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
-    const plain = plainDump(dump);
-    if (!plain) throw new SandboxError("misuse", 'cannot load the dump: not a djs dump (no "djs-dump"; header)');
-    this.prepareModules(dump);
-    return this.loadPlain(dump, plain.typescript);
-  }
-
-  /**
-   * Loads a plain dump (D2830): runs it as a Script with the hooks in `$djs` (D2890), to
-   * its first stop that is not a sync host call (idle, or done); the hooks are served only
-   * meanwhile. Then the sandbox deletes `$djs` and the dump's `$dump` (D2916).
-   * `$djs.resume(id, name, args, state)` opens the dump's call `id` of host function
-   * `name` again under its id (`vm_open_call`): one of the calls returned, with its state;
-   * `$djs.seed(lo, hi, next)` sets `Math.random`'s state and, once the dump has loaded,
-   * the id of the next call (D2897). Other sync host functions are called
-   * (they must return synchronously); async calls the Script makes are new calls, which
-   * the run that follows reports. The Script's completion value, when a promise, is the
-   * handle "run". The dumper is not needed: a plain dump is code.
-   */
-  private loadPlain(dump: string, typescript: boolean): { calls: OpenCall[]; handles: Map<string, number> } {
-    const x = this.x;
-    const vm = this.vm;
-    const dumpRuntime = x.vm_dump_runtime;
-    const calls: OpenCall[] = [];
-    this.guard(() => {
-      // `$djs`: the dump runtime's helpers the dump names (D2903, 0215) with the hooks added.
-      const hooks = this.check(dumpRuntime(vm, this.stageText(dumpRuntimeFor(dump))), "memory");
-      for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED], ["source", HOOK_SOURCE], ["host", HOOK_HOST]] as const) {
-        const f = this.check(x.vm_new_host_function(vm, id, this.stageText(name)), "memory");
-        this.defineOn(hooks, name, f);
-        x.vm_handle_free(vm, f);
-      }
-      const g = x.vm_global(vm);
-      this.defineOn(g, PLAIN_HOOKS, hooks);
-      x.vm_handle_free(vm, g);
-      x.vm_handle_free(vm, hooks);
-    });
-    let st = STATUS_DONE;
-    this.hookError = undefined;
-    // `$djs.seed`'s next call id: the counter goes on from the dumped VM's (D2897).
-    let next: number | undefined;
-    this.enter(dump, {}, true, "dump.js", typescript);
-    const slice = this.opts.fuelSlice ?? 1_000_000;
-    const maxFuel = this.opts.maxFuel ?? Infinity;
-    let used = 0;
-    for (;;) {
-      st = this.guard(() => {
-        this.setClock();
-        return x.vm_run(vm, slice);
-      });
-      used += x.vm_fuel_used(vm);
-      if (used >= maxFuel) {
-        this.guard(() => x.vm_abort(vm));
-        throw new SandboxError("fuel", `out of fuel after ${used} units while loading the dump`);
-      }
-      if (st === STATUS_OUT_OF_FUEL) continue;
-      if (st !== STATUS_HOST_CALL) break;
-      const { callId, fnId, args, unreadable } = this.guard(() => this.readCall(x.vm_host_call(vm)));
-      if (unreadable) {
-        this.complete(callId, false, unreadable, false);
-        continue;
-      }
-      if (fnId === HOOK_RESUME) {
-        const [id, name, callArgs, state] = args;
-        const f = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
-        if (f === 0) {
-          this.failHook(callId, new Error(`resume: unknown host function ${String(name)}`));
-          continue;
-        }
-        if (this.guard(() => x.vm_open_call(vm, callId, f)) !== 0) {
-          // (Out of memory may come after the parked call returned: then this is a no-op.)
-          this.complete(callId, false, new Error(outText(x)), false);
-          continue;
-        }
-        const call: OpenCall = { id: id as number, fn: name as string, args: Array.isArray(callArgs) ? callArgs : [] };
-        if (state !== undefined) call.state = state;
-        calls.push(call);
-        continue;
-      }
-      if (fnId === HOOK_SOURCE) {
-        this.serveSource(callId, args);
-        continue;
-      }
-      if (fnId === HOOK_HOST) {
-        this.serveHost(callId, args);
-        continue;
-      }
-      let ok = true;
-      let result: unknown;
-      if (fnId === HOOK_SEED) {
-        // `$djs.seed(lo, hi[, next])`, or `$djs.seed(next)` (D2837).
-        const [lo, hi, n] = args;
-        if (hi === undefined && typeof lo === "number") next = lo;
-        else if (typeof lo === "number" && typeof hi === "number") {
-          // (A state that ran, which the next dump writes again: `vm_restore_math_random`.)
-          this.guard(() => x.vm_restore_math_random(vm, lo >>> 0, hi >>> 0));
-          if (typeof n === "number") next = n;
-        } else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
-      } else {
-        try {
-          result = this.invoke(fnId, args);
-          if (result instanceof Promise) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise while a dump loads`);
-        } catch (e) {
-          if (e instanceof SandboxError && e.kind === "trap") throw e;
-          if (e instanceof RunExit) {
-            this.guard(() => x.vm_abort(vm));
-            throw new SandboxError("misuse", `cannot load the dump: host function ${this.fnNames[fnId - 1]} exited the run`);
-          }
-          [ok, result] = [false, e];
-        }
-      }
-      this.complete(callId, ok, result, false);
-    }
-    // (Without `next`: one past the highest reopened call, D2837.)
-    const last = Math.max(0, ...calls.map((c) => c.id));
-    this.guard(() => x.vm_set_next_call_id(vm, Math.max(next ?? 0, last + 1)));
-    // Set by hooks that ran meanwhile, which the narrowing of `this.hookError` cannot see.
-    const hookError = this.hookError as Error | undefined;
-    this.hookError = undefined;
-    return this.guard(() => {
-      if (st === STATUS_THREW || st === STATUS_HOST_OUT_OF_MEMORY) {
-        const h = x.vm_result(vm);
-        const why = st === STATUS_THREW ? `the dump threw: ${this.display(h)}` : "out of host memory";
-        x.vm_handle_free(vm, h);
-        throw new SandboxError("misuse", `cannot load the dump: ${why}`);
-      }
-      if (hookError !== undefined) throw new SandboxError("misuse", `cannot load the dump: ${hookError.message}`);
-      // The completion value: vm_result once done, else (idle) the entry call's outcome.
-      const h = st === STATUS_DONE ? x.vm_result(vm) : x.vm_outcome(vm);
-      const handles = new Map<string, number>();
-      const ps = h === 0 ? 0 : x.vm_promise_state(vm, h);
-      if (ps >= 2) x.vm_handle_free(vm, outWords(x, 1)[0]);
-      if (ps !== 0) handles.set("run", h);
-      else if (h !== 0) x.vm_handle_free(vm, h);
-      // The load is over: the host deletes the dump's globals (D2916), by running JS (the
-      // module has no delete of its own).
-      const drop = textEncoder.encode("delete globalThis.$djs; delete globalThis.$dump");
-      this.stage(drop);
-      const f = x.vm_compile_file(vm, 0, 0, 0, drop.length);
-      if (f !== 0) {
-        this.stage(new Uint8Array(0));
-        if (x.vm_call(vm, f, 0, 0) === 0) x.vm_run(vm, slice);
-        x.vm_handle_free(vm, f);
-      }
-      return { calls, handles };
-    });
   }
 
   /**
@@ -2442,9 +1993,8 @@ export class Sandbox {
    * Where the run waits on open host call `id` (D3054): the `await` (or `yield`) of the
    * innermost suspended activation waiting on the call, directly or through promise
    * combinators. `file` is the name the code was compiled as: the run's `filename` for
-   * the code it started with, the dump loader's name (`dump.js`) for code a dump carried
-   * (a run continued from a dump runs the dump's text). Undefined when the call is not
-   * open or nothing waits on it at a known position.
+   * the code it started with. Undefined when the call is not open or nothing waits on it
+   * at a known position.
    */
   callSite(id: number): CallSite | undefined {
     this.alive();
@@ -2539,8 +2089,8 @@ export class Sandbox {
       this.fns.set(id, f.call);
       this.hooks.set(id, f);
     }
-    // One function object per identity (D2970): a dump's `$djs.host(name)` gets the one
-    // the sandbox bound. A redefinition makes a new one only if its kind changes.
+    // One function object per identity (D2970): a snapshot names the one the sandbox
+    // bound. A redefinition makes a new one only if its kind changes.
     const old = this.fnHandles.get(id);
     if (old !== undefined && this.fnAsync.get(id) === async) return old;
     const shortName = name.slice(name.lastIndexOf(".") + 1);
@@ -2592,7 +2142,7 @@ export class Sandbox {
   }
 
   /** Compiles `code` and starts the call; returns nothing (the VM holds the call). */
-  private enter(code: string, params: Record<string, unknown>, script = false, filename?: string, typescript = false): void {
+  private enter(code: string, params: Record<string, unknown>, filename?: string): void {
     if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
     this.sealNamespaces();
     this.guard(() => {
@@ -2600,7 +2150,7 @@ export class Sandbox {
       const vm = this.vm;
       // A body's parameters: the run's data, then the sandbox's bindings (D2972), whose
       // objects the sandbox owns.
-      const bound = script ? [] : Object.entries(this.opts.bindings ?? {});
+      const bound = Object.entries(this.opts.bindings ?? {});
       const boundHandles = bound.map(([p, identity]) => {
         if (Object.hasOwn(params, p)) throw new SandboxError("misuse", `parameter ${p} is both a run parameter and a binding`);
         const h = this.hostValue(identity);
@@ -2608,7 +2158,7 @@ export class Sandbox {
         return h;
       });
       // The body's imports (D3597): parameters after the bindings.
-      const imported = script ? [] : this.bodyImports(code, (local) => Object.hasOwn(params, local) || bound.some(([p]) => p === local));
+      const imported = this.bodyImports(code, (local) => Object.hasOwn(params, local) || bound.some(([p]) => p === local));
       for (const [, h] of imported) boundHandles.push(h);
       const names = [...Object.keys(params), ...bound.map(([p]) => p), ...imported.map(([p]) => p)];
       const handles = Object.values(params).map((v) => this.toHandle(v));
@@ -2622,14 +2172,12 @@ export class Sandbox {
       this.stage(all);
       const o = this.opts;
       const goal = (o.debugger ? 16 : 0) |
-        (script
-          ? typescript ? 2 : 0
-          : 1 |
-            (o.typescript ? 2 : 0) |
-            (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
-            (o.emitDecoratorMetadata ? 8 : 0));
+        1 |
+        (o.typescript ? 2 : 0) |
+        (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
+        (o.emitDecoratorMetadata ? 8 : 0);
       const f = x.vm_compile_file(vm, goal, name.length, head.length, src.length);
-      if (f !== 0 && !script) rememberScript(filename || "sandbox.js", code);
+      if (f !== 0) rememberScript(filename || "sandbox.js", code);
       if (f === 0) {
         const msg = outText(x);
         for (const h of handles) if (h !== 0) x.vm_handle_free(vm, h);
@@ -2696,12 +2244,6 @@ export class Sandbox {
       if (st === STATUS_DONE || st === STATUS_THREW) {
         const outcome = this.guard(() => {
           let h = x.vm_result(vm);
-          if (run.result !== 0) {
-            // A resumed run's result promise: its entry call was the dump's Script.
-            x.vm_handle_free(vm, h);
-            h = run.result;
-            run.result = 0;
-          }
           let threw = st === STATUS_THREW;
           // A promise result (an async body): its outcome.
           const ps = x.vm_promise_state(vm, h);
@@ -2746,7 +2288,7 @@ export class Sandbox {
         this.checkRejections();
         // The body's result settled while async calls are open: the run is over, and
         // the calls are dropped (D3612), as when no call was open.
-        const settled = this.guard(() => this.settledResult(run));
+        const settled = this.guard(() => this.settledResult());
         if (settled === undefined) return IDLE;
         this.dropOpen(run);
         const outcome = this.guard(() => this.outcome(run, settled.h, settled.threw));
@@ -2979,7 +2521,7 @@ function newCall(id: number, fn: string, args: unknown[], state?: unknown): Live
   return { call: { id, fn, args, startedAt: Date.now(), state, signal: abort.signal }, abort };
 }
 
-/** A call's state as the JSON text a dump carries (D2770). */
+/** A call's state as JSON text (D2770): checks that a snapshot can carry it. */
 function stateJson(id: number, state: unknown): string {
   let json: string | undefined;
   try {

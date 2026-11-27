@@ -155,7 +155,7 @@ test("missingMember: reading a member a namespace lacks throws the host's messag
   }
 });
 
-test("missingMember: the namespace is still named by its identity in a dump, and guards after a load", async () => {
+test("missingMember: the namespace is still named by its identity in a snapshot, and guards after a load", async () => {
   const module = await loadModule();
   const opts: SandboxOptions = { module, console: quiet, frozenBuiltins: true, missingMember, asyncFunctions: { "tools.ask": () => 0 } };
   const sb = new Sandbox(opts);
@@ -167,11 +167,10 @@ test("missingMember: the namespace is still named by its identity in a dump, and
     return out;
   `);
   assert.equal(run.state, "idle");
-  const dump = run.dump();
-  assert.match(dump, /\$djs\.host\("tools"\)/);
+  const snap = run.snapshot();
   sb.dispose();
   const again = new Sandbox(opts);
-  const resumed = again.loadRun(dump);
+  const resumed = again.loadSnapshot(snap);
   await finish(resumed, () => "yes");
   assert.equal(resumed.state, "done", String(resumed.error));
   assert.deepEqual(resumed.value, ["yes", true, ["ask"], true, "tools.Ask does not exist. Did you mean tools.ask?"]);
@@ -211,7 +210,7 @@ test("namespaces are frozen and list their members in definition order", async (
   }
 });
 
-test("frozen namespaces after a dump and load; a module namespace is frozen too", async () => {
+test("frozen namespaces after a snapshot and load; a module namespace is frozen too", async () => {
   const module = await loadModule();
   const opts: SandboxOptions = {
     module,
@@ -226,10 +225,10 @@ test("frozen namespaces after a dump and load; a module namespace is frozen too"
     const a = await tools.ask();
     return [a, Object.keys(tools), Object.isFrozen(tools), Object.keys(x), Object.isFrozen(x), x.two === tools.tell];
   `);
-  const dump = run.dump();
+  const snap = run.snapshot();
   sb.dispose();
   const again = new Sandbox(opts);
-  const resumed = again.loadRun(dump);
+  const resumed = again.loadSnapshot(snap);
   await finish(resumed, () => 1);
   assert.deepEqual(resumed.value, [1, ["ask", "tell"], true, ["one", "two"], true, true]);
   again.dispose();
@@ -255,11 +254,10 @@ test("aliases: more member names for one function, which keeps its identity", as
       return [r, f === tools.my_tool, tools["My Tool"] === tools.my_tool, Object.keys(tools)];
     `);
     assert.deepEqual(run.calls.map((c) => [c.fn, c.args]), [["tools.my_tool", [1]]]);
-    const dump = run.dump();
-    assert.doesNotMatch(dump, /my-tool/);
+    const snap = run.snapshot();
     sb.dispose();
     const again = new Sandbox(opts);
-    const resumed = again.loadRun(dump);
+    const resumed = again.loadSnapshot(snap);
     await finish(resumed, () => "r");
     assert.deepEqual(resumed.value, ["r", true, true, ["my_tool", "my-tool", "My Tool", "other"]]);
     again.dispose();
@@ -308,10 +306,10 @@ test("a loaded run ends when its result settles too", async () => {
   const opts: SandboxOptions = { module, console: quiet, frozenBuiltins: true, asyncFunctions: { "tools.echo": () => {} } };
   const sb = new Sandbox(opts);
   const run = sb.begin("const a = tools.echo('a'); tools.echo('b'); return await a;");
-  const dump = run.dump();
+  const snap = run.snapshot();
   sb.dispose();
   const again = new Sandbox(opts);
-  const loaded = again.loadRun(dump);
+  const loaded = again.loadSnapshot(snap);
   assert.equal(loaded.calls.length, 2);
   loaded.settle(loaded.calls[0].id, { ok: true, value: "A" });
   await loaded.advance();
@@ -365,7 +363,7 @@ test("jsonBoundary.except: those functions get plain wire values", async () => {
     return { r, when: new Date(0) };
   `);
   assert.deepEqual(run.calls.map((c) => c.args), [["1970-01-01T00:00:00.000Z"]]);
-  const dump = run.dump();
+  const snap = run.snapshot();
   sb.dispose();
   assert.equal(got.length, 4);
   assert.ok(Number.isNaN(got[0][1][0]));
@@ -374,7 +372,7 @@ test("jsonBoundary.except: those functions get plain wire values", async () => {
   assert.deepEqual(got[3], ["tools.sync", [null, "1970-01-01T00:00:00.000Z"]]);
   // The result is still converted; after a load as before.
   const again = new Sandbox(opts);
-  const loaded = again.loadRun(dump);
+  const loaded = again.loadSnapshot(snap);
   await finish(loaded, () => "read");
   assert.deepEqual(loaded.value, { r: "read", when: "1970-01-01T00:00:00.000Z" });
   again.dispose();
@@ -382,7 +380,7 @@ test("jsonBoundary.except: those functions get plain wire values", async () => {
 
 // ---- (h) maxFuel across the steps of a host-driven run -------------------------------
 
-test("maxFuel bounds a host-driven run across its steps, and across a dump and load with fuelUsed", async () => {
+test("maxFuel bounds a host-driven run across its steps, and across a snapshot and load", async () => {
   const module = await loadModule();
   const maxFuel = 10_000_000;
   const opts: SandboxOptions = { module, console: quiet, frozenBuiltins: true, jsonBoundary: true, maxFuel, asyncFunctions: { "tools.tick": () => {} } };
@@ -408,7 +406,7 @@ test("maxFuel bounds a host-driven run across its steps, and across a dump and l
   assert.ok(steps > 1, `${steps} steps: each is far below the budget`);
   assert.deepEqual([run.state, run.error?.message, run.fuelUsed], ["threw", `out of fuel after ${maxFuel} units`, maxFuel]);
 
-  // Dumped half way: loaded with its fuelUsed, the run has the rest of the budget; without, a fresh one.
+  // Snapshotted half way: loaded, the run has the rest of the budget.
   const half = sb.begin(code, {}, { start: false });
   while (half.fuelUsed < maxFuel / 2) {
     await half.advance();
@@ -416,18 +414,17 @@ test("maxFuel bounds a host-driven run across its steps, and across a dump and l
     await half.advance();
   }
   const used = half.fuelUsed;
-  const dump = half.dump();
+  const snap = half.snapshot();
   sb.dispose();
-  for (const [fuelUsed, expected] of [[used, steps - Math.floor(used / (maxFuel / steps))], [undefined, steps]] as const) {
-    const again = new Sandbox(opts);
-    const loaded = again.loadRun(dump, { fuelUsed });
-    assert.equal(loaded.fuelUsed, fuelUsed ?? 0);
-    for (const c of loaded.calls) loaded.settle(c.id, { ok: true, value: 1 });
-    const n = await exhaust(loaded);
-    assert.ok(Math.abs(n - expected) <= 2, `fuelUsed ${fuelUsed}: ${n} steps, about ${expected} expected`);
-    assert.equal(loaded.fuelUsed, maxFuel);
-    again.dispose();
-  }
+  const expected = steps - Math.floor(used / (maxFuel / steps));
+  const again = new Sandbox(opts);
+  const loaded = again.loadSnapshot(snap);
+  assert.equal(loaded.fuelUsed, used);
+  for (const c of loaded.calls) loaded.settle(c.id, { ok: true, value: 1 });
+  const n = await exhaust(loaded);
+  assert.ok(Math.abs(n - expected) <= 2, `${n} steps, about ${expected} expected`);
+  assert.equal(loaded.fuelUsed, maxFuel);
+  again.dispose();
 });
 
 test("maxFuel is exact in run and runAsync", async () => {

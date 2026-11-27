@@ -3,7 +3,7 @@
 // (scripts/npm-test.sh, js/pkg-test/browser.js). `smoke()` returns what it checked and
 // throws at the first failure.
 
-import { Sandbox, SandboxError, helpers, scriptFor } from "@earendil-works/djs";
+import { Sandbox, SandboxError } from "@earendil-works/djs";
 
 function eq(actual, expected, what) {
   const a = JSON.stringify(actual);
@@ -80,35 +80,5 @@ export async function smoke() {
   resumed.sandbox.dispose();
   done.push("suspend and resume");
 
-  // The package's one module has the dumper: a host-driven run written as a dump.
-  const d = await Sandbox.create(opts);
-  const run = d.begin(SCRIPT, { x: "a" });
-  const dump = run.dump({ [run.calls[0].id]: { v: "a" } });
-  d.dispose();
-  if (!dump.startsWith('"djs-dump";')) throw new Error(`not a dump: ${dump.slice(0, 40)}`);
-
-  // The dump continued in the host's own engine, with the dump runtime's helpers.
-  const g = globalThis;
-  g.$djs = {
-    ...helpers,
-    seed() {},
-    resume: (_id, _name, _args, { v }) => `host resumed ${v}`,
-    source: () => function script() {},
-    host: (name) => {
-      if (name === "tools") return { wait: async (v) => `host ${v}` };
-      if (name === "tools.wait") return async (v) => `host ${v}`;
-      throw new Error(`host: ${name}`);
-    },
-  };
-  g.tools = { wait: async (v) => `host ${v}` };
-  try {
-    eq(await (0, eval)(`"use strict"; ${dump}`), ["host resumed a", "host host resumed a!"], "dump in the host engine");
-  } finally {
-    delete g.$djs;
-    delete g.$dump;
-    delete g.tools;
-  }
-  if (typeof scriptFor(dump) !== "string") throw new Error("scriptFor: no Script");
-  done.push("the dump runtime: the dump continued in the host engine");
   return done;
 }

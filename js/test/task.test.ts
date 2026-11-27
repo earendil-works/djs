@@ -110,13 +110,13 @@ test("a task runs like runAsync, hooks or not", async () => {
   sb.dispose();
 });
 
-test("suspend dumps the call states; resume continues every call by its hooks", async () => {
+test("suspend snapshots the call states; resume continues every call by its hooks", async () => {
   const p = await setup();
   const h = host(p);
   const sb = new Sandbox(h.opts);
   const task = sb.start(CODE, { n: 1 });
-  const dump = await task.suspend();
-  assert.deepEqual(heldCalls(dump, h.opts), [
+  const snap = await task.suspend();
+  assert.deepEqual(heldCalls(snap, h.opts), [
     ["tools.job", [1], { n: 1, step: "started, saved" }],
     ["tools.again", ["x"], undefined],
     ["tools.plain", ["y"], undefined],
@@ -130,7 +130,7 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
   sb.dispose();
 
   // (The plain function's call is rejected at once.)
-  const again = await Sandbox.resume(dump, h.opts);
+  const again = await Sandbox.resume(snap, h.opts);
   assert.deepEqual(again.calls.map((c) => [c.fn, c.args, c.state]), [
     ["tools.job", [1], { n: 1, step: "started, saved" }],
     ["tools.again", ["x"], undefined],
@@ -138,7 +138,7 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
   assert.deepEqual(h.seen.resumed.map(([s, c]) => [s, c.fn, c.state]), [[{ n: 1, step: "started, saved" }, "tools.job", { n: 1, step: "started, saved" }]]);
   await h.answer("resumed 1", "A2");
   await h.answer("again x", "B2");
-  // Dumped again while waiting on job(2): a fresh call's state, saved.
+  // Snapshotted again while waiting on job(2): a fresh call's state, saved.
   const second = await again.suspend();
   assert.deepEqual(heldCalls(second, h.opts), [["tools.job", [2], { n: 2, step: "started, saved" }]]);
   again.sandbox.dispose();
@@ -180,7 +180,7 @@ test("checkpoint snapshots and goes on; a snapshot that fails leaves the task ru
   sb.dispose();
 });
 
-test("states must be JSON data; save errors reject the dump only", async () => {
+test("states must be JSON data; save errors reject the snapshot only", async () => {
   const module = await loadModule();
   const sb = new Sandbox({
     module,
@@ -222,17 +222,16 @@ test("suspend before an idle point waits for it; a run that ends first rejects i
   sb.dispose();
 });
 
-test("host-driven runs dump states and load them back", async () => {
+test("host-driven runs snapshot states and load them back", async () => {
   const module = await loadModule();
   const opts = { module, frozenBuiltins: true, asyncFunctions: { "tools.sleep": () => 0 } };
   const sb = new Sandbox(opts);
   const run = sb.begin("return await tools.sleep(5) + await tools.sleep(6);");
   const id = run.calls[0].id;
-  const text = run.dump({ [id]: { due: 123, note: "é\n\u2028" } });
-  assert.match(text, new RegExp(`\\$djs\\.resume\\(${id}, "tools\\.sleep", \\[5\\], \\{"due":123,"note":"é\\\\n\u2028"\\}\\)`));
-  assert.throws(() => run.dump({ [id + 1]: 1 }), /a state for a call that is not open/);
-  assert.throws(() => run.dump({ [id]: { __proto__: null, ["__proto__"]: 1 } }), /__proto__/);
-  const again = new Sandbox(opts).loadRun(text);
+  const snap = run.snapshot({ states: { [id]: { due: 123, note: "é\n\u2028" } } });
+  assert.throws(() => run.snapshot({ states: { [id + 1]: 1 } }), /a state for a call that is not open/);
+  assert.throws(() => run.snapshot({ states: { [id]: { __proto__: null, ["__proto__"]: 1 } } }), /__proto__/);
+  const again = new Sandbox(opts).loadSnapshot(snap);
   assert.deepEqual(again.calls, [{ id, fn: "tools.sleep", args: [5], state: { due: 123, note: "é\n\u2028" } }]);
   again.settle(id, { ok: true, value: 1 });
   await again.advance();
