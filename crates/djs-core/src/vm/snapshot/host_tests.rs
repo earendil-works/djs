@@ -25,11 +25,15 @@ struct Host {
     printed: Vec<String>,
 }
 
-const CONFIG: &str = "({ list: [{ name: 'uniqueToolName', schema: { deep: { deeper: 1 } } }], n: 3 })";
+const CONFIG: &str =
+    "({ list: [{ name: 'uniqueToolName', schema: { deep: { deeper: 1 } } }], n: 3 })";
 
 fn host(read_id: u32, print_id: u32, with_config: bool) -> Host {
-    let mut vm = Vm::from_base(super::super::dump_harvest::base(), super::super::dump_harvest::frozen())
-        .unwrap();
+    let mut vm = Vm::from_base(
+        super::super::dump_harvest::base(),
+        super::super::dump_harvest::frozen(),
+    )
+    .unwrap();
     let read = vm.new_async_host_function(read_id, "read").unwrap();
     let print = vm.new_host_function(print_id, "print").unwrap();
     let tools = vm.new_null_proto_object().unwrap();
@@ -38,7 +42,9 @@ fn host(read_id: u32, print_id: u32, with_config: bool) -> Host {
     vm.define_global("print", print).unwrap();
     let mut values = vec![("tools".to_string(), Value::object(tools))];
     if with_config {
-        let src = format!("(() => {{ const deepFreeze = (o) => {{ Object.freeze(o); for (const v of Object.values(o)) if (typeof v === 'object') deepFreeze(v); }}; globalThis.CONFIG = {CONFIG}; deepFreeze(CONFIG); }})();");
+        let src = format!(
+            "(() => {{ const deepFreeze = (o) => {{ Object.freeze(o); for (const v of Object.values(o)) if (typeof v === 'object') deepFreeze(v); }}; globalThis.CONFIG = {CONFIG}; deepFreeze(CONFIG); }})();"
+        );
         let f = vm
             .compile(src.as_bytes(), &CompileOptions::script("config.js"))
             .unwrap();
@@ -55,7 +61,11 @@ fn host(read_id: u32, print_id: u32, with_config: bool) -> Host {
         .map(|(n, v)| (n, h.new_handle(v).unwrap()))
         .collect();
     let functions = vec![
-        ("tools.read".to_string(), read_id, h.new_handle(read).unwrap()),
+        (
+            "tools.read".to_string(),
+            read_id,
+            h.new_handle(read).unwrap(),
+        ),
         ("print".to_string(), print_id, h.new_handle(print).unwrap()),
     ];
     Host {
@@ -135,16 +145,14 @@ print("result", r + s);
 /// The run of `BODY` up to its first idle point, and a snapshot of it there.
 fn first_snapshot(data: &str) -> (Host, Vec<u8>) {
     let mut a = host(1, 2, true);
-    let f = a
-        .vm
-        .compile(BODY.as_bytes(), &CompileOptions::async_body("body.js", &[]))
-        .unwrap();
+    let f =
+        a.vm.compile(BODY.as_bytes(), &CompileOptions::async_body("body.js", &[]))
+            .unwrap();
     a.vm.call(f, Value::UNDEFINED, &[]).unwrap();
     assert!(matches!(a.run(), Status::Idle));
     let names = a.names(Vec::new(), data);
-    let bytes = a
-        .vm
-        .snapshot_with(
+    let bytes =
+        a.vm.snapshot_with(
             info(),
             &SnapshotOptions {
                 host: Some(names),
@@ -184,7 +192,8 @@ fn a_hosts_run_names_its_values_and_functions() {
     assert!(calls[0] > id);
     assert_eq!(b.vm.host_call(calls[0]).unwrap().fn_id, 7);
     let s = b.vm.heap_mut().alloc_str("S").unwrap();
-    b.vm.resolve_host_call(calls[0], Ok(Value::string(s))).unwrap();
+    b.vm.resolve_host_call(calls[0], Ok(Value::string(s)))
+        .unwrap();
     assert!(matches!(b.run(), Status::Idle | Status::Done(_)));
     assert!(b.vm.pending_host_calls().is_empty());
     assert_eq!(b.printed[1], "result RS");
@@ -193,9 +202,11 @@ fn a_hosts_run_names_its_values_and_functions() {
 #[test]
 fn handles_travel_by_name() {
     let mut a = host(1, 2, true);
-    let f = a
-        .vm
-        .compile(b"globalThis.kept = { a: 1 };", &CompileOptions::script("k.js"))
+    let f =
+        a.vm.compile(
+            b"globalThis.kept = { a: 1 };",
+            &CompileOptions::script("k.js"),
+        )
         .unwrap();
     a.vm.call(f, Value::object(a.vm.global()), &[]).unwrap();
     a.run();
@@ -203,9 +214,8 @@ fn handles_travel_by_name() {
     let k = a.vm.heap_mut().atom_str("kept").unwrap();
     let kept = a.vm.heap().get_own_property(g, k).unwrap().value().unwrap();
     let names = a.names(vec![("mine".to_string(), kept)], "");
-    let bytes = a
-        .vm
-        .snapshot_with(
+    let bytes =
+        a.vm.snapshot_with(
             info(),
             &SnapshotOptions {
                 host: Some(names),
@@ -248,9 +258,8 @@ fn a_host_function_without_a_name_refuses() {
     let mut a = host(1, 2, true);
     let mut names = a.names(Vec::new(), "");
     names.functions.retain(|(id, _)| *id != 2);
-    let e = a
-        .vm
-        .snapshot_with(
+    let e =
+        a.vm.snapshot_with(
             info(),
             &SnapshotOptions {
                 host: Some(names),

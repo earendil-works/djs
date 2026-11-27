@@ -227,38 +227,35 @@ impl<'a> Exporter<'a> {
         e
     }
 
-    /// Marks the host values (D3720): each root, and the objects of its own data
-    /// properties two levels deep, as dumps name them (D2971). Host functions are named
-    /// by identity wherever they are, and a Proxy's insides are not looked at.
+    /// Marks the host values (D3720): each root, and every object reachable from it
+    /// through own data properties, as a member (dumps went two levels deep, D2971; a
+    /// snapshot keeps the identity of every object of the host's data). Host functions
+    /// are named by identity wherever they are, and a Proxy's insides are not looked at.
     fn host_spots(&mut self, host: &HostNames) {
         let h = self.h;
-        let mut level = Vec::new();
+        let mut todo = Vec::new();
         for (i, (_, v)) in host.values.iter().enumerate() {
             if let Some(o) = self.host_object(*v) {
                 self.host_spots.insert(o.offset(), HostSpot::Root(i));
-                level.push(o);
+                todo.push(o);
             }
         }
-        for _ in 0..2 {
-            let mut next = Vec::new();
-            for o in level {
-                if h.object_class(o) == ObjectClass::Proxy {
+        while let Some(o) = todo.pop() {
+            if h.object_class(o) == ObjectClass::Proxy {
+                continue;
+            }
+            for k in h.own_keys(o) {
+                if h.atom_symbol(k).is_some() {
                     continue;
                 }
-                for k in h.own_keys(o) {
-                    if h.atom_symbol(k).is_some() {
-                        continue;
-                    }
-                    if let Some(Property::Data { value, .. }) = h.get_own_property(o, k)
-                        && let Some(c) = self.host_object(value)
-                    {
-                        self.host_spots
-                            .insert(c.offset(), HostSpot::Member(o.offset(), k));
-                        next.push(c);
-                    }
+                if let Some(Property::Data { value, .. }) = h.get_own_property(o, k)
+                    && let Some(c) = self.host_object(value)
+                {
+                    self.host_spots
+                        .insert(c.offset(), HostSpot::Member(o.offset(), k));
+                    todo.push(c);
                 }
             }
-            level = next;
         }
     }
 
@@ -317,7 +314,9 @@ impl<'a> Exporter<'a> {
         let n = match name {
             Some(n) => self.str_lit(&n),
             None => {
-                self.refuse(format!("a host function (id {id}) the host has no name for"));
+                self.refuse(format!(
+                    "a host function (id {id}) the host has no name for"
+                ));
                 0
             }
         };

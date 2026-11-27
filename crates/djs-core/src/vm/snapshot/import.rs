@@ -753,7 +753,11 @@ impl Loader<'_> {
         match self.snap.host.get(k as usize) {
             Some(HostEntry::Root(n) | HostEntry::Function(n)) => self.text(*n).unwrap_or_default(),
             Some(HostEntry::Member(p, key)) => {
-                format!("{}.{}", self.host_path(*p), self.text(*key).unwrap_or_default())
+                format!(
+                    "{}.{}",
+                    self.host_path(*p),
+                    self.text(*key).unwrap_or_default()
+                )
             }
             None => String::new(),
         }
@@ -921,7 +925,12 @@ impl Loader<'_> {
             V::Script(i) => {
                 Value::internal(*self.scripts.get(i as usize).ok_or_else(|| short(Short))?)
             }
-            V::Host(i) => self.host_vals.get(i as usize).ok_or_else(|| short(Short))?.0,
+            V::Host(i) => {
+                self.host_vals
+                    .get(i as usize)
+                    .ok_or_else(|| short(Short))?
+                    .0
+            }
         })
     }
 
@@ -1569,7 +1578,11 @@ impl Loader<'_> {
                     if self.host.is_some() && now != on {
                         return Err(refusal(format!(
                             "the snapshot's VM had {} {}, this one {}",
-                            if frozen { "frozen builtins" } else { "strong weak references" },
+                            if frozen {
+                                "frozen builtins"
+                            } else {
+                                "strong weak references"
+                            },
                             if on { "on" } else { "off" },
                             if now { "on" } else { "off" },
                         )));

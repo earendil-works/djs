@@ -31,10 +31,10 @@
 mod check;
 mod export;
 mod hash;
-mod import;
-mod schema;
 #[cfg(test)]
 mod host_tests;
+mod import;
+mod schema;
 #[cfg(test)]
 mod tests;
 mod wire;
