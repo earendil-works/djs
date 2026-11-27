@@ -14535,3 +14535,14 @@ differently (at 0302: 1,361 of 1,361 continue the same, none refused). It costs 
 (~10 CPU-min), so it runs with `--full`. In `test`, an exporter skewed as another build
 would write (fields and members reversed, a field or a member renamed or missing) checks
 the same in-process.
+
+## D3713: The size ceiling rises by the named records
+date: 2026-11-27 · by: psnap · issue: 0302
+The shipped module grows 769,623 -> 775,252 B gzip (+5.6 KB): the generated record schemas and
+constant sets with their names (+2.3 KB of data), the snapshot's records and constants by
+name and its record checks, and the bytecode hash naming `get_builtin` slots (+3.4 KB of
+code; measured per function against main). The hot paths compile as before: `RecordGet`
+and `RecordSet` take the same constant indexes, and `NewRecord` reads its slot count from the
+schema table and writes the kind into the header it writes anyway. The ceiling is that plus
+the slack, 776,276 B, as D3705 raised it for 0301; 0304 removes the dumper and lowers it.
+The codemode-memory rows stay (no new wasm page).
