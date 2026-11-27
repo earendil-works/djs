@@ -1,6 +1,7 @@
 # Suspension design review: state machines vs suspension maps
 
-Status: research report (0188), 2026-11-04. Decisions D2720–D2722 (proposed with this
+Status: research report (0188), 2026-11-04, kept as written; continuation dumps and
+suspension maps were removed in 0304 (D3730). Decisions D2720–D2722 (proposed with this
 report). Prototype: [work/research/0188](../work/research/0188/README.md).
 
 ## The question

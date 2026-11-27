@@ -27,7 +27,7 @@ djs's pi adapter supplies the same set. `atob`/`btoa`/`DOMException` are native.
 `performance` is `{ now }`, defined before the prelude so the lockdown freezes it. `now()`
 is `Date.now() - origin` on the VM clock, with the origin set per run: `startedAt` in
 deterministic mode (giving 0, then the delivered result times, as on quickjs) and the run's
-start otherwise. The origin lives in a closure, so it is heap data. Snapshots, dumps and
+start otherwise. The origin lives in a closure, so it is heap data. Snapshots and
 resumes keep it, and the prelude image doesn't depend on it. js/test/pi-vm.test.ts covers
 it. The only difference from quickjs-wasi is that djs has no `performance.timeOrigin`.
 
@@ -81,7 +81,7 @@ No. The analysis:
   with delivered async results (D1680), and fuel slices don't move it, so `now()` is a
   function of `startedAt` and the result times on any fuel slicing.
 - **Fuel.** One builtin call, as for Date.now.
-- **Snapshots and dumps.** An engine origin would need a new realm slot (an image change) and a
+- **Snapshots.** An engine origin would need a new realm slot (an image change) and a
   Vm/wasm setter. The adapter's closure is already ordinary heap data.
 - **Resolution.** The clock has ms resolution, and outside deterministic mode the adapter
   sets it once per slice (10,000 fuel). A tight loop therefore sees `now()` advance in
