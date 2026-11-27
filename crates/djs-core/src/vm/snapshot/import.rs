@@ -1669,6 +1669,39 @@ pub fn describe(bytes: &[u8]) -> Result<String, Refusal> {
         }
     }
     out += &format!("builtins: {}\n", names.join(" "));
+    let text = |i: u32| {
+        s.strings
+            .get(i as usize)
+            .map_or_else(String::new, |&(two, d)| string_of(two, d))
+    };
+    for (k, &(name, params, _, src)) in s.scripts.iter().enumerate() {
+        out += &format!(
+            "script {k}: {}{} ({})\n",
+            text(name),
+            if text(params).is_empty() {
+                String::new()
+            } else {
+                format!(", parameters {}", text(params))
+            },
+            match src {
+                Ok(b) => format!("{} bytes of source", b.len()),
+                Err(h) => format!("source by hash {h:016x}"),
+            }
+        );
+    }
+    let host: Vec<String> = s
+        .host
+        .iter()
+        .filter_map(|e| match *e {
+            HostEntry::Root(n) => Some(text(n)),
+            HostEntry::Function(n) => Some(format!("{}()", text(n))),
+            HostEntry::Member(..) => None,
+        })
+        .collect();
+    if !host.is_empty() {
+        let members = s.host.len() - host.len();
+        out += &format!("host values: {} (and {members} members)\n", host.join(" "));
+    }
     for (sc, a, b, pinned, _, sites) in &s.functions {
         out += &format!(
             "function {sc}:{a}..{b}{}{}\n",

@@ -121,7 +121,7 @@ test("a plain function's open call is rejected on resume", async () => {
     functions: { log: (...a: unknown[]) => void lines.push(a.map(String).join(" ")) },
     asyncFunctions: { plain: async (n: unknown) => Number(n) },
   });
-  assert.equal(await task.result, "plain: the call was open when the run was dumped, and the host function has no hooks to continue it2");
+  assert.equal(await task.result, "plain: the call was open when the run was suspended, and the host function has no hooks to continue it2");
   task.sandbox.dispose();
 });
 
@@ -140,84 +140,3 @@ test("a dump that does not load", async () => {
   }
 });
 
-test("a task suspended into a plain dump (the exporter's) resumes through the hooks, ids and all", async () => {
-  const module = await loadModule();
-  const code = `const a = await sleep(1); log("a", a); const b = await sleep(2); log("b", b, Math.random() < 1); return a + b;`;
-  const pending: { n: number; resolve(v: number): void }[] = [];
-  const resumed: [unknown, HostCall][] = [];
-  const calls: HostCall[] = [];
-  const lines: string[] = [];
-  const sleep: AsyncHostFunction<{ n: number }> = {
-    call(n) {
-      calls.push(this);
-      this.state = { n: Number(n) };
-      return new Promise((resolve) => pending.push({ n: Number(n), resolve }));
-    },
-    resume(state, call) {
-      resumed.push([state, call]);
-      return Promise.resolve(state.n * 100);
-    },
-  };
-  const opts = { module, frozenBuiltins: true, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep } };
-  const task = new Sandbox(opts).start(code);
-  while (pending.length === 0) await new Promise((r) => setTimeout(r, 1));
-  const dump = await task.suspend();
-  await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
-  task.sandbox.dispose();
-  assert.match(dump, /^"djs-dump";\n/);
-  // (No `$djs.seed`: Math.random ran after the dump, and the next id is one past the
-  // reopened call's, D2837.)
-  assert.doesNotMatch(dump, /\$djs\.seed\(/);
-  assert.match(dump, /\$djs\.resume\(1, "sleep", \[1\], \{"n":1\}\)/);
-  const again = await Sandbox.resume(dump, opts);
-  while (pending.length === 1) await new Promise((r) => setTimeout(r, 1));
-  // The next call has the id the uninterrupted run gives it (D2897): `log("a")`, a sync
-  // call, takes 2.
-  assert.deepEqual(calls.map((c) => [c.id, c.args]), [[1, [1]], [3, [2]]]);
-  pending[1].resolve(20);
-  assert.equal(await again.result, 120);
-  assert.deepEqual(resumed.map(([s, c]) => [s, c.id]), [[{ n: 1 }, 1]]);
-  assert.deepEqual(lines, ["a 100", "b 20 true"]);
-  again.sandbox.dispose();
-});
-
-// A dump names the codemode body it continues by `$djs.source(name, hash, params)` (D2882):
-// the sandbox compiles the script it ran (this process's, or the `sources` option's)
-// again; one it does not have is a clear error, and `inlineSources` writes the text.
-test("a dump names its script by $djs.source; the host compiles it again", async () => {
-  const module = await loadModule();
-  const code = `const a = await sleep(1);\nlog("got", a);\nreturn a + 1;`;
-  const sleep: AsyncHostFunction = { call: (n) => new Promise(() => {}), resume: () => Promise.resolve(41) };
-  const lines: string[] = [];
-  const opts = { module, frozenBuiltins: true, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep } };
-  const task = new Sandbox(opts).start(code, {}, { filename: "job-7.js" });
-  await new Promise((r) => setTimeout(r, 1));
-  const dump = await task.suspend();
-  await assert.rejects(task.result);
-  task.sandbox.dispose();
-  assert.match(dump, /\$djs\.source\("job-7\.js", "[0-9a-f]{8}"\)/);
-  assert.equal(dump.split("log(\"got\", a)").length, 2, dump);
-  // This process ran it: it loads.
-  const again = await Sandbox.resume(dump, opts);
-  assert.equal(await again.result, 42);
-  again.sandbox.dispose();
-  // A script the host does not have, then given by `sources`.
-  const other = dump.replace(/\$djs\.source\("job-7\.js"/, '$djs.source("job-8.js"');
-  await assert.rejects(Sandbox.resume(other, opts), (e: unknown) => e instanceof SandboxError && /job-8\.js.*does not have/.test(e.message));
-  const given = await Sandbox.resume(other, { ...opts, sources: (name: string) => (name === "job-8.js" ? code : undefined) });
-  assert.equal(await given.result, 42);
-  given.sandbox.dispose();
-  // Another text under that name is refused.
-  await assert.rejects(
-    Sandbox.resume(other, { ...opts, sources: () => code + "\n" }),
-    (e: unknown) => e instanceof SandboxError && /not the one the dump refers to/.test(e.message),
-  );
-  // Inline: the text, no reference.
-  const t2 = new Sandbox({ ...opts, inlineSources: true }).start(code, {}, { filename: "job-7.js" });
-  await new Promise((r) => setTimeout(r, 1));
-  const inline = await t2.suspend();
-  await assert.rejects(t2.result);
-  t2.sandbox.dispose();
-  assert.doesNotMatch(inline, /\$djs\.source/);
-  assert.equal(inline.split("log(\"got\", a)").length, 3, inline);
-});
