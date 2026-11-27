@@ -3,7 +3,7 @@
 # A tag `vX.Y.Z` (X.Y.Z must be js/package.json's version) runs everything and publishes,
 # after the `npm` environment's approval; a manual run does the same up to a dry run
 # unless `publish` is ticked. The package is built once (scripts/npm-pack.sh: the one
-# release wasm module, with the dumper, in the shipped build environment, tsc's JavaScript
+# release wasm module, with snapshots, in the shipped build environment, tsc's JavaScript
 # and declarations), and that tarball is what every test installs and what is published.
 #
 # Publishing uses npm's trusted publishing (OIDC: register this repository and workflow
