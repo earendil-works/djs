@@ -15,7 +15,6 @@ default = ["unicode"]
 unicode = ["djs-prelude/unicode"]
 
 [dependencies]
-# `dump`: the REPL's .dump (0167).
-djs-core = { path = "../djs-core", default-features = false, features = ["dump", "snapshot"] }
+djs-core = { path = "../djs-core", default-features = false, features = ["snapshot"] }
 # The base snapshot: VMs start as a copy, not a prelude compile (D1321).
-djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry", "names"] }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }

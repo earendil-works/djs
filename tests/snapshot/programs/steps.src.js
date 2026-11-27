@@ -1,5 +1,5 @@
 // A helper awaiting a sleep (an open call), called from a for-of that pushes each
-// result: dumped during a sleep, the caller holds a half-done `results.push(` (its
+// result: snapshotted during a sleep, the caller holds a half-done `results.push(` (its
 // callee and `this`) and the loop's iterator.
 const sleep = (ms) => later(ms);
 async function step(label, ms) {

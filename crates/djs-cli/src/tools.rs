@@ -9,7 +9,7 @@
 //! host function with a fresh id; the Proxy keeps it. So a tool's id and identity live in
 //! the heap, and survive images.
 //!
-//! Next to it, two globals of the dump fixtures and the corpus's idle points (D2602):
+//! Next to it, two globals of the test programs and the corpus's idle points (D2602):
 //! `print(...)`, a sync host call printed like `console.log`, and `later(v, rejected)`,
 //! an async host call that is answered with `v` (rejected with `v` if `rejected`) at the
 //! next idle point.
@@ -91,7 +91,7 @@ pub fn install_debugger(vm: &mut Vm) {
 /// The tools of a VM by id, and the scripted answers.
 #[derive(Default)]
 pub struct Tools {
-    /// Identities by `fn_id - TOOL_BASE`. A cell: a dump's loader asks for ids through a
+    /// Identities by `fn_id - TOOL_BASE`. A cell: a snapshot's loader asks for ids through a
     /// shared reference ([`Tools::id_for_call_name`]).
     names: RefCell<Vec<String>>,
     answers: Option<Answers>,
@@ -123,7 +123,7 @@ impl Tools {
     }
 
     /// The id of the host function with identity `name` (`tools.read`): the one it has
-    /// (made before, bound, or registered by a loaded dump's open call), else the next
+    /// (made before, bound, or registered by a loaded snapshot), else the next
     /// free one. A restored session and new calls of the same tool agree on it.
     pub fn id_for(&self, name: &str) -> u32 {
         let mut names = self.names.borrow_mut();
@@ -137,9 +137,9 @@ impl Tools {
         TOOL_BASE + i as u32
     }
 
-    /// The host function id for an identity a dump names (`tools.read`, in `$djs.resume`);
-    /// `None` for a name that is neither a tool nor a function the run has (bound with
-    /// `--bind`, or in the dump's state). The printing function's identity is `print`
+    /// The host function id for an identity a snapshot names (`tools.read`); `None` for a
+    /// name that is neither a tool nor a function the run has (bound with `--bind`, or in
+    /// the snapshot's state). The printing function's identity is `print`
     /// (the `console` methods are the same function).
     pub fn id_for_call_name(&self, call_name: &str) -> Option<u32> {
         match call_name {
@@ -148,8 +148,7 @@ impl Tools {
             "print" => return Some(crate::run::CONSOLE_LOG),
             _ => {}
         }
-        // (A tool the answers file answers is one too, whether or not a call to it was
-        // reopened yet: a dump may name it by `$djs.host` first, D3001.)
+        // (A tool the answers file answers is one too, whether or not the run made it.)
         let known = self.names.borrow().iter().any(|n| n == call_name)
             || self
                 .answers
@@ -161,7 +160,7 @@ impl Tools {
         (known || tool).then(|| self.id_for(call_name))
     }
 
-    /// The identity of a host function id (`tools.read`), for a dump's exporter. The
+    /// The identity of a host function id (`tools.read`), for a snapshot's exporter. The
     /// printing function (`print`, `console.log`, ...) is `print`: one id, one behavior.
     pub fn call_name(&self, fn_id: u32) -> Option<String> {
         if fn_id == LATER {
@@ -229,20 +228,10 @@ impl Tools {
         format!("{}({})", self.name(info.fn_id), args.join(", "))
     }
 
-    /// [`Tools::describe`] under a name given by the caller (a dump's own name for it).
-    pub fn describe_as(vm: &mut Vm, call_id: u32, name: &str) -> String {
-        let Some(info) = vm.host_call(call_id) else {
-            return format!("call {call_id}");
-        };
-        let args: Vec<String> = info.args.iter().map(|&a| to_json(vm, a)).collect();
-        format!("{name}({})", args.join(", "))
-    }
-
-    /// The state the CLI gives each open call of a dump (D2894), JSON: where the call came
+    /// The CLI's state of a run (D2894), JSON: where the call came
     /// from (`origin`, the REPL's input label) and how many ordered answers each tool has
-    /// used (`answered`). That count is the run's state, not the call's, but an idle point
-    /// always has an open call, so every call carries it and a resumed run's next call gets
-    /// the answer the uninterrupted run would have. `None` when there is nothing to keep.
+    /// used (`answered`), so that a resumed run's next call gets the answer the
+    /// uninterrupted run would have. `None` when there is nothing to keep.
     pub fn call_state(&self, origin: Option<&str>) -> Option<String> {
         let mut fields = Vec::new();
         if let Some(o) = origin {
@@ -270,8 +259,8 @@ impl Tools {
         (!fields.is_empty()).then(|| format!("{{{}}}", fields.join(",")))
     }
 
-    /// Takes a loaded call's state back (D2894): the answer counts (the highest of all the
-    /// calls' counts per tool).
+    /// Takes a loaded run's state back (D2894): the answer counts (the highest per tool)
+    /// and the tools made.
     pub fn restore_state(&mut self, json: &str) {
         let Ok(J::Obj(fields)) = J::parse(json) else {
             return;
@@ -301,7 +290,7 @@ impl Tools {
         }
     }
 
-    /// A dump's `$djs.host(name)` (D2971): the tool `tools.<n>` from the Proxy's table
+    /// The host value `name` (D2971): the tool `tools.<n>` from the Proxy's table
     /// (made there now if the run had not read it yet, so that the script's later
     /// `tools.<n>` is the same function), any other name the global of its path
     /// (`tools`, `console`, `print`, `later`).
@@ -321,7 +310,7 @@ impl Tools {
     }
 
     /// Puts every tool the registry knows into the `tools` Proxy's table at once, under its
-    /// id, as the dumped run had made them (the state's `made`, D2897): reading
+    /// id, as the snapshotted run had made them (the state's `made`, D2897): reading
     /// `tools.read` later then makes no `make` call, which would take a call id the
     /// uninterrupted run did not.
     pub fn premake(&self, vm: &mut Vm) {
@@ -341,17 +330,6 @@ impl Tools {
             };
             let _ = vm.define(made, name, f);
         }
-    }
-
-    /// A loaded call's `origin`, from its state ([`Tools::call_state`]).
-    pub fn state_origin(json: &str) -> Option<String> {
-        let J::Obj(fields) = J::parse(json).ok()? else {
-            return None;
-        };
-        fields.into_iter().find_map(|(k, v)| match (k.as_str(), v) {
-            ("origin", J::Str(o)) => Some(o),
-            _ => None,
-        })
     }
 
     /// The scripted answer for the pending call `call_id`, if the answers file has one.

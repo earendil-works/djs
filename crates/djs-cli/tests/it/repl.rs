@@ -38,9 +38,9 @@ fn repl(input: &str) -> String {
     repl_with(&[], input)
 }
 
-/// [`repl`] with frozen builtins, which dumps need (D2836).
-fn frozen(input: &str) -> String {
-    repl_with(&["--frozen"], input)
+/// [`repl`] where `debugger;` pauses (`--debugger`, D3060).
+fn debugger(input: &str) -> String {
+    repl_with(&["--debugger"], input)
 }
 
 #[track_caller]
@@ -177,12 +177,12 @@ fn fuel_and_suspension() {
 }
 
 #[test]
-fn restore_reads_only_snapshots_and_dumps() {
+fn restore_reads_only_snapshots() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let other = format!("{dir}/repl-test-{}.bin", std::process::id());
-    std::fs::write(&other, b"DJS\0 not a dump").unwrap();
+    std::fs::write(&other, b"DJS\0 not a snapshot").unwrap();
     let out = repl(&format!("let r = 7\n.restore {other}\nr\n"));
-    assert!(out.contains("is not a djs snapshot or dump"), "{out}");
+    assert!(out.contains("is not a djs snapshot"), "{out}");
     assert!(out.ends_with("\n7\n"), "{out}");
     std::fs::remove_file(&other).unwrap();
     check(
@@ -372,156 +372,25 @@ fn answers_file() {
     );
 }
 
-#[test]
-fn restore_a_waiting_dump() {
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/run");
-    // A hand-written dump: a run waiting on `tools.read`. Its run (the completion value)
-    // becomes a waiting input; new calls of the same tool get the same function id.
-    check(
-        &format!(
-            ".restore {dir}/reads.dump.js\n.pending\n.bt 2\n.resolve 2 \"AA\"\n.bt all\n.resolve 3 \"BBB\"\n.pending\n"
-        ),
-        &format!(
-            "loaded {dir}/reads.dump.js into a fresh VM\n\
-             waiting: #2 tools.read({{\"path\":\"a\"}})\n\
-             #2 tools.read({{\"path\":\"a\"}})  the dump, at {dir}/reads.dump.js:13:12\n\
-             #2 tools.read({{\"path\":\"a\"}})\n  async function <anonymous> at {dir}/reads.dump.js:13:12 (run)\n\
-             \x20     const a = (await $dump.p2);\n\
-             \x20                ^\n\
-             \x20   a = undefined, b = undefined\n\
-             [waiting] #3 tools.read({{\"path\":\"b\"}})\n\
-             \x20 async function <anonymous> at {dir}/reads.dump.js:14:11 (run)\n\
-             \x20     const b = await tools.read({{ path: \"b\" }});\n\
-             \x20               ^\n\
-             \x20   a = 'AA', b = undefined\n\
-             AABBB\ntotal 5\n[run] 5\nno open calls\n"
-        ),
-    );
-    // A plain dump (D2830) of two waiting inputs and a value: its completion value names
-    // them (D2895), and the calls' states their origins (D2894).
-    check(
-        &format!(
-            ".restore {dir}/inputs.dump.js\n.pending\n.resolve 2 \"AAA\"\n.resolve 3 \"x\"\n.pending\n"
-        ),
-        &format!(
-            "loaded {dir}/inputs.dump.js into a fresh VM\n[done] 5\n\
-             waiting: #2 tools.read({{\"path\":\"a\"}})\n\
-             waiting: #3 tools.read({{\"path\":\"b\"}})\n\
-             #2 tools.read({{\"path\":\"a\"}})  input 1, at {dir}/inputs.dump.js:9:60\n\
-             #3 tools.read({{\"path\":\"b\"}})  input 2, at {dir}/inputs.dump.js:10:52\n\
-             [input 1] 3\nno open calls\n"
-        ),
-    );
-    // `later(v)` calls are answered at once; a program of tests/dump runs to its end.
-    let tmp = env!("CARGO_TARGET_TMPDIR");
-    let plan = format!("{tmp}/repl-plan-{}.js", std::process::id());
-    let src = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/plan.src.js");
-    let r = Command::new(env!("CARGO_BIN_EXE_djs"))
-        .args(["run", "--dump-after", "5", &plan, src])
-        .output()
-        .unwrap();
-    assert!(r.status.success(), "{r:?}");
-    let out = repl(&format!(".restore {plan}\n"));
-    std::fs::remove_file(&plan).unwrap();
-    assert_eq!(
-        out,
-        format!(
-            "loaded {plan} into a fresh VM\nwaiting: #5 later(\"TODO four\\nok\\nTODO five\")\n\
-             5 TODOs in 4 files\n[[2,0],[1,2]]\n[run] undefined\n"
-        )
-    );
-    check(
-        ".restore /nonexistent.js\n",
-        "cannot read /nonexistent.js: No such file or directory (os error 2)\n",
-    );
-}
-
-#[test]
-fn dump_a_waiting_session() {
-    let dir = env!("CARGO_TARGET_TMPDIR");
-    let dump = format!("{dir}/repl-wait-{}.js", std::process::id());
-    let out = frozen(&format!(
-        "async function get(p) {{ const v = await tools.read({{path: p}}); return v.toUpperCase() }}\n\
-         let out = []; get('a').then(v => out.push(v)); 0\n\
-         .dump {dump}\n.clear\n.restore {dump}\n.bt all\n.resolve 2 \"hello\"\nout\n\
-         .dump-every on\nget('c').then(v => out.push(v)); get('d').then(v => out.push(v)); 0\n\
-         .resolve 3 \"c!\"\n.resolve 4 \"d!\"\nout\n.dump-every off\n"
-    ));
-    std::fs::remove_file(&dump).unwrap();
-    let mut lines = out.lines();
-    assert_eq!(
-        lines.next(),
-        Some("[waiting] #2 tools.read({\"path\":\"a\"})")
-    );
-    assert_eq!(lines.next(), Some("0"));
-    let wrote = lines.next().unwrap();
-    assert!(
-        wrote.starts_with("wrote ") && wrote.ends_with(" (1 activation, 1 pending call)"),
-        "{out}"
-    );
-    let rest: Vec<&str> = lines.collect();
-    let dumped = |l: &str| l.starts_with("[dumped ") && l.ends_with(" bytes]");
-    assert!(rest.iter().filter(|l| dumped(l)).count() >= 2, "{out}");
-    let rest: Vec<&str> = rest.into_iter().filter(|l| !dumped(l)).collect();
-    assert_eq!(
-        rest,
-        [
-            "a fresh VM",
-            &format!("loaded {dump} into a fresh VM"),
-            "waiting: #2 tools.read({\"path\":\"a\"})",
-            &format!("  async function <anonymous> at {dump}:5:11"),
-            "      const v = await $djs.resume(2, \"tools.read\", [{ path: \"a\" }], {\"origin\":\"input 2\",\"made\":[\"tools.read\"]});",
-            "                ^",
-            // (`p` is dead after the await: the continuation leaves it out, D2911.)
-            "    v = undefined",
-            "[ 'HELLO' ]",
-            "dumping at every idle point: on",
-            // The restored tools are made already (the calls' states, D2897): no `make`
-            // call takes an id, so the ids are the uninterrupted session's.
-            "[waiting] #3 tools.read({\"path\":\"c\"})",
-            "[waiting] #4 tools.read({\"path\":\"d\"})",
-            "0",
-            "[ 'HELLO', 'C!', 'D!' ]",
-            "dumping at every idle point: off",
-        ]
-    );
-    // What cannot be dumped is refused with its path, and `.dump-every` turns itself off.
-    let out = frozen(".dump-every on\nconst w = new WeakMap(); tools.x(w); 0\n");
-    assert!(out.contains("[not dumped] cannot dump:\n"), "{out}");
-    assert!(out.contains("a weak collection"), "{out}");
-    assert!(out.contains("dumping at every idle point: off\n"), "{out}");
-}
-
-/// Inputs suspended in their own top-level `await` (async bodies, D2617) dump and
+/// Inputs suspended in their own top-level `await` (async bodies, D2617) snapshot and
 /// restore; an expression input still prints its value when it settles, a statement does
 /// not, and new inputs are numbered after the restored ones. The waiting inputs are the
-/// dump's completion value's properties (D2895), the calls' origins their states (D2894).
+/// snapshot's handles, the calls' origins the host's data (D2894).
 #[test]
-fn dump_waiting_await_inputs() {
+fn snapshot_waiting_await_inputs() {
     let dir = env!("CARGO_TARGET_TMPDIR");
-    let dump = format!("{dir}/repl-await-{}.js", std::process::id());
-    let out = repl_with(
-        &["--frozen"],
-        &format!(
-            "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
-         .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
-         .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
+    let snap = format!("{dir}/repl-await-{}.snapshot", std::process::id());
+    let out = repl(&format!(
+        "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
+         .snapshot {snap}\n.clear\n.restore {snap}\nawait tools.read({{path: 'c'}})\n.pending\n\
+         .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n\
          const x = await tools.read({{path: 'd'}})\n.resolve 4 \"c!\"\n.resolve 5 \"dee\"\nx\n"
-        ),
-    );
-    let text = std::fs::read_to_string(&dump).unwrap();
-    std::fs::remove_file(&dump).unwrap();
-    assert!(text.starts_with("\"djs-dump\";"), "{text}");
+    ));
+    std::fs::remove_file(&snap).unwrap();
     let lines: Vec<String> = out
         .lines()
-        .filter(|l| !(l.starts_with("[dumped ") || l.starts_with("wrote ")))
-        // Positions are in the dump, whose layout is the exporter's.
-        .map(|l| {
-            l.split(&format!(", at {dump}:"))
-                .next()
-                .unwrap()
-                .to_string()
-        })
+        .filter(|l| !l.starts_with("wrote "))
+        .map(|l| l.split(", at ").next().unwrap().to_string())
         .collect();
     assert_eq!(
         lines,
@@ -529,42 +398,29 @@ fn dump_waiting_await_inputs() {
             "[waiting] #2 tools.read({\"path\":\"a\"})",
             "[waiting] #3 tools.read({\"path\":\"b\"})",
             "a fresh VM",
-            &format!("loaded {dump} into a fresh VM"),
+            &format!("loaded {snap} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
             "waiting: #3 tools.read({\"path\":\"b\"})",
             "[waiting] #4 tools.read({\"path\":\"c\"})",
             "#2 tools.read({\"path\":\"a\"})  input 1",
             "#3 tools.read({\"path\":\"b\"})  input 2",
-            "#4 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
+            "#4 tools.read({\"path\":\"c\"})  input 3",
             "[input 2] 'bee'",
             "'hello'",
-            "dumping at every idle point: on",
             "[waiting] #5 tools.read({\"path\":\"d\"})",
             "[input 3] 'c!'",
             "'dee'",
-        ]
-    );
-    assert!(out.matches("[dumped ").count() >= 2, "{out}");
-    // Without --frozen the VM's builtins are not frozen: dumps need them (D2836).
-    let out = repl(".dump -\n.dump\n.dump-every on\n.dump-every\n");
-    assert_eq!(
-        out,
-        "dumps need frozen builtins: start the REPL with `djs repl --frozen`\n".repeat(3)
-            + "dumping at every idle point: off\n"
+        ],
+        "{out}"
     );
 }
 
-/// `.dump` with no file prints the dump, as `.dump -` does; the commands that need an
-/// argument print their usage instead of "unknown command".
+/// The commands that need an argument print their usage instead of "unknown command".
 #[test]
 fn commands_without_arguments() {
-    let out = frozen("let a = 41\n.dump\n");
-    assert!(out.starts_with("\"djs-dump\";"), "{out}");
-    assert!(out.contains("41"), "{out}");
-    assert_eq!(out, frozen("let a = 41\n.dump -\n"));
     check(
         ".restore\n.disasm\n.load\n.resolve\n.reject\n.c\n.bt\n",
-        "usage: .restore <file> (a file .dump wrote)\n\
+        "usage: .restore <file> (a file .snapshot wrote)\n\
          usage: .disasm <code>\n\
          usage: .load <file>\n\
          usage: .resolve <id> <json> or .reject <id> <message>\n\
@@ -573,14 +429,14 @@ fn commands_without_arguments() {
          no suspended activations\n",
     );
     let help = repl(".help\n");
-    assert!(help.contains(".dump [file] [names]"), "{help}");
+    assert!(help.contains(".snapshot [file]"), "{help}");
 }
 
-/// `debugger;` in `--frozen` (D3060): a pause is an open call of `debugger`; `.c`
+/// `debugger;` with `--debugger` (D3060): a pause is an open call of `debugger`; `.c`
 /// continues it in place, several times in a loop; the input's top level pauses too.
 #[test]
 fn debugger_pauses_and_continues() {
-    let out = frozen(
+    let out = debugger(
         "let n = 0\nfor (let i = 0; i < 3; i++) { n += i; debugger; }\n.pending\n.bt 1\nn\n.c\n.c\n.c\n.c\nn\n",
     );
     let at = "  for (let i = 0; i < 3; i++) { n += i; debugger; }\n\
@@ -589,7 +445,7 @@ fn debugger_pauses_and_continues() {
         out,
         format!(
             "[paused] #1 input 2 at repl:1:39\n{at}\
-             (.dump shows the continuation, .c continues, .abort drops it)\n\
+             (.snapshot saves it, .c continues, .abort drops it)\n\
              #1 debugger()  input 2, at repl:1:39\n\
              #1 debugger()\n  async <eval> at repl:1:39 (input 2)\n\
              \x20     for (let i = 0; i < 3; i++) {{ n += i; debugger; }}\n\
@@ -603,61 +459,17 @@ fn debugger_pauses_and_continues() {
     );
     // In an async function: the caller's promise waits; its value prints after `.c`.
     assert_eq!(
-        frozen("async function f(x) { const y = x * 2; debugger; return y }\nawait f(4)\n.c 1\n"),
+        debugger("async function f(x) { const y = x * 2; debugger; return y }\nawait f(4)\n.c 1\n"),
         "[paused] #1 input 2 at repl:1:40\n\
          \x20 async function f(x) { const y = x * 2; debugger; return y }\n\
          \x20                                        ^\n\
-         (.dump shows the continuation, .c continues, .abort drops it)\n\
+         (.snapshot saves it, .c continues, .abort drops it)\n\
          [input 2] 8\n",
     );
-    // Without the dumping mode, `debugger;` does nothing.
+    // Without `--debugger`, `debugger;` does nothing.
     check(
         "debugger; 1\nasync function f() { debugger; return 2 }\nawait f()\n",
         "1\n2\n",
-    );
-}
-
-/// A paused session dumps; the dump continues the run in a fresh VM (`.restore`, then
-/// `.c`), pauses again at the loop's next `debugger;` and dumps again from there.
-#[test]
-fn debugger_pauses_resume_from_the_dump() {
-    let dir = env!("CARGO_TARGET_TMPDIR");
-    let id = std::process::id();
-    let (d1, d2) = (
-        format!("{dir}/repl-pause-{id}-1.js"),
-        format!("{dir}/repl-pause-{id}-2.js"),
-    );
-    let out = frozen(&format!(
-        "let n = 0\nfor (let i = 0; i < 4; i++) {{ n += i; debugger; }}\n.c\n\
-         .dump {d1}\n.restore {d1}\n.c\n.dump {d2}\n.restore {d2}\nn\n.c\n.c\nn\n"
-    ));
-    let text = std::fs::read_to_string(&d1).unwrap();
-    for f in [&d1, &d2] {
-        std::fs::remove_file(f).unwrap();
-    }
-    assert!(
-        text.contains("await $djs.resume(2, \"debugger\", [], {\"origin\":\"input 2\"});"),
-        "{text}"
-    );
-    let lines: Vec<&str> = out.lines().filter(|l| !l.starts_with(' ')).collect();
-    assert_eq!(
-        lines,
-        [
-            "[paused] #1 input 2 at repl:1:39",
-            "(.dump shows the continuation, .c continues, .abort drops it)",
-            "[paused] #2 input 2 at repl:1:39",
-            &format!("wrote 299 bytes to {d1} (1 activation, 1 pending call)"),
-            &format!("loaded {d1} into a fresh VM"),
-            &format!("[paused] #2 input 2 at {d1}:5:1"),
-            &format!("[paused] #3 input 2 at {d1}:6:33"),
-            &format!("wrote 299 bytes to {d2} (1 activation, 1 pending call)"),
-            &format!("loaded {d2} into a fresh VM"),
-            &format!("[paused] #3 input 2 at {d2}:5:1"),
-            "3",
-            &format!("[paused] #4 input 2 at {d2}:6:33"),
-            "6",
-        ],
-        "{out}"
     );
 }
 
@@ -665,14 +477,14 @@ fn debugger_pauses_resume_from_the_dump() {
 #[test]
 fn debugger_abort() {
     assert_eq!(
-        frozen(
+        debugger(
             ".abort\nlet n = 1; debugger; n = 2\nconst r = await tools.read({path: 'a'})\n.abort\n.pending\nn\n.c\n"
         ),
         "nothing is paused\n\
          [paused] #1 input 1 at repl:1:12\n\
          \x20 0,  n = 1; debugger; n = 2\n\
          \x20            ^\n\
-         (.dump shows the continuation, .c continues, .abort drops it)\n\
+         (.snapshot saves it, .c continues, .abort drops it)\n\
          [waiting] #3 tools.read({\"path\":\"a\"})\n\
          aborted input 1, with 1 other waiting input and 1 open call\n\
          no open calls\n1\nnothing is paused\n",
@@ -726,7 +538,7 @@ fn snapshot_a_waiting_session() {
 fn debugger_pauses_resume_from_the_snapshot() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let s1 = format!("{dir}/repl-pause-{}.snapshot", std::process::id());
-    let out = frozen(&format!(
+    let out = debugger(&format!(
         "let n = 0\nfor (let i = 0; i < 4; i++) {{ n += i; debugger; }}\n.c\n\
          .snapshot {s1}\n.restore {s1}\n.c\nn\n.c\n.c\nn\n"
     ));
@@ -739,7 +551,7 @@ fn debugger_pauses_resume_from_the_snapshot() {
         lines,
         [
             "[paused] #1 input 2 at repl:1:39",
-            "(.dump shows the continuation, .c continues, .abort drops it)",
+            "(.snapshot saves it, .c continues, .abort drops it)",
             "[paused] #2 input 2 at repl:1:39",
             &format!("loaded {s1} into a fresh VM"),
             "[paused] #2 input 2 at repl:1:39",

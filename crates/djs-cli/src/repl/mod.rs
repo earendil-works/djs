@@ -26,13 +26,13 @@ use crate::tools::{self, MAKE_TOOL, Tools};
 use term::{Input, Terminal};
 
 const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--frozen]\n\
-                [--tools answers.json]\n\
+                [--debugger] [--tools answers.json]\n\
   --ts            parse inputs as TypeScript (.ts toggles it)\n\
   --tools FILE    answer tools.x(...) calls from FILE (docs/cli.md); others wait for .resolve\n\
   --gc-stress     collect garbage at every safepoint\n\
   --no-history    do not read or write the history file ($DJS_HISTORY, ~/.djs_history)\n\
-  --frozen        the VMs have frozen builtins, which .dump and .dump-every need (D2836);
-                  `debugger;` pauses (.help)";
+  --frozen        the VMs have frozen builtins (D2304)\n\
+  --debugger      `debugger;` in an async function or an input pauses it (.help)";
 
 const HELP: &str = "\
 .help                 this text
@@ -56,16 +56,10 @@ const HELP: &str = "\
                       realm every VM starts with (sections summary, kinds, diff, prefix,
                       largest, strings, shapes, functions, session; default
                       summary,diff; `all` for every section)
-.dump [file] [names]  write the session's globals (or the named ones) as JavaScript,
-                      with what is in flight (open calls, waiting inputs): a Script
-                      that recreates them, functions as their source, closures and
-                      data as code, builtins by name (no file or `-` prints it;
-                      needs --frozen)
 .snapshot [file]      write the session as a snapshot (D3720): its state as data, with
                       what is in flight (open calls, waiting inputs), the host's values
                       by name (default file: session.snapshot)
-.restore <file>       replace the VM with a fresh one that loaded a .snapshot file, or
-                      that ran a .dump file
+.restore <file>       replace the VM with a fresh one that loaded a .snapshot file
 .clear                start over with a fresh VM
 
 tools.<name>(args) is an async host call: an input that waits on one returns to the
@@ -75,16 +69,12 @@ prompt and prints its value when it settles.
 .reject <id> <msg>    answer call #id with an Error
 .bt [id|all]          the suspended activations waiting on call #id (or all of
                       them, the default), where they stopped and their bindings
-.restore <dump.js>    also restores a dump's waiting run and open calls
-                      (`later(v)` calls are answered with v at once; print() prints)
-.dump-every [on|off]  dump and reload at every idle point ([dumped N bytes]; needs
-                      --frozen)
 
-With --frozen, `debugger;` in an async function or an input pauses it ([paused] #id):
+With --debugger, `debugger;` in an async function or an input pauses it ([paused] #id):
 .continue, .c [id]    continue the pause (the oldest, or #id) in place
 .abort                drop the paused input and everything else in flight (Ctrl-C
                       at an empty prompt does too)
-.snapshot (or .dump) then .restore of the file continue from it: the pause is open again.
+.snapshot then .restore of the file continue from it: the pause is open again.
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
@@ -93,17 +83,14 @@ template or comment). Top-level let/const/class/function persist (Script globals
 /// Fuel per slice: how often a running input checks for Ctrl-C (a few ms).
 const SLICE: u64 = 1_000_000;
 const FILENAME: &str = "repl";
-/// The running input's result, as a handle of `.dump-every`'s dumps.
-const ENTRY: &str = "$entry";
 const HISTORY_MAX: usize = 1000;
-/// `.dump` and `.dump-every` in a REPL whose VMs have no frozen builtins.
-const NOT_FROZEN: &str = "dumps need frozen builtins: start the REPL with `djs repl --frozen`";
 
 pub fn main(args: &[String]) -> i32 {
     let mut typescript = false;
     let mut gc_stress = false;
     let mut history = true;
     let mut frozen = false;
+    let mut debugger = false;
     let mut answers = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -123,6 +110,7 @@ pub fn main(args: &[String]) -> i32 {
             "--gc-stress" => gc_stress = true,
             "--no-history" => history = false,
             "--frozen" => frozen = true,
+            "--debugger" => debugger = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return 0;
@@ -138,7 +126,7 @@ pub fn main(args: &[String]) -> i32 {
     } else {
         None
     };
-    let mut repl = Repl::new(gc_stress, frozen);
+    let mut repl = Repl::new(gc_stress, frozen, debugger);
     repl.typescript = typescript;
     repl.tools = Tools::with_answers(answers);
     match term {
@@ -179,7 +167,7 @@ enum Step {
 
 /// An input whose promise is still pending: it waits on tool calls.
 struct Waiting {
-    /// `input 3`, or the name of a loaded dump's handle.
+    /// `input 3`, or the name of a loaded snapshot's handle.
     label: String,
     promise: Handle,
     /// Print its value when it settles.
@@ -189,9 +177,9 @@ struct Waiting {
 }
 
 impl Waiting {
-    /// Its name as a dump's handle: the label, and for an input whose value prints when
-    /// it settles (an expression input, `[value]`) ` (value)` after it (D2604), so a
-    /// restore prints it the same way. Other handles (a dump's `run`) print their value.
+    /// Its name as a snapshot's handle: the label, and for an input whose value prints
+    /// when it settles (an expression input, `[value]`) ` (value)` after it (D2604), so a
+    /// restore prints it the same way.
     fn handle_name(&self) -> String {
         if self.label.starts_with("input ") && self.show {
             format!("{} (value)", self.label)
@@ -256,25 +244,20 @@ struct Repl {
     fresh: Vec<u32>,
     /// The last run announced a waiting call.
     announced: bool,
-    /// `.dump-every`.
-    dump_every: bool,
-    /// `--frozen`: the VMs have frozen builtins, which dumps need (D2836).
+    /// `--frozen`: the VMs have frozen builtins (D2304).
     frozen: bool,
-    /// The running input's result after `.dump-every` reloaded the VM.
-    entry_override: Option<Handle>,
-    /// A handle outside the waiting inputs is held: `.dump-every` must not replace the VM.
-    hold_vm: bool,
-    /// The dump file the VM was `.restore`d from (its functions' positions are in it).
-    dump_file: Option<String>,
+    /// `--debugger`: `debugger;` pauses (D3060).
+    debugger: bool,
     /// A `debugger;` paused before: the hint on how to go on was shown.
     paused_before: bool,
 }
 
 impl Repl {
-    fn new(gc_stress: bool, frozen: bool) -> Repl {
+    fn new(gc_stress: bool, frozen: bool, debugger: bool) -> Repl {
         Repl {
-            vm: new_vm(gc_stress, frozen),
+            vm: new_vm(gc_stress, frozen, debugger),
             frozen,
+            debugger,
             gc_stress,
             typescript: false,
             fuel_limit: None,
@@ -293,10 +276,6 @@ impl Repl {
             current: String::new(),
             fresh: Vec::new(),
             announced: false,
-            dump_every: false,
-            entry_override: None,
-            hold_vm: false,
-            dump_file: None,
             paused_before: false,
         }
     }
@@ -304,8 +283,6 @@ impl Repl {
     /// Replaces the VM; waiting inputs belong to the old one.
     fn replace_vm(&mut self, vm: Vm) {
         self.vm = vm;
-        self.entry_override = None;
-        self.dump_file = None;
         self.waiting.clear();
         self.origins.clear();
         self.fresh.clear();
@@ -405,8 +382,7 @@ impl Repl {
             typescript: self.typescript,
             experimental_decorators: self.legacy_decorators,
             emit_decorator_metadata: self.decorator_metadata,
-            // The dumping mode: `debugger;` pauses (D3060).
-            debugger_awaits: self.frozen,
+            debugger_awaits: self.debugger,
             ..o
         }
     }
@@ -429,7 +405,7 @@ impl Repl {
         }
         // A `debugger;` pauses in an async body only: an input with one runs as a
         // top-level-await input (D3060).
-        if self.frozen
+        if self.debugger
             && input::has_top_level_debugger(src)
             && let Some(Ok(p)) = self.plan_await(src, filename)
         {
@@ -516,7 +492,7 @@ impl Repl {
         } else {
             (src.to_string(), false)
         };
-        let rw = input::rewrite_await(&js, self.frozen)?;
+        let rw = input::rewrite_await(&js, self.debugger)?;
         Some((rw.declare, rw.body, ts))
     }
 
@@ -559,13 +535,10 @@ impl Repl {
             }
             Plan::Await(declare, body) => {
                 let h = self.vm.heap_mut().new_handle(body).expect("out of memory");
-                // `h` lives in this VM: no `.dump-every` reload while the declarations run.
-                self.hold_vm = true;
                 let ok = match declare {
                     Some(d) => matches!(self.report(d), Outcome::Done(_)),
                     None => true,
                 };
-                self.hold_vm = false;
                 let body = self.vm.heap().get_handle(h);
                 self.vm.heap_mut().drop_handle(h);
                 if ok {
@@ -657,9 +630,6 @@ impl Repl {
     /// outcome is the result; otherwise (after `.resolve`) the outcome is an old one.
     fn pump(&mut self, entry: bool) -> Outcome {
         let mut used: u64 = 0;
-        if let Some(h) = self.entry_override.take() {
-            self.vm.heap_mut().drop_handle(h);
-        }
         // `.step`: pause at every slice until `c`.
         let mut stepping = self.step.is_some();
         let outcome = loop {
@@ -672,47 +642,14 @@ impl Repl {
             }
             let (st, n) = self.vm.run_metered(slice);
             used += n;
-            // After `.dump-every` reloaded the VM, its outcome is the load's: the running
-            // input's result came through the dump.
-            let st = match (st, self.entry_override.take()) {
-                (Status::Done(_), Some(h)) => {
-                    let v = self.vm.heap().get_handle(h);
-                    self.vm.heap_mut().drop_handle(h);
-                    Status::Done(v)
-                }
-                (st, h) => {
-                    self.entry_override = h;
-                    st
-                }
-            };
             match st {
                 Status::Done(v) if entry => break Outcome::Done(v),
                 Status::Threw(e) if entry => break Outcome::Threw(e),
                 Status::Done(_) | Status::Threw(_) => break Outcome::Done(Value::UNDEFINED),
                 Status::Idle => {
                     self.note_new_calls();
-                    if self.dump_every && !self.hold_vm && !self.vm.pending_host_calls().is_empty()
-                    {
-                        match self.dump_and_reload(entry) {
-                            Ok(n) => println!("[dumped {n} bytes]"),
-                            Err(e) => {
-                                println!("[not dumped] {e}");
-                                self.dump_every = false;
-                                println!("dumping at every idle point: off");
-                            }
-                        }
-                    }
                     if self.answer_one() {
                         continue;
-                    }
-                    if let Some(h) = self.entry_override.take() {
-                        let v = self.vm.heap().get_handle(h);
-                        self.vm.heap_mut().drop_handle(h);
-                        break if entry {
-                            Outcome::Done(v)
-                        } else {
-                            Outcome::Done(Value::UNDEFINED)
-                        };
                     }
                     break match self.vm.outcome() {
                         Some(Ok(v)) if entry => Outcome::Done(v),
@@ -798,8 +735,7 @@ impl Repl {
         let heap = self.vm.heap();
         let a = activations::call_promise(heap, id)
             .and_then(|p| activations::waiting_on(heap, p).first().copied())
-            .and_then(|g| activations::activation(heap, g))
-            .map(|a| self.in_dump_file(a));
+            .and_then(|g| activations::activation(heap, g));
         let at = a
             .as_ref()
             .map(|a| format!(" at {}", a.at))
@@ -810,7 +746,7 @@ impl Repl {
         }
         if !self.paused_before {
             self.paused_before = true;
-            println!("(.dump shows the continuation, .c continues, .abort drops it)");
+            println!("(.snapshot saves it, .c continues, .abort drops it)");
         }
     }
 
@@ -862,9 +798,6 @@ impl Repl {
         self.vm.abort();
         for w in std::mem::take(&mut self.waiting) {
             self.vm.heap_mut().drop_handle(w.promise);
-        }
-        if let Some(h) = self.entry_override.take() {
-            self.vm.heap_mut().drop_handle(h);
         }
         self.origins.clear();
         self.fresh.clear();
@@ -993,14 +926,6 @@ impl Repl {
         self.report_rejections();
     }
 
-    /// Positions in the functions of a `.restore`d dump under the dump's file name.
-    fn in_dump_file(&self, a: activations::Activation) -> activations::Activation {
-        match &self.dump_file {
-            Some(f) => a.in_file(f),
-            None => a,
-        }
-    }
-
     /// `.pending`: the open calls, what issued them and where the code waits.
     fn pending(&mut self) {
         let ids = self.vm.pending_host_calls();
@@ -1016,7 +941,7 @@ impl Repl {
             let heap = self.vm.heap();
             if let Some(p) = activations::call_promise(heap, id)
                 && let Some(&g) = activations::waiting_on(heap, p).first()
-                && let Some(a) = activations::activation(heap, g).map(|a| self.in_dump_file(a))
+                && let Some(a) = activations::activation(heap, g)
             {
                 line.push_str(&format!(", at {}", a.at));
             }
@@ -1047,10 +972,7 @@ impl Repl {
             print!("{}", a.describe(&input));
         };
         if arg == "all" {
-            let all: Vec<_> = activations::all(self.vm.heap())
-                .into_iter()
-                .map(|a| self.in_dump_file(a))
-                .collect();
+            let all = activations::all(self.vm.heap());
             if all.is_empty() {
                 println!("no suspended activations");
             }
@@ -1070,7 +992,6 @@ impl Repl {
         let acts: Vec<_> = gens
             .iter()
             .filter_map(|&g| activations::activation(heap, g))
-            .map(|a| self.in_dump_file(a))
             .collect();
         let desc = self.tools.describe(&mut self.vm, id);
         println!("#{id} {desc}");
@@ -1225,20 +1146,8 @@ impl Repl {
             ".resolve" => self.settle(arg, true),
             ".reject" => self.settle(arg, false),
             ".bt" => self.backtrace_cmd(if arg.is_empty() { "all" } else { arg }),
-            ".dump" => self.dump(arg),
-            ".dump-every" => match on_off(arg, &mut self.dump_every) {
-                Ok(()) if self.dump_every && !self.frozen => {
-                    self.dump_every = false;
-                    println!("{NOT_FROZEN}");
-                }
-                Ok(()) => println!(
-                    "dumping at every idle point: {}",
-                    if self.dump_every { "on" } else { "off" }
-                ),
-                Err(e) => println!("{e}"),
-            },
             ".restore" if arg.is_empty() => {
-                println!("usage: .restore <file> (a file .dump wrote)")
+                println!("usage: .restore <file> (a file .snapshot wrote)")
             }
             ".snapshot" => self.snapshot(if arg.is_empty() {
                 "session.snapshot"
@@ -1249,17 +1158,13 @@ impl Repl {
                 Ok(bytes) if crate::snapshots::is_snapshot(&bytes) => {
                     self.restore_snapshot(arg, &bytes)
                 }
-                Ok(bytes) if crate::dumps::is_dump(&bytes) => {
-                    let src = String::from_utf8_lossy(&bytes).into_owned();
-                    self.restore_dump(arg, &src);
-                }
                 Ok(_) => println!(
-                    "{arg} is not a djs snapshot or dump (.restore reads what .snapshot and .dump write)"
+                    "{arg} is not a djs snapshot (.restore reads what .snapshot writes)"
                 ),
                 Err(e) => println!("cannot read {arg}: {e}"),
             },
             ".clear" => {
-                self.replace_vm(new_vm(self.gc_stress, self.frozen));
+                self.replace_vm(new_vm(self.gc_stress, self.frozen, self.debugger));
                 println!("a fresh VM");
             }
             ".disasm" if arg.is_empty() => println!("usage: .disasm <code>"),
@@ -1269,38 +1174,10 @@ impl Repl {
         None
     }
 
-    /// `.dump [file] [names]` (no file or `-`: to stdout): the session as a dump (0167, 0174, D2830: with what is in
-    /// flight, the waiting inputs as handles).
-    fn dump(&mut self, arg: &str) {
-        if !self.frozen {
-            println!("{NOT_FROZEN}");
-            return;
-        }
-        let mut parts = arg.split_whitespace();
-        let file = parts.next().unwrap_or("-");
-        let names: Vec<&str> = parts.collect();
-        let sel = (!names.is_empty()).then_some(names.as_slice());
-        let handles = self.waiting_handles(None);
-        let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        let origin = |id: u32| self.origins.get(&id).cloned();
-        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, &origin, false) {
-            Ok(d) if file == "-" => print!("{}", d.text),
-            Ok(d) => match std::fs::write(file, &d.text) {
-                Ok(()) => println!(
-                    "wrote {} bytes to {file}{}",
-                    d.text.len(),
-                    crate::dumps::in_flight(&d)
-                ),
-                Err(e) => println!("cannot write {file}: {e}"),
-            },
-            Err(e) => println!("{e}"),
-        }
-    }
-
     /// `.snapshot file`: the session as a snapshot (D3720), the waiting inputs as handles
     /// by label and the open calls' origins.
     fn snapshot(&mut self, file: &str) {
-        let handles = self.waiting_handles(None);
+        let handles = self.waiting_handles();
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
         let origins = self.origins.clone();
         let origin = |id: u32| origins.get(&id).cloned();
@@ -1334,12 +1211,13 @@ impl Repl {
                 return;
             }
         };
-        self.replace_vm(new_vm(self.gc_stress, frozen));
+        // `debugger` too: the snapshot may hold a pause, or functions compiled to pause.
+        self.replace_vm(new_vm(self.gc_stress, frozen, true));
         let loaded = match crate::snapshots::load(&mut self.vm, &mut self.tools, bytes) {
             Ok(l) => l,
             Err(e) => {
                 println!("cannot load {arg}: {e}");
-                self.replace_vm(new_vm(self.gc_stress, self.frozen));
+                self.replace_vm(new_vm(self.gc_stress, self.frozen, self.debugger));
                 return;
             }
         };
@@ -1374,136 +1252,15 @@ impl Repl {
         self.report_rejections();
     }
 
-    /// The waiting inputs as the host's handles of a dump, by label; with `entry`, also
-    /// the running input's result as `$entry`.
-    fn waiting_handles(&self, entry: Option<Value>) -> Vec<(String, Value)> {
-        let mut out: Vec<(String, Value)> = self
-            .waiting
+    /// The waiting inputs as the host's handles of a snapshot, by label.
+    fn waiting_handles(&self) -> Vec<(String, Value)> {
+        self.waiting
             .iter()
             .map(|w| (w.handle_name(), self.vm.heap().get_handle(w.promise)))
-            .collect();
-        out.extend(entry.map(|v| (String::from(ENTRY), v)));
-        out
+            .collect()
     }
 
-    /// `.dump-every`: dumps the idle VM and continues in a fresh one that loaded the dump
-    /// (D2604). Waiting inputs, the running input's result (`entry`), open calls and the
-    /// tool registry carry over. The dump's size.
-    fn dump_and_reload(&mut self, entry: bool) -> Result<usize, String> {
-        let entry = match (self.entry_override, entry) {
-            (Some(h), _) => Some(self.vm.heap().get_handle(h)),
-            (None, true) => match self.vm.outcome() {
-                Some(Ok(v)) => Some(v),
-                _ => None,
-            },
-            (None, false) => None,
-        };
-        let handles = self.waiting_handles(entry);
-        let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        let origin = |id: u32| self.origins.get(&id).cloned();
-        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, &origin, false)?;
-        let mut vm = new_vm(self.gc_stress, self.frozen);
-        // The fresh VM runs the dump; its prints are the run's (a reaction that ran).
-        let mut log = |vm: &Vm, args: &[Value]| {
-            let parts: Vec<String> = args
-                .iter()
-                .map(|&a| inspect::log_arg(vm.heap(), a))
-                .collect();
-            println!("{}", parts.join(" "));
-        };
-        crate::dumps::run_plain(
-            &mut vm,
-            &mut self.tools,
-            &d.text,
-            "<dump>",
-            self.frozen,
-            &mut log,
-        )?;
-        let mut handles = crate::dumps::plain_handles(&mut vm);
-        // The old VM's handles go with it; positions are now in this dump, which has no file.
-        self.vm = vm;
-        self.dump_file = None;
-        let mut kept = Vec::new();
-        for mut w in std::mem::take(&mut self.waiting) {
-            if let Some(h) = crate::dumps::take_handle(&mut handles, &w.handle_name()) {
-                w.promise = h;
-                kept.push(w);
-            }
-        }
-        self.waiting = kept;
-        self.entry_override = crate::dumps::take_handle(&mut handles, ENTRY);
-        for (_, h) in handles {
-            self.vm.heap_mut().drop_handle(h);
-        }
-        Ok(d.text.len())
-    }
-
-    /// `.restore` of a dump (D2603): a fresh VM loads it. The open calls it recreates
-    /// keep their ids, named tools get their functions' ids from the registry, and the
-    /// handles it names become waiting inputs (labelled by their names). The tool names
-    /// are not read back from the heap afterwards: an open call's tool may have no
-    /// function there yet.
-    fn restore_dump(&mut self, arg: &str, src: &str) {
-        self.replace_vm(new_vm(self.gc_stress, self.frozen));
-        // A dump (D2830) is a Script: the fresh VM runs it, printing as inputs do.
-        let mut log = |vm: &Vm, args: &[Value]| {
-            let parts: Vec<String> = args
-                .iter()
-                .map(|&a| inspect::log_arg(vm.heap(), a))
-                .collect();
-            println!("{}", parts.join(" "));
-        };
-        // The values the dump names, and the open calls' states.
-        let r = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, true, &mut log);
-        let (handles, states) = match r {
-            Ok(l) => (crate::dumps::plain_handles(&mut self.vm), l.states),
-            Err(e) => {
-                println!("cannot load {arg}: {e}");
-                return;
-            }
-        };
-        println!("loaded {arg} into a fresh VM");
-        self.dump_file = Some(arg.to_string());
-        // New inputs are numbered after the restored ones (`input 3`), so labels stay
-        // unique handle names for later dumps.
-        self.inputs = handles
-            .iter()
-            .filter_map(|(n, _)| {
-                let n = n.strip_prefix("input ")?;
-                n.strip_suffix(" (value)").unwrap_or(n).parse::<u32>().ok()
-            })
-            .max()
-            .unwrap_or(0);
-        for id in self.vm.pending_host_calls() {
-            let state = states.iter().find(|(i, _)| *i == id);
-            let o = state.and_then(|(_, s)| Tools::state_origin(s));
-            self.origins
-                .insert(id, o.unwrap_or_else(|| String::from("the dump")));
-        }
-        for (name, h) in handles {
-            let v = self.vm.heap().get_handle(h);
-            match self.vm.promise_state(v) {
-                Some(None) => {
-                    self.vm.mark_promise_handled(v);
-                    self.waiting.push(Waiting::from_handle_name(name, h));
-                }
-                _ => {
-                    println!("[{name}] {}", inspect::inspect(self.vm.heap(), v));
-                    self.vm.heap_mut().drop_handle(h);
-                }
-            }
-        }
-        self.pending_after_restore();
-        // An idle point: `later` calls (and scripted answers) are answered at once.
-        self.current = String::from("the dump");
-        if let Outcome::Stopped(why) = self.pump(false) {
-            println!("{why}");
-        }
-        self.check_waiting();
-        self.report_rejections();
-    }
-
-    /// After a restore: the calls the dump's run still has open.
+    /// After a restore: the calls the snapshot's run still has open.
     fn pending_after_restore(&mut self) {
         for id in self.vm.pending_host_calls() {
             if self.tools.is_pause(&self.vm, id) {
@@ -1670,7 +1427,7 @@ fn load_history(path: Option<&std::path::Path>) -> Vec<String> {
 
 /// The REPL's VM: the base snapshot, the wall clock, and `console.log` (`info`, `warn`,
 /// `error`, `debug` too) as a host function printing with the REPL's printer.
-fn new_vm(gc_stress: bool, frozen_builtins: bool) -> Vm {
+fn new_vm(gc_stress: bool, frozen_builtins: bool, debugger: bool) -> Vm {
     let opts = VmOptions {
         exec: ExecOptions {
             gc_stress,
@@ -1689,8 +1446,8 @@ fn new_vm(gc_stress: bool, frozen_builtins: bool) -> Vm {
     vm.define_global("console", Value::object(console))
         .expect("oom");
     tools::install(&mut vm);
-    // The dumping mode is the debugger mode: `debugger;` awaits `debugger()` (D3060).
-    if frozen_builtins {
+    // `debugger;` awaits `debugger()` (D3060).
+    if debugger {
         tools::install_debugger(&mut vm);
     }
     vm

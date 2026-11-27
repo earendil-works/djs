@@ -1,4 +1,4 @@
-// Binary data in flight (`$dump.bytes`): an ArrayBuffer and views over it.
+// Binary data in flight: an ArrayBuffer and views over it.
 const buf = new Uint8Array([1, 2, 250, 0, 7]).buffer;
 const view = new DataView(buf, 1, 3);
 async function main() {

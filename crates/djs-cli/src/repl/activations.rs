@@ -156,19 +156,6 @@ pub fn activation(heap: &Heap, g: Obj) -> Option<Activation> {
 }
 
 impl Activation {
-    /// The file name a dump's loader compiled its functions as.
-    pub const DUMP_FILE: &'static str = "dump.js";
-
-    /// Shows positions in a loaded dump under the dump's real file name.
-    pub fn in_file(mut self, dump: &str) -> Activation {
-        if let Some(rest) = self.at.strip_prefix(Self::DUMP_FILE)
-            && rest.starts_with(':')
-        {
-            self.at = format!("{dump}{rest}");
-        }
-        self
-    }
-
     /// The source line it stopped in (without its indentation, at most 120 characters)
     /// and a caret under the `await`/`yield`, each after `indent`; empty when the source
     /// is not known.
@@ -194,21 +181,19 @@ impl Activation {
         out
     }
 
-    /// For `.bt` and `djs resume --explain`: what it is and where it stopped (`label`
+    /// For `.bt`: what it is and where it stopped (`label`
     /// names the input or handle whose promise it is), the source line with a caret
     /// under the `await`/`yield`, and the bindings, indented by two spaces.
     pub fn describe(&self, label: &str) -> String {
         let mut out = format!("  {} at {}{label}\n", self.what, self.at);
         out.push_str(&self.source_lines("      "));
-        // Without a plain dump's scaffolding (`$djs_*`, D2830), and a name once: a
-        // continuation declares a loop's binding for the current iteration and for the
-        // later ones, and the first is the one in scope at the site.
+        // A name once: the first binding of a name is the one in scope at the site.
         let mut seen: Vec<&str> = Vec::new();
         let b: Vec<String> = self
             .bindings
             .iter()
             .filter(|(k, _)| {
-                let fresh = !k.starts_with("$djs_") && !seen.contains(&k.as_str());
+                let fresh = !seen.contains(&k.as_str());
                 seen.push(k);
                 fresh
             })
@@ -321,8 +306,7 @@ pub fn call_promise(heap: &Heap, call_id: u32) -> Option<Obj> {
     heap.cells()
         .filter(|c| c.kind == CellKind::HostCall)
         .filter(|c| a.get::<u32>(c.offset, HostCall::ID) == call_id)
-        // (Dead cells of finished calls may hold the id too: a plain dump's parked
-        // `$djs.resume` call has the id of the call it opens, D2890.)
+        // (Dead cells of finished calls may hold the id too.)
         .find_map(|c| a.get::<Value>(c.offset, HostCall::PROMISE).as_object())
 }
 

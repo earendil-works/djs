@@ -1,4 +1,4 @@
-// Math.random's state goes with the dump (`$dump.random`): the sequence continues.
+// Math.random's state goes with the snapshot: the sequence continues.
 async function main() {
   const a = Math.random();
   await later(0);

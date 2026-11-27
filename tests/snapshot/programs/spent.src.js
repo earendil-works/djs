@@ -1,4 +1,4 @@
-// Resolving functions whose promise has settled (`$dump.spent`): calling them does nothing.
+// Resolving functions whose promise has settled: calling them does nothing.
 let res, rej;
 const p = new Promise((a, b) => { res = a; rej = b; });
 res("first");
