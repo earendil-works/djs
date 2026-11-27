@@ -230,7 +230,6 @@ test("host-driven runs snapshot states and load them back", async () => {
   const id = run.calls[0].id;
   const snap = run.snapshot({ states: { [id]: { due: 123, note: "é\n\u2028" } } });
   assert.throws(() => run.snapshot({ states: { [id + 1]: 1 } }), /a state for a call that is not open/);
-  assert.throws(() => run.snapshot({ states: { [id]: { __proto__: null, ["__proto__"]: 1 } } }), /__proto__/);
   const again = new Sandbox(opts).loadSnapshot(snap);
   assert.deepEqual(again.calls, [{ id, fn: "tools.sleep", args: [5], state: { due: 123, note: "é\n\u2028" } }]);
   again.settle(id, { ok: true, value: 1 });

@@ -40,7 +40,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 10;
+pub const ABI_VERSION: u32 = 11;
 
 /// `vm_run` results.
 pub mod status {
@@ -82,9 +82,6 @@ struct Slot {
     call_id: u32,
     /// The fuel the last `vm_run` used (`vm_fuel_used`).
     fuel_used: u64,
-    /// `vm_set_dump_source_refs` (D2882).
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    source_refs: bool,
 }
 
 #[derive(Default)]
@@ -434,7 +431,6 @@ impl State {
             result: 0,
             call_id: 0,
             fuel_used: 0,
-            source_refs: true,
         };
         match self.vms.iter().position(Option::is_none) {
             Some(i) => {
@@ -717,8 +713,7 @@ fn options(memory_limit: u32) -> VmOptions {
         } else {
             memory_limit as usize
         },
-        // The dump module compiles functions at their first call (D2990, D2993).
-        #[cfg(feature = "dump")]
+        #[cfg(feature = "lazy")]
         lazy_functions: true,
         ..VmOptions::default()
     }
@@ -816,8 +811,7 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
 /// `goal` 0 is a Script; 1 is a codemode async function body with those parameters.
 /// `goal | 2` parses TypeScript (0048), `| 4` with legacy `experimentalDecorators`, `| 8`
 /// also with `emitDecoratorMetadata` (0065), `| 16` compiles `debugger;` in async
-/// functions as an await of the global `debugger` (D3050; builds with the dumper only:
-/// elsewhere the bit is ignored). Returns a handle to the closure, or 0 with the error
+/// functions as an await of the global `debugger` (D3050). Returns a handle to the closure, or 0 with the error
 /// (`SyntaxError: ... at line:col`) in the out buffer.
 pub extern "C" fn vm_compile_file(
     vm: u32,
@@ -829,16 +823,9 @@ pub extern "C" fn vm_compile_file(
     compile(vm, goal, name_len, params_len, src_len)
 }
 
-/// Whether `vm_dump` refers to the codemode bodies the host ran by
-/// `$djs.source(name, hash)` (1, the default, D2882) or writes their text (0).
-#[cfg(feature = "dump")]
-pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
-    with(|s| s.slot(vm).source_refs = on != 0);
-}
-
 /// Where the run in `vm` waits on open call `call_id` (D3054, `Vm::call_site`): the out
-/// buffer holds `line:col:file` (the script's name as compiled: the host's for its body,
-/// the dump's loader name for code a dump carries). Returns its length, 0 when nothing
+/// buffer holds `line:col:file` (the script's name as compiled: the host's for its
+/// body). Returns its length, 0 when nothing
 /// waits on the call at a known position. For the docs site's pauses.
 pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
     with(|s| {
@@ -866,8 +853,6 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
         let params_text = staged_str(staging, name_len, params_len);
         let src = staged(staging, name_len + params_len, src_len);
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
-        // (`..`: the dump build's fields.)
-        #[allow(clippy::needless_update)]
         let opts = CompileOptions {
             goal: if goal & 1 == 0 {
                 Goal::Script
@@ -881,7 +866,6 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
             debugger_awaits: goal & 16 != 0,
-            ..CompileOptions::script("")
         };
         let result = elastic(&mut slot.vm, |vm| {
             allocator::with_zone(|| vm.compile(src, &opts))
@@ -921,8 +905,6 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
         let params_text = String::from(staged_str(&s.staging, 0, params_len));
         let src = staged(&s.staging, params_len, src_len).to_vec();
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
-        // (`..`: the dump build's fields.)
-        #[allow(clippy::needless_update)]
         let opts = CompileOptions {
             goal: if goal & 1 == 0 {
                 Goal::Script
@@ -936,7 +918,6 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
             debugger_awaits: goal & 16 != 0,
-            ..CompileOptions::script("")
         };
         let listing = djs_core::heap::Heap::new()
             .map_err(|e| String::from(e.as_str()))
@@ -981,22 +962,6 @@ pub extern "C" fn vm_new_object(vm: u32, flags: u32) -> u32 {
         };
         match o {
             Ok(o) => slot.handle(Value::object(o)),
-            Err(_) => 0,
-        }
-    })
-}
-
-/// A handle to a new object holding the plain dump runtime's helpers (D2903), evaluated
-/// from staging[0..len], the runtime's Script (js/src/dump-runtime.js `script`; the module
-/// does not carry it), for the host to add its hooks to and define as `$djs` while a plain
-/// dump loads. 0 if it fails (out of memory, or not the runtime's text). Runs the VM: call
-/// it before the load.
-pub extern "C" fn vm_dump_runtime(vm: u32, len: usize) -> u32 {
-    with(|s| {
-        let (slot, staging) = s.vm_and_staging(vm);
-        let text = staged_str(staging, 0, len);
-        match slot.vm.dump_runtime_from(text) {
-            Ok(o) => slot.handle(o),
             Err(_) => 0,
         }
     })
@@ -1061,111 +1026,6 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32, flag
             return -1;
         }
         0
-    })
-}
-
-/// Writes the idle VM as a dump (`Vm::dump`, 0167, 0172, a plain Script, D2830;
-/// docs/continuation-dumps.md) to the out buffer: its global bindings, and what is in flight
-/// (suspended activations, open host calls, pending promises). The VM needs frozen
-/// builtins (D2836). staging[0..len] is UTF-8, six lines (0179, 0213): the globals the host defines (re-bound by name, never
-/// written) and the names to dump (none: all of the VM's own), each comma-separated; the
-/// host's function names in id order, tab-separated (`DumpOptions::host_fn_name`: open
-/// calls and host functions held as values are written by name); the values to name for
-/// the host, `handle:name`, tab-separated (`DumpOptions::handles`, the dump's completion
-/// value, D2895; handle 0: the entry call's outcome, `Vm::outcome`, D2633); the host's
-/// roots, `handle:name`, tab-separated (`DumpOptions::host_roots`, written as
-/// `$djs.host(name)`, D2971); the host's
-/// states of open calls (D2770), `call_id:byte_len`, tab-separated; and after that line's
-/// newline the states' JSON texts one after another (`DumpOptions::call_states`, written as
-/// `$djs.resume`'s fourth argument). 0: the dump is in out; 1: refused, the reasons in out
-/// (one per line).
-#[cfg(feature = "dump")]
-pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
-    with(|s| {
-        let (slot, staging) = s.vm_and_staging(vm);
-        let text = staged_str(staging, 0, len);
-        // Six lines, then the states' text, which may hold newlines of its own.
-        let mut lines = text.splitn(7, '\n');
-        let mut line = || lines.next().unwrap_or("");
-        let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
-        let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
-        let fns: Vec<&str> = line().split('\t').collect();
-        let host_fn_name = |id: u32| {
-            let name = fns.get((id as usize).checked_sub(1)?)?;
-            (!name.is_empty()).then(|| String::from(*name))
-        };
-        let handles: Vec<(&str, Value)> = line()
-            .split('\t')
-            .filter_map(|e| {
-                let (h, name) = e.split_once(':')?;
-                let v = match h.parse().ok()? {
-                    // The entry call's outcome, without making a handle for it.
-                    0 => match slot.vm.outcome()? {
-                        Ok(v) | Err(v) => v,
-                    },
-                    h => slot.value(h),
-                };
-                Some((name, v))
-            })
-            .collect();
-        let roots: Vec<(&str, Value)> = line()
-            .split('\t')
-            .filter_map(|e| {
-                let (h, name) = e.split_once(':')?;
-                Some((name, slot.value(h.parse().ok()?)))
-            })
-            .collect();
-        let state_lens = line();
-        let state_text = line();
-        let mut call_states: Vec<(u32, &str)> = Vec::new();
-        let mut at = 0;
-        for e in state_lens.split('\t').filter(|e| !e.is_empty()) {
-            let state = e.split_once(':').and_then(|(id, n)| {
-                let end = at + n.parse::<usize>().ok()?;
-                let json = state_text.get(at..end)?;
-                at = end;
-                Some((id.parse().ok()?, json))
-            });
-            match state {
-                Some(s) => call_states.push(s),
-                None => {
-                    s.set_out(b"bad call states in staging\n");
-                    return 1;
-                }
-            }
-        }
-        // The base's names are the module's own (built with it): the dumper needs no base.
-        let opts = djs_core::vm::dump::DumpOptions {
-            host: &host,
-            host_roots: &roots,
-            host_fn_name: &host_fn_name,
-            handles: &handles,
-            call_states: &call_states,
-            source_refs: slot.source_refs,
-            base_names: djs_core::vm::dump::BaseNames {
-                builtins: djs_prelude::BASE_NAMES,
-                globals: djs_prelude::BASE_GLOBALS,
-            },
-            check: true,
-        };
-        match slot
-            .vm
-            .dump(&opts, (!names.is_empty()).then_some(names.as_slice()))
-        {
-            Ok(t) => {
-                s.set_out(t.as_bytes());
-                0
-            }
-            Err(e) => {
-                let mut lines = String::new();
-                for r in &e.0 {
-                    lines.push_str(r);
-                    lines.push('\n');
-                }
-                s.set_out(lines.as_bytes());
-                1
-            }
-        }
     })
 }
 
@@ -1271,8 +1131,7 @@ pub extern "C" fn vm_display(vm: u32, h: u32) -> usize {
 /// nonzero: a compile that nests deeper than the module's small stack allows makes
 /// `vm_compile*` return `COMPILE_NEED_STACK` and `vm_run` NEED_STACK instead of running out
 /// of stack; the host calls again on a larger stack (`djs_stack`). Off (the default),
-/// the compile runs again at once on the module's stack, where deep nesting traps. Other
-/// exports that compile (the dump module's) always do that.
+/// the compile runs again at once on the module's stack, where deep nesting traps.
 pub extern "C" fn djs_elastic_stack(on: u32) {
     ELASTIC.with(|e| e.set(on != 0));
 }
@@ -1540,38 +1399,6 @@ pub extern "C" fn vm_resolve_host_call_at(
     resolve(vm, call_id, ok, value, Some(now))
 }
 
-/// A plain dump's `$djs.resume(id, name, args, state)` (D2890): while parked on that sync
-/// call `parked`, opens async call `id` of host function `fn_id` (the host's for `name`)
-/// with `args`' elements, under the dump's id, and returns its promise from the parked
-/// call (`Vm::open_host_call`). 0, or -1 with the reason in out, for the host to throw.
-pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
-    with(|s| match s.slot(vm).vm.open_host_call(parked, fn_id) {
-        Ok(()) => 0,
-        Err(e) => {
-            s.set_out(e.as_bytes());
-            -1
-        }
-    })
-}
-
-/// Restores a dumped run's `Math.random` state `hi << 32 | lo` (a plain dump's
-/// `$djs.seed(lo, hi)`, `Vm::restore_math_random`): as a state that ran, which the next
-/// dump writes again (D2837).
-pub extern "C" fn vm_restore_math_random(vm: u32, lo: u32, hi: u32) {
-    with(|s| {
-        s.slot(vm)
-            .vm
-            .restore_math_random((u64::from(hi) << 32) | u64::from(lo))
-    })
-}
-
-/// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's
-/// load, its `$djs.seed`'s `next`, else one past its highest reopened call (D2897,
-/// D2837).
-pub extern "C" fn vm_set_next_call_id(vm: u32, id: u32) {
-    with(|s| s.slot(vm).vm.set_next_call_id(id))
-}
-
 fn resolve(vm: u32, call_id: u32, ok: u32, value: u32, now: Option<f64>) -> i32 {
     with(|s| {
         let slot = s.slot(vm);
@@ -1659,7 +1486,7 @@ macro_rules! ops {
             }
         }
 
-        /// Whether this build has operation `op` (operations of the `dump`, `docs`,
+        /// Whether this build has operation `op` (operations of the `docs`,
         /// `alloc-stats` and `compiled-prelude` features only in those builds).
         fn djs_has(op: u32) -> u32 {
             match op {
@@ -1704,54 +1531,48 @@ ops! {
     18 vm_arena_len(a);
     19 vm_collect(a);
     20 vm_compile_file(a, b, c, d, e);
-    #[cfg(feature = "dump")] 21 vm_set_dump_source_refs(a, b);
-    22 vm_call_site(a, b);
-    #[cfg(feature = "docs")] 23 djs_disasm(a, b, c);
-    24 vm_global(a);
-    25 vm_new_object(a, b);
-    26 vm_dump_runtime(a, b);
-    27 vm_new_host_function(a, b, c);
-    28 vm_new_async_host_function(a, b, c);
-    29 vm_define(a, b, c, d, e);
-    #[cfg(feature = "dump")] 30 vm_dump(a, b);
-    31 vm_decode_wire(a, b);
-    32 vm_string_reserve(a, b);
-    33 vm_new_error(a, b, c);
-    34 vm_handle_bits(a, b);
-    35 vm_handle_free(a, b);
-    36 vm_display(a, b);
-    37 vm_call(a, b, c, d);
-    38 vm_run(a, b);
-    39 vm_fuel_used(a);
-    40 vm_set_now(a, t);
-    41 vm_canonical_hash(a);
-    42 vm_set_weak_refs(a, b);
-    43 vm_set_random_seed(a, b, c);
-    44 vm_set_time_zone_offset(a, b);
-    45 vm_abort(a);
-    46 vm_result(a);
-    47 vm_outcome(a);
-    48 vm_host_call(a);
-    49 vm_host_call_info(a, b);
-    50 vm_new_host_calls(a);
-    51 vm_take_unhandled_rejections(a);
-    52 vm_promise_state(a, b);
-    53 vm_resolve_host_call(a, b, c, d);
-    54 vm_resolve_host_call_at(a, b, c, d, t);
-    55 vm_open_call(a, b, c);
-    56 vm_restore_math_random(a, b, c);
-    57 vm_set_next_call_id(a, b);
-    58 djs_elastic_stack(a);
-    59 djs_stack(a);
-    #[cfg(feature = "alloc-stats")] 60 djs_alloc_stats(a);
-    61 djs_has(a);
-    #[cfg(feature = "cold-unicode")] 62 djs_tables_ptr(a, b);
-    #[cfg(feature = "cold-unicode")] 63 djs_tables_set();
-    64 vm_tables_need(a);
-    #[cfg(feature = "snapshot")] 65 vm_snapshot(a, b);
-    #[cfg(feature = "snapshot")] 66 vm_load_snapshot(a, b);
-    #[cfg(feature = "snapshot")] 67 djs_snapshot_needs(a);
-    #[cfg(feature = "snapshot")] 68 djs_snapshot_describe(a);
+    21 vm_call_site(a, b);
+    #[cfg(feature = "docs")] 22 djs_disasm(a, b, c);
+    23 vm_global(a);
+    24 vm_new_object(a, b);
+    25 vm_new_host_function(a, b, c);
+    26 vm_new_async_host_function(a, b, c);
+    27 vm_define(a, b, c, d, e);
+    28 vm_decode_wire(a, b);
+    29 vm_string_reserve(a, b);
+    30 vm_new_error(a, b, c);
+    31 vm_handle_bits(a, b);
+    32 vm_handle_free(a, b);
+    33 vm_display(a, b);
+    34 vm_call(a, b, c, d);
+    35 vm_run(a, b);
+    36 vm_fuel_used(a);
+    37 vm_set_now(a, t);
+    38 vm_canonical_hash(a);
+    39 vm_set_weak_refs(a, b);
+    40 vm_set_random_seed(a, b, c);
+    41 vm_set_time_zone_offset(a, b);
+    42 vm_abort(a);
+    43 vm_result(a);
+    44 vm_outcome(a);
+    45 vm_host_call(a);
+    46 vm_host_call_info(a, b);
+    47 vm_new_host_calls(a);
+    48 vm_take_unhandled_rejections(a);
+    49 vm_promise_state(a, b);
+    50 vm_resolve_host_call(a, b, c, d);
+    51 vm_resolve_host_call_at(a, b, c, d, t);
+    52 djs_elastic_stack(a);
+    53 djs_stack(a);
+    #[cfg(feature = "alloc-stats")] 54 djs_alloc_stats(a);
+    55 djs_has(a);
+    #[cfg(feature = "cold-unicode")] 56 djs_tables_ptr(a, b);
+    #[cfg(feature = "cold-unicode")] 57 djs_tables_set();
+    58 vm_tables_need(a);
+    #[cfg(feature = "snapshot")] 59 vm_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 60 vm_load_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 61 djs_snapshot_needs(a);
+    #[cfg(feature = "snapshot")] 62 djs_snapshot_describe(a);
 }
 
 // ---- Logical snapshots (D3700, D3720) ---------------------------------

@@ -26,10 +26,8 @@ alloc-stats = []
 # Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
 # Off by default: the shipping module does not carry the disassembler.
 docs = ["djs-core/intrinsic-names"]
-# Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript. Not a
-# default feature (the native tools and tests pick it per crate), but the one shipped
-# module has it (scripts/build-wasm.sh, D3600), and so does the gate's debug build.
-dump = ["djs-core/dump", "djs-core/lazy", "djs-prelude/names"]
+# Every VM compiles functions at their first call (`VmOptions::lazy_functions`, D2990).
+lazy = ["djs-core/lazy"]
 # Logical snapshots (D3700): `vm_snapshot`, `vm_from_snapshot`. The shipped module has them
 # (scripts/build-wasm.sh).
 snapshot = ["djs-core/snapshot"]

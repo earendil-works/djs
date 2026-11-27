@@ -411,7 +411,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 10;
+const ABI_VERSION = 11;
 /** `vm_new`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
@@ -1743,7 +1743,10 @@ export class Sandbox {
   private snapshotRun(core: RunCore, states: [number, unknown][], opts: SnapshotOptions): Uint8Array {
     const x = this.x;
     if (x.vm_snapshot === undefined) throw new SandboxError("misuse", "this djs-wasm module has no snapshots");
-    for (const [id, v] of states) stateJson(id, v);
+    for (const [id, v] of states) {
+      if (!core.open.has(id)) throw new SandboxError("misuse", `a state for a call that is not open: ${id}`);
+      stateJson(id, v);
+    }
     const data: SnapshotData = { states, fuelUsed: core.used };
     if (this.clock !== undefined) data.clock = this.clock;
     const w = new StagingWriter();

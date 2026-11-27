@@ -7,21 +7,20 @@
 
 /** The operations of `djs`, by number. */
 export const OPS = [
-  "djs_abi_version", "djs_build_hash", "djs_base_ptr", "djs_base_inject_ptr", "djs_base_inject",
-  "djs_base_coded_ptr", "djs_base_len", "djs_staging", "djs_out_ptr", "djs_out_len",
-  "djs_panic_ptr", "djs_panic_len", "djs_debug_panic", "vm_new", "vm_frozen_builtins",
-  "vm_new_compiled", "vm_free", "vm_arena_ptr", "vm_arena_len", "vm_collect", "vm_compile_file",
-  "vm_set_dump_source_refs", "vm_call_site", "djs_disasm", "vm_global", "vm_new_object",
-  "vm_dump_runtime", "vm_new_host_function", "vm_new_async_host_function", "vm_define", "vm_dump",
+  "djs_abi_version", "djs_build_hash", "djs_base_ptr", "djs_base_inject_ptr",
+  "djs_base_inject", "djs_base_coded_ptr", "djs_base_len", "djs_staging", "djs_out_ptr",
+  "djs_out_len", "djs_panic_ptr", "djs_panic_len", "djs_debug_panic", "vm_new",
+  "vm_frozen_builtins", "vm_new_compiled", "vm_free", "vm_arena_ptr", "vm_arena_len",
+  "vm_collect", "vm_compile_file", "vm_call_site", "djs_disasm", "vm_global",
+  "vm_new_object", "vm_new_host_function", "vm_new_async_host_function", "vm_define",
   "vm_decode_wire", "vm_string_reserve", "vm_new_error", "vm_handle_bits", "vm_handle_free",
   "vm_display", "vm_call", "vm_run", "vm_fuel_used", "vm_set_now", "vm_canonical_hash",
-  "vm_set_weak_refs", "vm_set_random_seed", "vm_set_time_zone_offset", "vm_abort", "vm_result",
-  "vm_outcome", "vm_host_call", "vm_host_call_info", "vm_new_host_calls",
+  "vm_set_weak_refs", "vm_set_random_seed", "vm_set_time_zone_offset", "vm_abort",
+  "vm_result", "vm_outcome", "vm_host_call", "vm_host_call_info", "vm_new_host_calls",
   "vm_take_unhandled_rejections", "vm_promise_state", "vm_resolve_host_call",
-  "vm_resolve_host_call_at", "vm_open_call", "vm_restore_math_random", "vm_set_next_call_id",
-  "djs_elastic_stack", "djs_stack", "djs_alloc_stats", "djs_has", "djs_tables_ptr",
-  "djs_tables_set", "vm_tables_need", "vm_snapshot", "vm_load_snapshot", "djs_snapshot_needs",
-  "djs_snapshot_describe",
+  "vm_resolve_host_call_at", "djs_elastic_stack", "djs_stack", "djs_alloc_stats", "djs_has",
+  "djs_tables_ptr", "djs_tables_set", "vm_tables_need", "vm_snapshot", "vm_load_snapshot",
+  "djs_snapshot_needs", "djs_snapshot_describe",
 ] as const;
 
 /** An operation's name. */
