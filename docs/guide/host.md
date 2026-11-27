@@ -129,7 +129,7 @@ incompatible change to the operations, and the `Sandbox` checks it.
 
 ## The operations
 
-The shipped module has <!--n wasm/ops-->74<!--/n--> operations. By area:
+The shipped module has <!--n wasm/ops-->60<!--/n--> operations. By area:
 
 | area | operations |
 | --- | --- |
@@ -363,7 +363,7 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `snapshot` (snapshots) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
+| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `snapshot` (snapshots) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->511 KB<!--/n--> with gzip |
 | docs module | `docs` and `snapshot` | this site's live examples: `djs_disasm`, the bytecode listing an edited example shows, and snapshots for their `debugger;` pauses |
 
 A host that persists runs calls `vm_snapshot` on the idle VM itself, in the module it

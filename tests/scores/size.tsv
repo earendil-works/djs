@@ -36,11 +36,12 @@
 # records and constants by name, the bytecode hash's builtin names, 769,623 -> 775,252 B, the
 # ceiling that plus the slack; raised by 0303, D3723: snapshots of a host's run (host values
 # by name, the load into the host's VM, needs, describe, the operations), 775,252 -> 785,077 B,
-# the ceiling that plus the slack; 0304 removes the dumper and lowers it.
+# the ceiling that plus the slack; lowered by 0304, D3730: the dumper, the suspension maps and
+# the parser's hooks removed, the module eager, 785,187 -> 510,652 B, the ceiling that plus the slack.
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 # budget_allowance_gzip: added to 1.5x by the owner (D3510, 2026-11-21) to land the speedups
 # parked for size, raised by 1,024 for the fuel fix (D3591, 2026-11-22); the ceiling below
 # still rises only by recorded batches.
 quickjs_wasi_gzip	286655
 budget_allowance_gzip	3072
-ceiling_gzip	786101
+ceiling_gzip	511676

@@ -18,7 +18,7 @@ their results and return data, and replaces QuickJS in pi's codemode.
 
 It behaves like QuickJS, down to error messages (dquickts, a QuickJS fork, is the test
 oracle), passes <!--n test262/passed-->39,325<!--/n--> of the <!--n test262/active-->39,365<!--/n--> test262 tests in its active group, and
-the wasm module is <!--n wasm/brotli kb-->627 KB<!--/n--> brotli-compressed.
+the wasm module is <!--n wasm/brotli kb-->428 KB<!--/n--> brotli-compressed.
 
 **Documentation:** [How djs works](https://earendil-works.github.io/djs/), the guide
 (source in `docs/guide/`).
