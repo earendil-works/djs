@@ -1,13 +1,11 @@
 // Host bindings (0213, D2970-D2972): a host function is identified by a name its host
 // chooses; scripts find it where the sandbox binds it (globals, namespaces, body bindings,
-// the stand-in for imports), and dumps name it by identity (`$djs.host(name)`), so a run
-// that holds a bare `myTool` dumps and resumes like one that uses `tools.x`, also in node.
+// the stand-in for imports), and dumps and snapshots name it by identity, so a run that
+// holds a bare `myTool` is suspended and resumes like one that uses `tools.x`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Script } from "node:vm";
 import { type AsyncHostFunction, loadModule, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
-import { helpers } from "../src/dump-runtime.js";
 
 const MY_TOOL = "@sdk/our-stuff#myTool";
 
@@ -91,7 +89,7 @@ test("a run with body bindings dumps at every idle point and continues identical
   }
 });
 
-test("a suspended task with body bindings resumes in a sandbox and in node", async () => {
+test("a suspended task with body bindings resumes in a sandbox", async () => {
   const code = `const held = myTool; const a = await held("a"); return [a, held === myTool];`;
   const opts = await options();
   // A call that never returns, so the task waits at its first idle point.
@@ -109,27 +107,4 @@ test("a suspended task with body bindings resumes in a sandbox and in node", asy
   const again = await Sandbox.resume(dump, opts);
   assert.deepEqual(await again.result, ["my a (resumed)", true]);
   again.sandbox.dispose();
-
-  // node: the host functions are bound nowhere but given to `$djs.host` by identity.
-  const myTool = (arg: unknown) => Promise.resolve(`node ${String(arg)}`);
-  const values: Record<string, unknown> = { [MY_TOOL]: myTool, sdk: { fetch: myTool }, console };
-  (globalThis as Record<string, unknown>).$djs = {
-    ...helpers,
-    seed() {},
-    resume: (_id: number, name: string, args: unknown[]) => (values[name] as (a: unknown) => unknown)(args[0]),
-    source: () => function body() {},
-    host: (name: string) => {
-      if (!Object.hasOwn(values, name)) throw new Error(`host: unknown host value ${name}`);
-      return values[name];
-    },
-  };
-  const run = new Script(`"use strict"; ${dump}`, { filename: "task.dump.js" }).runInThisContext();
-  // (The host deletes the dump's globals once the Script ran, D2916.)
-  delete (globalThis as Record<string, unknown>).$djs;
-  delete (globalThis as Record<string, unknown>).$dump;
-  const result = await run;
-  // The open call is answered by calling the function again; `held` and the parameter
-  // are the one object `$djs.host` gave for the identity.
-  assert.deepEqual(result, ["node a", true]);
-  assert.equal("$djs" in globalThis, false);
 });

@@ -1,7 +1,7 @@
 // `debugger;` as a pause (D3050): with the sandbox option `debugger`, the statement in an
 // async function awaits a call of that host function, so a task can be suspended there
-// into a dump, and a sandbox with the option that resumes the dump pauses again at the
-// next `debugger;`.
+// into a snapshot, and a sandbox with the option that resumes the snapshot pauses again at
+// the next `debugger;`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -18,7 +18,7 @@ function host(module: WebAssembly.Module) {
       paused++;
       return new Promise<void>((r) => (go = r));
     },
-    // A pause continued from a dump goes on at once.
+    // A pause continued from a snapshot goes on at once.
     resume() {},
   };
   const opts: SandboxOptions = { module, frozenBuiltins: true, console: { log, info: log, warn: log, error: log }, debugger: pause };
@@ -52,22 +52,23 @@ test("a debugger statement pauses the run; the task runs on when the pause resol
   sb.dispose();
 });
 
-test("a pause is dumped as an open call; each resumed dump pauses at the next debugger", async () => {
+test("a pause is snapshotted as an open call; each resumed snapshot pauses at the next debugger", async () => {
   const h = host(await loadModule());
   let task = new Sandbox(h.opts).start(LOOP);
-  const dumps: string[] = [];
+  const snapshots: Uint8Array[] = [];
   for (;;) {
-    const dump = await task.suspend();
-    assert.match(dump, /\$djs\.resume\(\d+, "debugger", \[\]\)/);
-    dumps.push(dump);
+    while (task.calls.length === 0) await new Promise((r) => setTimeout(r, 1));
+    assert.deepEqual(task.calls.map((c) => [c.fn, c.args]), [["debugger", []]]);
+    const snapshot = await task.suspend({ sources: false });
+    snapshots.push(snapshot);
     task.sandbox.dispose();
-    task = await Sandbox.resume(dump, h.opts);
-    if (dumps.length === 4) break;
+    task = await Sandbox.resume(snapshot, h.opts);
+    if (snapshots.length === 4) break;
   }
   assert.deepEqual(await task.result, [3, 6]);
   assert.deepEqual(h.lines, ["i 0 0", "i 1 1", "i 2 3"]);
-  // Re-dumps keep their size: the continuation is written from the original each time.
-  const sizes = dumps.slice(0, 3).map((d) => d.length);
+  // The loop's pauses hold the same state but for the numbers.
+  const sizes = snapshots.slice(0, 3).map((d) => d.length);
   assert.ok(Math.max(...sizes) - Math.min(...sizes) < 8, String(sizes));
   task.sandbox.dispose();
 });
@@ -84,7 +85,7 @@ test("without the option, or outside async functions, debugger does nothing", as
   sb2.dispose();
 });
 
-test("callSite: where a pause waits, in the body, then in the dump the run continued from (D3054)", async () => {
+test("callSite: where a pause waits, in the body, also after a resume (D3054)", async () => {
   const h = host(await loadModule());
   let task = new Sandbox(h.opts).start(LOOP, {}, { filename: "loop.js" });
   while (h.paused() < 1) await new Promise((r) => setTimeout(r, 1));
@@ -92,14 +93,12 @@ test("callSite: where a pause waits, in the body, then in the dump the run conti
   assert.equal(call.fn, "debugger");
   assert.deepEqual(task.sandbox.callSite(call.id), { file: "loop.js", line: 6, column: 3 });
   assert.equal(task.sandbox.callSite(call.id + 100), undefined);
-  // Continued from a dump, the run executes the dump's text: positions are in it.
-  const dump = await task.suspend();
+  // Continued from a snapshot, the run is in the same script: the next pause's position.
+  const snapshot = await task.suspend();
   task.sandbox.dispose();
-  task = await Sandbox.resume(dump, h.opts);
+  task = await Sandbox.resume(snapshot, h.opts);
   while (h.paused() < 2) await new Promise((r) => setTimeout(r, 1));
-  const at = task.sandbox.callSite(task.calls[0].id)!;
-  assert.equal(at.file, "dump.js");
-  assert.equal(dump.split("\n")[at.line - 1].slice(at.column - 1), "debugger;");
+  assert.deepEqual(task.sandbox.callSite(task.calls[0].id), { file: "loop.js", line: 6, column: 3 });
   task.result.catch(() => {});
   task.sandbox.dispose();
 });
