@@ -8,17 +8,14 @@ Counts that follow from the repository (test262 groups, ratchets, corpus cases, 
 snapshot) are computed by djs-docs itself and need no recording.
 
 usage:
-  scripts/status.py size              build the shipped module and the same build without
-                                      the dumper and record their sizes: bytes, gzip -9,
-                                      brotli -q 11, code and data of the shipped one and its
-                                      coded base section
+  scripts/status.py size              build the shipped module and record its sizes: bytes,
+                                      gzip -9, brotli -q 11, code and data and its coded base
+                                      section
   scripts/status.py speed [-n N]      scripts/perf/wmeasure.py on the README workloads:
                                       instructions of djs-wasm and quickjs-wasi (needs
                                       scripts/perf/setup.sh; takes minutes)
   scripts/status.py startup           js/bench/sandbox.bench.ts: vm_new, Sandbox.create, the
                                       first run, a 10,000-fuel slice (median of 3 runs)
-  scripts/status.py dumps             scripts/dump-costs/dump-costs.ts: dump sizes
-                                      and times over the harvested corpus, and the log case
   scripts/status.py bounds            what the arena's bounds checks would cost: the shipped
                                       module (unchecked, `unsafe-heap`) against the same build
                                       with the checks, gzip -9 bytes and instructions on the
@@ -32,14 +29,14 @@ usage:
                                       (fetches and builds the engines into vendor/engines) three
                                       times over the codemode workload set; per engine module
                                       sizes, compile time, idle memory and startup, per workload
-                                      run time and memory, djs's dumps (medians of the 3 runs)
+                                      run time and memory (medians of the 3 runs)
   scripts/status.py ops               js/bench/engines/ops.ts three times (djs and the two QuickJS
                                       releases): per operation djs's time and the best QuickJS
                                       build's (medians); `engines` runs it too
   scripts/status.py bridge            js/bench/engines/bridge.ts three times: per payload and engine
                                       the time and memory of passing it in and out, per end-to-end
                                       case the run time (medians); `engines` runs it too
-  scripts/status.py all               size, speed, startup, dumps, bounds, heap, engines, bench
+  scripts/status.py all               size, speed, startup, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
                                       `set speed/x/djs-wasm 1.0`; --at names an older
@@ -56,8 +53,6 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FILE = os.path.join(ROOT, "tests/scores/status.tsv")
 WASM = os.path.join(ROOT, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
-# The shipped build without the dumper, for what the dumper adds (`dump/extra-gzip`).
-NODUMP = os.path.join(ROOT, "target/nodump-wasm/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
 HEADER = [
     "# Measured status numbers (D2101): `scripts/status.py` writes this file, and the",
     "# `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.",
@@ -145,17 +140,8 @@ def build(*flags):
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh"), *flags], check=True)
 
 
-def build_nodump():
-    subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/with-wasm-env.sh"), "cargo", "build",
-                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm", "--quiet",
-                    "--features", "unsafe-heap,cold-unicode"],
-                   cwd=ROOT, env=dict(os.environ, CARGO_TARGET_DIR=os.path.join(ROOT, "target/nodump-wasm")),
-                   check=True)
-
-
 def size(rows):
     build()
-    build_nodump()
     b = open(WASM, "rb").read()
     code, data = section_sizes(b)
     _, coded, ops = base(WASM)
@@ -170,9 +156,6 @@ def size(rows):
     if shutil.which("brotli"):
         r = subprocess.run(["brotli", "-c", "-q", "11"], input=b, capture_output=True, check=True)
         new["wasm/brotli"] = len(r.stdout)
-    # What the dumper adds to the shipped module: the same build without it (D3600).
-    nodump = len(gzip.compress(open(NODUMP, "rb").read(), compresslevel=9, mtime=0))
-    new["dump/extra-gzip"] = new["wasm/gzip"] - nodump
     return new
 
 
@@ -221,45 +204,13 @@ def startup():
     return {k: median(xs) for k, xs in runs.items()}
 
 
-def dumps():
-    out_dir = os.path.join(ROOT, "work/scratch/status-dumps")
-    report = node("scripts/dump-costs/dump-costs.ts", out_dir)
-    import json
-    points = json.load(open(os.path.join(out_dir, "points.json")))
-    corpus = points["corpus djs.wasm"]
-    m = re.search(r"(\d+) cases ran \((\d+) failed to start\), (\d+) idle points, (\d+) refused", report)
-    if not m:
-        sys.exit(f"status.py: no corpus summary in dump-costs' report:\n{report}")
-
-    def pct(k, p):
-        xs = sorted(x[k] for x in corpus)
-        return xs[min(len(xs) - 1, int(p / 100 * len(xs)))]
-    # scripts/dump-costs/cases/big-log.js: a 20,000-line log kept across five tool calls.
-    log = next(v for k, v in points.items() if k.startswith("B ") and k.endswith("/big-log"))
-    return {
-        "dumps/corpus-cases": int(m.group(1)),
-        "dumps/idle-points": int(m.group(3)),
-        "dumps/refused": int(m.group(4)),
-        "dumps/raw-p50": pct("raw", 50),
-        "dumps/raw-p99": pct("raw", 99),
-        "dumps/zstd-p50": pct("z3", 50),
-        "dumps/zstd-p99": pct("z3", 99),
-        "dumps/write-ms-p50": round(pct("dumpMs", 50), 3),
-        "dumps/write-ms-p99": round(pct("dumpMs", 99), 3),
-        "dumps/resume-ms-p50": round(pct("resumeMs", 50), 3),
-        "dumps/resume-ms-p99": round(pct("resumeMs", 99), 3),
-        "dumps/log-raw": max(x["raw"] for x in log),
-        "dumps/log-zstd": max(x["z3"] for x in log),
-    }
-
-
 def bounds():
     # The shipped module reads the arena unchecked (D3100); this builds it with the checks
     # (no `unsafe-heap`) to say what they would cost.
     target = os.path.join(ROOT, "target/checked-wasm")
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/with-wasm-env.sh"), "cargo", "build",
                     "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm", "--quiet",
-                    "--features", "dump,cold-unicode"],
+                    "--features", "snapshot,cold-unicode"],
                    cwd=ROOT, env=dict(os.environ, CARGO_TARGET_DIR=target), check=True)
     checked = os.path.join(target, "wasm32-unknown-unknown/wasm/djs_wasm.wasm")
     gz = lambda p: len(gzip.compress(open(p, "rb").read(), compresslevel=9, mtime=0))
@@ -385,13 +336,6 @@ def engines():
             for w, x in e["workloads"].items():
                 put(f"{k}/{w}/run-ms", x["runMs"])
                 put(f"{k}/{w}/memory", x["memory"])
-        for w, d in run["dumps"].items():
-            k = f"engines/djs/{w}/dump"
-            put(f"{k}-points", d["points"])
-            for m, src in (("raw-p50", "rawP50"), ("raw-max", "rawMax"), ("gzip-p50", "gzipP50"), ("gzip-max", "gzipMax")):
-                put(f"{k}-{m}", d[src])
-            put(f"{k}-ms", d["dumpMsP50"])
-            put(f"{k}-load-ms", d["resumeMsP50"])
     new = {}
     for k, xs in vals.items():
         v = median(xs)
@@ -490,9 +434,6 @@ def main():
     elif args[0] == "startup":
         build()
         save(rows, loaded(startup(), "startup"))
-    elif args[0] == "dumps":
-        build()
-        save(rows, loaded(dumps(), "dumps"))
     elif args[0] == "bounds":
         build()
         save(rows, loaded(bounds(), "bounds"))
@@ -514,7 +455,6 @@ def main():
         save(rows, size(rows))
         save(rows, loaded(speed(3), "speed"))
         save(rows, loaded(startup(), "startup"))
-        save(rows, loaded(dumps(), "dumps"))
         save(rows, loaded(bounds(), "bounds"))
         save(rows, loaded(heap(), "heap"))
         save(rows, engines())

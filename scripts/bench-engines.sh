@@ -89,7 +89,7 @@ build() { # name version src... (in the current directory)
   echo "QuickJS-NG $NG (release amalgamation), wasi-sdk $WASI_SDK -O2" > "$V/build/quickjs-ng.wasm.version"
 )
 
-# djs: the shipped module (it has the dumper).
+# djs: the shipped module.
 nice -n 10 scripts/build-wasm.sh >/dev/null
 
 [ "${1:-}" = "--setup" ] && exit 0

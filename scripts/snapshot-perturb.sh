@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Snapshots continue in another build by name (0302, D3712). Takes logical snapshots at
-# every idle point of the codemode corpus and of the tests/dump programs with this tree's
+# every idle point of the codemode corpus and of the tests/snapshot programs with this tree's
 # build, then makes a copy of the tree whose builtins list record fields in another order
 # and give state constants other values (scripts/snapshot-perturb.py), checks that the
 # copy is still right (the difftest corpus against its ratchet), and loads every snapshot

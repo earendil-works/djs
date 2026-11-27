@@ -21,7 +21,3 @@ tests/corpus/expected-failures.txt merge=union
 # The builtin registry (D2371, D3644): scripts/regen.sh rewrites it from the merged tree
 # (scripts/registry-update.sh keeps one side's order and appends the other's builtins).
 tests/builtins/registry.tsv merge=djs-generated
-# Derived files that every corpus change touches (0214): the suspension map summary is
-# rewritten by scripts/regen.sh after a merge; the dump-size score merges row by row.
-tests/smap/summary.txt merge=djs-generated
-tests/scores/dump-size.tsv merge=djs-scores
