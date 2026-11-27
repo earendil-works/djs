@@ -308,10 +308,12 @@ this site and the command line's `--debugger` work this way. Without the option,
 
 ## Where to look
 
-- [`crates/djs-core/src/vm/snapshot/`](../../crates/djs-core/src/vm/snapshot/): the
-  writer (`export.rs`), the loader (`import.rs`), the checks on load (`check.rs`), the
-  hashes (`hash.rs`), the slot names of every object class (`schema.rs`) and the
-  encoding (`wire.rs`).
+- [`crates/djs-core/src/vm/snapshot/`](../../crates/djs-core/src/vm/snapshot/): snapshots. [`crates/djs-core/src/vm/snapshot/export.rs`](../../crates/djs-core/src/vm/snapshot/export.rs): the writer;
+  [`crates/djs-core/src/vm/snapshot/import.rs`](../../crates/djs-core/src/vm/snapshot/import.rs): the loader and `describe`;
+  [`crates/djs-core/src/vm/snapshot/check.rs`](../../crates/djs-core/src/vm/snapshot/check.rs): the checks on load;
+  [`crates/djs-core/src/vm/snapshot/hash.rs`](../../crates/djs-core/src/vm/snapshot/hash.rs): the bytecode and interface hashes;
+  [`crates/djs-core/src/vm/snapshot/schema.rs`](../../crates/djs-core/src/vm/snapshot/schema.rs): the slot names of every object class;
+  [`crates/djs-core/src/vm/snapshot/wire.rs`](../../crates/djs-core/src/vm/snapshot/wire.rs): the encoding.
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `Task.suspend`, `Run.snapshot`,
   `Sandbox.resume`, `loadSnapshot`, `describeSnapshot` and `callSite`.
 - [`tests/snapshot/`](../../tests/snapshot/): the programs the snapshot tests stop at

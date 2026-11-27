@@ -57,7 +57,7 @@ cargo run -q -p djs-docs -- build             # the site: target/docs-site/
 ```
 
 `build` renders every page, copies djs-wasm (the docs build from
-`scripts/build-wasm.sh --docs`, with the dumper and the `djs_disasm` export that gives
+`scripts/build-wasm.sh --docs`, with snapshots and the `djs_disasm` export that gives
 edited examples their own bytecode listing; else the shipping build from
 `scripts/build-wasm.sh`, whose examples can't pause at `debugger;`; or `--wasm FILE`) and the host package with its types stripped by node, for the live
 examples. Open it over HTTP (`python3 -m http.server -d target/docs-site`); from
@@ -90,10 +90,10 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 | `intrinsics-all` | every intrinsic, descriptions from builtins/intrinsics.d.ts |
 | `excerpt PATH "ANCHOR" "START" N` | N lines of a repository file: from the first line containing START after the line containing ANCHOR (quoted code that cannot drift) |
 | `status conformance\|speed\|size\|inventory\|recorded` | status numbers: counted from the repository, or read from `tests/scores/status.tsv` (`scripts/status.py`); also used in README.md. `recorded` lists the recorded measurements (on pi.md those that name pi, elsewhere the others) |
-| `status engines-size\|engines-startup\|engines-run\|engines-memory\|engines-dumps` | the benchmarks page's tables, from the `engines/*` keys of `tests/scores/status.tsv` (`scripts/status.py engines`) |
+| `status engines-size\|engines-startup\|engines-run\|engines-memory` | the benchmarks page's tables, from the `engines/*` keys of `tests/scores/status.tsv` (`scripts/status.py engines`) |
 | `disasm` | the bytecode of the closest `js` or `ts` block above |
 | `run` | the output of the closest `js` or `ts` block above, as this build prints it |
-| `dump [N]` | the continuation dump the closest `js` or `ts` block above writes at its Nth `debugger;` pause (default 1), as a live example writes it at that pause |
+| `snapshot [N]` | the description (`describeSnapshot`) of the snapshot the closest `js` or `ts` block above is at its Nth `debugger;` pause (default 1), as a live example writes it at that pause |
 
 A single number in prose is generated the same way, inline:
 `<!--n KEY FMT-->1,234<!--/n-->`, with its markers on one line. KEY is a count from the
@@ -110,9 +110,9 @@ figure that follows from the code (a constant, a cell size) may be written out.
 Examples (`js` blocks, and `ts` blocks, which compile as TypeScript) are codemode async
 function bodies: `await` and `return` work at the top level and `console.log` prints. `run` executes them in a VM from the base
 snapshot, suspended and restored from its heap image every 50 fuel units. `run` and
-`dump` regions are only rewritten by `regen --examples`: a changed output fails the gate,
-because it is a behavior change that someone should look at. Since the dump format still
-changes, prose around a `dump` region describes what the dump does, not the exact text.
+`snapshot` regions are only rewritten by `regen --examples`: a changed output fails the
+gate, because it is a behavior change that someone should look at. Prose around a
+`snapshot` region describes what the snapshot holds, not its exact sizes.
 
 A block marked ```` ```js live ```` (or ```` ```ts live ````) becomes a live example on the site: the code is
 an editor, highlighted as it is typed in the same colors as static code, and runs in
@@ -120,16 +120,15 @@ djs-wasm in the browser, with its bytecode, a walk over the VM's heap, and its f
 and snapshot. Put its `gen:run` region right after it; the site shows that output inside
 the widget until the reader runs the code, and without JavaScript.
 
-A `debugger;` in a live example (with the docs module, which has the dumper) pauses the
-run there: the page suspends it into a continuation dump, disposes of its sandbox, and
-Run becomes Continue, which resumes the run from the dump in a fresh sandbox, on to the
-next pause or the end. The output reads as one transcript with a line at each pause,
-which says where the run stopped (line and column in the example, or in the dump that
-part continued from, linked), and the current dump, with its raw and gzip size, is one
-click away under it (for readers
-without JavaScript, the dump at the first pause, made at build time). A run the dumper
-refuses shows why and continues in the same sandbox. Such runs have frozen builtins,
-which dumps need. An info tip next to Run explains the pause and links the dumps page.
+A `debugger;` in a live example (with a module that has snapshots) pauses the run
+there: the page suspends it into a snapshot, disposes of its sandbox, and Run becomes
+Continue, which resumes the run from the snapshot in a fresh sandbox, on to the next
+pause or the end. The output reads as one transcript with a line at each pause, which
+says where the run stopped (line and column in the example) and links that pause's
+snapshot, whose description, with its raw and gzip size, is one click away under it (for
+readers without JavaScript, the description at the first pause, made at build time). A
+run that cannot be snapshotted shows why and continues in the same sandbox. An info tip
+next to Run explains the pause and links the snapshots page.
 
 How the editor behaves: Run or Ctrl/Cmd-Enter runs the code (or continues a paused run), and it also runs by itself
 600 ms after the last edit. Tab and Shift-Tab indent and dedent (two spaces, also a
@@ -153,9 +152,9 @@ missing diagram, a diagram in `gen/` that nothing generates.
 
 - Start with what the reader wants to know, then an `> **In short.** ...` paragraph: the
   whole page in three sentences.
-- Pages about using djs (the language, the JavaScript interface, dumps, limits, the CLI)
+- Pages about using djs (the language, the JavaScript interface, snapshots, limits, the CLI)
   say what a user sees and can do, with examples. Pages about how it works go from the
-  problem to the design. Show real code, real bytecode, real dumps and real layouts
+  problem to the design. Show real code, real bytecode, real snapshots and real layouts
   (generated), not paraphrases.
 - Give a design choice its cost where it helps: `> **Trade-off.** X over Y. Why ... The
   cost: ...`.

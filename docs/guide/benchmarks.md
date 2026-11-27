@@ -1,6 +1,6 @@
 # Benchmarks
 
-How fast does djs start, run and dump the scripts an agent writes, and what does it cost
+How fast does djs start and run the scripts an agent writes, and what does it cost
 in download and memory, next to the QuickJS builds a host would otherwise embed? This
 page compares them on workloads modeled on real agent codemode sessions, all in
 WebAssembly, the way a host runs them, and says how to re-run every number.
@@ -14,8 +14,7 @@ WebAssembly, the way a host runs them, and says how to re-run every number.
 > as fast and reads them out six to nine times as fast; it is behind on bytes coming in and
 > on many tiny calls. Its
 > module is the largest of the JavaScript engines, it takes about a tenth more memory
-> than the QuickJS releases built here over the set, and its dumps of a paused run are kilobytes, written or
-> loaded in under a millisecond for most workloads. `scripts/bench-engines.sh` fetches,
+> than the QuickJS releases built here over the set. `scripts/bench-engines.sh` fetches,
 > builds and runs everything; the tables and charts are generated from the recorded
 > results.
 
@@ -473,22 +472,6 @@ twice as fast as JSON text for structured data and a single copy for long ASCII 
 The reader makes the way out six to nine times as fast for structured data and more for
 strings, because no engine work and no text happen in between. Bytes coming in and many tiny calls are the places where the
 simpler paths of the C embedding are still ahead.
-
-## Dumps
-
-djs can write a run that waits on tool calls as a [continuation dump](dumps.md) and
-continue it later in a new sandbox. Here every workload runs through the sandbox with
-asynchronous host tools and is dumped at every idle point, every time it waits on a call:
-
-<!-- gen:status engines-dumps -->
-<!-- /gen -->
-
-Most dumps are a few kilobytes, and gzip takes the larger ones to between a sixth and a
-quarter; they hold the run's live state, so a dump taken while `json` holds 600 query
-rows, or while `fanout` holds the file texts it has read, is as large as that data.
-Writing one and loading it into a new sandbox takes about as long as starting a VM and
-running a small body; the `json` dumps take longest, as they encode and decode the most
-objects. `inspect` makes no tool call, so it never waits and has nothing to dump.
 
 ## Re-running
 

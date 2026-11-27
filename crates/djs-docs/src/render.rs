@@ -325,7 +325,7 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
         "<div class=\"live\" id=\"live-{n}\">\n\
          <div class=\"live-bar\"><span class=\"live-badge\">live</span>\
          <span class=\"live-note\">output from the build</span>\
-         <a class=\"live-info\" href=\"js-api.html#snapshots\" hidden aria-label=\"{INFO}\" data-tip=\"{INFO}\">ⓘ</a>\
+         <a class=\"live-info\" href=\"persistence.html\" hidden aria-label=\"{INFO}\" data-tip=\"{INFO}\">ⓘ</a>\
          <button class=\"live-reset\" hidden>Reset</button>\
          <button class=\"live-run\" hidden>Run</button></div>\n\
          <div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre></div>\n\

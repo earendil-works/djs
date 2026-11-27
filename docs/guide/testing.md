@@ -2,7 +2,7 @@
 
 djs promises things that are hard to test: it behaves like QuickJS, down to the text of
 error messages; it can stop after any instruction and continue in another process from
-a copy of its memory or from a continuation dump; and it gives the same result whichever
+a copy of its memory or from a snapshot; and it gives the same result whichever
 way its builtins are compiled, on whichever platform. This page explains the test layers
 that check these promises, why each exists, and how they come together in the gate every
 change must pass.
@@ -10,7 +10,7 @@ change must pass.
 > **In short.** test262 checks conformance against a checked-in list of known failures
 > that may only shrink (the ratchet), and the difftest corpus runs codemode scripts in
 > djs and in QuickJS and compares what a model would see. Stress modes run the same
-> cases again while suspending, restoring, collecting and dumping all the time, and in
+> cases again while suspending, restoring, collecting and snapshotting all the time, and in
 > wasm, and require identical results. One gate, cached by
 > each check's inputs, runs all of it before anything reaches `main`.
 
@@ -201,36 +201,33 @@ every stop, and under GC stress.
 > test262 run are the largest part of the gate, which is why a change is checked only
 > against the cases it touches while it is being written.
 
-## Dumps: continuing in another engine
+## Snapshots: continuing in a fresh VM and in another build
 
-A [continuation dump](dumps.md) must resume in a fresh VM and in node, which has never
-seen djs. Three kinds of tests hold it to that:
+A [snapshot](persistence.md) must continue in a fresh VM exactly as the run would have
+gone on, and a later build must either continue it the same way or refuse it. Four kinds
+of tests hold it to that:
 
-- **A dump at every idle point.** The dumps check dumps each codemode case of the
-  corpus at every idle point, with frozen builtins, runs the dump in a fresh VM and goes
-  on from there, in chains of up to 50 links. The transcript must equal the plain
-  run's, and node must produce the same transcript from the same dumps. A dump the
-  writer refuses ends the chain; which cases may refuse is a ratchet of its own,
-  [`tests/dump-refusals.txt`](../../tests/dump-refusals.txt). The end-to-end tests add
-  a dump mode: every case dumps its final state, the dump runs in a fresh VM and is
-  dumped again, and a further round must give the same dump.
-- **Golden dumps.** [`tests/dump/golden/`](../../tests/dump/golden/) holds small
-  programs and the dumps written of them at every idle point, one program per construct
-  the writer handles (operand positions, loop kinds, promise combinators, generators,
-  classes). Every test run loads each dump and finishes the program with the output of
-  the uninterrupted run, plainly and under GC stress. A change to the dump runtime that
-  breaks them writes them again, so what changed for stored dumps shows in review.
-- **Size.** The dumps of the corpus, of the golden programs and of an example are
-  measured, and [`tests/scores/dump-size.tsv`](../../tests/scores/dump-size.tsv) records
-  each case's raw and gzip size; the gate fails when a dump grows past its score.
-
-A fuzzer looks for what these miss: [`scripts/dump-fuzz/fuzz.mjs`](../../scripts/dump-fuzz/fuzz.mjs)
-generates codemode-like programs from seeds (JSON data, Maps, Sets, Dates, regular
-expressions, typed arrays, errors, symbol keys, classes with accessors, every third one
-TypeScript), runs each with a chain of dumps from every idle point in djs and in node,
-and reports each distinct failure with its smallest program. It is too slow for every
-merge; it runs before changes to the dump writer, and each finding becomes a corpus case
-under `tests/corpus/codemode/plain-fuzz/`, marked as a known failure until it is fixed.
+- **A snapshot at every idle point.** The snapshot check takes each codemode case of the
+  corpus and each program of [`tests/snapshot/programs/`](../../tests/snapshot/programs/)
+  (one program per kind of state: activations, generators, classes, promise combinators,
+  binary data, cycles) to every idle point, snapshots it there, loads the snapshot into
+  a fresh VM and goes on, both from each idle point alone and in a chain through all of
+  them. The transcript must equal the uninterrupted run's, and nothing may be refused.
+  It runs once with eager and once with lazy compilation. The command line's tests run
+  the same programs through its snapshot files, and the host package's tests suspend and
+  resume runs through the `Sandbox`.
+- **A negative control.** A loader made to lose an array's elements must make that
+  check fail, so the check is known to see what it compares.
+- **The waiting functions' bytecode.** [`tests/snapshot/frame-bytecode.txt`](../../tests/snapshot/frame-bytecode.txt)
+  pins the bytecode hash of every function of the corpus that can hold a frame at an
+  idle point. A change to the compiler that changes one fails the test until the file is
+  written again, so a change that would refuse waiting snapshots is a visible decision.
+- **Another build.** [`scripts/snapshot-perturb.sh`](../../scripts/snapshot-perturb.sh)
+  writes the corpus's snapshots with this build, then builds a copy of the tree whose
+  builtins list their record fields in another order and give their state constants
+  other values, checks the copy against the corpus, and loads every snapshot into it.
+  Each must continue as the copy's own run does, or be refused; none may continue
+  differently.
 
 ## More checks against an independent reference
 
@@ -266,13 +263,13 @@ consists of legs, each one check:
 - formatting, and clippy with warnings as errors, natively, for wasm32 and on every
   feature combination that ships;
 - all unit and integration tests, which include the freshness of the generated builtins
-  and the golden dumps;
+  and the pinned bytecode of the waiting functions;
 - the `no_std` wasm32 build of djs-core;
 - `djs-docs check` for this guide, which also reruns its examples;
 - the host package's tests on the djs-wasm modules, native-versus-wasm images, and the
   cross-language wire and reader checks;
-- the difftest corpus with suspension, GC stress and determinism; the plain dumps in djs
-  and node with their size; the corpus again on the unchecked-heap build;
+- the difftest corpus with suspension, GC stress and determinism; the snapshots at every
+  idle point; the corpus again on the unchecked-heap build;
 - the active test262 group against its ratchet;
 - the size ceiling of the shipped module.
 
@@ -298,8 +295,8 @@ Three things keep it fast without checking less:
   class. So a documentation change gates in seconds, a change to the host package reruns
   only the JavaScript legs, and a change to the engine reruns every Rust leg.
 - **Slow checks apart.** `scripts/gate.sh --full` ignores the cache and adds checks too
-  slow for every merge, such as the agent host's tests with a dump and a resume at every
-  idle point, and test262 with a collection at every safepoint in a debug build, where
+  slow for every merge, such as the snapshots loaded into another build (above), and
+  test262 with a collection at every safepoint in a debug build, where
   the heap checks its invariants at each collection. It runs daily and before releases.
 
 > **Trade-off.** One gate on every merge over checks after the fact. `main` is always
@@ -341,10 +338,11 @@ machine fails at random:
   and its stress modes.
 - [`crates/djs-core/tests/e2e.rs`](../../crates/djs-core/tests/e2e.rs) and
   [`tests/data/e2e/`](../../tests/data/e2e/): the end-to-end tests.
-- [`crates/djs-core/src/vm/dump_resume_tests.rs`](../../crates/djs-core/src/vm/dump_resume_tests.rs)
-  and [`tests/dump/`](../../tests/dump/): the golden dumps;
-  [`scripts/dump-node.mjs`](../../scripts/dump-node.mjs): dumps continued in node;
-  [`scripts/dump-fuzz/`](../../scripts/dump-fuzz/): the dump fuzzer.
+- [`crates/djs-core/src/vm/snapshot/tests.rs`](../../crates/djs-core/src/vm/snapshot/tests.rs)
+  and [`tests/snapshot/`](../../tests/snapshot/): snapshots at every idle point, the
+  negative control and the bytecode pin;
+  [`scripts/snapshot-perturb.sh`](../../scripts/snapshot-perturb.sh): snapshots loaded
+  into another build.
 - [`crates/djs-core/tests/it/verify_fuzz.rs`](../../crates/djs-core/tests/it/verify_fuzz.rs):
   the verifier against corrupt images.
 - [`scripts/gate.py`](../../scripts/gate.py) (run by

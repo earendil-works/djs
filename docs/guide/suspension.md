@@ -305,6 +305,35 @@ array iterator of the loop in its registers, the open call of the pause, and the
 named by its span and bytecode hash:
 
 <!-- gen:snapshot -->
+```text
+2278 bytes
+types          1813 bytes
+strings         191 bytes
+builtins          7 bytes
+intrinsics        1 bytes
+host              5 bytes
+scripts          13 bytes
+functions        15 bytes
+records         154 bytes
+vm               72 bytes
+16 strings (174 bytes of text), 6 builtins, 0 intrinsics, 1 scripts, 1 functions, 15 records
+builtins: Object.prototype Promise.prototype %ArrayIteratorPrototype%.next Function.prototype %ArrayIteratorPrototype% Array.prototype
+flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
+script 0: example.js (source by hash adba3bded187355a)
+host values: console debugger() (and 0 members)
+host data: 
+function 0:0..144 (bytecode)
+       1 HostCall
+       1 Object.Array
+       1 Object.ArrayIterator
+       1 Object.Function
+       1 Object.Generator
+       2 Object.Promise
+       1 Patch.Global
+       1 Patch.GlobalLex
+       1 Patch.SymbolRegistry
+       5 ValueArray
+```
 <!-- /gen -->
 
 ## Where to look

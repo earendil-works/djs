@@ -8,7 +8,7 @@ merge. Measurements that need a build or a benchmark (the wasm module's size, th
 against quickjs-wasi, an agent's codemode test suite) are recorded in `tests/scores/status.tsv` by
 `scripts/status.py`, with the commit they were measured at, and shown with it. The
 repository's front page shows the same numbers. Single figures in the prose of other
-pages, such as what a dump costs or how many bytes an object takes, come from the same
+pages, such as the module's size or how many bytes an object takes, come from the same
 records; [the last section](#every-recorded-measurement) lists them all.
 
 ## Conformance
