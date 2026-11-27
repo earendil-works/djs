@@ -277,7 +277,12 @@ fn value(r: &mut Reader<'_>) -> Result<V, Short> {
         V_FALSE => V::Imm(Value::FALSE),
         V_TRUE => V::Imm(Value::TRUE),
         V_INT => V::Imm(Value::int(i32::try_from(r.i()?).map_err(|_| Short)?)),
-        V_F64 => V::Imm(Value::from_bits(r.u64_raw()?).ok_or(Short)?),
+        // A number only: tagged bits would make a reference out of nothing.
+        V_F64 => V::Imm(
+            Value::from_bits(r.u64_raw()?)
+                .filter(|v| v.tag().is_none())
+                .ok_or(Short)?,
+        ),
         V_HOLE => V::Imm(Value::HOLE),
         V_UNINIT => V::Imm(Value::UNINITIALIZED),
         V_STR => V::Str(r.str_ref()?),
@@ -412,8 +417,21 @@ pub(super) fn load(
             refusal(format!("record {i} ({name}): {}", e.0.join("; ")))
         })?;
     }
+    // Before the rebuilds, which rely on the slots (D3702).
+    for i in 0..snap.records.len() {
+        if let Kind::Object(_) = l.kinds[i] {
+            super::check::object(l.vm.heap(), crate::value::Obj(l.cells[i])).map_err(|e| {
+                let name = &snap.types[snap.records[i].0 as usize].name;
+                refusal(format!("record {i} ({name}): {e}"))
+            })?;
+        }
+    }
     l.rebuild()?;
     l.root()?;
+    l.vm
+        .heap()
+        .verify()
+        .map_err(|e| refusal(format!("the imported heap does not verify: {e:?}")))?;
     if let Some(st) = stats {
         st.records = snap.records.len();
         st.strings = snap.strings.len();
@@ -572,7 +590,7 @@ impl Loader<'_> {
                     if n == "template"
                         && let F::Fn(i) = f
                     {
-                        template = self.functions[*i as usize];
+                        template = *self.functions.get(*i as usize).ok_or_else(|| short(Short))?;
                     }
                 }
                 // Slots the snapshot's class has and this build's lacks: refused below
@@ -793,6 +811,7 @@ impl Loader<'_> {
     ) -> Result<(), Refusal> {
         let o = Obj(off);
         let mut slot_vals: Vec<(u32, Value)> = Vec::new();
+        let mut header = None;
         let mut buckets = None;
         for ((name, t), f) in ty.fields.iter().zip(fs) {
             match (name.as_str(), f) {
@@ -805,13 +824,19 @@ impl Loader<'_> {
                         .set(off, Object::PROTO, Ref(r));
                 }
                 ("header", F::Flags(bits)) => {
+                    // Set after the properties: a lazy `name` is read from the template
+                    // when a key is looked up, and the checks come later.
                     let Ty::Flags(names) = t else { unreachable!() };
-                    self.set_flags(o, names, *bits)?;
+                    header = Some((names, *bits));
                 }
                 ("props", F::Props(ps)) => {
                     for p in ps {
                         let (k, p) = self.prop(p)?;
-                        self.vm.heap_mut().snap_prop_insert(o, k, &p).map_err(oom)?;
+                        let h = self.vm.heap_mut();
+                        if h.get_own_property(o, k).is_some() {
+                            return Err(refusal(format!("{}: a key twice", ty.name)));
+                        }
+                        h.snap_prop_insert(o, k, &p).map_err(oom)?;
                     }
                 }
                 ("elements", F::Vs(vs)) => self.set_elements(o, vs)?,
@@ -849,12 +874,27 @@ impl Loader<'_> {
                 }
             }
         }
+        if let Some((names, bits)) = header {
+            self.set_flags(o, names, bits)?;
+        }
         let h = self.vm.heap_mut();
         for (k, v) in slot_vals {
             h.set_object_slot(o, k, v);
         }
         if let Some((k, b)) = buckets {
-            let ix = h.alloc_u32_array(b.max(8)).map_err(oom)?;
+            // A power of two with room for every entry (the rehash probes for a free
+            // bucket): the snapshot's count, if it is one.
+            let used = match h.object_slot(o, 0).as_internal() {
+                Some(e) if h.cell_kind(e) == CellKind::ValueArray
+                    || h.cell_kind(e) == CellKind::EphemeronArray =>
+                {
+                    h.value_array_len(e)
+                }
+                _ => 0,
+            };
+            let need = (2 * (used / 2 + 1)).next_power_of_two().max(8);
+            let b = if b.is_power_of_two() && b >= need { b } else { need };
+            let ix = h.alloc_u32_array(b).map_err(oom)?;
             h.set_object_slot(o, k, Value::internal(ix));
         }
         Ok(())
@@ -877,7 +917,16 @@ impl Loader<'_> {
                 }
                 ("header", F::Flags(bits)) => {
                     let Ty::Flags(names) = t else { unreachable!() };
-                    self.set_flags(o, names, *bits)?;
+                    // A per-VM object can only have been made non-extensible.
+                    let want = self.flags_of(names, *bits, schema::OBJECT_FLAGS)?;
+                    if want & !crate::heap::cells::flags::OBJ_EXTENSIBLE != 0 {
+                        return Err(refusal(format!("{}: header flags {want:#x}", ty.name)));
+                    }
+                    self.vm.heap_mut().snap_set_obj_flag(
+                        o,
+                        crate::heap::cells::flags::OBJ_EXTENSIBLE,
+                        want != 0,
+                    );
                 }
                 ("deleted", F::Vs(keys)) => {
                     for k in keys {
@@ -980,6 +1029,10 @@ impl Loader<'_> {
     ) -> Result<(), Refusal> {
         let layout: &CellLayout = spec.kind.layout();
         for ((name, t), f) in ty.fields.iter().zip(fs) {
+            // What the importer sets itself: a symbol's atom, a tail's count.
+            if spec.skip.contains(&name.as_str()) || spec.count == Some(name.as_str()) {
+                return Err(refusal(format!("{}: {name} is not state", ty.name)));
+            }
             if name == "header"
                 && let (Ty::Flags(names), F::Flags(bits)) = (t, f)
             {
@@ -1077,6 +1130,79 @@ impl Loader<'_> {
         Ok(())
     }
 
+    /// The host call table: open async calls with distinct ids, their arguments and
+    /// promises.
+    fn check_host_calls(&self, r: Ref) -> Result<(), Refusal> {
+        use crate::heap::cells::HostCall;
+        let h = self.vm.heap();
+        let bad = |w: &str| refusal(format!("the host call table: {w}"));
+        let t = r.get().filter(|&t| h.cell_kind(t) == CellKind::ValueArray).ok_or_else(|| bad("not an array"))?;
+        let mut ids = Vec::new();
+        for i in 0..h.value_array_len(t) {
+            let c = h
+                .value_array_get(t, i)
+                .as_internal()
+                .filter(|&c| h.cell_kind(c) == CellKind::HostCall)
+                .ok_or_else(|| bad("an entry is not a call"))?;
+            let a = h.arena();
+            let id: u32 = a.get(c, HostCall::ID);
+            let args: Ref = a.get(c, HostCall::ARGS);
+            let p: Value = a.get(c, HostCall::PROMISE);
+            if id == 0 || ids.contains(&id) {
+                return Err(bad("a call id is 0 or twice"));
+            }
+            ids.push(id);
+            if !args.get().is_some_and(|x| h.cell_kind(x) == CellKind::ValueArray) {
+                return Err(bad("a call's arguments are not an array"));
+            }
+            if !p.as_object().is_some_and(|o| h.object_class(o) == ObjectClass::Promise) {
+                return Err(bad("an open call at an idle point without a promise"));
+            }
+        }
+        Ok(())
+    }
+
+    /// The handle table: its free list and live count within its slots.
+    fn check_handles(&self, r: Ref) -> Result<(), Refusal> {
+        use crate::heap::cells::{HANDLE_LIVE, HandleSlot, HandleTable};
+        let Some(t) = r.get() else {
+            return Ok(());
+        };
+        let h = self.vm.heap();
+        let bad = |w: &str| refusal(format!("the handle table: {w}"));
+        if h.cell_kind(t) != CellKind::HandleTable {
+            return Err(bad("not a handle table"));
+        }
+        let a = h.arena();
+        let len: u32 = a.get(t, HandleTable::LEN);
+        let (mut free, mut live) = (a.get::<u32>(t, HandleTable::FREE), 0);
+        for i in 0..len {
+            let next: u32 = a.get(HandleTable::SLOTS.at(t, i), HandleSlot::NEXT);
+            if next == HANDLE_LIVE {
+                live += 1;
+            } else if next > len {
+                return Err(bad("a free slot links out of the table"));
+            }
+        }
+        if live != a.get::<u32>(t, HandleTable::LIVE) {
+            return Err(bad("the live count is wrong"));
+        }
+        // The free list ends, within the table, on free slots.
+        let mut steps = 0;
+        while free != 0 {
+            if free > len || steps > len {
+                return Err(bad("the free list is broken"));
+            }
+            let next: u32 = a.get(HandleTable::SLOTS.at(t, free - 1), HandleSlot::NEXT);
+            if next == HANDLE_LIVE {
+                return Err(bad("the free list holds a live slot"));
+            }
+            free = next;
+            steps += 1;
+        }
+        Ok(())
+    }
+
     fn root(&mut self) -> Result<(), Refusal> {
         let snap = self.snap;
         let ty = &snap.types[snap.root.0 as usize];
@@ -1124,14 +1250,13 @@ impl Loader<'_> {
                 ("hostCalls", F::V(v)) => {
                     let v = self.val(*v)?;
                     let r = Ref(v.ref_offset().unwrap_or(0));
-                    if r.is_null() {
-                        return Err(refusal(String::from("no host call table")));
-                    }
+                    self.check_host_calls(r)?;
                     self.vm.heap_mut().arena_mut().set(0, Roots::HOST_CALLS, r)
                 }
                 ("handles", F::V(v)) => {
                     let v = self.val(*v)?;
                     let r = Ref(v.ref_offset().unwrap_or(0));
+                    self.check_handles(r)?;
                     self.vm.heap_mut().arena_mut().set(0, Roots::HANDLES, r)
                 }
                 ("global" | "globalLex" | "symbolRegistry", _) => {}

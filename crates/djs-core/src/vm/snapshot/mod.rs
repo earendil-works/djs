@@ -28,6 +28,7 @@
 //! **Import** makes a fresh VM from the base, compiles the scripts, checks the hashes,
 //! allocates every record, fills them in, rebuilds the indexes, and installs the root.
 
+mod check;
 mod export;
 mod hash;
 mod import;

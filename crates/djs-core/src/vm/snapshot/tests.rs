@@ -1060,3 +1060,138 @@ text(String(re.exec("ab cd ")?.groups.w) + " " + Object.getOwnPropertySymbols(o)
     assert!(n > 0);
     assert_eq!(got, want);
 }
+
+// ---- Malformed snapshots refuse (D3702) -------------------------------------------------
+
+/// Snapshots at every idle point of a few programs, for the fuzz.
+fn fuzz_seeds() -> Vec<Vec<u8>> {
+    let mut seeds = Vec::new();
+    for (name, src) in programs() {
+        if !["plan", "generator", "asyncgen", "combinators", "golden/class-fields", "golden/using"]
+            .contains(&name.as_str())
+        {
+            continue;
+        }
+        run_program(&src, &mut |vm, _| seeds.push(vm.snapshot(info()).unwrap()));
+    }
+    seeds
+}
+
+/// Loads `bytes`; if that works, runs the VM to the end, answering its calls: a panic
+/// anywhere is the failure.
+fn load_and_run(bytes: &[u8]) -> bool {
+    let Ok(mut vm) = Vm::from_snapshot(info(), bytes) else {
+        return false;
+    };
+    for _ in 0..50 {
+        match vm.run(2_000_000) {
+            Status::HostCall { call_id, .. } => {
+                let _ = vm.resolve_host_call(call_id, Ok(Value::UNDEFINED));
+            }
+            Status::Idle | Status::Done(_) => {
+                let Some(&id) = vm.pending_host_calls().iter().min() else {
+                    break;
+                };
+                let _ = vm.resolve_host_call(id, Ok(Value::int(1)));
+            }
+            _ => break,
+        }
+    }
+    true
+}
+
+/// A small xorshift, so that the fuzz is the same every run.
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+}
+
+fn fuzz(rounds: usize) -> (usize, usize) {
+    let seeds = fuzz_seeds();
+    assert!(!seeds.is_empty());
+    hook();
+    let mut rng = Rng(0x0300_0301);
+    let (mut loaded, mut tried) = (0, 0);
+    for round in 0..rounds {
+        let seed = &seeds[round % seeds.len()];
+        let mut b = seed.clone();
+        match rng.next() % 4 {
+            0 => b.truncate((rng.next() as usize) % b.len()),
+            1 => {
+                let i = (rng.next() as usize) % b.len();
+                b[i] ^= 1 << (rng.next() % 8);
+            }
+            2 => {
+                for _ in 0..4 {
+                    let i = (rng.next() as usize) % b.len();
+                    b[i] = rng.next() as u8;
+                }
+            }
+            _ => {
+                // A byte in the records or the `Vm` record, where the structure is.
+                let start = b.len() / 2;
+                let i = start + (rng.next() as usize) % (b.len() - start);
+                b[i] ^= 1 << (rng.next() % 8);
+            }
+        }
+        tried += 1;
+        let r = std::panic::catch_unwind(|| load_and_run(&b));
+        match r {
+            Ok(true) => loaded += 1,
+            Ok(false) => {}
+            Err(_) if std::env::var_os("DJS_SNAP_FUZZ_ALL").is_some() => {
+                *PANICS.lock().unwrap().entry(LAST.lock().unwrap().clone()).or_default() += 1;
+            }
+            Err(_) => panic!("round {round}: a malformed snapshot panicked"),
+        }
+    }
+    for (at, n) in PANICS.lock().unwrap().iter() {
+        std::println!("{n:6} panics at {at}");
+    }
+    (tried, loaded)
+}
+
+static PANICS: std::sync::Mutex<BTreeMap<String, usize>> = std::sync::Mutex::new(BTreeMap::new());
+static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// With `DJS_SNAP_FUZZ_ALL`: remember where each panic came from (the first djs frame).
+fn hook() {
+    if std::env::var_os("DJS_SNAP_FUZZ_ALL").is_none() {
+        return;
+    }
+    std::panic::set_hook(alloc::boxed::Box::new(|_| {
+        let bt = std::backtrace::Backtrace::force_capture().to_string();
+        let at = bt
+            .lines()
+            .filter(|l| l.contains("djs_core::") && !l.contains("fail::") && !l.contains("object_slot") && !l.contains("snapshot::tests"))
+            .take(9)
+            .map(|l| l.trim().split("::").last().unwrap_or("?").to_string())
+            .collect::<Vec<_>>()
+            .join(" < ");
+        *LAST.lock().unwrap() = at;
+    }));
+}
+
+/// Truncations and bit flips refuse or load; they never panic.
+#[test]
+fn malformed_snapshots_refuse() {
+    let (tried, loaded) = fuzz(400);
+    std::println!("fuzz: {tried} malformed snapshots, {loaded} loaded and ran");
+}
+
+/// `DJS_SNAP_FUZZ=N`: a longer fuzz.
+#[test]
+#[ignore]
+fn malformed_snapshots_refuse_long() {
+    let n = std::env::var("DJS_SNAP_FUZZ")
+        .ok()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(20_000);
+    let (tried, loaded) = fuzz(n);
+    std::println!("fuzz: {tried} malformed snapshots, {loaded} loaded and ran");
+}
