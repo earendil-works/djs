@@ -953,6 +953,8 @@ export class Sandbox {
   private readonly fnAsync = new Map<number, boolean>();
   /** The globals the sandbox bound to host functions and namespaces (a dump's host globals). */
   private readonly globalNames = new Set<string>();
+  /** Whether the instance has what snapshots need of the base (`snapshotBase`). */
+  private snapshotsReady = false;
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
   private active: RunCore | null = null;
   /** The task in progress (`start`, `resume`): ends it when the sandbox is disposed. */
@@ -1935,12 +1937,24 @@ export class Sandbox {
       w.text(name);
     }
     w.text(JSON.stringify(data));
+    this.snapshotBase();
     const n = this.guard(() => {
       this.stage(w.bytes());
       return x.vm_snapshot!(this.vm, w.length);
     });
     if (n < 0) throw new SandboxError("misuse", `cannot snapshot the run:\n${outText(x)}`);
     return new Uint8Array(x.memory.buffer, x.djs_out_ptr(), n).slice();
+  }
+
+  /**
+   * Snapshots name builtins by their paths in the base, which the instance reads once,
+   * at its first snapshot operation: its first VM took the base as its arena (D2060), so
+   * it gets the base again (D2252; the instance keeps the paths, not the bytes).
+   */
+  private snapshotBase(): void {
+    if (this.snapshotsReady) return;
+    this.guard(() => provideBase(this.module, this.x));
+    this.snapshotsReady = true;
   }
 
   /** The host values by name a snapshot names (D3720): the converting functions, the namespaces, `values` and module namespaces. */
@@ -1993,6 +2007,7 @@ export class Sandbox {
       w.u32(h);
       w.text(name);
     }
+    this.snapshotBase();
     const st = this.guard(() => {
       this.stage(w.bytes());
       return x.vm_load_snapshot!(this.vm, w.length);

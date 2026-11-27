@@ -57,7 +57,9 @@ const MAGIC: &[u8; 6] = b"DJSNAP";
 /// What a build knows about its base image, made once per base: the builtins' registry
 /// paths, and the per-VM objects of a fresh VM (what patches are relative to).
 pub struct BaseInfo {
-    pub(crate) image: Vec<u8>,
+    /// The base image, for loads into a fresh VM ([`Vm::from_snapshot`]); `None` when
+    /// made by [`BaseInfo::from_owned`], for loads into a host's VM only.
+    pub(crate) image: Option<Vec<u8>>,
     pub(crate) opts: VmOptions,
     /// Builtin cell offset -> registry path.
     pub(crate) paths: BTreeMap<u32, String>,
@@ -72,6 +74,20 @@ pub struct BaseInfo {
 impl BaseInfo {
     pub fn new(image: &[u8], opts: VmOptions) -> Result<BaseInfo, String> {
         let vm = Vm::from_base(image, opts).map_err(|e| alloc::format!("{e:?}"))?;
+        let mut info = BaseInfo::of(&vm, opts);
+        info.image = Some(image.to_vec());
+        Ok(info)
+    }
+
+    /// [`BaseInfo::new`] over a base the caller hands over (a wasm instance's decoded
+    /// base, which a VM took as its arena): no copy kept, so it serves snapshots and loads
+    /// into a host's VM ([`Vm::load_snapshot`]), not [`Vm::from_snapshot`].
+    pub fn from_owned(image: Vec<u8>, opts: VmOptions) -> Result<BaseInfo, String> {
+        let vm = Vm::from_base_vec(image, opts, 0).map_err(|e| alloc::format!("{e:?}"))?;
+        Ok(BaseInfo::of(&vm, opts))
+    }
+
+    fn of(vm: &Vm, opts: VmOptions) -> BaseInfo {
         let h = vm.heap();
         let end = h.base_end();
         let mut paths = BTreeMap::new();
@@ -95,14 +111,14 @@ impl BaseInfo {
                 .collect(),
             None => Vec::new(),
         });
-        Ok(BaseInfo {
-            image: image.to_vec(),
+        BaseInfo {
+            image: None,
             opts,
             paths,
             cells,
             fresh,
             fresh_global: intrinsic(h, Intrinsic::Global),
-        })
+        }
     }
 }
 

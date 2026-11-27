@@ -448,7 +448,12 @@ pub(super) fn load(
     stats: Option<&mut SnapshotStats>,
 ) -> Result<(Vm, ()), Refusal> {
     let snap = Snap::parse(bytes)?;
-    let mut vm = Vm::from_base(&base.image, base.opts).map_err(|e| refusal(format!("{e:?}")))?;
+    let image = base.image.as_deref().ok_or_else(|| {
+        refusal(String::from(
+            "no base image to make a fresh VM from (a host's base info)",
+        ))
+    })?;
+    let mut vm = Vm::from_base(image, base.opts).map_err(|e| refusal(format!("{e:?}")))?;
     run(&mut vm, &snap, base, sources, None, stats)?;
     Ok((vm, ()))
 }

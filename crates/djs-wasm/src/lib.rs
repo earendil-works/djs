@@ -1759,7 +1759,8 @@ ops! {
 #[cfg(feature = "snapshot")]
 instance_locals! {
     /// What the snapshots of this instance are relative to: made from the base at the
-    /// first use, with the options of the first VM that asked.
+    /// first use, with the options of the first VM that asked (the frozen-builtins mode
+    /// and the memory limit play no part in it).
     static SNAP_BASE: RefCell<Option<djs_core::vm::snapshot::BaseInfo>> = RefCell::new(None);
 }
 
@@ -1771,8 +1772,14 @@ fn with_snap_base<R>(
     SNAP_BASE.with(|b| {
         let mut b = b.borrow_mut();
         if b.is_none() {
-            let base = take_base().ok_or_else(|| String::from("no base snapshot"))?;
-            *b = Some(djs_core::vm::snapshot::BaseInfo::new(&base, opts)?);
+            // The instance's base, decoded or handed over again after its first VM took
+            // it (the host injects it before its first snapshot operation): taken, not
+            // copied.
+            let base = BASE
+                .with(|b| b.borrow_mut().take())
+                .or_else(|| decode_base(base_capacity()))
+                .ok_or_else(|| String::from("no base snapshot: hand the base over again"))?;
+            *b = Some(djs_core::vm::snapshot::BaseInfo::from_owned(base, opts)?);
         }
         Ok(f(b.as_ref().unwrap()))
     })
