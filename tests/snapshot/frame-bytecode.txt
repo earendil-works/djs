@@ -7,7 +7,7 @@ codemode/arrows-share-this-arguments.js	446..529	f62c56ed5c50a85b
 codemode/arrows-share-this-arguments.js	532..693	d276d39f3b20c189
 codemode/arrows-share-this-arguments.js	714..789	1d9d93335fb1fb50
 codemode/arrows-share-this-arguments.js	793..882	80b778d9d693ef80
-codemode/arrows-share-this-arguments.js	883..1069	1e0438d435b07b25
+codemode/arrows-share-this-arguments.js	883..1069	83b9d86a913bd004
 codemode/arrows-share-this-arguments.js	1070..1149	5b90037dac29b4f4
 codemode/async-helpers.js	1..1424	99d62ad6c39d15d1
 codemode/async-helpers.js	141..319	4ca1a7d5b0f69edf
@@ -38,7 +38,7 @@ codemode/plain-for-await-sync.js	445..599	856cf8d771e10169
 codemode/plain-for-await-sync.js	701..774	9fdc15e111e84dbe
 codemode/redump-copied-loops.js	1..1018	e0668b1689f8b860
 codemode/redump-copied-loops.js	205..268	972bfc675e24e8f4
-codemode/redump-from-async.js	1..1295	c0913817a73c49a9
+codemode/redump-from-async.js	1..1295	d882fd8080ebacb9
 codemode/redump-from-async.js	336..481	e862772757c282f4
 codemode/redump-from-async.js	595..643	32dfd59e6034cda2
 codemode/redump-from-async.js	843..882	2c9712d23e220196
@@ -57,7 +57,7 @@ codemode/redump-super-late-class.js	464..525	dd08fc02630a532d
 codemode/redump-super-late-class.js	642..818	9f2688ee0de775d1
 codemode/redump-super-late-class.js	991..1047	b97ae4e7db0b26c4
 codemode/redump-template.js	1..235	3e175af109d16b9d
-codemode/script-style.js	1..819	cc5dab1ebe9dde17
+codemode/script-style.js	1..819	417edb88e0318479
 codemode/store.js	1..521	4312ac0603129391
 codemode/tool-failure.js	1..152	25714403bbdb7e05
 codemode/tools-proxy.js	1..2809	63177cdd71e13787
@@ -72,7 +72,7 @@ codemode-harvest/h002-bash-read.js	1..16497	1127cdeab60b7fff
 codemode-harvest/h002-bash-read.js	15847..16486	5abdabfdfd8790e2
 codemode-harvest/h002-bash-read.js	16162..16227	958d2b54c8b07e93
 codemode-harvest/h003-bash-read.js	1..2498	55ba968d45170f11
-codemode-harvest/h003-bash-read.js	1997..2487	73d9081821163246
+codemode-harvest/h003-bash-read.js	1997..2487	c48d8cf234c3c98c
 codemode-harvest/h004-bash-read.js	1..4162	4aaefb0b56fe5a11
 codemode-harvest/h004-bash-read.js	2771..4151	7c264b6322f9125e
 codemode-harvest/h004-bash-read.js	2955..3015	795f513274819237
@@ -80,7 +80,7 @@ codemode-harvest/h005-bash.js	1..3300	714dabcf1f3c3a8a
 codemode-harvest/h005-bash.js	2340..3289	53154fb43a18816e
 codemode-harvest/h005-bash.js	3146..3228	55c1c740016232e1
 codemode-harvest/h006-no-tools.js	1..1236	36b81f4887e54a31
-codemode-harvest/h006-no-tools.js	886..1225	937309dc3ce4f9d0
+codemode-harvest/h006-no-tools.js	886..1225	27c48064a1bd0688
 codemode-harvest/h007-bash-read.js	1..14684	d72354b1eb3380ac
 codemode-harvest/h007-bash-read.js	13976..14673	33273f666a5b9802
 codemode-harvest/h007-bash-read.js	14317..14372	a2d7607b2e0b225c
@@ -113,7 +113,7 @@ codemode-harvest/h019-bash-read.js	4818..4878	795f513274819237
 codemode-harvest/h020-read.js	1..2582	3587cddb31eae076
 codemode-harvest/h020-read.js	2153..2571	2c2f14d74aba11ea
 codemode-harvest/h021-bash-read.js	1..3786	786471b5f59aff97
-codemode-harvest/h021-bash-read.js	2857..3775	06bf134c72be93f3
+codemode-harvest/h021-bash-read.js	2857..3775	ca5b1f845b741720
 codemode-harvest/h022-no-tools.js	1..1043	9812712aa4406960
 codemode-harvest/h022-no-tools.js	886..1032	e6fdabf9dadf2422
 codemode-harvest/h023-bash.js	1..5774	d3ca2db52ff703c3
@@ -228,7 +228,7 @@ codemode-harvest/h072-read.js	1423..1614	907a26353af04716
 codemode-harvest/h073-bash-read.js	1..1965	b94cac78d157552c
 codemode-harvest/h073-bash-read.js	1640..1954	1bd9d65293e12555
 codemode-harvest/h074-bash.js	1..2094	c23877f76022ba16
-codemode-harvest/h074-bash.js	1733..2083	556e1d372396e615
+codemode-harvest/h074-bash.js	1733..2083	ce33bf5cd8f21fd6
 codemode-harvest/h075-bash.js	1..3945	d88f8fdcbec00ffb
 codemode-harvest/h075-bash.js	3692..3934	c2d88d9124c215e8
 codemode-harvest/h075-bash.js	3768..3929	e0e6a6ab45afa1bd
@@ -300,7 +300,7 @@ codemode-harvest/h105-read.js	1741..2035	fabf784774e2b518
 codemode-harvest/h106-read.js	1..2145	efd18f4a171d8e3b
 codemode-harvest/h106-read.js	1864..2134	c8c09c21f749c60d
 codemode-harvest/h107-bash-read.js	1..2809	900e6b77e57efd32
-codemode-harvest/h107-bash-read.js	1899..2798	ef80a4c987117cc0
+codemode-harvest/h107-bash-read.js	1899..2798	278b4f52f8c74f8f
 codemode-harvest/h108-read.js	1..1999	db97123191b71aea
 codemode-harvest/h108-read.js	1787..1988	160de284f9114e67
 codemode-harvest/h109-bash.js	1..1828	a4545a086efe7ff1
@@ -400,15 +400,15 @@ codemode-harvest/h150-bash.js	1..3857	264069e755c94fcc
 codemode-harvest/h150-bash.js	3363..3846	fcb721439377faff
 codemode-harvest/h150-bash.js	3769..3841	fbc183d9e7fea6ab
 codemode-harvest/h151-bash-structured-models-write.js	1..17123	1a68d4a8335e066e
-codemode-harvest/h151-bash-structured-models-write.js	15217..17100	45c89adfe0dd5535
+codemode-harvest/h151-bash-structured-models-write.js	15217..17100	d6619af61bb91aa4
 codemode-harvest/h152-read-transcribe_file.js	1..11730	dda454ed1aa65f3a
-codemode-harvest/h152-read-transcribe_file.js	10864..11719	2d8839efc0e05e72
+codemode-harvest/h152-read-transcribe_file.js	10864..11719	2b2cbaeaf4963c85
 codemode-harvest/h153-structured.js	1..8817	673c3fad620832bd
 codemode-harvest/h153-structured.js	8043..8806	a7a4992720dbcb6c
 codemode-harvest/h154-bash-structured-load.js	1..21136	4fad1216ee629077
-codemode-harvest/h154-bash-structured-load.js	19882..21115	468c5ab4e06f89dd
+codemode-harvest/h154-bash-structured-load.js	19882..21115	87a4ea78af425404
 codemode-harvest/h155-bash-structured-models.js	1..4526	8ac83fad760147d8
-codemode-harvest/h155-bash-structured-models.js	3107..4503	2ee886bb90589ff7
+codemode-harvest/h155-bash-structured-models.js	3107..4503	945d1f8c303946c2
 codemode-harvest/h156-bash-edit.js	1..2182	da262aac7e202f0d
 codemode-harvest/h156-bash-edit.js	1519..2171	9a9834be59a4c60b
 codemode-harvest/h157-structured.js	1..5809	64a70622b456b845
@@ -422,7 +422,7 @@ codemode-harvest/h160-bash-structured-models-read.js	82983..84835	ac36fc738f1281
 codemode-harvest/h161-bash-load-structured.js	1..4302	b92b822a8b5637c7
 codemode-harvest/h161-bash-load-structured.js	3282..4281	d50e5be8470710a6
 codemode-harvest/h162-load-models-read.js	1..12593	016b03cbb25abfe2
-codemode-harvest/h162-load-models-read.js	11082..12560	aacfd95dd16407ea
+codemode-harvest/h162-load-models-read.js	11082..12560	10a132c59dc155c2
 codemode-harvest/h163-read-write.js	1..2931	11e9766c9f9b7f1e
 codemode-harvest/h163-read-write.js	1501..2920	2656c15cdfef686b
 codemode-harvest/h164-load.js	1..48536	28f9f8fb83795556
@@ -433,7 +433,7 @@ codemode-harvest/h166-image-models.js	1..3955	ca51827039eb10ae
 codemode-harvest/h166-image-models.js	2710..3921	eb00ac133f56063b
 codemode-harvest/h166-image-models.js	3596..3730	61b6f1184e82e6c0
 codemode-harvest/h167-bash-structured-load-read.js	1..3832	436800d67dd818fc
-codemode-harvest/h167-bash-structured-load-read.js	3316..3811	7065c56eb9baf85d
+codemode-harvest/h167-bash-structured-load-read.js	3316..3811	30b1ab0bfb81095a
 codemode-harvest/h168-structured.js	1..1650	0941fba341195b7f
 codemode-harvest/h168-structured.js	1343..1639	7293871c010ec982
 codemode-harvest/h169-bash-structured-read-write.js	1..3404	1714743ee8d1162f
@@ -446,7 +446,7 @@ codemode-harvest/h172-bash-structured-structured.js	1..5835	1ae8360462871688
 codemode-harvest/h172-bash-structured-structured.js	4603..5824	7ff8b0af1d57642e
 codemode-harvest/h173-structured.js	1..2935	1e5151858a55f701
 codemode-harvest/h173-structured.js	2420..2924	bf69b3436a94fcdf
-codemode-harvest/h173-structured.js	2566..2864	a4547033e02e9e30
+codemode-harvest/h173-structured.js	2566..2864	c3b34bbd912d646f
 codemode-harvest/h174-structured.js	1..4772	9cf28f0f14ac321c
 codemode-harvest/h174-structured.js	3703..4761	f4b59b8931e89b96
 codemode-harvest/h175-models.js	1..3309	fbde8710bd11ef76
@@ -493,7 +493,7 @@ codemode-harvest/h193-image-models-read.js	2880..4790	c6f39e63f8b92f7a
 codemode-harvest/h194-structured.js	1..2837	7f54994bc3ba0b55
 codemode-harvest/h194-structured.js	986..2826	a14aee9881d80592
 codemode-harvest/h195-load.js	1..4455	95edb7c186c7fa3b
-codemode-harvest/h195-load.js	3709..4434	ccf5657ae4aa4a42
+codemode-harvest/h195-load.js	3709..4434	c3fbbf3cf5e206da
 codemode-harvest/h196-bash-structured-transcribe_file.js	1..2262	c306e1f3eace5bcb
 codemode-harvest/h196-bash-structured-transcribe_file.js	1796..2251	54fde6d274768b2d
 codemode-harvest/h197-structured.js	1..1399	e765bdc62874514c
@@ -543,7 +543,7 @@ codemode-harvest/h217-load-read.js	2365..2572	3ac5bb341ad3152c
 codemode-harvest/h218-structured.js	1..1302	3692c444df8396ac
 codemode-harvest/h218-structured.js	999..1291	eced74b5cc1aa0d2
 codemode-harvest/h219-bash-structured.js	1..3402	67e4b9a4d40e2f7f
-codemode-harvest/h219-bash-structured.js	2917..3379	2a71293eede5eca2
+codemode-harvest/h219-bash-structured.js	2917..3379	2621375927bbaaa5
 codemode-harvest/h220-bash-edit.js	1..3034	a68413ae8f3df93e
 codemode-harvest/h220-bash-edit.js	1683..3023	d83964efe3f5e49e
 codemode-harvest/h221-bash-structured-structured.js	1..6167	e59da364cb10ab98
@@ -583,7 +583,7 @@ codemode-harvest/h236-load.js	1..3300	8aee23cc3a00ac82
 codemode-harvest/h236-load.js	3092..3279	dff3d5e186088cb8
 codemode-harvest/h237-structured.js	1..2962	bcdac4e4f45926a9
 codemode-harvest/h237-structured.js	2486..2951	1117016a9d092d6e
-codemode-harvest/h237-structured.js	2632..2930	bab078b0d25c6558
+codemode-harvest/h237-structured.js	2632..2930	c7e9eb4cbc910df5
 codemode-harvest/h238-bash-structured-load.js	1..2526	f6af6922ca5160ab
 codemode-harvest/h238-bash-structured-load.js	2150..2505	38ce9db3981a24bb
 codemode-harvest/h239-structured.js	1..1748	cb3eebbb1307f8af

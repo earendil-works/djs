@@ -3,8 +3,9 @@
 //!
 //! What goes in, and why:
 //! - every instruction by opcode *name* (not byte), its byte offset, and its immediates;
-//!   atom immediates by the atom's string and intrinsic immediates by the intrinsic's
-//!   name, since atom and intrinsic ids move whenever builtins come or go. The offsets
+//!   atom immediates by the atom's string, intrinsic immediates by the intrinsic's name
+//!   and prelude function table slots by what they hold (D3711), since atom and
+//!   intrinsic ids and the slots move whenever builtins come or go. The offsets
 //!   are in because a frame's pc and its header's return pcs are byte offsets: a change
 //!   in an instruction's encoded size must change the hash even if the sequence stays.
 //! - the frame shape: parameter count, `length`, locals, operand stack depth, captures,
@@ -65,6 +66,7 @@ pub(super) fn template_hash(h: &Heap, t: u32) -> u64 {
                 ImmKind::Intrinsic => f.str(crate::bytecode::intrinsics::intrinsic_name(
                     insn.imm(i) as u16,
                 )),
+                ImmKind::Builtin => builtin(h, &mut f, insn.imm(i)),
                 _ => f.u32(insn.imm(i)),
             }
         }
@@ -87,6 +89,34 @@ pub(super) fn template_hash(h: &Heap, t: u32) -> u64 {
         }
     }
     f.0
+}
+
+/// A prelude function table slot (`get_builtin`) by what it holds (D3711): a known
+/// builtin by its name (`Math.floor`), a prelude function by its function's name. The slot
+/// numbers move whenever a builtin comes or goes.
+fn builtin(h: &Heap, f: &mut Fnv, k: u32) {
+    use crate::interp::realm::{Intrinsic, intrinsic};
+    if let Some((g, m)) = crate::interp::known::name_of(h, k) {
+        f.str("known");
+        f.str(&h.atom_name(g));
+        if let Some(m) = m {
+            f.str(&h.atom_name(m));
+        }
+        return;
+    }
+    let t = intrinsic(h, Intrinsic::PreludeFunctions).as_internal();
+    let fun = t
+        .filter(|&t| k < h.value_array_len(t))
+        .and_then(|t| h.value_array_get(t, k).as_object())
+        .filter(|&o| h.object_class(o) == crate::heap::ObjectClass::Function);
+    match fun {
+        Some(o) => {
+            let name = h.arena().get::<u32>(h.closure_template(o), FuncTemplate::NAME);
+            f.str("prelude");
+            f.str(&h.atom_name(Atom::from_id(name)));
+        }
+        None => f.u32(k),
+    }
 }
 
 /// A constant by value: strings by content, numbers by bits; the rest (a regex literal's

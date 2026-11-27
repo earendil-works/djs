@@ -76,6 +76,27 @@ pub(crate) fn lookup(heap: &Heap, global: Atom, member: u32) -> Option<(u16, u16
     Some((k(i), k(i)))
 }
 
+/// What prelude function table slot `k` holds as a known builtin: the global's name
+/// atom and, for a member of it, the member's (the logical snapshot's bytecode hash names
+/// `get_builtin` by them, D3711). None for a prelude function's slot.
+#[cfg(feature = "snapshot")]
+pub(crate) fn name_of(heap: &Heap, k: u32) -> Option<(Atom, Option<Atom>)> {
+    let names = intrinsic(heap, Intrinsic::KnownNames).as_internal()?;
+    let w = k.checked_sub(heap.u32_array_get(names, 0))? + 1;
+    if w >= heap.u32_array_len(names) {
+        return None;
+    }
+    let word = heap.u32_array_get(names, w);
+    if word & GLOBAL != 0 {
+        return Some((Atom::from_id(word & !GLOBAL), None));
+    }
+    let g = (1..w)
+        .rev()
+        .map(|i| heap.u32_array_get(names, i))
+        .find(|x| x & GLOBAL != 0)?;
+    Some((Atom::from_id(g & !GLOBAL), Some(Atom::from_id(word))))
+}
+
 /// No member for [`lookup`]: no member's word has the bit.
 pub(crate) const NO_MEMBER: u32 = GLOBAL;
 
