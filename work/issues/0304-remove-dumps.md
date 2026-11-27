@@ -1,6 +1,6 @@
 # 0304: Remove continuation dumps
 
-status: in-progress
+status: done
 agent: psnap
 branch: issue/0304-remove-dumps
 depends-on: 0301, 0302, 0303
@@ -62,7 +62,72 @@ No compatibility code (owner: earlier releases need not load).
   runtime. Scripts: dump-costs, dump-fuzz, dump-node.mjs, dump-size gone; the `scores`
   merge driver (only dump-size.tsv used it) and the smap summary's regen gone;
   merge-driver-test checks the generated driver; status.py without dumps.
+- Guide: one page on persistence, docs/guide/persistence.md ("Snapshots: keeping a
+  waiting run", in "Using djs": a live `debugger;` example with its `gen:snapshot`, idle
+  points, taking and loading, contents, code compiled again and checked by hash,
+  scripts by text or hash, host values, later builds, what cannot be snapshotted,
+  describe/callSite, pauses). dumps.md, continuations.md and gen/chart-engines-dumps.svg
+  deleted; rewritten: suspension.md ("Persisting a waiting run", gen:snapshot),
+  snapshots.md ("Beyond the process"), js-api.md, cli.md (REPL `--debugger`/`--frozen`),
+  host.md (no dump ops; the shipped module's 128 KiB stack; one module with snapshots),
+  pi.md (the durable mode on `run.snapshot()`/`loadSnapshot`), goals.md, index.md,
+  introduction.md, language.md, limits.md, determinism.md, builtins.md ("Snapshots and
+  changed builtins"), compiler.md (lazy: the wasm modules leave it out), interpreter.md,
+  rust-api.md, benchmarks.md (no Dumps section), testing.md (a snapshots section instead
+  of dumps), status.md, README.md (gen:snapshot, the live pause text). The live tip links
+  persistence.html. `djs-docs check` ok.
+- docs/: continuation-dumps.md deleted; cli.md and host.md rewritten for snapshots (both
+  had never described them); compiler.md, web-globals.md; status lines of the research
+  reports heap-snapshots-revisited.md and suspension-design-review.md say they are
+  historical; decisions-index.md lists D3700, D3730-D3734 and the supersession.
+- ARCH.md: G4, "Images and snapshots" (was "Images and dumps"; djs-prelude's two
+  references follow), the execution API, durability, the stress mode, phases, risks.
+  TESTING.md: no --dumps/fuzzer/golden dumps/e2e dump mode/smap/dump-size; the programs;
+  the merge drivers; size history. README.md, AGENTS.md, work/README.md, the workflows'
+  comments.
+- Size after (shipped features): 510,652 B gz (1,192,832 raw; code 1,016 KB, data 79 KB
+  from 108 KB); ceiling 786,101 -> 511,676; codemode-memory every row 64 KiB lower (the
+  smaller data segment), recorded; status.tsv's wasm sizes recorded (wasm/ops 74 -> 60).
+- Decisions D3730 (removal, superseding the dump decisions), D3731 (REPL --debugger),
+  D3732 (eager module), D3733 (128 KiB with snapshots), D3734 (run result, states,
+  gen:snapshot, programs).
+- What stays (final grep for dump|smap|$djs|continuation): value "dumps" of the json/wire
+  tests and js/test/dump.ts (a canonical value printer), gen-cross/reader-cross; the
+  interpreter's return continuations (`Continuation`), template and line continuations,
+  UTF-8 continuation bytes, AsyncFromSyncIteratorContinuation; `ThisMap` (smap);
+  `$DJS_*` environment variables; other engines' `vm.dump`/`ctx.dump` in js/bench/engines
+  and `json.dumps` (monty); scripts/size/areas.py's QuickJS JS_DumpMemory patterns;
+  prof::dump (scripts/perf/instr.py), chrome's `--dump-dom`, `DJS_DUMP_META` (test262
+  frontmatter); llvm-dwarfdump/objdump. Historical records: docs/decisions.md, the
+  research reports, work/issues, work/research (0199's Cargo.toml names the old `dump`
+  feature; not a workspace member), the TESTING/ARCH history notes, frozen-builtins.md's
+  design table. tests/corpus: 83 cases' comments name the plain-dump fuzzer or dumps as
+  their provenance; left as they are, since editing them shifts the source spans that
+  tests/snapshot/frame-bytecode.txt pins (and the cases stay valid tests).
+- Ran: djs-docs and djs-cli tests, e2e (default: plain, GC stress, suspend), the JS tests on
+  the dev wasm (110 pass), nesting on the shipped module, fmt, gate legs paths/targets.
 
 ## Follow-ups
+- The engine comparison (benchmarks.md) lost its dump table; snapshot costs (write and
+  load time, size per workload) could take its place (`scripts/status.py engines` and
+  js/bench/engines/run.ts).
+- The `engines/*` measurements in status.tsv were recorded with the dumper module
+  (djs's module size, compile time, memory); re-record with `scripts/status.py engines`.
+- tests/corpus comments that cite the dump fuzzer or dump behavior (83 files) could be
+  reworded together with a regeneration of tests/snapshot/frame-bytecode.txt.
+- The shipped module's 128 KiB stack (D3733): an elastic retry inside the snapshot loader
+  would give every instance 64 KiB back.
+- pi-mono-djs's durable mode still uses dumps (`run.dump`, `loadRun`); it needs to move to
+  `run.snapshot()`/`loadSnapshot` and ABI 11.
 
 ## Result
+Continuation dumps are gone: the dumper, the suspension maps and their parser hooks, the
+`$djs` runtime, the dump ABI (djs-wasm ABI 11), the Sandbox's, CLI's, REPL's, difftest's
+and djs-docs' dump parts, the dump tools, tests, gate leg and guide pages. Snapshots
+(D3700) are the only persistence format: `task.suspend()`/`checkpoint()`,
+`Sandbox.resume`, `run.snapshot()`/`loadSnapshot`, `describeSnapshot`, `callSite`;
+`djs run --snapshot-after/--snapshot-every-idle/--debugger`, `djs resume`, `djs
+describe`, the REPL's `.snapshot`/`.restore` and `--debugger`. The guide has one page on
+it, persistence.md. The shipped module is 510,652 B gz (from 785,187), eager, with a
+128 KiB stack; its ceiling is 511,676. Known gaps: see Follow-ups (engine-comparison
+numbers stale, corpus provenance comments, the 128 KiB stack, pi's durable mode).
