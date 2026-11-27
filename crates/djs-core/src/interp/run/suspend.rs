@@ -147,20 +147,12 @@ pub(crate) fn dequeue_request(heap: &mut Heap, g: Obj) -> Value {
     first
 }
 
-/// A suspended activation as the dumper and `Vm::call_site` read it (0172).
-#[cfg_attr(not(feature = "dump"), allow(dead_code))]
+/// A suspended activation as `Vm::call_site` reads it: its saved frame and where it
+/// resumes.
 pub(crate) struct Suspended {
-    pub kind: i32,
-    pub state: i32,
     /// The saved frame (`suspend_frame`), empty unless suspended.
     pub frame: alloc::vec::Vec<Value>,
     pub pc: u32,
-    /// The header's position in `frame`.
-    pub hp: u32,
-    /// An async function's result promise.
-    pub promise: Value,
-    /// An async generator's request Records.
-    pub queue: alloc::vec::Vec<Value>,
 }
 
 /// Reads activation `g`.
@@ -175,13 +167,8 @@ pub(crate) fn read_activation(heap: &Heap, g: Obj) -> Suspended {
         }
     };
     Suspended {
-        kind: int(KIND),
-        state: int(STATE),
         frame: list(heap.object_slot(g, FRAME)),
         pc: int(PC) as u32,
-        hp: int(HP) as u32,
-        promise: heap.object_slot(g, PROMISE),
-        queue: list(heap.object_slot(g, QUEUE)),
     }
 }
 

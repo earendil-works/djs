@@ -14,10 +14,7 @@ doctest = false
 djs-libm = { path = "../djs-libm" }
 
 [features]
-default = ["unicode", "dump", "lazy", "embed", "snapshot"]
-# `Vm::dump` (0167, docs/continuation-dumps.md): a VM's bindings written as JavaScript.
-# Code only: images and the base do not depend on it.
-dump = []
+default = ["unicode", "lazy", "embed", "snapshot"]
 # Logical snapshots (0300, 0301, D3700): `Vm::snapshot`/`Vm::from_snapshot`, a waiting VM
 # as a graph of named-field records keyed by bytecode hashes: djs's persistence format.
 # Code only (not in the build hash).
@@ -25,7 +22,7 @@ snapshot = ["intrinsic-names"]
 # Lazy function compilation (0218, D2990): with `VmOptions::lazy_functions`, a function
 # body is compiled at its first call; the load still parses everything. Code only: a
 # build without it treats a lazy template as corrupt bytecode, and `Vm::seal` compiles
-# them all first. Off in the shipped module (D2990), on in the dump module.
+# them all first.
 lazy = []
 # What Rust hosts (djs-embed) use beyond the wasm modules' needs (D3175, D3180): the
 # outbound wire encoder (`wire::encode`), the wire format's uncounted UTF-8 strings,
@@ -64,7 +61,7 @@ unsafe-heap = []
 [dev-dependencies]
 # e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,
 # which cargo allows: integration tests link the same djs-core).
-djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry", "names"] }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }
 
 [lints.rust]
 # `djs_optsize`: set by scripts/wasm-build-env.sh for the shipped module (0298).

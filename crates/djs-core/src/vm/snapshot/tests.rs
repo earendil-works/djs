@@ -1,10 +1,10 @@
 //! Logical snapshots on the harvested codemode corpus (0300): every case of
-//! tests/corpus/codemode-harvest runs as the difftest runs it (vm/dump_harvest.rs), and
+//! tests/corpus/codemode-harvest runs as the difftest runs it, and
 //! at idle points the VM is exported, imported into a fresh VM, and the run goes on there.
 //!
 //! `DJS_SNAP=1 cargo test -p djs-core --features snapshot --lib vm::snapshot -- --ignored --nocapture`
-//! (`DJS_SNAP_OUT=file`: one line per idle point; `DJS_SNAP_DIR=dir`: the snapshots and
-//! dumps themselves, for compressed sizes).
+//! (`DJS_SNAP_OUT=file`: one line per idle point; `DJS_SNAP_DIR=dir`: the snapshots
+//! themselves, for compressed sizes).
 
 extern crate std;
 
@@ -14,8 +14,6 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use std::time::Instant;
 
-use super::super::dump::DumpOptions;
-use super::super::dump_harvest as dh;
 use super::*;
 use crate::compiler::CompileOptions;
 use crate::heap::Handle;
@@ -26,9 +24,30 @@ const OUTPUT: u32 = 0;
 const DONE: u32 = 1;
 const LATER: u32 = 2;
 
+/// The base image of this build, made once.
+pub(super) fn base() -> &'static [u8] {
+    static BASE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    BASE.get_or_init(|| {
+        let mut v = Vm::new(VmOptions::default()).unwrap();
+        v.prepare_base_image().unwrap();
+        v.bytes().to_vec()
+    })
+}
+
+/// The VMs' options: frozen builtins, as pi runs; with `DJS_LAZY=1` lazy functions
+/// (D2990).
+pub(super) fn vm_opts() -> VmOptions {
+    VmOptions {
+        frozen_builtins: true,
+        #[cfg(feature = "lazy")]
+        lazy_functions: std::env::var("DJS_LAZY").is_ok_and(|v| v == "1"),
+        ..VmOptions::default()
+    }
+}
+
 pub(super) fn info() -> &'static BaseInfo {
     static INFO: std::sync::OnceLock<BaseInfo> = std::sync::OnceLock::new();
-    INFO.get_or_init(|| BaseInfo::new(dh::base(), dh::frozen()).unwrap())
+    INFO.get_or_init(|| BaseInfo::new(base(), vm_opts()).unwrap())
 }
 
 fn get(vm: &mut Vm, o: Obj, name: &str) -> Value {
@@ -42,7 +61,7 @@ fn get(vm: &mut Vm, o: Obj, name: &str) -> Value {
 /// What happens at an idle point: `k` counts them from 0 over the whole run.
 type AtIdle<'a> = &'a mut dyn FnMut(&mut Vm, Handle, usize);
 
-/// Runs `f` as the difftest's djs engine does (dump_harvest's `idle_call`): output and
+/// Runs `f` as the difftest's djs engine does: output and
 /// done recorded, `later` calls settled at idle points, oldest first.
 #[allow(clippy::too_many_arguments)]
 fn idle_call(
@@ -103,7 +122,7 @@ fn idle_call(
 
 /// A case's transcript; `at_idle` is called at each idle point of the script's run.
 fn run(prelude: &str, case: &str, at_idle: Option<AtIdle<'_>>) -> Result<Vec<String>, String> {
-    let mut vm = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+    let mut vm = Vm::from_base(base(), vm_opts()).unwrap();
     let mut out = Vec::new();
     let mut k = 0;
     let p = vm
@@ -237,7 +256,7 @@ fn snapshot_harvest() {
     }
     let measure = std::env::var_os("DJS_SNAP_MEASURE").is_some();
     let mut lines = String::from(
-        "case\tk\tsnap\texport_us\timport_us\tdump\tdump_us\timage\tsources\trecords\tnosrc\tfresh_us\tcompile_us\n",
+        "case\tk\tsnap\texport_us\timport_us\timage\tsources\trecords\tnosrc\tfresh_us\tcompile_us\n",
     );
     let mut st = Stats::default();
     for (name, case) in &cases {
@@ -245,13 +264,13 @@ fn snapshot_harvest() {
         let Ok(want) = run(&prelude, case, None) else {
             continue;
         };
-        // Every idle point: export, and, measured, the dump and the image beside it.
+        // Every idle point: export, and, measured, the image beside it.
         let mut points = 0;
         let mut first_err: Vec<(usize, Result<(), String>)> = Vec::new();
         let r = run(
             &prelude,
             case,
-            Some(&mut |vm: &mut Vm, api: Handle, k: usize| {
+            Some(&mut |vm: &mut Vm, _api: Handle, k: usize| {
                 points += 1;
                 let t0 = Instant::now();
                 let snap = vm.snapshot(info());
@@ -272,17 +291,6 @@ fn snapshot_harvest() {
                 };
                 first_err.push((k, ok));
                 if measure || dir.is_some() {
-                    let apiv = vm.heap().get_handle(api);
-                    let handles = [("run", apiv)];
-                    let opts = DumpOptions {
-                        base_names: dh::base_names(),
-                        host_fn_name: &dh::host_fn_name,
-                        handles: &handles,
-                        ..Default::default()
-                    };
-                    let t0 = Instant::now();
-                    let dump = vm.dump(&opts, None).ok();
-                    let dump_us = t0.elapsed().as_micros();
                     let mut img = vm.clone_for_image();
                     let image = img.image().len();
                     let sources = sources_len(&snap);
@@ -305,7 +313,7 @@ fn snapshot_harvest() {
                     // What an import costs before its records: a fresh VM, then the
                     // scripts compiled into it.
                     let t0 = Instant::now();
-                    let mut fresh = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+                    let mut fresh = Vm::from_base(base(), vm_opts()).unwrap();
                     let fresh_us = t0.elapsed().as_micros();
                     let t0 = Instant::now();
                     fresh
@@ -316,17 +324,13 @@ fn snapshot_harvest() {
                         .unwrap();
                     let compile_us = t0.elapsed().as_micros();
                     lines += &format!(
-                        "{name}\t{k}\t{}\t{export_us}\t{import_us}\t{}\t{dump_us}\t{image}\t{sources}\t{records}\t{}\t{fresh_us}\t{compile_us}\n",
+                        "{name}\t{k}\t{}\t{export_us}\t{import_us}\t{image}\t{sources}\t{records}\t{}\t{fresh_us}\t{compile_us}\n",
                         snap.len(),
-                        dump.as_ref().map_or(0, |d| d.len()),
                         nosrc.len(),
                     );
                     if let Some(d) = &dir {
                         std::fs::write(d.join(format!("{name}-{k}.snap")), &snap).unwrap();
                         std::fs::write(d.join(format!("{name}-{k}.nosrc")), &nosrc).unwrap();
-                        if let Some(t) = dump {
-                            std::fs::write(d.join(format!("{name}-{k}.dump.js")), t).unwrap();
-                        }
                     }
                 }
             }),
@@ -519,7 +523,7 @@ const P_LATER: u32 = 1;
 const P_PRINT: u32 = 2;
 
 fn program_vm() -> Vm {
-    let mut vm = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+    let mut vm = Vm::from_base(base(), vm_opts()).unwrap();
     let later = vm.new_async_host_function(P_LATER, "later").unwrap();
     vm.define_global("later", later).unwrap();
     let print = vm.new_host_function(P_PRINT, "print").unwrap();
@@ -680,7 +684,7 @@ fn snapshot_programs() {
     }
     assert!(
         notes.is_empty(),
-        "snapshots of the dump programs refused or differ"
+        "snapshots of the test programs refused or differ"
     );
 }
 
@@ -709,7 +713,7 @@ fn describe_file() {
     }
 }
 
-// ---- Large live state (the cases pi hit with dumps) -----------------------------------
+// ---- Large live state --------------------------------------------------------------
 
 const LARGE: &[(&str, &str)] = &[
     (
@@ -749,7 +753,7 @@ fn large_state() {
         .unwrap_or(15);
     let _ = info();
     std::println!(
-        "case\tsnap_bytes\texport_med_us\texport_p99_us\timport_med_us\timport_p99_us\tdump_bytes\tdump_med_us\timage_bytes\timage_med_us\trestore_med_us"
+        "case\tsnap_bytes\texport_med_us\texport_p99_us\timport_med_us\timport_p99_us\timage_bytes\timage_med_us\trestore_med_us"
     );
     for (name, setup) in LARGE {
         let src = format!(
@@ -769,22 +773,9 @@ fn large_state() {
             }
         }
         vm.collect().unwrap();
-        let (mut ex, mut im, mut du, mut ig, mut rs) =
-            (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let (mut ex, mut im, mut ig, mut rs) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let mut snap = Vec::new();
-        let mut dump = String::new();
         let mut image = 0;
-        let handles: [(&str, Value); 0] = [];
-        let opts = DumpOptions {
-            base_names: dh::base_names(),
-            host_fn_name: &|id| match id {
-                P_LATER => Some("later".into()),
-                P_PRINT => Some("print".into()),
-                _ => None,
-            },
-            handles: &handles,
-            ..Default::default()
-        };
         for _ in 0..reps {
             let t = Instant::now();
             snap = vm.snapshot(info()).unwrap();
@@ -793,9 +784,6 @@ fn large_state() {
             let v = Vm::from_snapshot(info(), &snap).unwrap();
             im.push(t.elapsed().as_micros());
             drop(v);
-            let t = Instant::now();
-            dump = vm.dump(&opts, None).unwrap_or_default();
-            du.push(t.elapsed().as_micros());
             let t = Instant::now();
             let bytes = vm.image().to_vec();
             ig.push(t.elapsed().as_micros());
@@ -849,20 +837,17 @@ fn large_state() {
         if let Some(d) = &dir {
             std::fs::create_dir_all(d).unwrap();
             std::fs::write(d.join(format!("large-{name}.snap")), &snap).unwrap();
-            std::fs::write(d.join(format!("large-{name}.dump.js")), &dump).unwrap();
             if let Some(n) = &next {
                 std::fs::write(d.join(format!("large-{name}.next.snap")), n).unwrap();
             }
         }
         std::println!(
-            "{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{image}\t{}\t{}",
+            "{name}\t{}\t{}\t{}\t{}\t{}\t{image}\t{}\t{}",
             snap.len(),
             percentile(&mut ex, 0.5),
             percentile(&mut ex, 0.99),
             percentile(&mut im, 0.5),
             percentile(&mut im, 0.99),
-            dump.len(),
-            percentile(&mut du, 0.5),
             percentile(&mut ig, 0.5),
             percentile(&mut rs, 0.5),
         );
@@ -973,7 +958,7 @@ fn snapshot_import_dir() {
 #[ignore]
 fn probe_build() {
     let i = info();
-    let h = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+    let h = Vm::from_base(base(), vm_opts()).unwrap();
     let h = h.heap();
     let id = |n: &str| crate::bytecode::intrinsics::names().position(|x| x == n);
     std::println!(
@@ -981,7 +966,7 @@ fn probe_build() {
         super::super::BUILD_HASH,
         crate::heap::cells::LAYOUT_HASH,
         h.base_end(),
-        dh::base().len(),
+        base().len(),
         id("AsyncAwait"),
         id("PromiseResolveFunction"),
         crate::heap::atoms::LENGTH.id(),

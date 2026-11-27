@@ -37,10 +37,6 @@ pub(super) enum ScopeKind {
 
 pub(super) struct Scope {
     pub parent: Option<ScopeId>,
-    /// Source offset where the scope starts (the function's start for the body): how a
-    /// suspension map names a binding's declaring scope (D2563).
-    #[cfg(feature = "dump")]
-    pub pos: u32,
     pub kind: ScopeKind,
     pub vars: Vec<VarId>,
     /// Function declarations hoisted to this scope's entry: `(binding, child index)`.
@@ -347,9 +343,6 @@ pub(super) struct FuncState {
     /// The construct temporaries (`VarKind::Temp`, compiler/temps.rs): the binding, the
     /// construct and its source offset, which name its slot (D2721, D2732).
     pub temps: Vec<(VarId, &'static str, u32)>,
-    /// Recording for a suspension map (D2563, compiler/smap.rs), when requested.
-    #[cfg(feature = "dump")]
-    pub smap: Option<alloc::boxed::Box<super::smap::Recorder>>,
     /// Lazy compilation (D2990): a function written in source that may compile at its
     /// first call (the rest of the rule is in `resolve::lazy_roots`).
     #[cfg(feature = "lazy")]
@@ -444,8 +437,6 @@ impl FuncState {
             code: CodeBuf::phase1(),
             scopes: alloc::vec![Scope {
                 parent: None,
-                #[cfg(feature = "dump")]
-                pos: 0,
                 kind: ScopeKind::Body,
                 vars: Vec::new(),
                 funcs: Vec::new(),
@@ -493,8 +484,6 @@ impl FuncState {
             var_scope: BODY_SCOPE,
             index: VarIndex::default(),
             temps: Vec::new(),
-            #[cfg(feature = "dump")]
-            smap: None,
             #[cfg(feature = "lazy")]
             lazy_ok: false,
             #[cfg(feature = "lazy")]
@@ -509,12 +498,9 @@ impl FuncState {
     }
 
     pub fn new_scope(&mut self, parent: ScopeId, kind: ScopeKind, pos: u32) -> ScopeId {
-        #[cfg(not(feature = "dump"))]
         let _ = pos;
         self.scopes.push_out(Scope {
             parent: Some(parent),
-            #[cfg(feature = "dump")]
-            pos,
             kind,
             vars: Vec::new(),
             funcs: Vec::new(),

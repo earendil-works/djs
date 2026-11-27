@@ -16,13 +16,6 @@
 //! [`Handle`](crate::heap::Handle) to hold them longer.
 
 mod call_site;
-#[cfg(feature = "dump")]
-pub mod dump;
-#[cfg(feature = "dump")]
-mod dump_classes;
-pub mod dump_runtime;
-#[cfg(feature = "dump")]
-mod dump_state;
 mod format;
 mod image;
 mod module;
@@ -180,9 +173,6 @@ enum Collection {
 pub struct Vm {
     heap: Heap,
     opts: VmOptions,
-    /// What dumps keep for the next dump: the suspension maps of their scripts.
-    #[cfg(feature = "dump")]
-    dump_cache: core::cell::RefCell<dump::Cache>,
 }
 
 impl Vm {
@@ -195,8 +185,6 @@ impl Vm {
         let mut vm = Vm {
             heap,
             opts,
-            #[cfg(feature = "dump")]
-            dump_cache: Default::default(),
         };
         crate::builtins::number::set_seed(&mut vm.heap, opts.random_seed);
         if opts.prelude {
@@ -432,8 +420,6 @@ impl Vm {
         Ok(Vm {
             heap,
             opts,
-            #[cfg(feature = "dump")]
-            dump_cache: Default::default(),
         })
     }
 
@@ -502,28 +488,6 @@ impl Vm {
         src: &[u8],
         opts: &crate::compiler::CompileOptions<'_>,
     ) -> Result<Value, crate::compiler::CompileError> {
-        // A plain dump (it starts with its directive) is compiled with its suspension
-        // maps, kept for this VM's next dump: its continuations are suspended in it, and
-        // compiling all of it again there was a third of a re-dump (0215). Lazily, the
-        // maps of what the load compiles; a dump asks for the others (D2994).
-        #[cfg(feature = "dump")]
-        let template = if src.starts_with(b"\"djs-dump") && opts.params.is_empty() {
-            #[cfg(feature = "lazy")]
-            let lazy = self.opts.lazy_functions;
-            #[cfg(not(feature = "lazy"))]
-            let lazy = false;
-            let (t, maps, globals) = self.compile_with_maps(src, opts, lazy)?;
-            if let Ok(text) = core::str::from_utf8(src) {
-                let globals = self.global_texts(globals);
-                self.dump_cache
-                    .borrow_mut()
-                    .keep(opts.bits(), text, maps, lazy, globals);
-            }
-            t
-        } else {
-            self.compile_unit(src, opts)?
-        };
-        #[cfg(not(feature = "dump"))]
         let template = self.compile_unit(src, opts)?;
         self.instantiate(template)
             .map_err(|e| crate::compiler::CompileError {
@@ -581,43 +545,7 @@ impl Vm {
         }
     }
 
-    /// [`crate::compiler::LazyGlobals`] as text.
-    #[cfg(feature = "dump")]
-    fn global_texts(
-        &self,
-        globals: Vec<crate::compiler::LazyGlobals>,
-    ) -> Vec<(u32, u32, Vec<String>)> {
-        let h = &self.heap;
-        globals
-            .into_iter()
-            .map(|(a, b, g)| (a, b, g.into_iter().map(|g| h.atom_name(g)).collect()))
-            .collect()
-    }
 
-    /// A plain dump's compile with its suspension maps, all of them or (`lazy`) those of
-    /// the functions the load compiles (D2994).
-    #[cfg(feature = "dump")]
-    fn compile_with_maps(
-        &mut self,
-        src: &[u8],
-        opts: &crate::compiler::CompileOptions<'_>,
-        lazy: bool,
-    ) -> Result<
-        (
-            Ref,
-            Vec<crate::compiler::FunctionMap>,
-            Vec<crate::compiler::LazyGlobals>,
-        ),
-        crate::compiler::CompileError,
-    > {
-        #[cfg(feature = "lazy")]
-        if lazy {
-            return crate::compiler::compile_lazy_with_maps(&mut self.heap, src, opts);
-        }
-        let _ = lazy;
-        crate::compiler::compile_with_maps(&mut self.heap, src, opts)
-            .map(|(t, m)| (t, m, Vec::new()))
-    }
 
     /// Compiles `src`, lazily with `VmOptions::lazy_functions` (D2990).
     fn compile_unit(
@@ -625,23 +553,7 @@ impl Vm {
         src: &[u8],
         opts: &crate::compiler::CompileOptions<'_>,
     ) -> Result<Ref, crate::compiler::CompileError> {
-        #[cfg(all(feature = "lazy", feature = "dump"))]
-        if self.opts.lazy_functions {
-            // The globals of its lazy functions, for a dump of this VM (D2993).
-            let (t, globals) =
-                crate::compiler::compile_lazy_with_globals(&mut self.heap, src, opts)?;
-            if !globals.is_empty()
-                && let Ok(text) = core::str::from_utf8(src)
-            {
-                let globals = self.global_texts(globals);
-                let params = opts.params.join(",");
-                self.dump_cache
-                    .borrow_mut()
-                    .keep_globals(opts.bits(), &params, text, globals);
-            }
-            return Ok(t);
-        }
-        #[cfg(all(feature = "lazy", not(feature = "dump")))]
+        #[cfg(feature = "lazy")]
         if self.opts.lazy_functions {
             return crate::compiler::compile_lazy_unit(&mut self.heap, src, opts);
         }
@@ -768,8 +680,7 @@ impl Vm {
 
     /// The value at the dotted `path` from the global object (`tools.read`): own data
     /// properties only, no getters or Proxy traps run. For hosts that bind their values
-    /// as globals and resolve a dump's `$djs.host(name)` by the binding (D2971); `None`
-    /// if a step is missing.
+    /// as globals and find them again by name (D2971); `None` if a step is missing.
     pub fn global_path(&mut self, path: &str) -> Option<Value> {
         let mut v = Value::object(self.global());
         for part in path.split('.') {
@@ -813,18 +724,7 @@ impl Vm {
     /// Reseeds `Math.random` alone, keeping the hash key: for an embedder that keyed the
     /// VM once (pi keys its prelude image and reseeds every session from it, D2433).
     pub fn set_math_random_seed(&mut self, seed: u64) {
-        self.set_math_random(seed, false);
-    }
-
-    /// Restores a dumped run's `Math.random` state (a plain dump's `$djs.seed(lo, hi)`):
-    /// as a state that ran, which the next dump writes again (D2837).
-    pub fn restore_math_random(&mut self, state: u64) {
-        self.set_math_random(state, true);
-    }
-
-    /// [`Vm::set_math_random_seed`], or with `restore` [`Vm::restore_math_random`].
-    pub fn set_math_random(&mut self, s: u64, restore: bool) {
-        crate::builtins::number::set_math_state(&mut self.heap, s, restore);
+        crate::builtins::number::set_math_state(&mut self.heap, seed);
     }
 
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {
@@ -1058,81 +958,6 @@ impl Vm {
                 .collect(),
             is_async: a.get::<Value>(c, HostCall::PROMISE).as_object().is_some(),
         })
-    }
-
-    /// Continues an open call of a plain dump (D2890): while parked on the sync host call
-    /// `parked`, a `resume(id, name, args, state)` hook the dump calls, opens async host
-    /// call `id` of host function `fn_id` (the host's for `name`) with the elements of
-    /// `args`, and returns its promise from the parked call. The call keeps its id, so a
-    /// later dump writes it as it was; the next new call gets a higher one. It is not
-    /// reported by [`Vm::new_host_calls`]: the host has it already. `Err`: the reason, for
-    /// the host to throw at the parked call (only out of memory comes after the parked
-    /// call returned).
-    pub fn open_host_call(&mut self, parked: u32, fn_id: u32) -> Result<(), &'static str> {
-        // Plain code over closures and iterator adapters: this is in the shipped module,
-        // under the size budget (D020).
-        let i = state::interp(&self.heap);
-        if self.state() != RunState::HostCall
-            || self.heap.arena().get(i, Interp::HOST_CALL) != parked
-        {
-            return Err("not parked on that call");
-        }
-        let c = run::host_call_cell(&self.heap, parked).ok_or("not parked on that call")?;
-        let args: Ref = self.heap.arena().get(c, HostCall::ARGS);
-        let argc = self.heap.arena().get(args.0, ValueArray::LEN);
-        let arg = |n: u32| {
-            if n < argc {
-                self.heap.value_array_get(args.0, n)
-            } else {
-                Value::UNDEFINED
-            }
-        };
-        let (id, list) = (arg(0).as_int(), arg(2).as_object());
-        let Some(id) = id.filter(|&n| n > 0).map(|n| n as u32) else {
-            return Err("resume: not a call id");
-        };
-        let Some(a) =
-            list.filter(|&o| self.heap.object_class(o) == crate::heap::ObjectClass::Array)
-        else {
-            return Err("resume: the arguments are not an array");
-        };
-        // (Sync calls take ids from the same counter: `parked` itself may have `id`.)
-        if id != parked && run::host_call_cell(&self.heap, id).is_some() {
-            return Err("resume: the call is open already");
-        }
-        const OOM: &str = "out of memory";
-        let n = self.heap.array_length(a);
-        let arr = self.heap.alloc_value_array(n).map_err(|_| OOM)?;
-        for k in 0..n {
-            let v = self
-                .heap
-                .get_element_fast(a, k)
-                .ok_or("resume: the arguments are an array with holes")?;
-            self.heap.value_array_set(arr, k, v);
-        }
-        self.heap.arena_mut().set(arr, ValueArray::LEN, n);
-        let proto = intrinsic_obj(&self.heap, Intrinsic::PromiseProto);
-        let p = Value::object(run::promise::alloc(&mut self.heap, Some(proto)).map_err(|_| OOM)?);
-        // The parked call returns first, so that its id is free again. Out of memory
-        // after it leaves the promise pending forever: the host gives up the load.
-        self.resolve_host_call(parked, Ok(p)).map_err(|_| OOM)?;
-        run::add_loaded_host_call(&mut self.heap, id, fn_id, arr, p).map_err(|_| OOM)?;
-        let c = run::host_call_cell(&self.heap, id).ok_or(OOM)?;
-        let flags = self.heap.arena().get(c, HostCall::FLAGS);
-        self.heap
-            .arena_mut()
-            .set(c, HostCall::FLAGS, flags | HOST_CALL_REPORTED);
-        Ok(())
-    }
-
-    /// Sets the id the next host call gets (a plain dump's `$djs.seed(lo, hi, next)`,
-    /// D2897): the host restores the dumped VM's counter once the dump has loaded, since
-    /// the hooks, sync calls, took ids of their own. 0 is never an id.
-    pub fn set_next_call_id(&mut self, id: u32) {
-        let i = state::interp(&self.heap);
-        self.heap
-            .arena_mut()
-            .set(i, Interp::NEXT_CALL_ID, id.max(1));
     }
 
     /// Completes the host call `call_id` with a value (`Ok`) or an exception (`Err`).
@@ -1520,31 +1345,6 @@ fn tidy_stack(heap: &mut Heap, shrink: bool) {
     let _ = state::move_stack(heap, sp, cap);
 }
 
-/// The `hash` of a script's `$djs.source(name, hash)` (D2882): FNV-1a of its source text,
-/// its parameter names and its compile options, folded to 32 bits, 8 hex digits (D2839:
-/// enough to tell a host's scripts apart; the name stays). The host's script must have
-/// the same, or `Vm::source_function` refuses it.
-pub fn script_hash(source: &str, params: &str, bits: u32) -> String {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    let bits = cat!(bits);
-    for b in params
-        .bytes()
-        .chain([0])
-        .chain(bits.bytes())
-        .chain([0])
-        .chain(source.bytes())
-    {
-        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
-    }
-    let h = (h ^ (h >> 32)) as u32;
-    let mut s = String::new();
-    for i in (0..8).rev() {
-        let d = (h >> (i * 4)) & 0xf;
-        s.push(char::from_digit(d, 16).unwrap_or('0'));
-    }
-    s
-}
-
 /// FNV-1a, 64 bits.
 fn fnv64(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -1554,16 +1354,6 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
-#[cfg(all(test, feature = "dump"))]
-mod dump_debugger_tests;
-#[cfg(all(test, feature = "dump"))]
-mod dump_harvest;
-#[cfg(all(test, feature = "dump"))]
-mod dump_perf;
-#[cfg(all(test, feature = "dump"))]
-mod dump_resume_tests;
-#[cfg(all(test, feature = "dump"))]
-mod dump_tests;
 #[cfg(all(test, feature = "embed"))]
 mod encoding_tests;
 #[cfg(test)]
@@ -1582,41 +1372,3 @@ mod module_tests;
 mod props_tests;
 #[cfg(test)]
 mod tests;
-
-impl Vm {
-    /// A plain dump's `$djs.source(name, hash)` (D2882): the host's script `name`, `src`
-    /// compiled with the options it ran with, as the codemode body function the dump's
-    /// continuations name as their origin. Refused (for the host to throw) when it is not
-    /// the script the dump refers to: another text, parameters or options.
-    pub fn source_function(
-        &mut self,
-        src: &[u8],
-        opts: &crate::compiler::CompileOptions<'_>,
-        hash: &str,
-    ) -> Result<Value, String> {
-        let f = self
-            .compile(src, opts)
-            .map_err(|e| cat!("source: the script does not compile: ", e.message))?;
-        let h = &self.heap;
-        let t = f.as_object().map(|o| h.closure_template(o));
-        let script = t.and_then(|t| crate::bytecode::template::debug_info(h, t).script.get());
-        let Some(script) = script else {
-            return Err(String::from("source: not a script"));
-        };
-        let a = h.arena();
-        let text = |r: Ref| {
-            r.get()
-                .map(|s| h.str_to_string(crate::value::Str(s)))
-                .unwrap_or_default()
-        };
-        let source = crate::bytecode::template::script_text(h, script).unwrap_or_default();
-        let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS));
-        let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
-        if script_hash(&source, &params, bits) != hash {
-            return Err(String::from(
-                "source: the host's script is not the one the dump refers to (another text, parameters or options)",
-            ));
-        }
-        Ok(f)
-    }
-}

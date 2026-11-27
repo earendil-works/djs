@@ -43,7 +43,7 @@ const GLOBAL: u32 = 1 << 31;
 /// The known builtins in table order: globals, each followed by its known members (own
 /// data properties, each with a dot before it). Cheap functions that loops call: where
 /// the lookup is a good part of the call. An entry costs the base image about six bytes.
-#[cfg(any(djs_prelude, feature = "dump", test))]
+#[cfg(any(djs_prelude, test))]
 const KNOWN: &[u8] = b"Math.floor.ceil.round.trunc.abs.sqrt.max.min.pow.sign.random.PI \
 Number.isInteger.isFinite.isNaN String.fromCharCode Array.isArray parseInt parseFloat isNaN";
 
@@ -101,13 +101,13 @@ pub(crate) fn name_of(heap: &Heap, k: u32) -> Option<(Atom, Option<Atom>)> {
 pub(crate) const NO_MEMBER: u32 = GLOBAL;
 
 /// [`lookup`] in a heap without a realm, where only the dumper and tests compile.
-#[cfg(not(any(feature = "dump", test)))]
+#[cfg(not(test))]
 fn by_text(_: &Heap, _: Atom, _: u32) -> Option<(u16, u16)> {
     None
 }
 
 /// [`lookup`] in a heap without a realm: by the names, the values numbered from 0.
-#[cfg(any(feature = "dump", test))]
+#[cfg(test)]
 fn by_text(heap: &Heap, global: Atom, member: u32) -> Option<(u16, u16)> {
     let named = |a: Atom, name: &[u8]| a.is_string() && heap.atom_name(a).as_bytes() == name;
     let mut k = 0;

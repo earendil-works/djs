@@ -78,37 +78,7 @@ fn compile_lazy_once(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
     Ok(compiled)
 }
 
-/// The suspension maps of lazy template `t` of `from` and of the functions inside it
-/// (D2563, D2994), compiled into `into` with every function eager: what an eager compile
-/// of the whole script records for them (D2991). The maps of functions without sites
-/// are kept too, so that a span that has none is known to have none.
-#[cfg(feature = "dump")]
-pub fn lazy_function_maps(
-    from: &Heap,
-    t: Ref,
-    into: &mut Heap,
-) -> Result<Vec<super::smap::FunctionMap>, CompileError> {
-    let f = LazyFn::read(from, t);
-    let mut maps = Vec::new();
-    let mut once = |into: &mut Heap| {
-        maps.clear();
-        f.compile(into, Ref::NULL, false, Some(&mut maps))
-    };
-    super::elastic(into, &mut once, CompileError::need_stack)?;
-    Ok(maps)
-}
 
-/// Lazy template `t` of `from` compiled into `into` with every function inside it
-/// eager: the code it would have, for a dump to read (D2993).
-#[cfg(feature = "dump")]
-pub fn lazy_function_code(from: &Heap, t: Ref, into: &mut Heap) -> Result<Ref, CompileError> {
-    let f = LazyFn::read(from, t);
-    super::elastic(
-        into,
-        |into| f.compile(into, Ref::NULL, false, None),
-        CompileError::need_stack,
-    )
-}
 
 /// A lazy template's function as its compile needs it, read from the heap that holds it
 /// (names as text: the compile may go into another heap).
@@ -198,8 +168,7 @@ impl LazyFn {
         heap: &mut Heap,
         script: Ref,
         lazy: bool,
-        #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
-        #[cfg(not(feature = "dump"))] maps: Option<&mut Vec<()>>,
+        maps: Option<&mut Vec<()>>,
     ) -> Result<Ref, CompileError> {
         let params: Vec<&str> = if self.params.is_empty() {
             Vec::new()
@@ -259,13 +228,8 @@ impl Lazy<'_> {
         &self,
         mut p: Parser<'_, '_>,
         unit: Unit,
-        #[cfg(feature = "dump")] maps: Option<(&mut Vec<super::smap::FunctionMap>, u32)>,
-        #[cfg(not(feature = "dump"))] maps: Option<(&mut Vec<()>, u32)>,
+        maps: Option<(&mut Vec<()>, u32)>,
     ) -> PResult<Ref> {
-        #[cfg(feature = "dump")]
-        if maps.is_some() {
-            p.smaps = true;
-        }
         let kind = func_flags::kind(self.flags);
         // The stand-in for the enclosing function: for an arrow, the kind of the function
         // that owns its `this` (`super`, `arguments`, `new.target` resolve as there).
@@ -338,22 +302,6 @@ impl Lazy<'_> {
             f.capture_names = self.names.to_vec();
             f.name = self.name;
         }
-        #[cfg(feature = "dump")]
-        if let Some((maps, base)) = maps {
-            let (t, ..) = p.finish_unit_with(Some(&mut *maps), None)?;
-            // Spans in the script, as an eager compile has them (the rest of a map is
-            // relative to its function).
-            for m in maps.iter_mut() {
-                m.start += base;
-                m.end += base;
-                for k in &mut m.computed_keys {
-                    k.0 += base;
-                    k.1 += base;
-                }
-            }
-            return Ok(t);
-        }
-        #[cfg(not(feature = "dump"))]
         let _ = maps;
         let (t, ..) = p.finish_unit()?;
         Ok(t)

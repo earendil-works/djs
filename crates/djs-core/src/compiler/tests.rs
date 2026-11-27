@@ -3298,15 +3298,3 @@ fn body_imports_are_skipped() {
     );
 }
 
-#[cfg(feature = "dump")]
-#[test]
-fn body_imports_end_is_after_the_last_import() {
-    let mut heap = Heap::new().unwrap();
-    let src = "/* c */ import { a } from 'x';\nimport * as b from \"y\"\n\nreturn a(b);";
-    let end = body_imports_end(&mut heap, src.as_bytes(), false).unwrap() as usize;
-    assert_eq!(
-        &src[..end],
-        "/* c */ import { a } from 'x';\nimport * as b from \"y\""
-    );
-    assert_eq!(body_imports_end(&mut heap, b"return 1", false).unwrap(), 0);
-}

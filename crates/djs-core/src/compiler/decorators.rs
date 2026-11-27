@@ -171,7 +171,7 @@ impl Parser<'_, '_> {
                     e = self.parse_dot_name(tok.start)?;
                 }
                 TokenKind::LParen => {
-                    self.prepare_call(e, at);
+                    self.prepare_call(e);
                     let args = self.parse_args()?;
                     self.mark(tok.start);
                     self.emit_call(args);
@@ -182,9 +182,8 @@ impl Parser<'_, '_> {
         }
         if receiver {
             // `dec recv`, like a call's callee and `this`.
-            self.prepare_call(e, at);
+            self.prepare_call(e);
             // They stay for the class: its suspensions are not described (D2563).
-            self.names_pop(2);
         }
         self.leave();
         Ok(())

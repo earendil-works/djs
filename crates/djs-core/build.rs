@@ -48,8 +48,7 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// The enabled features of this crate, sorted, without `default` and `unicode` (which only
 /// name others) and `unsafe-heap`, which changes how the arena is accessed but no
 /// result or image (D2520): the base snapshot, built by a host build without it, loads into
-/// a build with it, and images move freely between the two. Nor `dump` (0167), which only
-/// adds `Vm::dump`, a reader of the heap: a run never calls it. Nor `lazy` (D2990): the base
+/// a build with it, and images move freely between the two. Nor `lazy` (D2990): the base
 /// holds no lazy template (the prelude is privileged), and lazy compilation is a VM option.
 /// Nor `prelude`
 /// (D3094): it only decides whether a wasm build can run the prelude source. Nor
@@ -65,7 +64,6 @@ fn features() -> Vec<String> {
             f != "default"
                 && f != "unicode"
                 && f != "unsafe-heap"
-                && f != "dump"
                 && f != "lazy"
                 && f != "prelude"
                 && f != "intrinsic-names"

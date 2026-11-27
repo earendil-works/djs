@@ -120,8 +120,6 @@ pub(crate) mod promise;
 mod proxy;
 mod stack;
 pub(crate) mod suspend;
-#[cfg(feature = "dump")]
-pub(crate) use intrinsics::builtin_closure_kind;
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
 mod fast {
@@ -4688,29 +4686,6 @@ fn add_host_call(
     heap.value_array_set(table2, len, Value::internal(c));
     heap.arena_mut().set(table2, ValueArray::LEN, len + 1);
     Ok(id)
-}
-
-/// Adds an async host call with the embedder's `id` and `promise` (an open call of a
-/// dump, 0171, D2890). The id counter stays as it is, or moves past `id`.
-pub(crate) fn add_loaded_host_call(
-    heap: &mut Heap,
-    id: u32,
-    fn_id: u32,
-    args: u32,
-    promise: Value,
-) -> Result<(), HeapError> {
-    let i = state::interp(heap);
-    let next = heap.arena().get(i, Interp::NEXT_CALL_ID);
-    heap.arena_mut().set(i, Interp::NEXT_CALL_ID, id);
-    let r = add_host_call(heap, fn_id, args, Value::UNDEFINED, promise);
-    let i = state::interp(heap);
-    let next = if next > id {
-        next
-    } else {
-        id.wrapping_add(1).max(1)
-    };
-    heap.arena_mut().set(i, Interp::NEXT_CALL_ID, next);
-    r.map(|_| ())
 }
 
 /// Whether an async host call is pending (its promise unsettled), D1374.

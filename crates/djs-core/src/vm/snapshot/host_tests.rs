@@ -30,8 +30,8 @@ const CONFIG: &str =
 
 fn host(read_id: u32, print_id: u32, with_config: bool) -> Host {
     let mut vm = Vm::from_base(
-        super::super::dump_harvest::base(),
-        super::super::dump_harvest::frozen(),
+        super::tests::base(),
+        super::tests::vm_opts(),
     )
     .unwrap();
     let read = vm.new_async_host_function(read_id, "read").unwrap();

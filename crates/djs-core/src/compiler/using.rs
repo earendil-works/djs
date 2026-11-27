@@ -42,7 +42,6 @@ use crate::PushOut;
 use super::PResult;
 use super::func::{HandlerLabels, VarKind};
 use super::parser::{BlockKind, Parser, syntax};
-use super::smap::SiteKind;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::lexer::{Kw, TokenKind};
@@ -133,12 +132,6 @@ impl Parser<'_, '_> {
 
     /// `using x = v, ...;` or `await using x = v, ...;` in a statement list.
     pub(super) fn parse_using_declaration(&mut self, is_await: bool) -> PResult<()> {
-        let dk = if is_await {
-            super::smap_syntax::DeclKind::AwaitUsing
-        } else {
-            super::smap_syntax::DeclKind::Using
-        };
-        self.syn_open(super::smap_syntax::NodeKind::Decl(dk), self.tok.start);
         if is_await {
             self.next()?;
         }
@@ -147,7 +140,6 @@ impl Parser<'_, '_> {
         let rec = self.open_using(self.tok.start, is_await)?;
         self.parse_using_bindings(rec, is_await, false)?;
         self.expect_semicolon()?;
-        self.syn_close();
         Ok(())
     }
 
@@ -220,21 +212,10 @@ impl Parser<'_, '_> {
             self.next()?;
             self.ts_annotation()?;
             let v = self.declare_lexical(name, VarKind::Const, self.tok.start)?;
-            self.syn_decl(
-                v,
-                if is_await {
-                    super::smap_syntax::DeclKind::AwaitUsing
-                } else {
-                    super::smap_syntax::DeclKind::Using
-                },
-            );
-            self.syn_part(super::smap_syntax::Role::Target, pos, self.prev_end);
             if !self.eat(TokenKind::Assign)? {
                 return syntax(self.tok.start, "missing initializer for using declaration");
             }
-            let init = self.tok.start;
             self.parse_named(name, |p| p.parse_assign(no_in))?;
-            self.syn_part(super::smap_syntax::Role::Init, init, self.prev_end);
             self.mark(pos);
             self.emit_using_add(rec, is_await);
             let r = self.init_ref(name, pos);
@@ -288,7 +269,6 @@ impl Parser<'_, '_> {
                 .call_intrinsic(intrinsic_id_of!("UsingAwaitValue"), 1);
             self.place(l_a);
             // Named by the list's end.
-            self.site(SiteKind::AwaitUsing, self.prev_end);
             self.code().await_(0);
             self.place(l_a_end);
             self.code().drop();

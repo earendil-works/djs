@@ -10,7 +10,6 @@ use super::PResult;
 use super::expr::Expr;
 use super::func::HandlerLabels;
 use super::parser::{OpenIter, Parser, syntax};
-use super::smap::SiteKind;
 use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
@@ -25,18 +24,12 @@ impl Parser<'_, '_> {
         }
         self.next()?;
         let is_async = self.f.is_async;
-        use super::smap_syntax::{NodeKind, Role};
         if self.is(TokenKind::Star) && !self.tok.newline_before() {
-            self.syn_open(NodeKind::YieldStar, tok.start);
             self.next()?;
-            let operand = self.tok.start;
             self.parse_assign(no_in)?;
-            self.syn_part(Role::Operand, operand, self.prev_end);
             self.emit_yield_star(tok.start, is_async)?;
-            self.syn_close();
             return Ok(Expr::Value);
         }
-        self.syn_open(NodeKind::Yield, tok.start);
         // Without an operand: at the end of the expression or the line (qjs's set).
         let bare = self.tok.newline_before()
             || matches!(
@@ -52,29 +45,21 @@ impl Parser<'_, '_> {
         if bare {
             self.code().undefined();
         } else {
-            let operand = self.tok.start;
             self.parse_assign(no_in)?;
-            self.syn_part(Role::Operand, operand, self.prev_end);
         }
         self.mark(tok.start);
         if is_async {
-            self.site(SiteKind::AsyncYieldAwait, tok.start);
             self.code().await_(0);
-            self.site(SiteKind::AsyncYield, tok.start);
-        } else {
-            self.site(SiteKind::Yield, tok.start);
         }
         self.code().yield_(0);
         let l_next = self.new_label();
         self.code().jump_if_false(l_next);
         if is_async {
             // AsyncGeneratorUnwrapYieldResumption: `return(x)` awaits x.
-            self.site(SiteKind::AsyncYieldReturn, tok.start);
             self.code().await_(0);
         }
         self.emit_return_from_expr();
         self.place(l_next);
-        self.syn_close();
         Ok(Expr::Value)
     }
 
@@ -184,11 +169,9 @@ impl Parser<'_, '_> {
         if is_async {
             self.code().get_field(atoms::VALUE, 0);
             self.place(r_start);
-            self.site(SiteKind::YieldStar, pos);
             self.code().yield_(0);
         } else {
             self.place(r_start);
-            self.site(SiteKind::YieldStar, pos);
             self.code().yield_star(0);
         }
         self.place(r_end);
@@ -206,7 +189,6 @@ impl Parser<'_, '_> {
         self.code().jump_if_false(l_loop);
         // return(x): `x`.
         if is_async {
-            self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
         self.emit_inner_method(it, atoms::RETURN, l_retnone);
@@ -216,7 +198,6 @@ impl Parser<'_, '_> {
         self.code().jump_if_false(l_yield);
         self.code().get_field(atoms::VALUE, 0);
         if is_async {
-            self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
         self.emit_return_from_expr();
@@ -224,7 +205,6 @@ impl Parser<'_, '_> {
         self.place(l_retnone);
         self.code().drop();
         if is_async {
-            self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
         self.emit_return_from_expr();
@@ -240,7 +220,7 @@ impl Parser<'_, '_> {
         self.temp_get(it);
         self.mark(pos);
         if is_async {
-            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos));
+            self.emit_async_close_normal();
         } else {
             self.code()
                 .call_intrinsic(intrinsic_id_of!("IteratorClose"), 1);
@@ -286,14 +266,13 @@ impl Parser<'_, '_> {
     /// An inner iterator result: awaited in async generators, then it must be an object.
     fn emit_inner_result(&mut self, is_async: bool) {
         if is_async {
-            self.site(SiteKind::YieldStarAwait, self.prev_end);
             self.code().await_(0);
         }
         self.code().iter_check_object();
     }
 
-    /// AsyncIteratorClose with a normal completion: `it` -> ``, awaiting at `site`.
-    pub(super) fn emit_async_close_normal(&mut self, site: (SiteKind, u32)) {
+    /// AsyncIteratorClose with a normal completion: `it` -> ``.
+    pub(super) fn emit_async_close_normal(&mut self) {
         let l_skip = self.new_label();
         let l_closed = self.new_label();
         self.code().dup();
@@ -305,7 +284,6 @@ impl Parser<'_, '_> {
         self.code().jump_if_true(l_skip);
         self.code().swap();
         self.code().call(0);
-        self.site(site.0, site.1);
         self.code().await_(0);
         self.code().iter_check_object();
         self.code().drop();

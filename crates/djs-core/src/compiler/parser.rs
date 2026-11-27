@@ -200,9 +200,6 @@ pub(super) struct Parser<'a, 'h> {
     /// Lazy or eager, and a lazy function's own compile (D2990).
     #[cfg(feature = "lazy")]
     pub unit: super::resolve::Unit,
-    /// Record suspension maps (compiler/smap.rs): every function gets a recorder.
-    #[cfg(feature = "dump")]
-    pub smaps: bool,
     /// Tests only: a plain call pushes `this` under the callee (a lowering whose
     /// suspension maps must differ, compiler/smap_tests.rs). The code does not run.
     #[cfg(test)]
@@ -400,8 +397,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             ident_atoms: IdentAtoms::default(),
             #[cfg(feature = "lazy")]
             unit: super::resolve::Unit::EAGER,
-            #[cfg(feature = "dump")]
-            smaps: false,
             #[cfg(test)]
             test_swap_call: false,
         };
@@ -437,76 +432,10 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.finish_unit()
     }
 
-    /// Parses the whole source and resolves its names: [`super::free_names`].
-    #[cfg(feature = "dump")]
-    pub fn free_names(mut self) -> PResult<Vec<super::FreeNames>> {
-        self.parse_top()?;
-        self.end_async_region();
-        let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
-        self.done[0] = Some(top);
-        let funcs = core::mem::take(&mut self.done)
-            .into_iter()
-            .map(|f| f.ok_or_else(|| super::resolve::internal("unfinished function")))
-            .collect::<PResult<Vec<_>>>()?;
-        Ok(super::resolve::free_names(
-            funcs,
-            &self.ts_decls,
-            self.opts.privileged,
-            self.atom_undefined,
-        ))
-    }
 
-    /// Parses the whole source and returns the class spans it recorded
-    /// (`compiler::class_spans`); the templates are not built.
-    #[cfg(feature = "dump")]
-    pub fn compile_class_spans(mut self) -> PResult<Vec<ClassSpan>> {
-        self.class_spans = Some(Vec::new());
-        self.parse_top()?;
-        Ok(self.class_spans.take().unwrap_or_default())
-    }
 
-    /// Parses the whole source and returns the suspension maps of its functions
-    /// (compiler/smap.rs), in source order. The templates are built too, and are garbage.
-    #[cfg(feature = "dump")]
-    pub fn compile_maps(mut self) -> PResult<(Ref, Vec<super::smap::FunctionMap>)> {
-        self.smaps = true;
-        self.f.smap = Some(Default::default());
-        self.parse_top()?;
-        let mut maps = Vec::new();
-        let (t, ..) = self.finish_unit_with(Some(&mut maps), None)?;
-        crate::sort::sort_by(&mut maps, |a, b| (a.start, a.end) < (b.start, b.end));
-        Ok((t, maps))
-    }
 
-    /// A lazy unit's compile with the globals of each of its lazy functions (D2993).
-    #[cfg(all(feature = "dump", feature = "lazy"))]
-    pub fn compile_lazy_globals(mut self) -> PResult<(Ref, Vec<super::resolve::LazyGlobals>)> {
-        self.unit.lazy = true;
-        self.parse_top()?;
-        let mut globals = Vec::new();
-        let (t, ..) = self.finish_unit_with(None, Some(&mut globals))?;
-        Ok((t, globals))
-    }
 
-    /// [`Parser::compile_maps`] of a lazy unit (D2994), with the globals of each of its
-    /// lazy functions.
-    #[cfg(all(feature = "dump", feature = "lazy"))]
-    pub fn compile_lazy_maps(
-        mut self,
-    ) -> PResult<(
-        Ref,
-        Vec<super::smap::FunctionMap>,
-        Vec<super::resolve::LazyGlobals>,
-    )> {
-        self.unit.lazy = true;
-        self.smaps = true;
-        self.f.smap = Some(Default::default());
-        self.parse_top()?;
-        let (mut maps, mut globals) = (Vec::new(), Vec::new());
-        let (t, ..) = self.finish_unit_with(Some(&mut maps), Some(&mut globals))?;
-        crate::sort::sort_by(&mut maps, |a, b| (a.start, a.end) < (b.start, b.end));
-        Ok((t, maps, globals))
-    }
 
     /// The top-level code, up to its return.
     pub(super) fn parse_top(&mut self) -> PResult<()> {
@@ -554,10 +483,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         self,
     ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.finish_unit_with(
-            #[cfg(feature = "dump")]
-            None,
-            #[cfg(feature = "dump")]
-            None,
         )
     }
 
@@ -565,8 +490,6 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// and `globals` with the globals of each lazy function (`resolve::LazyGlobals`).
     pub(super) fn finish_unit_with(
         mut self,
-        #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
-        #[cfg(feature = "dump")] globals: Option<&mut Vec<super::resolve::LazyGlobals>>,
     ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
@@ -597,10 +520,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             funcs,
             &self.ts_decls,
             names.as_mut(),
-            #[cfg(feature = "dump")]
-            maps,
-            #[cfg(feature = "dump")]
-            globals,
         )?;
         Ok((t, erased, names))
     }
@@ -613,10 +532,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.done.push(None);
         #[allow(unused_mut)]
         let mut child = FuncState::new(id, kind, Some((self.f.id, self.scope)));
-        #[cfg(feature = "dump")]
-        if self.smaps {
-            child.smap = Some(Default::default());
-        }
         let parent = core::mem::replace(&mut self.f, child);
         self.stack.push(Suspended {
             f: parent,
@@ -724,7 +639,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.f.vars[v as usize].param = self.f.param_count;
         self.f.params.push_out(v);
         self.f.param_count += 1;
-        self.syn_decl(v, super::smap_syntax::DeclKind::Param);
         Ok(v)
     }
 
@@ -936,16 +850,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         self.f.code.rotate(start, mid, end);
         // Suspension sites in the moved blocks move with them.
-        #[cfg(feature = "dump")]
-        if let Some(r) = &mut self.f.smap {
-            for s in &mut r.sites {
-                if (start..mid).contains(&s.p1) {
-                    s.p1 += end - mid;
-                } else if (mid..end).contains(&s.p1) {
-                    s.p1 -= mid - start;
-                }
-            }
-        }
         // The entries are sorted by pc: before `start`, the moved `start..mid` and
         // `mid..end`, the rest. Each block starts with the entry in effect where it
         // started (unless it has its own), and so does the code after `end`.
@@ -1231,7 +1135,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         let v = self.f.add_var(name, VarKind::Var, vs);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script;
-        self.syn_decl(v, super::smap_syntax::DeclKind::Var);
         self.note_export(name, pos);
         Ok(v)
     }
@@ -1271,12 +1174,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         if scope == BODY_SCOPE {
             self.note_export(name, pos);
         }
-        let dk = if kind == VarKind::Const {
-            super::smap_syntax::DeclKind::Const
-        } else {
-            super::smap_syntax::DeclKind::Let
-        };
-        self.syn_decl(v, dk);
         Ok(v)
     }
 
@@ -1332,9 +1229,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         if var.kind == VarKind::Var {
             // `var f; function f() {}`: the function now initializes it.
             var.kind = VarKind::Func;
-        }
-        if var.kind == VarKind::Func {
-            self.syn_decl(v, super::smap_syntax::DeclKind::Function);
         }
         self.f.scopes[scope as usize].funcs.push_out((v, child));
         if scope == BODY_SCOPE {
@@ -1502,7 +1396,6 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// the binding. In top-level code `arguments` is an ordinary (global) name. Class
     /// field initializers and static blocks have none (an early error).
     pub fn note_arguments(&mut self, pos: u32) -> PResult<()> {
-        self.syn_special(super::smap_syntax::Special::Arguments, pos);
         if self.own_this_kind().is_some_and(FuncKind::is_class_init) {
             return syntax(
                 pos,

@@ -147,11 +147,9 @@ impl Parser<'_, '_> {
         self.enter_n(super::parser::CLASS_WEIGHT)?;
         // What a class definition keeps on the stack (heritage, constructor, prototype,
         // computed keys) is not described in suspension maps yet (D2563).
-        self.unsupported_begin("class");
         self.class_depth += 1;
         let r = self.parse_class_inner(decl, hint);
         self.class_depth -= 1;
-        self.unsupported_end();
         self.leave_n(super::parser::CLASS_WEIGHT);
         r
     }
@@ -179,7 +177,6 @@ impl Parser<'_, '_> {
             self.next()?;
             if decl {
                 let v = self.declare_lexical(name, VarKind::Let, tok.start)?;
-                self.syn_decl(v, super::smap_syntax::DeclKind::Class);
                 outer = Some(v);
             }
         } else if decl {
@@ -1223,7 +1220,6 @@ impl Parser<'_, '_> {
             Vec::new()
         };
         self.begin_ctor(b, props)?;
-        let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
         if b.legacy {
             // Its parameter decorators and types belong to the class.
@@ -1234,7 +1230,6 @@ impl Parser<'_, '_> {
         } else {
             self.parse_params()?;
         }
-        self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
         if !b.derived {
             // Parameter properties are assigned once the parameters are (a derived
             // constructor does it after `super()`).

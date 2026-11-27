@@ -96,32 +96,17 @@ pub const DEFAULT_RANDOM_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 /// string hash from it (D2433): a host that seeds from entropy gets a secret key, one in
 /// deterministic mode the same layout for the same seed.
 pub(crate) fn set_seed(heap: &mut Heap, seed: u64) {
-    let seed = set_math_state(heap, seed, false);
+    let seed = set_math_state(heap, seed);
     heap.set_hash_key(crate::heap::string::hash_key_for_seed(seed));
 }
 
 /// Stores a seed for `Math.random` alone; the hash key stays (`Vm::set_math_random_seed`).
-/// With `restore`, a dumped run's state (`$djs.seed`, `Vm::restore_math_random`): one
-/// that ran, so that the next dump writes it again, its seed recorded as another value
-/// (D2837). Beside the state the record holds the seed it is taken to start from:
-/// `Math.random` ran where they differ (xorshift never returns to its seed in practice).
-/// The state stored.
-pub(crate) fn set_math_state(heap: &mut Heap, s: u64, restore: bool) -> u64 {
+/// Beside the state the record holds the seed it started from. The state stored.
+pub(crate) fn set_math_state(heap: &mut Heap, s: u64) -> u64 {
     let s = if s == 0 { DEFAULT_RANDOM_SEED } else { s };
     store_state(heap, s, 0);
-    store_state(heap, if restore { !s } else { s }, 2);
+    store_state(heap, s, 2);
     s
-}
-
-/// The `Math.random` state as its two int32 halves (low, high), for dumps (D2624), and
-/// whether `Math.random` ran since the VM was seeded (D2837).
-#[cfg(feature = "dump")]
-pub(crate) fn random_state(heap: &Heap) -> (i32, i32, bool) {
-    let a = realm::intrinsic(heap, Intrinsic::RandomState)
-        .as_internal()
-        .expect("random state");
-    let half = |i| heap.value_array_get(a, i).as_int().unwrap_or(0);
-    (half(0), half(1), (half(0), half(1)) != (half(2), half(3)))
 }
 
 fn store_state(heap: &mut Heap, s: u64, at: u32) {

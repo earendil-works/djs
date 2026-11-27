@@ -18,15 +18,8 @@
 //! Cases run in parallel (`DJS_JOBS` threads, else one per CPU). Each run has a fuel
 //! budget and a time limit: a case that loops forever fails its plain run within seconds
 //! (and then skips the stress modes) instead of hanging the test.
-//! 4. dump (0172, D2830): the run with frozen builtins, which dumps need (D2836), then a
-//!    dump of the finished VM (its globals and whatever is still in flight), run as a
-//!    Script in a fresh VM and dumped again, twice: the third dump must be the second.
-//!    The cases have no idle points before their end (their awaits settle through jobs),
-//!    so this checks the exporter on every construct the cases leave behind. Its output is
-//!    not compared (cases that change builtins fail there on purpose); refusals are
-//!    counted, not failures.
 //!
-//! `DJS_E2E_MODE=plain|suspend|gc|dump` runs one mode, `DJS_E2E_CASE=<substring>` only
+//! `DJS_E2E_MODE=plain|suspend|gc` runs one mode, `DJS_E2E_CASE=<substring>` only
 //! the matching cases.
 
 use std::path::{Path, PathBuf};
@@ -72,146 +65,7 @@ enum Mode {
     Plain,
     Suspend,
     GcStress,
-    Dump,
 }
-
-/// The options of a dump mode VM: frozen builtins, which dumps need (D2836).
-fn frozen() -> VmOptions {
-    VmOptions {
-        frozen_builtins: true,
-        ..VmOptions::default()
-    }
-}
-
-/// A VM of the dump mode with `console.log`, and its console object.
-fn dump_vm() -> (Vm, djs_core::value::Obj) {
-    let mut vm = djs_prelude::new_vm(frozen()).unwrap();
-    let console = vm.new_object().unwrap();
-    let log = vm.new_host_function(LOG, "log").unwrap();
-    vm.define(console, "log", log).unwrap();
-    vm.define_global("console", Value::object(console)).unwrap();
-    (vm, console)
-}
-
-/// A dump's hooks (D2890), above every case's host function id.
-const SEED: u32 = 0x7fff_fff0;
-const RESUME: u32 = 0x7fff_fff1;
-const HOST: u32 = 0x7fff_fff2;
-
-/// Runs dump `text` in `vm`, a fresh one, as a host does: `$djs` is the dump runtime with
-/// the hooks `seed`, `resume` (a finished VM has no open call to resume) and `host` (the
-/// host's values are the globals of their names, D2971), and the
-/// Script runs to its end. Why it failed, if it did.
-fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
-    let hooks = vm
-        .dump_runtime_for(text)?
-        .as_object()
-        .ok_or("no dump runtime")?;
-    let seed = vm.new_host_function(SEED, "seed").unwrap();
-    vm.define(hooks, "seed", seed).unwrap();
-    let resume = vm.new_host_function(RESUME, "resume").unwrap();
-    vm.define(hooks, "resume", resume).unwrap();
-    let host = vm.new_host_function(HOST, "host").unwrap();
-    vm.define(hooks, "host", host).unwrap();
-    vm.define_global("$djs", Value::object(hooks)).unwrap();
-    let f = vm
-        .compile(text.as_bytes(), &CompileOptions::script("dump.js"))
-        .map_err(|e| format!("{} at {}:{}", e.message, e.line, e.col))?;
-    let this = Value::object(vm.global());
-    vm.call(f, this, &[]).map_err(|e| format!("{e:?}"))?;
-    loop {
-        match vm.run(FUEL_BUDGET) {
-            // (The host deletes `$djs` and `$dump` once the Script ran, D2916.)
-            Status::Done(_) | Status::Idle => {
-                return vm.end_dump_load().map_err(|e| format!("{e:?}"));
-            }
-            Status::HostCall { call_id, fn_id } if fn_id == SEED => {
-                let args = vm.host_call(call_id).unwrap().args;
-                // (`$djs.seed(lo, hi[, next])` or `$djs.seed(next)`, D2837.)
-                let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
-                if args.get(1).is_some_and(|v| !v.is_undefined()) {
-                    vm.restore_math_random(u64::from(half(0)) | (u64::from(half(1)) << 32));
-                }
-                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
-            }
-            Status::HostCall { call_id, fn_id } if fn_id == HOST => {
-                let args = vm.host_call(call_id).unwrap().args;
-                let name = args.first().and_then(|v| v.as_string());
-                let name = name.map(|s| vm.heap().str_to_string(s)).unwrap_or_default();
-                let v = vm
-                    .global_path(&name)
-                    .ok_or(format!("host: unknown {name}"))?;
-                vm.resolve_host_call(call_id, Ok(v)).unwrap();
-            }
-            Status::HostCall { call_id, .. } => {
-                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
-            }
-            Status::Threw(e) => return Err(format!("threw {}", vm.display(e))),
-            s => return Err(format!("{s:?}")),
-        }
-    }
-}
-
-/// Dumps a finished VM and runs the dump in a fresh VM, twice: a failure if a run fails
-/// or the second round does not give the same text again (the first may order the global
-/// bindings differently: a loaded dump declares them in its own order). Refusals are
-/// counted in `DUMP_REFUSED`.
-fn dump_round_trip(vm: &Vm) -> Option<String> {
-    use djs_core::vm::dump::DumpOptions;
-    let name = |id: u32| (id == LOG).then(|| String::from("log"));
-    // `console` is the host's: re-bound by name, its `log` written as `console.log`.
-    let name = |id: u32| name(id).map(|n| format!("console.{n}"));
-    let opts = DumpOptions {
-        base_names: djs_core::vm::dump::BaseNames {
-            builtins: djs_prelude::BASE_NAMES,
-            globals: djs_prelude::BASE_GLOBALS,
-        },
-        host: &["console"],
-        host_fn_name: &name,
-        ..DumpOptions::default()
-    };
-    let first = match vm.dump(&opts, None) {
-        Ok(t) => t,
-        Err(e) => {
-            DUMP_REFUSED.fetch_add(1, Ordering::Relaxed);
-            if std::env::var_os("DJS_E2E_DUMP_REFUSALS").is_some() {
-                eprintln!("{}", e.message());
-            }
-            return None;
-        }
-    };
-    let mut texts = vec![first];
-    for round in 0..2 {
-        let text = texts.last().unwrap();
-        let (mut b, _) = dump_vm();
-        if let Err(e) = run_dump(&mut b, text) {
-            return Some(format!(
-                "<e2e: dump {} does not run: {e}>\n{text}\n",
-                round + 1
-            ));
-        }
-        match b.dump(&opts, None) {
-            Ok(again) => texts.push(again),
-            Err(e) => {
-                return Some(format!(
-                    "<e2e: the loaded dump is refused: {}>\n{text}\n",
-                    e.message()
-                ));
-            }
-        }
-    }
-    if texts[1] != texts[2] {
-        return Some(format!(
-            "<e2e: a loaded dump dumps differently>\n--- first\n{}\n--- second\n{}\n",
-            texts[1], texts[2]
-        ));
-    }
-    DUMP_OK.fetch_add(1, Ordering::Relaxed);
-    None
-}
-
-static DUMP_OK: AtomicUsize = AtomicUsize::new(0);
-static DUMP_REFUSED: AtomicUsize = AtomicUsize::new(0);
 
 fn cases_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/e2e")
@@ -245,11 +99,7 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
     // Every case starts from one base image (prelude + console), as a base snapshot
     // would: building the prelude per case dominated the run time.
     let (image, console) = base();
-    let (mut vm, console) = if matches!(mode, Mode::Dump) {
-        dump_vm()
-    } else {
-        (Vm::from_bytes(image.clone(), opts).unwrap(), *console)
-    };
+    let (mut vm, console) = (Vm::from_bytes(image.clone(), opts).unwrap(), *console);
     let body = src.starts_with("// mode: body");
     // A module graph (gen-expected.sh): main.js, then a module per `// file:` line.
     let module = src.starts_with("// mode: module");
@@ -313,12 +163,6 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         let status = vm.run(fuel);
         match status {
             Status::Done(v) => {
-                if matches!(mode, Mode::Dump)
-                    && !module
-                    && let Some(f) = dump_round_trip(&vm)
-                {
-                    out += &f;
-                }
                 let rejections = vm.take_unhandled_rejections();
                 // A body is an async function (D008): gen-expected.sh catches its
                 // rejected promise and prints `Uncaught <reason>`.
@@ -433,8 +277,7 @@ fn e2e_cases() {
         Ok("plain") => (true, vec![]),
         Ok("suspend") => (false, vec![Mode::Suspend]),
         Ok("gc") => (false, vec![Mode::GcStress]),
-        Ok("dump") => (false, vec![Mode::Dump]),
-        _ => (true, vec![Mode::GcStress, Mode::Suspend, Mode::Dump]),
+        _ => (true, vec![Mode::GcStress, Mode::Suspend]),
     };
     let mut failures = Vec::new();
     // The image hash of each case's plain and suspension runs (D1720).
@@ -475,13 +318,6 @@ fn e2e_cases() {
                 "{name}: the heap images (raw, and the canonical hash) differ between the plain and suspension modes: {images:x?}"
             ));
         }
-    }
-    if stress.iter().any(|m| matches!(m, Mode::Dump)) {
-        eprintln!(
-            "dump: {} cases round-trip, {} refused",
-            DUMP_OK.load(Ordering::Relaxed),
-            DUMP_REFUSED.load(Ordering::Relaxed)
-        );
     }
     assert!(
         failures.is_empty(),
@@ -547,11 +383,6 @@ fn check_case(path: &Path, mode: Mode) -> (Option<String>, Option<Images>) {
                 .unwrap_or_default();
             (format!("<e2e: panicked: {msg}>\n"), None)
         });
-    // The dump mode runs with frozen builtins: only its round trips count.
-    let failed = match mode {
-        Mode::Dump => got.contains("<e2e: "),
-        _ => got != want,
-    };
-    let failure = failed.then(|| format!("{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"));
+    let failure = (got != want).then(|| format!("{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"));
     (failure, image)
 }

@@ -33,7 +33,6 @@ use super::expr::{Expr, LValue};
 use super::func::{BODY_SCOPE, FuncKind, HandlerLabels, VarKind};
 use super::parser::{Checkpoint, Parser, syntax};
 use super::scan::Follow;
-use super::smap_syntax::{NodeKind, Role};
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::heap::{Atom, atoms};
@@ -72,14 +71,6 @@ impl Target<'_> {
         match self {
             Target::Ref(lv) => lv.refs(),
             _ => 0,
-        }
-    }
-
-    /// Their slot names' constructs (suspension maps).
-    fn stack_names(&self) -> &'static [&'static str] {
-        match self {
-            Target::Ref(lv) => lv.stack_names(),
-            _ => &[],
         }
     }
 }
@@ -173,7 +164,6 @@ impl<'a> Parser<'a, '_> {
                 }
                 let v = self.f.add_var(name, VarKind::Param, BODY_SCOPE);
                 self.f.params.push_out(v);
-                self.syn_decl(v, super::smap_syntax::DeclKind::Param);
                 v
             }
             Binding::Member => {
@@ -287,7 +277,6 @@ impl<'a> Parser<'a, '_> {
     /// `{ a, b: c = 1, [k]: d, ...rest }`.
     fn parse_object_pattern(&mut self, b: Binding) -> PResult<()> {
         let open = self.tok;
-        self.syn_open(NodeKind::ObjectPattern, open.start);
         let rest = super::scan::object_has_rest(self.lx, open);
         self.next()?;
         self.mark(open.start);
@@ -308,7 +297,6 @@ impl<'a> Parser<'a, '_> {
             if self.is(TokenKind::Ellipsis) {
                 let pos = self.tok.start;
                 self.next()?;
-                let t_at = self.tok.start;
                 let t = if b == Binding::Assign {
                     let e = self.parse_lhs(false)?;
                     Target::Ref(self.pattern_lvalue(e, false)?)
@@ -318,7 +306,6 @@ impl<'a> Parser<'a, '_> {
                     }
                     self.parse_binding_target(b)?
                 };
-                self.names_push(t_at, t.stack_names());
                 self.temp_get(src);
                 if let Some(e) = excl {
                     self.temp_get(e);
@@ -327,8 +314,6 @@ impl<'a> Parser<'a, '_> {
                 self.code()
                     .call_intrinsic(intrinsic_id_of!("CopyDataPropertiesExcluding"), 2);
                 self.store_target(b, t)?;
-                self.syn_part(Role::Rest, pos, self.prev_end);
-                self.names_pop(t.stack_names().len());
                 if !self.is(TokenKind::RBrace) {
                     return syntax(self.tok.start, "assignment rest property must be last");
                 }
@@ -341,8 +326,6 @@ impl<'a> Parser<'a, '_> {
                     TokenKind::Comma | TokenKind::RBrace | TokenKind::Assign
                 );
             // Where the target starts: it names the slots of a reference target.
-            let mut t_at = key_tok.start;
-            let mut t_mark = self.syn_mark();
             let (key, t) = if shorthand {
                 let a = self.ident_atom()?;
                 if let Some(e) = excl {
@@ -384,25 +367,15 @@ impl<'a> Parser<'a, '_> {
                             self.code().array_push();
                             self.code().drop();
                         }
-                        self.names_push(key_tok.start, &["pattern.key"]);
                     }
                 }
                 if !self.is(TokenKind::Colon) {
                     return syntax(self.tok.start, "expecting ':'");
                 }
-                let role = if key.is_some() {
-                    Role::Key
-                } else {
-                    Role::ComputedKey
-                };
-                self.syn_part(role, key_tok.start, self.prev_end);
                 self.next()?;
-                t_at = self.tok.start;
-                t_mark = self.syn_mark();
                 (key, self.parse_target(b)?)
             };
             let r = t.refs();
-            self.names_push(t_at, t.stack_names());
             match key {
                 Some(a) => {
                     self.temp_get(src);
@@ -417,47 +390,17 @@ impl<'a> Parser<'a, '_> {
                 }
             }
             let name = self.target_name(&t);
-            let default = self.syn_default(t_at, t_mark);
             self.parse_pattern_default(name)?;
             self.store_target(b, t)?;
-            self.syn_default_end(default);
-            let role = if shorthand {
-                Role::Shorthand
-            } else {
-                Role::Value
-            };
-            self.syn_part(role, t_at, self.prev_end);
-            self.names_pop(t.stack_names().len());
             if key.is_none() {
                 self.code().drop();
-                self.names_pop(1);
             }
             if !self.eat(TokenKind::Comma)? {
                 break;
             }
         }
         self.expect(TokenKind::RBrace, "}")?;
-        self.syn_close();
         Ok(())
-    }
-
-    /// Before a target's `= default`, if there is one: the target from `t_at`
-    /// ([`Parser::syn_mark`] `mark` where it started) becomes a `Default` node's
-    /// `Target` (D2852). Returns where the default starts.
-    fn syn_default(&mut self, t_at: u32, mark: u32) -> Option<u32> {
-        if !self.is(TokenKind::Assign) || !self.syn_on() {
-            return None;
-        }
-        self.syn_open_late(NodeKind::Default, t_at, mark, Role::Target, self.prev_end);
-        Some(self.peek().start)
-    }
-
-    /// After the default and the store: the `Init` part, and the node ends.
-    fn syn_default_end(&mut self, init: Option<u32>) {
-        if let Some(init) = init {
-            self.syn_part(Role::Init, init, self.prev_end);
-            self.syn_close();
-        }
     }
 
     // ---- Array patterns --------------------------------------------------------------
@@ -465,7 +408,6 @@ impl<'a> Parser<'a, '_> {
     /// `[a, , b = 1, [c], ...d]`.
     fn parse_array_pattern(&mut self, b: Binding) -> PResult<()> {
         let open = self.tok;
-        self.syn_open(NodeKind::ArrayPattern, open.start);
         self.next()?;
         self.mark(open.start);
         self.code()
@@ -497,7 +439,6 @@ impl<'a> Parser<'a, '_> {
                 TokenKind::RBracket => break,
                 TokenKind::Comma => {
                     // An elision: one step, value dropped.
-                    self.syn_part(Role::Hole, self.tok.start, self.tok.start);
                     self.region_end(&mut regions);
                     self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
@@ -507,39 +448,27 @@ impl<'a> Parser<'a, '_> {
                     continue;
                 }
                 TokenKind::Ellipsis => {
-                    let rest = self.tok.start;
                     self.next()?;
-                    let t_at = self.tok.start;
                     let t = self.parse_target(b)?;
                     if !self.is(TokenKind::RBracket) {
                         return syntax(self.tok.start, "rest element must be the last one");
                     }
                     may_throw |= matches!(t, Target::Pattern(_));
-                    self.names_push(t_at, t.stack_names());
                     self.region_end(&mut regions);
                     self.emit_iter_rest((it, next), first, open.start);
                     self.region_start(&mut regions);
                     self.store_target(b, t)?;
-                    self.syn_part(Role::Rest, rest, self.prev_end);
-                    self.names_pop(t.stack_names().len());
                     break;
                 }
                 _ => {
-                    let t_at = self.tok.start;
-                    let t_mark = self.syn_mark();
                     let t = self.parse_target(b)?;
                     may_throw |= matches!(t, Target::Pattern(_));
-                    self.names_push(t_at, t.stack_names());
                     self.region_end(&mut regions);
                     self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
                     let name = self.target_name(&t);
-                    let default = self.syn_default(t_at, t_mark);
                     may_throw |= self.parse_pattern_default(name)?;
                     self.store_target(b, t)?;
-                    self.syn_default_end(default);
-                    self.syn_part(Role::Element, t_at, self.prev_end);
-                    self.names_pop(t.stack_names().len());
                     first = false;
                 }
             }
@@ -550,7 +479,6 @@ impl<'a> Parser<'a, '_> {
             }
         }
         self.expect(TokenKind::RBracket, "]")?;
-        self.syn_close();
         self.open_iters.pop();
         self.region_end(&mut regions);
         // Close a not-done iterator.

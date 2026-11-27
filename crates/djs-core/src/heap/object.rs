@@ -2956,10 +2956,6 @@ impl Heap {
         out
     }
 
-    #[cfg(feature = "dump")]
-    pub(crate) fn ordinary_own_keys(&self, o: Obj) -> Vec<Atom> {
-        self.ordinary_keys(o, false)
-    }
 
     /// The ordinary [[OwnPropertyKeys]], or with `enumerable` only those of enumerable
     /// properties (dense elements always are; `length` and a closure's lazy `length` and
