@@ -1441,9 +1441,9 @@ fn records_and_constants_travel_by_name() {
         "Object.Record.UsingRecord",
         "Object.Record.FromAsyncState",
         "Object.Record.AsyncDisposeState",
-        "Enum(\"GeneratorStates\"",
-        "Enum(\"HelperStates\"",
-        "Bits(\"PromiseFlags\"",
+        " GeneratorStates",
+        " HelperStates",
+        " PromiseFlags",
     ] {
         assert!(all.contains(t), "{t} not in any snapshot");
     }

@@ -121,6 +121,7 @@ host: suspended the run into examples/sleep-snapshot/out/sleep.snapshot (2491 by
   | vm               72 bytes
   | 18 strings (272 bytes of text), 8 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
   | builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% %ArrayIteratorPrototype%.next Array.prototype.push Function.prototype Array.prototype %ArrayIteratorPrototype%
+  | flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
   | script 0: sleep.js, parameters ms (source by hash 4c7bfb155608b5b3)
   | host values: console tools tools.sleep() (and 0 members)
   | host data: {"states":[[2,{"due":1795813233385}]],"fuelUsed":110}

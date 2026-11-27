@@ -157,6 +157,8 @@ struct Snap<'a> {
     bases: Vec<u32>,
     intrinsics: Vec<u32>,
     host: Vec<HostEntry>,
+    /// The flag and constant sets' names, for `describe`.
+    set_names: Vec<String>,
     /// Name, parameters, options, and the source or its hash.
     scripts: Vec<ScriptEntry<'a>>,
     /// Script, span, whether the bytecode is pinned, the hash, the template objects made
@@ -196,6 +198,7 @@ impl<'a> Snap<'a> {
             bases: Vec::new(),
             intrinsics: Vec::new(),
             host: Vec::new(),
+            set_names: Vec::new(),
             scripts: Vec::new(),
             functions: Vec::new(),
             records: Vec::new(),
@@ -212,6 +215,7 @@ impl<'a> Snap<'a> {
             for _ in 0..k {
                 names.push(r.str().map_err(short)?.to_string());
             }
+            s.set_names.push(name.clone());
             sets.insert(name, names);
         }
         let n = r.u().map_err(short)?;
@@ -1674,6 +1678,7 @@ pub fn describe(bytes: &[u8]) -> Result<String, Refusal> {
         }
     }
     out += &format!("builtins: {}\n", names.join(" "));
+    out += &format!("flags and constants: {}\n", s.set_names.join(" "));
     let text = |i: u32| {
         s.strings
             .get(i as usize)
