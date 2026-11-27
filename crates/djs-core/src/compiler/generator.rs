@@ -146,8 +146,8 @@ impl Parser<'_, '_> {
         self.code().call_intrinsic(get_iterator, 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
-        let it = self.temp("yield*.iterator", pos);
-        let next = self.temp("yield*.next", pos);
+        let it = self.temp();
+        let next = self.temp();
         self.temp_put(next);
         self.temp_put(it);
         self.place(l_base);

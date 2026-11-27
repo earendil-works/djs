@@ -342,7 +342,6 @@ fn is_slot_object(class: ObjectClass) -> bool {
     )
 }
 
-
 /// `%NewBuiltinClosure(kind, data, length)`: a builtin closure of kind `kind` (its index
 /// in `BUILTIN_CLOSURES`) holding `data`; `None` for an unknown kind.
 pub(super) fn new_builtin_closure(
@@ -1577,7 +1576,7 @@ impl Exec<'_> {
                     let Some(s) = a0.as_string() else {
                         break 'bad;
                     };
-                    // (By chunk: a dump's buffers are megabytes of Latin-1.)
+                    // (By chunk: the text may be megabytes of Latin-1.)
                     let mut units: alloc::vec::Vec<u16> =
                         crate::buf::vec_with_capacity(self.heap.str_len(s) as usize);
                     for c in self.heap.str_chunks(s) {

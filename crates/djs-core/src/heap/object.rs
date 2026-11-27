@@ -2943,20 +2943,6 @@ impl Heap {
         self.ordinary_keys(o, enumerable)
     }
 
-    /// The private names (D1400) `o` holds, in table order, with their properties:
-    /// what [[OwnPropertyKeys]] leaves out. For dumps (vm/dump.rs).
-    pub fn private_entries(&self, o: Obj) -> Vec<(Atom, Property)> {
-        let mut out = Vec::new();
-        for i in 0..self.prop_slots(o) {
-            let key = self.prop_key(o, i);
-            if !key.is_null() && self.is_private_atom(key) {
-                out.push_out((key, self.prop_read(o, i)));
-            }
-        }
-        out
-    }
-
-
     /// The ordinary [[OwnPropertyKeys]], or with `enumerable` only those of enumerable
     /// properties (dense elements always are; `length` and a closure's lazy `length` and
     /// `name` never).

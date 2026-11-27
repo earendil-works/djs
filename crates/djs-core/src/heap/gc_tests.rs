@@ -10,10 +10,10 @@ use crate::value::{Kind, Value};
 
 // ------------------------------------------------------------------ deep compare
 
-/// A canonical text dump of everything reachable from `roots`, by walking the graph from
+/// A canonical text of everything reachable from `roots`, by walking the graph from
 /// the handles. Objects and symbols get ids in visit order, so two heaps with the same
-/// graph give the same dump regardless of where cells are.
-fn dump(h: &Heap, roots: &[Handle]) -> String {
+/// graph give the same text regardless of where cells are.
+fn graph_text(h: &Heap, roots: &[Handle]) -> String {
     struct D<'a> {
         h: &'a Heap,
         ids: BTreeMap<u64, usize>,
@@ -310,11 +310,11 @@ fn random_graphs_survive_collection() {
         let mut h = Heap::new().unwrap();
         let hs = build_random(&mut h, seed.wrapping_mul(0x9E37_79B9_7F4A_7C15), 400, None);
         h.verify().unwrap();
-        let d0 = dump(&h, &hs);
+        let d0 = graph_text(&h, &hs);
         let stats = h.collect().unwrap();
         assert!(stats.after <= stats.before);
         h.verify().unwrap();
-        assert_eq!(dump(&h, &hs), d0, "seed {seed}");
+        assert_eq!(graph_text(&h, &hs), d0, "seed {seed}");
         // Collecting again is a fixpoint, byte for byte.
         let b1 = h.bytes().to_vec();
         let s2 = h.collect().unwrap();
@@ -322,9 +322,9 @@ fn random_graphs_survive_collection() {
         assert_eq!(h.bytes(), &b1[..], "seed {seed}");
         // The image round trip still works, handles included.
         let mut r = Heap::from_bytes(b1, DEFAULT_LIMIT).unwrap();
-        assert_eq!(dump(&r, &hs), d0);
+        assert_eq!(graph_text(&r, &hs), d0);
         r.collect().unwrap();
-        assert_eq!(dump(&r, &hs), d0);
+        assert_eq!(graph_text(&r, &hs), d0);
     }
 }
 
@@ -340,7 +340,7 @@ fn collecting_during_construction_changes_nothing() {
         let hb = build_random(&mut b, seed, 600, Some(37));
         assert_eq!(ha, hb);
         b.verify().unwrap();
-        assert_eq!(dump(&a, &ha), dump(&b, &hb), "seed {seed}");
+        assert_eq!(graph_text(&a, &ha), graph_text(&b, &hb), "seed {seed}");
         // Both collected: identical images.
         a.collect().unwrap();
         b.collect().unwrap();
@@ -360,13 +360,13 @@ fn both_collectors_keep_the_same_graph() {
             let mut a = Heap::new().unwrap();
             let ha = build_random(&mut a, seed, 500, None);
             let mut b = Heap::from_bytes_trusted(a.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
-            let d0 = dump(&a, &ha);
+            let d0 = graph_text(&a, &ha);
             let sa = a.collect().unwrap();
             let sb = b.collect_canonical().unwrap();
             assert_eq!(sa.after, sb.after, "seed {seed} cap {cap}");
             a.verify().unwrap();
-            assert_eq!(dump(&a, &ha), d0, "seed {seed} cap {cap}");
-            assert_eq!(dump(&b, &ha), d0, "seed {seed} cap {cap}");
+            assert_eq!(graph_text(&a, &ha), d0, "seed {seed} cap {cap}");
+            assert_eq!(graph_text(&b, &ha), d0, "seed {seed} cap {cap}");
             let image = a.bytes().to_vec();
             a.collect().unwrap();
             assert_eq!(a.bytes(), &image[..], "seed {seed} cap {cap}");
@@ -598,13 +598,13 @@ fn failed_collection_leaves_heap_intact() {
     let mut h = Heap::new().unwrap();
     let hs = build_random(&mut h, 77, 300, None);
     let bytes = h.bytes().to_vec();
-    let d = dump(&h, &hs);
+    let d = graph_text(&h, &hs);
     h.fail_next_gc_reserve = true;
     assert_eq!(h.collect(), Err(HeapError::HostOutOfMemory));
     assert_eq!(h.bytes(), &bytes[..]);
-    assert_eq!(dump(&h, &hs), d);
+    assert_eq!(graph_text(&h, &hs), d);
     h.collect().unwrap();
-    assert_eq!(dump(&h, &hs), d);
+    assert_eq!(graph_text(&h, &hs), d);
 }
 
 #[test]
@@ -1116,10 +1116,10 @@ fn minor_collections_keep_the_graph() {
             let mut b = Heap::from_bytes_trusted(a.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
             let old = a.old_end();
             let old_bytes = a.bytes()[..old as usize].to_vec();
-            let d0 = dump(&a, &hs);
+            let d0 = graph_text(&a, &hs);
             let sa = a.collect_minor().unwrap();
             a.verify().unwrap();
-            assert_eq!(dump(&a, &hs), d0, "seed {seed} cap {cap}");
+            assert_eq!(graph_text(&a, &hs), d0, "seed {seed} cap {cap}");
             assert_eq!(a.old_end(), old);
             assert!(sa.after >= old && sa.after <= sa.before);
             // Old cells do not move; only reference slots to young cells and the roots'
@@ -1164,7 +1164,7 @@ fn scheduled_collections_do_not_change_compacted_images() {
             h.verify().unwrap();
         });
         assert!(minors > 0);
-        assert_eq!(dump(&a, &ha), dump(&b, &hb), "seed {seed}");
+        assert_eq!(graph_text(&a, &ha), graph_text(&b, &hb), "seed {seed}");
         a.collect().unwrap();
         b.collect().unwrap();
         assert_eq!(a.bytes(), b.bytes(), "seed {seed}");
@@ -1365,10 +1365,10 @@ fn collections_never_move_the_prefix() {
         "only the words the mutation wrote differ"
     );
     h.verify().unwrap();
-    let d = dump(&h, &hs);
+    let d = graph_text(&h, &hs);
     h.collect_canonical().unwrap();
     assert_eq!(h.base_end(), end);
     assert_eq!(changed(&h), written);
-    assert_eq!(dump(&h, &hs), d);
+    assert_eq!(graph_text(&h, &hs), d);
     h.verify().unwrap();
 }

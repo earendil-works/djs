@@ -226,9 +226,9 @@ impl Exec<'_> {
     }
 
     /// `f`'s own `name` when it is a data property holding a string (read without
-    /// running code, as V8 does): a renamed function and a dump's continuation show
-    /// the name the program knows. A closure whose `name` is still the lazy one (D2445)
-    /// has the compiled name: no lookup.
+    /// running code, as V8 does): a renamed function shows the name the program knows. A
+    /// closure whose `name` is still the lazy one (D2445) has the compiled name: no
+    /// lookup.
     fn own_name(&self, f: Obj) -> Option<Name> {
         if self.heap.cell_flags(f.offset()) & OBJ_LAZY_NAME != 0 {
             return None;

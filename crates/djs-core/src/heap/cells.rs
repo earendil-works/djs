@@ -428,8 +428,8 @@ cells! {
         /// The source text (D009) as UTF-8 in a [`Bytes`] cell (D2992), or null when
         /// stripped.
         SOURCE: Ref = 12,
-        /// The compile options that matter to the code (`CompileOptions::bits`): a dump
-        /// compiles the source again to name a suspended frame's slots (D2610).
+        /// The compile options that matter to the code (`CompileOptions::bits`): a
+        /// snapshot's load compiles the source again with them.
         OPTIONS: u32 = 16,
         /// An async body's parameter names joined by `,`, a string, or null.
         PARAMS: Ref = 20,

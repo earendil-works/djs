@@ -228,8 +228,8 @@ impl<'a> Exporter<'a> {
     }
 
     /// Marks the host values (D3720): each root, and every object reachable from it
-    /// through own data properties, as a member (dumps went two levels deep, D2971; a
-    /// snapshot keeps the identity of every object of the host's data). A host function
+    /// through own data properties, as a member (a snapshot keeps the identity of every
+    /// object of the host's data). A host function
     /// that is no member is named by its identity, and a Proxy's insides are not looked
     /// at.
     fn host_spots(&mut self, host: &HostNames) {

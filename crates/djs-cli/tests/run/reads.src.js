@@ -1,5 +1,5 @@
-// reads.dump.js, a plain dump written by hand for djs-cli's tests, is this program at
-// idle point 1.
+// A program for djs-cli's tests that reads two files through tools, one at a time:
+// two idle points.
 async function main() {
   const a = await tools.read({ path: "a" });
   const b = await tools.read({ path: "b" });

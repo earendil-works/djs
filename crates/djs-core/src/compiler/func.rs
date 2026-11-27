@@ -85,8 +85,7 @@ pub(super) enum VarKind {
     /// anything can read it, so never TDZ-checked.
     Hidden,
     /// A construct's state while it runs (a loop's iterator record, a switch's
-    /// discriminant, a pattern's source, D2732): named `construct@offset` like the
-    /// temporaries of suspension maps (D2721), written before anything reads it.
+    /// discriminant, a pattern's source, D2732), written before anything reads it.
     Temp,
     /// A module's import binding (immutable; its Box is the exporting module's, so reads
     /// are always TDZ-checked), and the hidden bindings the linker initializes (a
@@ -340,9 +339,8 @@ pub(super) struct FuncState {
     pub var_scope: ScopeId,
     /// `(scope, name)` → binding, once the function has many (0092).
     pub index: VarIndex,
-    /// The construct temporaries (`VarKind::Temp`, compiler/temps.rs): the binding, the
-    /// construct and its source offset, which name its slot (D2721, D2732).
-    pub temps: Vec<(VarId, &'static str, u32)>,
+    /// How many construct temporaries (`VarKind::Temp`, compiler/temps.rs) it has.
+    pub temps: u32,
     /// Lazy compilation (D2990): a function written in source that may compile at its
     /// first call (the rest of the rule is in `resolve::lazy_roots`).
     #[cfg(feature = "lazy")]
@@ -483,7 +481,7 @@ impl FuncState {
             ns: None,
             var_scope: BODY_SCOPE,
             index: VarIndex::default(),
-            temps: Vec::new(),
+            temps: 0,
             #[cfg(feature = "lazy")]
             lazy_ok: false,
             #[cfg(feature = "lazy")]

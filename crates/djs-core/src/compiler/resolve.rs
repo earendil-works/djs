@@ -39,8 +39,7 @@ struct UnitPool {
     values: Vec<Value>,
     /// Open addressing over the shared constants' hashes: `(hash, index + 1)`, index 0
     /// empty. The hash is kept so that growing the table hashes nothing again: a
-    /// megabyte string constant (a dump's data) was hashed again at every doubling
-    /// (0198). (A `BTreeMap` here cost 16 KB of wasm.)
+    /// megabyte string constant was hashed again at every doubling (0198). (A `BTreeMap` here cost 16 KB of wasm.)
     table: Vec<(u32, u32)>,
     shared: u32,
 }
@@ -48,8 +47,8 @@ struct UnitPool {
 impl UnitPool {
     fn hash(heap: &Heap, v: Value) -> u32 {
         match v.as_string() {
-            // A long flat string by its length and ~256 sampled units: a dump's megabyte
-            // literal is compared on a match instead of hashed whole (0198).
+            // A long flat string by its length and ~256 sampled units: a megabyte literal
+            // is compared on a match instead of hashed whole (0198).
             Some(s) if heap.str_len(s) > 1024 => match heap.str_view(s) {
                 Some(view) => (0..view.len())
                     .step_by(view.len() / 256)
@@ -174,7 +173,6 @@ pub(super) fn internal(what: &str) -> PErr {
     )
 }
 
-
 /// How a unit is compiled (D2990).
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Unit {
@@ -227,8 +225,7 @@ impl Unit {
 /// The functions that compile lazily when the unit is lazy (D2990). Eligibility depends
 /// only on a function's own text and its parent's, so the compile of an enclosing lazy
 /// function decides the same as the whole unit's, and every eligible function gets a
-/// constant pool of its own in every compile: its code is the same either way, which the
-/// suspension maps of an eager compile rely on.
+/// constant pool of its own in every compile: its code is the same either way (D2991).
 #[cfg(feature = "lazy")]
 fn lazy_roots(
     funcs: &[FuncState],
@@ -357,8 +354,6 @@ impl Plan {
     }
 }
 
-
-
 /// Without lazy functions: every function emitted, the top level in pool 0, the rest in
 /// pool 1.
 #[cfg(not(feature = "lazy"))]
@@ -413,7 +408,7 @@ pub(super) fn finish(
     let builtins = u16::try_from(builtins).map_err(|_| internal("too many prelude functions"))?;
     let mut next_builtin = 0;
     // The debug name of construct temporaries (D2732), which bind integer atoms.
-    let temp_name = if funcs.iter().any(|f| !f.temps.is_empty()) {
+    let temp_name = if funcs.iter().any(|f| f.temps > 0) {
         heap.atom_str("<temp>")?
     } else {
         Atom::NULL
@@ -809,7 +804,6 @@ fn assign_storage(
     }
     (storage, names)
 }
-
 
 /// Handlers whose depth is relative to a label (`HandlerLabels::depth_from`) get their
 /// absolute depth from the final code. Reachability is found from the entry: a handler

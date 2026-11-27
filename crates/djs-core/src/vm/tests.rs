@@ -3256,8 +3256,8 @@ fn reset_to_reuses_the_arena() {
     assert_eq!(out.log, ["1 undefined"]);
 }
 
-/// A VM moves between threads (an embedder's async tasks): `Send` in every build, the
-/// dump feature's caches included (D3183).
+/// A VM moves between threads (an embedder's async tasks): `Send` in every build
+/// (D3183).
 #[test]
 fn vm_is_send() {
     fn send<T: Send>() {}

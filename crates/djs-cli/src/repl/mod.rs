@@ -1158,9 +1158,9 @@ impl Repl {
                 Ok(bytes) if crate::snapshots::is_snapshot(&bytes) => {
                     self.restore_snapshot(arg, &bytes)
                 }
-                Ok(_) => println!(
-                    "{arg} is not a djs snapshot (.restore reads what .snapshot writes)"
-                ),
+                Ok(_) => {
+                    println!("{arg} is not a djs snapshot (.restore reads what .snapshot writes)")
+                }
                 Err(e) => println!("cannot read {arg}: {e}"),
             },
             ".clear" => {

@@ -193,8 +193,7 @@ fn parse_args() -> Result<Args, String> {
     if args.update_ratchet && args.ratchet.is_none() {
         args.ratchet = Some(args.corpus.join("expected-failures.txt"));
     }
-    if (args.suspend_every.is_some() || args.gc_stress || args.determinism)
-        && args.engine != "djs"
+    if (args.suspend_every.is_some() || args.gc_stress || args.determinism) && args.engine != "djs"
     {
         return Err("--suspend-every, --gc-stress and --determinism need --engine djs".into());
     }

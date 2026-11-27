@@ -62,7 +62,3 @@ unsafe-heap = []
 # e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,
 # which cargo allows: integration tests link the same djs-core).
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }
-
-[lints.rust]
-# `djs_optsize`: set by scripts/wasm-build-env.sh for the shipped module (0298).
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(djs_optsize)'] }

@@ -283,10 +283,10 @@ impl<'a> Parser<'a, '_> {
         self.code().require_object_coercible();
         // The value and, with a rest property, the keys of the properties before it,
         // to exclude from it (D2732).
-        let src = self.temp("pattern.source", open.start);
+        let src = self.temp();
         self.temp_put(src);
         let excl = if rest {
-            let e = self.temp("pattern.excluded", open.start);
+            let e = self.temp();
             self.code().array_from(0);
             self.temp_put(e);
             Some(e)
@@ -415,8 +415,8 @@ impl<'a> Parser<'a, '_> {
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         // The iterator (`undefined` once done) and its `next` (D2732).
-        let it = self.temp("pattern.iterator", open.start);
-        let next = self.temp("pattern.next", open.start);
+        let it = self.temp();
+        let next = self.temp();
         self.temp_put(next);
         self.temp_put(it);
         // The close handler's depth is the depth here.

@@ -40,14 +40,14 @@ fn main() {
     // The shadow stack (D1941, D2540, D3280). It is part of every instance's linear memory
     // from the start. The release modules link 64 KiB: compiles nest to the small stack's
     // limits there, and a host moves the stack to a 128 KiB block for one that nests
-    // deeper (the elastic stack). Debug builds (larger frames) and the dump module
-    // (whose dumps and loads compile without the host) keep 128 KiB, where the parser's
+    // deeper (the elastic stack). Debug builds (larger frames) and modules with snapshots
+    // (whose loads compile the scripts without the host) keep 128 KiB, where the parser's
     // deepest accepted nesting needs at most ~115 KiB (docs/compiler.md 2.4).
     // DJS_WASM_STACK overrides it for measurements.
     println!("cargo:rerun-if-env-changed=DJS_WASM_STACK");
     if wasm {
-        let dump = std::env::var("CARGO_FEATURE_DUMP").is_ok();
-        let small = if debug || dump { "131072" } else { "65536" };
+        let snapshot = std::env::var("CARGO_FEATURE_SNAPSHOT").is_ok();
+        let small = if debug || snapshot { "131072" } else { "65536" };
         let n = std::env::var("DJS_WASM_STACK").unwrap_or_else(|_| small.into());
         println!("cargo:rustc-link-arg-cdylib=-zstack-size={n}");
         // Exported so that a host can tell a stack overflow from other traps: the pointer

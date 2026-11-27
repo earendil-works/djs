@@ -25,7 +25,7 @@ fn base() -> &'static BaseInfo {
     })
 }
 
-/// Whether `bytes` are a snapshot (its magic), not a dump.
+/// Whether `bytes` are a snapshot (its magic).
 pub fn is_snapshot(bytes: &[u8]) -> bool {
     bytes.starts_with(b"DJSNAP")
 }

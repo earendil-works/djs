@@ -173,7 +173,7 @@ impl Parser<'_, '_> {
     pub(super) fn using_region_start(&mut self, is_await: bool, at: u32) -> UsingRegion {
         self.code()
             .call_intrinsic(intrinsic_id_of!("UsingCreate"), 0);
-        let rec = self.temp("using.record", at);
+        let rec = self.temp();
         self.temp_put(rec);
         let l_try = self.new_label();
         let l_fin = self.new_label();

@@ -3,7 +3,7 @@
 //! docs/heap-snapshots-revisited.md).
 //!
 //! **When**: at an idle point only (no frames on the stack, no queued jobs, nothing in the
-//! host inbox; open async host calls are fine), the moments a dump is taken.
+//! host inbox; open async host calls are fine).
 //!
 //! **What**: one record per reachable cell above the builtin prefix, in a self-describing
 //! binary format:
@@ -142,8 +142,8 @@ impl Default for SnapshotOptions {
     }
 }
 
-/// What a host names in a snapshot of its run instead of writing it (D3720), as dumps
-/// name host values (D2971): the loading host makes them again, and they stay its own.
+/// What a host names in a snapshot of its run instead of writing it (D3720, D2971): the
+/// loading host makes them again, and they stay its own.
 #[derive(Clone, Debug, Default)]
 pub struct HostNames {
     /// Host function ids and their identities: a host function object and the function

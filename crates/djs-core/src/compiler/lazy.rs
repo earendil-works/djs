@@ -78,8 +78,6 @@ fn compile_lazy_once(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
     Ok(compiled)
 }
 
-
-
 /// A lazy template's function as its compile needs it, read from the heap that holds it
 /// (names as text: the compile may go into another heap).
 struct LazyFn {

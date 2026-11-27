@@ -15,9 +15,7 @@ impl Parser<'_, '_> {
     /// StatementListItem: declarations are allowed here, not in single-statement
     /// positions.
     pub(super) fn parse_statement_list_item(&mut self) -> PResult<()> {
-        // A statement of the list (suspension maps, D2850).
-        self.parse_statement_list_item_inner()?;
-        Ok(())
+        self.parse_statement_list_item_inner()
     }
 
     fn parse_statement_list_item_inner(&mut self) -> PResult<()> {
@@ -181,10 +179,7 @@ impl Parser<'_, '_> {
 
     /// `debugger;` with `CompileOptions::debugger_awaits` in an async function (D3050):
     /// the code and syntax of the statement `await debugger();`, where `debugger` is
-    /// the global a host binds. To the suspension map and the dump writer it is an
-    /// ordinary await of a call; its operand's text is the keyword, which a dump never
-    /// copies (the site's operand is the awaited value), while a later `debugger;` in a
-    /// continuation's text is copied as written and pauses again.
+    /// the global a host binds: an ordinary await of a call.
     fn parse_debugger_await(&mut self) -> PResult<()> {
         let start = self.tok.start;
         let atom = self.ident_atom()?;
@@ -866,7 +861,7 @@ impl Parser<'_, '_> {
             self.blocks[fin].kind = BlockKind::Labeled;
             self.expect(TokenKind::Finally, "finally")?;
             self.place(l_fin);
-            self.save_completion_value(fin, try_pos);
+            self.save_completion_value(fin);
             self.parse_block()?;
             self.end_try_finally(l_fin, l_end, exc_region.0, exc_region.1);
         }
@@ -879,11 +874,11 @@ impl Parser<'_, '_> {
     /// it runs. (Out of line, as [`Parser::end_try_finally`]: this frame is in every
     /// nested statement's, D1941.)
     #[inline(never)]
-    fn save_completion_value(&mut self, fin: usize, try_pos: u32) {
+    fn save_completion_value(&mut self, fin: usize) {
         let Some(a) = self.completion_local() else {
             return;
         };
-        let t = self.temp("completion.saved", try_pos);
+        let t = self.temp();
         let r = self.name_ref(a, self.prev_end);
         self.code().name_get(r);
         self.temp_put(t);
@@ -952,7 +947,7 @@ impl Parser<'_, '_> {
         self.next()?;
         self.reset_completion();
         self.parse_paren_expr()?;
-        let d = self.temp("switch.discriminant", switch_pos);
+        let d = self.temp();
         self.temp_put(d);
         self.expect(TokenKind::LBrace, "{")?;
         self.push_scope(ScopeKind::Switch)?;

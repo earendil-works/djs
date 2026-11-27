@@ -182,10 +182,7 @@ impl Vm {
             .set(0, crate::heap::cells::Roots::BUILD, BUILD_HASH);
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
-        let mut vm = Vm {
-            heap,
-            opts,
-        };
+        let mut vm = Vm { heap, opts };
         crate::builtins::number::set_seed(&mut vm.heap, opts.random_seed);
         if opts.prelude {
             #[cfg(djs_prelude)]
@@ -417,10 +414,7 @@ impl Vm {
             return Err(LoadError::BadHeader);
         }
         heap.force_prefix_barrier(opts.prefix_barrier);
-        Ok(Vm {
-            heap,
-            opts,
-        })
+        Ok(Vm { heap, opts })
     }
 
     /// The arena as it is: the complete VM state, including dead value-stack slots above
@@ -544,8 +538,6 @@ impl Vm {
             }
         }
     }
-
-
 
     /// Compiles `src`, lazily with `VmOptions::lazy_functions` (D2990).
     fn compile_unit(

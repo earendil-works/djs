@@ -196,13 +196,14 @@ fn lazy_code_is_eager_code_corpus() {
         opts.typescript = ts;
         n += check_identity(&src, &opts);
     }
-    // Plain dumps, as Scripts.
-    let golden = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/golden");
-    for e in std::fs::read_dir(golden).unwrap() {
+    // The snapshot test programs, as Scripts.
+    let programs =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/snapshot/programs");
+    for e in std::fs::read_dir(programs).unwrap() {
         let p = e.unwrap().path();
-        if p.to_string_lossy().ends_with(".dump.js") {
+        if p.to_string_lossy().ends_with(".src.js") {
             let src = std::fs::read_to_string(&p).unwrap();
-            n += check_identity(&src, &CompileOptions::script("dump.js"));
+            n += check_identity(&src, &CompileOptions::script("program.js"));
         }
     }
     assert!(n > 1000, "{n} lazy functions compared");
@@ -238,8 +239,6 @@ fn seal_compiles_lazy_templates() {
     let r = eval_with(&mut vm, "later(4)", &CompileOptions::script("u.js"));
     assert_eq!(r, "17");
 }
-
-
 
 #[test]
 #[ignore]

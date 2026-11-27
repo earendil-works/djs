@@ -383,6 +383,7 @@ fn check_case(path: &Path, mode: Mode) -> (Option<String>, Option<Images>) {
                 .unwrap_or_default();
             (format!("<e2e: panicked: {msg}>\n"), None)
         });
-    let failure = (got != want).then(|| format!("{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"));
+    let failure =
+        (got != want).then(|| format!("{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"));
     (failure, image)
 }

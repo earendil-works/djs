@@ -1424,7 +1424,7 @@ impl<'a> Parser<'a, '_> {
             ) {
                 // A parameter property: `public x` also means `this.x = x`, so it is not
                 // erasable. `strip_types` keeps it, as it keeps an enum, and the text
-                // does not compile as JavaScript (plain dumps stay TypeScript, 0209).
+                // does not compile as JavaScript.
                 let erased = self.erased.take();
                 self.ts_erase(start);
                 self.erased = erased;

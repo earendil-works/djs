@@ -836,7 +836,6 @@ impl Heap {
         self.find_string_atom(hash, Needle::Str(s))
     }
 
-
     /// Interns a Rust string; allocates only if it is not interned yet.
     pub fn atom_str(&mut self, t: &str) -> Result<Atom, HeapError> {
         self.atom_str_inner(t)

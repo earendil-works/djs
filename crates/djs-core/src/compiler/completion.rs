@@ -19,8 +19,7 @@
 //! (D2720) and no return address: this replaced `gosub`/`ret` (D2627).
 //!
 //! The kind is written last, after the value, and only abrupt completions with a value
-//! write the value: for the suspension maps' liveness, a write of the kind defines the
-//! value too (compiler/temps.rs), and the rethrow clears it. (A for-of whose loop no jump
+//! write the value, and the rethrow clears it. (A for-of whose loop no jump
 //! leaves never uses its temporaries: they are dead everywhere.)
 use crate::PushOut;
 
@@ -97,8 +96,8 @@ impl Parser<'_, '_> {
         pos: u32,
     ) {
         let completion = matches!(kind, BlockKind::Finally | BlockKind::Iter).then(|| Completion {
-            kind: self.temp("completion.kind", pos),
-            value: self.temp("completion.value", pos),
+            kind: self.temp(),
+            value: self.temp(),
             saved: Atom::NULL,
             exits: Vec::new(),
         });

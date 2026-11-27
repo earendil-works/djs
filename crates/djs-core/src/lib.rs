@@ -2,9 +2,6 @@
 //!
 //! `no_std` + `alloc`. See ARCH.md at the repository root.
 #![no_std]
-// The shipped module's build (scripts/wasm-build-env.sh, RUSTC_BOOTSTRAP) sets `djs_optsize`:
-// the dumper's functions are optimized for size there (0298).
-#![cfg_attr(djs_optsize, feature(optimize_attribute))]
 // No `unsafe` in djs-core (AGENTS.md), except the arena's unchecked accessors in
 // heap/layout/access.rs with the `unsafe-heap` feature (D2520).
 #![cfg_attr(not(feature = "unsafe-heap"), forbid(unsafe_code))]

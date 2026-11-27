@@ -170,7 +170,7 @@ impl<'a> Parser<'a, '_> {
             }
             _ => {
                 let is_of = is_await || self.for_expr_head_is_of()?;
-                temps = Some(self.loop_temps(is_of, is_await, for_pos));
+                temps = Some(self.loop_temps(is_of));
                 let l_rhs = self.new_label();
                 self.code().jump(l_rhs);
                 self.place(l_assign);
@@ -243,7 +243,7 @@ impl<'a> Parser<'a, '_> {
         }
         let (it, next_t) = match temps {
             Some(t) => t,
-            None => self.loop_temps(is_of, is_await, for_pos),
+            None => self.loop_temps(is_of),
         };
         self.next()?;
         // The right side: for-of takes an AssignmentExpression, for-in an Expression.
@@ -293,7 +293,7 @@ impl<'a> Parser<'a, '_> {
             if is_await {
                 // The body's exception waits in a temporary of its own while the close
                 // is awaited, so the suspended frame keeps nothing on its stack.
-                let exc = self.temp("for-await.exception", for_pos);
+                let exc = self.temp();
                 self.temp_put(exc);
                 self.temp_get(it);
                 // A promise that always fulfills (errors from `return()` are dropped).
@@ -475,15 +475,10 @@ impl<'a> Parser<'a, '_> {
     }
 
     /// The temporaries of a loop's iterator record (D2732): the iterator (for-in: the key
-    /// iterator) and, for for-of and for-await, its `next` method, named by the `for`.
-    fn loop_temps(&mut self, is_of: bool, is_await: bool, for_pos: u32) -> (Atom, Option<Atom>) {
-        let (it, next) = match (is_of, is_await) {
-            (false, _) => ("for-in.iterator", None),
-            (true, false) => ("for-of.iterator", Some("for-of.next")),
-            (true, true) => ("for-await.iterator", Some("for-await.next")),
-        };
-        let it = self.temp(it, for_pos);
-        (it, next.map(|n| self.temp(n, for_pos)))
+    /// iterator) and, for for-of and for-await, its `next` method.
+    fn loop_temps(&mut self, is_of: bool) -> (Atom, Option<Atom>) {
+        let it = self.temp();
+        (it, is_of.then(|| self.temp()))
     }
 
     /// A pattern in a declaration head (`for (const [k, v] of ...)`): skipped, as it

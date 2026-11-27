@@ -285,8 +285,8 @@ pub(crate) struct Decoded {
     pub error: bool,
 }
 
-/// The value of base64 digit `c` (by range: a search of the alphabet was most of decoding
-/// a dump's buffers, 0215).
+/// The value of base64 digit `c` (by range: a search of the alphabet was most of decoding,
+/// 0215).
 fn b64_value(c: u16) -> Option<u32> {
     let c = u32::from(c);
     match c {
@@ -346,9 +346,6 @@ pub(crate) fn from_base64(s: &[u16], url: bool, last: u8, max: usize) -> Decoded
     let len = s.len();
     let mut chunk: Vec<u32> = crate::buf::vec_with_capacity(4);
     let mut i = 0;
-    // Whole groups of four plain digits first, while they fit (the common case): the
-    // same bytes as the steps below, without their per-unit checks. Only with `dump`,
-    // which loads dumps' buffers (+250 B gzip, 0215).
     loop {
         while i < len && is_ascii_ws(s[i]) {
             i += 1;

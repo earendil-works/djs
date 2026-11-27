@@ -6,10 +6,9 @@
 //! the realm's prelude function table (`Intrinsic::PreludeFunctions`, D2440), then one
 //! word per value in the list's order, a global's name atom with [`GLOBAL`] set followed
 //! by its members' atoms. Names and atom ids are the same in every VM of a build, so what
-//! the compiler emits for a name depends on nothing a script can change. A heap without a realm (the
-//! dumper's recompile for a text's suspension sites, the compiler's tests) goes by the
-//! list itself and numbers the values from 0: the code has the same shape, which is all
-//! such a compile is for.
+//! the compiler emits for a name depends on nothing a script can change. A heap without a
+//! realm (the compiler's tests) goes by the list itself and numbers the values from 0:
+//! the code has the same shape, which is all such a compile is for.
 //!
 //! The values are in the table only where a change of a builtin is noticed: the base
 //! image's build appends them ([`arm`]) when the realm becomes the builtin prefix. A VM
@@ -100,7 +99,7 @@ pub(crate) fn name_of(heap: &Heap, k: u32) -> Option<(Atom, Option<Atom>)> {
 /// No member for [`lookup`]: no member's word has the bit.
 pub(crate) const NO_MEMBER: u32 = GLOBAL;
 
-/// [`lookup`] in a heap without a realm, where only the dumper and tests compile.
+/// [`lookup`] in a heap without a realm, where only tests compile.
 #[cfg(not(test))]
 fn by_text(_: &Heap, _: Atom, _: u32) -> Option<(u16, u16)> {
     None

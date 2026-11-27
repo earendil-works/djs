@@ -144,10 +144,8 @@ impl<'a> CompileOptions<'a> {
         }
     }
 
-
     /// The options that decide the code, as a Script cell keeps them (`Script::OPTIONS`):
-    /// the goal in the low two bits, then TypeScript, legacy decorators, metadata (also
-    /// what a dump's `$djs.source` hash counts, D2882).
+    /// the goal in the low two bits, then TypeScript, legacy decorators, metadata.
     pub fn bits(&self) -> u32 {
         let goal = match self.goal {
             Goal::Script => 0,
@@ -383,8 +381,7 @@ fn has_property_escape(src: &[u8]) -> bool {
     false
 }
 
-
-/// Runs `f` on a parser of `src` (the scans are always exact without the dumper).
+/// Runs `f` on a parser of `src`.
 fn attempt<T>(
     heap: &mut Heap,
     src: &[u8],
@@ -464,14 +461,6 @@ pub fn compile_lazy_unit(
     result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
 }
 
-
-
-
-
-
-
-
-
 #[cfg(feature = "lazy")]
 pub use lazy::compile_lazy;
 pub use parser::{ClassSpan, ClassSpanKind};
@@ -540,7 +529,6 @@ pub fn compile_dynamic_function(
     })
     .map_err(|e| error_at(src, e))
 }
-
 
 /// TypeScript erasure for the strip-types oracle (TESTING.md): compiles `src` with the
 /// TypeScript grammar and returns it with every erased type range blanked (spaces;

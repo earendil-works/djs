@@ -200,10 +200,6 @@ pub(super) struct Parser<'a, 'h> {
     /// Lazy or eager, and a lazy function's own compile (D2990).
     #[cfg(feature = "lazy")]
     pub unit: super::resolve::Unit,
-    /// Tests only: a plain call pushes `this` under the callee (a lowering whose
-    /// suspension maps must differ, compiler/smap_tests.rs). The code does not run.
-    #[cfg(test)]
-    pub test_swap_call: bool,
 }
 
 /// The atoms of unescaped identifiers by their text in the source: most names repeat,
@@ -397,8 +393,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             ident_atoms: IdentAtoms::default(),
             #[cfg(feature = "lazy")]
             unit: super::resolve::Unit::EAGER,
-            #[cfg(test)]
-            test_swap_call: false,
         };
         p.f.src_end = src.len() as u32;
         if crate::EMBED && kind == FuncKind::Module {
@@ -406,7 +400,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         if kind == FuncKind::AsyncBody {
             // Before the parameters, as for an async function: a body's frame is laid out
-            // as the `async function (params) {...}` a dump writes for it (D2617, D2620).
+            // as an `async function (params) {...}`'s (D2617, D2620).
             p.start_flavor((true, false))?;
             for name in opts.params.iter() {
                 let atom = p.heap.atom_str(name)?;
@@ -431,11 +425,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.parse_top()?;
         self.finish_unit()
     }
-
-
-
-
-
 
     /// The top-level code, up to its return.
     pub(super) fn parse_top(&mut self) -> PResult<()> {
@@ -480,15 +469,6 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Finishes the unit after its top-level code: resolves every function into
     /// templates (also used by `compile_dynamic`, compiler/dynamic.rs).
     pub(super) fn finish_unit(
-        self,
-    ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
-        self.finish_unit_with(
-        )
-    }
-
-    /// [`Parser::finish_unit`], filling `maps` with the suspension maps when recorded,
-    /// and `globals` with the globals of each lazy function (`resolve::LazyGlobals`).
-    pub(super) fn finish_unit_with(
         mut self,
     ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.end_async_region();
@@ -937,10 +917,10 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// The unit's heap string of `units`: open addressing over their hash, compared
     /// by their units (a sorted list, inserted into, made a compile quadratic in
-    /// distinct strings: a dump's data has thousands, 0198).
+    /// distinct strings: a data-heavy script has thousands, 0198).
     fn str_pool_get(&mut self, units: &[u16]) -> PResult<crate::value::Str> {
-        // A long string by its length and a sample of ~256 units: a dump's megabyte
-        // literal is compared once on a match instead of hashed whole.
+        // A long string by its length and a sample of ~256 units: a megabyte literal is
+        // compared once on a match instead of hashed whole.
         let h = units
             .iter()
             .step_by(units.len() / 256 + 1)

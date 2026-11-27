@@ -3297,4 +3297,3 @@ fn body_imports_are_skipped() {
         .is_err()
     );
 }
-

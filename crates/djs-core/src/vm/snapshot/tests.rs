@@ -575,7 +575,8 @@ fn run_program(src: &str, at_idle: &mut dyn FnMut(&mut Vm, usize)) -> Vec<String
 }
 
 fn programs() -> Vec<(String, String)> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/snapshot/programs");
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/snapshot/programs");
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(|e| e.ok().map(|e| e.path()))

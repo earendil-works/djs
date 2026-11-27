@@ -242,8 +242,6 @@ impl PatternScan {
     }
 }
 
-
-
 /// With `open` the current `{` or `[` and `lx` after it: the lexer after the matching
 /// closer and the closer's end offset, or `None` if the group does not scan.
 pub(super) fn skip_group<'a>(lx: Lexer<'a>, open: Token) -> Option<(Lexer<'a>, u32)> {

@@ -19,7 +19,6 @@
 #     panic machinery (−10.8 KB gzip). Release modules recorded no panic message anyway
 #     (D2332); js/src/trap.ts names such a trap an engine panic. Needs the toolchain's
 #     rust-src component (checked below).
-#   - `--cfg djs_optsize` (0298): djs-core's `#[optimize(size)]` on the dumper's functions.
 #   - `-Zshare-generics=no` (D3090): at opt-level s rustc shares generic instances with
 #     upstream crates, and with core built at s that made djs-core call core's
 #     out-of-line `copy_from_slice_impl` from the arena accessors (+40% instructions in
@@ -46,8 +45,6 @@ if [ "${DJS_STABLE_ONLY:-}" != 1 ]; then
     exit 1
   fi
   flags+=("-Zlocation-detail=none" "-Zunstable-options" "-Cpanic=immediate-abort" "-Zshare-generics=no")
-  # `#[optimize(size)]` (LLVM minsize) on the dumper's functions (crates/djs-core/src/vm/dump*.rs, 0298).
-  flags+=("--cfg" "djs_optsize")
   echo "RUSTC_BOOTSTRAP=1"
   echo "CARGO_UNSTABLE_BUILD_STD=core,alloc"
 fi

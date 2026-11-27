@@ -440,9 +440,6 @@ impl Heap {
         None
     }
 
-
-
-
     /// The live keys and values of a collection in order (for the builtins that read a
     /// snapshot, like the Set methods' receiver copies).
     pub fn collection_entries_list(&self, o: Obj) -> alloc::vec::Vec<(Value, Value)> {

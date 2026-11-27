@@ -1022,13 +1022,7 @@ impl Parser<'_, '_> {
             }
             // `(a?.b)()`: the chain left both.
             Expr::Callee => {}
-            _ => {
-                self.code().undefined();
-                #[cfg(test)]
-                if self.test_swap_call {
-                    self.code().swap();
-                }
-            }
+            _ => self.code().undefined(),
         }
     }
 

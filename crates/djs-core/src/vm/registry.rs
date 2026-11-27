@@ -350,34 +350,9 @@ pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
     names(heap, prelude_functions)
 }
 
-/// The own data properties of `heap`'s global object with string keys, as a dump compares
-/// a VM's global object with its base's (`vm::dump::BaseNames::globals`): the key's atom (a
-/// VM's base atoms are the base's), name, the value's bits, the property's flags. An
-/// accessor has `u64::MAX` (no value has those bits).
-pub fn base_globals(heap: &Heap) -> Vec<(u32, String, u64, u8)> {
-    let Some(g) = intrinsic(heap, Intrinsic::Global).as_object() else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for k in heap.own_keys(g) {
-        if heap.atom_symbol(k).is_some() {
-            continue;
-        }
-        let name = heap.atom_name(k);
-        match heap.get_own_property(g, k) {
-            Some(Property::Data { value, flags }) => {
-                out.push_out((k.id(), name, value.to_bits(), flags.bits()));
-            }
-            Some(_) => out.push_out((k.id(), name, u64::MAX, 0)),
-            None => {}
-        }
-    }
-    out
-}
-
 /// [`canonical_names`] without the last pass (the prelude's internal functions, whose
 /// names need the prelude's source compiled): the same paths for everything else. For
-/// `Vm::dump`, which refuses those functions anyway and should not link the prelude source.
+/// snapshots (`BaseInfo`), which should not link the prelude source.
 pub fn reachable_names(heap: &Heap) -> Vec<(u32, String)> {
     names(heap, |_| Vec::new())
 }
@@ -485,7 +460,7 @@ fn walk(
         };
         // Children seen already are skipped when popped (only roots are walked again), so
         // they are left out here, before their paths are made: most edges of the later
-        // passes lead to named builtins (0184: this halved a dump's fixed cost).
+        // passes lead to named builtins (0184).
         for (seg, child, child_expand) in edges(heap, o, proto, Some(seen)) {
             queue.push_out((child, child_path(&path, &seg), child_expand, false));
         }

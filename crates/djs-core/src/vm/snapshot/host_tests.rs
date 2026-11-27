@@ -29,11 +29,7 @@ const CONFIG: &str =
     "({ list: [{ name: 'uniqueToolName', schema: { deep: { deeper: 1 } } }], n: 3 })";
 
 fn host(read_id: u32, print_id: u32, with_config: bool) -> Host {
-    let mut vm = Vm::from_base(
-        super::tests::base(),
-        super::tests::vm_opts(),
-    )
-    .unwrap();
+    let mut vm = Vm::from_base(super::tests::base(), super::tests::vm_opts()).unwrap();
     let read = vm.new_async_host_function(read_id, "read").unwrap();
     let print = vm.new_host_function(print_id, "print").unwrap();
     let tools = vm.new_null_proto_object().unwrap();

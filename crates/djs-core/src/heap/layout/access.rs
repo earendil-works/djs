@@ -6,7 +6,7 @@
 //!   `u64` so that it cannot wrap on wasm32. With it LLVM proves the slice access that
 //!   follows in range and drops its own two checks (`off <= len`, then `len - off >= N`),
 //!   which is what a plain `bytes.get(off..)` costs. Out of range is a panic (a wasm
-//!   trap), never undefined behavior. Native builds, the dump and docs modules and every
+//!   trap), never undefined behavior. Native builds, the docs module and every
 //!   test build use it.
 //! - **Unchecked (`unsafe-heap`).** A plain load or store. Debug builds still assert the
 //!   bounds, so the tests catch what the checked build would. The shipped wasm module

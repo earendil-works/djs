@@ -145,8 +145,6 @@ impl Parser<'_, '_> {
     /// `hint` names an anonymous class expression.
     pub(super) fn parse_class(&mut self, decl: bool, hint: Atom) -> PResult<()> {
         self.enter_n(super::parser::CLASS_WEIGHT)?;
-        // What a class definition keeps on the stack (heritage, constructor, prototype,
-        // computed keys) is not described in suspension maps yet (D2563).
         self.class_depth += 1;
         let r = self.parse_class_inner(decl, hint);
         self.class_depth -= 1;
