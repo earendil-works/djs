@@ -476,8 +476,432 @@ python3 $S/sizes.py
 
 <!-- Sections 3-5: issue 0300. -->
 
-## 3. (0300)
+## 3. A logical snapshot for djs, as built (0300)
 
-## 4. (0300)
+A prototype, on branch `issue/0300-logical-snapshots` (not on main): the module
+`crates/djs-core/src/vm/snapshot/` behind a non-default cargo feature `snapshot`, its tests,
+and two exports in djs-wasm. Everything in sections 3 and 4 was measured with it.
 
-## 5. (0300)
+### 3.1 The interface
+
+- `BaseInfo::new(base image, options)`: made once per base (per build). It holds the
+  builtins' registry paths (offset to path and back, from `registry::reachable_names`), and
+  the own properties of a fresh VM's per-VM objects, which the patches below are relative
+  to.
+- `vm.snapshot(&base) -> Result<Vec<u8>, Refusal>`, `vm.snapshot_with(&base, &opts)`:
+  `SnapshotOptions { sources: false }` writes each script's hash instead of its text.
+- `Vm::from_snapshot(&base, bytes)`, `Vm::from_snapshot_with(&base, bytes, sources)`: a
+  fresh VM from the importer's own base, with the run in it. The host gets its handles
+  (by index), its open calls (by id) and its host functions (by id) back as they were.
+- `describe(bytes)`: sections, record types, builtins and functions, for people.
+- djs-wasm: `vm_snapshot(vm)` and `vm_from_snapshot(len, limit)`, for size measurements;
+  no Sandbox method.
+
+A snapshot is taken only at an idle point, the moments a dump is taken: the run is
+`Idle`, `Done` or `Threw`, no frame is on the stack, no job is queued, nothing waits in the
+host inbox, and the builtins were never written (the frozen-builtins latch). Open async
+host calls are fine.
+
+### 3.2 The format
+
+Binary, self-describing, written in one pass (export) and read in one pass (import):
+
+| section | content |
+| --- | --- |
+| header | `DJSNAP`, format version 1 |
+| flag sets | header-flag names per kind (`Object`: extensible, lengthReadonly, builtin, builtinCtor, hostAsync, lazyLength, lazyName; `BigInt`: negative; `Symbol`: private...) |
+| types | every record type used: its name, its fields as (name, type), a 64-bit digest of both |
+| strings | every string the records use: content, Latin-1 or UTF-16 |
+| builtins | the base objects referred to, by registry path |
+| intrinsics | the builtin closure kinds referred to, by intrinsic name |
+| scripts | name, parameters, compile options, and the source (or its hash) |
+| functions | (script, source span), a flag and a hash (3.5), the template objects made at its tagged templates |
+| records | one per reachable cell above the base, each a type id and its fields in the type's order |
+| `Vm` | the interpreter's per-run state, the host call table, the handle table, the realm's per-VM values |
+
+Values are a tag byte and a payload: `undefined`, `null`, booleans, an int32 (zigzag
+varint), an f64 (8 bytes), hole, uninitialized, a string, a record, a builtin, a function,
+a script. A value keeps its form: an int32 stays an int32 and an internal reference stays
+internal, so the imported heap holds the same bits the exporter's did, up to offsets.
+References to strings and records are written as 0 for "the next one not referred to yet"
+and as id + 1 otherwise. A breadth-first graph mostly refers to new records, and keys and
+prototypes repeat, so both forms compress: a Map of 10,000 entries went from 88 KB to
+26 KB zstd with it, compared with plain ids.
+
+### 3.3 Records: kind names and named fields
+
+- **Generic kinds**, straight from the layout table (`heap/cells.rs`): `ValueArray`,
+  `EphemeronArray`, `U32Array`, `Bytes`, `BoxCell`, `HostCall`, `HandleTable`, `BigInt`,
+  `Symbol`. Every field by its name and type (value, ref, uint, int, f64), the tail as its
+  elements (a record tail field by field: `SLOTS[].VALUE`, `SLOTS[].NEXT`), and per kind a
+  little spec (`schema.rs`): which field counts the tail in use, which fields are not state
+  (a symbol's atom id), the header flags by name.
+- **Objects**, by class: `Object.Promise`, `Object.Generator`, ... (33 classes). Each has
+  its prototype, its header flags by name, its own properties, its elements, and its
+  internal slots *by name* from a slot table in `schema.rs`
+  (`Promise [state, result, reactions, flags]`,
+  `Generator [state, frame, pc, hp, promise, kind, queue]`). Closures, records and
+  iterator helpers have a variable tail (`captures`, `fields`). The table did not exist:
+  heap/object.rs describes the slots in prose only. It is the main new contract, as 2.7
+  predicted.
+- **Properties** in storage order as (key, attributes, value or getter and setter). Keys
+  are strings or symbol records. Shapes, property tables, accessor pairs and the atom
+  table are not stored: the importer adds the properties in order and its heap builds its
+  own shapes or dictionaries.
+- **Per-kind code** only where a field is not self-describing:
+  - strings (flat, ropes, slices, append buffers) are their content, in the string table;
+  - an atom is its string; a symbol gets a new atom on import;
+  - a Map or Set's hash index is its bucket count, rebuilt (`collection_rehash`); the
+    entries, tombstones included, are a generic `ValueArray`, so live iterators keep
+    their positions;
+  - a RegExp's compiled program is compiled again from its source and flags;
+  - a builtin closure's kind (slot 0, an intrinsic id) is the intrinsic's name;
+  - the template objects of tagged templates live in the script's constant pool: they
+    travel by (function, constant index), and the importer checks that its code has a
+    `get_template_object` at that index.
+- **The zero state.** A field the snapshot has and the importer's layout lacks refuses
+  the snapshot, unless the field holds the zero state a new cell starts with. A field
+  the importer has and the snapshot lacks starts at zero. That is cells.rs's own rule
+  ("zero bytes must be a valid initial state").
+- **A kind or class without a spec refuses** the snapshot with the record it was found
+  in ("an object of class WeakRef"), as the dumper's refusals do. Refused as built:
+  `WeakRef`, `FinalizationRegistry`, `TextCodec`, host refs, a script without its source,
+  a lazy template, an unnamed builtin cell, a realm intrinsic above the base that the
+  `Vm` record does not name.
+
+### 3.4 Names
+
+- **Builtins by registry path**: a value that refers to a cell below `BASE_END` is written
+  as its path (`Promise.prototype.then`, `%ArrayIteratorPrototype%.next`). Median 14 paths
+  per snapshot. A cell of the base without a path refuses.
+- **Builtin closure kinds by intrinsic name** (`PromiseResolveFunction`).
+- **Host identities as they are**: host function ids, call ids, handle indexes, the next
+  call id. These are the host's contract already.
+- **The per-VM objects of a fresh VM** (the global object, the global lexical record, the
+  `Symbol.for` registry) are patches over the importer's own: the keys deleted, the
+  properties that differ, and every property after the first one out of the fresh
+  order. A record that refers to one of them refers to the importer's object.
+- **The realm's per-VM values** are named fields of the `Vm` record: the random state,
+  the clock, the time zone offset, the global lexical epoch, the kept objects, the
+  registries, the modules. Caches (the RegExp cache, the unit strings) and the prelude
+  function table, which is per VM but holds the base's functions, are not stored.
+
+### 3.5 Code
+
+Templates are never stored. A closure's template, a frame's callee, any internal reference
+to a template is a function: (script, source span). The importer compiles every script
+again and finds the function by its span; two templates with one span (class field
+initializers) are told apart by the hash. A span rather than an index in compile order:
+it is what `Function.prototype.toString` returns, and it does not move when the compiler
+adds or drops a synthetic function elsewhere in the script.
+
+Each function carries one of two hashes, as 2.7 recommends:
+- **With a stored frame** (the callee of a suspended Generator, async function or async
+  generator): the **bytecode hash**, so that the frame's pc, its registers and its header
+  mean the same. It covers every instruction by opcode name, its byte offset and its
+  immediates, with atoms by string, intrinsics by name and constants by value (the
+  constant pool is the script's, so its numbering moves with other functions' constants);
+  the frame shape (parameters, `length`, locals, stack depth, captures, flags); the
+  capture descriptors; the handler table; the name; the children's spans in order. Left
+  out: the line table and local names (stack-trace text, not the meaning of a pc), the
+  inline caches, the template object a site made (state, carried separately).
+- **Without one** (a closure only): its **interface hash**: parameters, `length`, flags,
+  name, and the captured bindings by name in order. Its code may change: the closure
+  runs the importer's code with the same Boxes.
+
+A suspended frame is stored as it is: the Generator record's `frame` slot is a
+`ValueArray` of callee, `this`, arguments, the 6-slot header, locals and the operand stack,
+and its `pc` and `hp` slots. Nothing is described by role or rebuilt: the hash makes
+that unnecessary. Median per snapshot: 22 functions, 2 of them with a frame (at most 18).
+
+### 3.6 Import
+
+1. Parse the whole snapshot; refuse a type field with an unknown type.
+2. A fresh VM from the importer's base (3 µs).
+3. Compile the scripts (with the given sources when the snapshot has hashes), index the
+   templates by span, check every function's hash.
+4. Resolve the builtin paths and the intrinsic names.
+5. Allocate every record (objects with their slot count, closures with their template,
+   generic cells with their tail), then fill them in by field name; symbols get atoms.
+6. Rebuild the Map and Set indexes and the RegExp programs; put the template objects back.
+7. Install the `Vm` record: interpreter state, host call and handle tables, realm values.
+
+Nothing runs. The VM is idle where the exporter's was and the host resolves its open
+calls as usual.
+
+### 3.7 Outside the module
+
+About 40 lines in djs-core, all behind the feature: raw property slot access and
+`prop_insert` in heap/object.rs, a symbol's atom in heap/atom.rs, the cfgs of
+`CompileOptions::from_bits` and `atom_string_of`, and the feature left out of the build
+hash in build.rs. About 70 lines in djs-wasm for its two exports (and js/src/abi.ts's
+operation table).
+
+## 4. Results (0300)
+
+All runs native, on the corpus runner's terms (vm/dump_harvest.rs): the corpus prelude,
+fake tools answering through the async host function `later`, one call settled per idle
+point, oldest first, frozen builtins. "Same" means the run continued from the imported VM
+gives the uninterrupted run's transcript (output lines and the final result).
+
+### 4.1 Coverage and equivalence
+
+| corpus | idle points | exported | imported | continue the same | refused |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| tests/corpus/codemode-harvest (300 cases, 288 with an idle point) | 1,164 | 1,164 | 1,164 | 1,164 | 0 |
+| ... chained (a snapshot at every idle point, each run on in the import) | 288 cases | | | 288 | 0 |
+| tests/dump and tests/dump/golden programs (45) | 197 | 197 | 197 | 197 | 0 |
+| ... chained | 45 programs | | | 45 | 0 |
+
+- Nothing was refused. The programs include sync and async generators, `finally`,
+  destructuring, iterator helpers, `using`, and a class with private names, which plain
+  dumps refuse (tests/dump/refusals.txt, `golden/class-fields@1`).
+- A test round-trips what the corpus does not hold at an idle point: typed arrays,
+  `ArrayBuffer`, `DataView`, `WeakMap`/`WeakSet`, `BigInt`, `Date`, local symbols as keys,
+  accessors, non-enumerable and frozen properties, sparse arrays, a `Proxy`, a suspended
+  sync generator and async generator, a bound function, Map and string iterators
+  mid-way, a sticky RegExp with `lastIndex`, a tagged template's identity.
+- A negative control (the importer drops elements) makes many runs differ, so the
+  comparison sees a broken import.
+- Plain dumps also write all 1,164 harvest idle points.
+
+### 4.2 Sizes
+
+At the 1,164 harvest idle points. Both formats carry the corpus prelude's state; the
+snapshot also carries the prelude's source (8.3 KB) and the case's (the harvest's fake
+results are in it) unless written without sources:
+
+| | median | p90 | p99 | max |
+| --- | ---: | ---: | ---: | ---: |
+| snapshot, raw | 16.9 KB | 31.2 KB | 163 KB | 164 KB |
+| snapshot, zstd -3 | 6.7 KB | 10.4 KB | 25.8 KB | 25.9 KB |
+| snapshot without sources, raw | 5.4 KB | 10.7 KB | 69.9 KB | 70.5 KB |
+| snapshot without sources, zstd -3 | **2.7 KB** | 4.3 KB | 12.1 KB | 12.2 KB |
+| plain dump, raw | 12.8 KB | 28.2 KB | 104 KB | 177 KB |
+| plain dump, zstd -3 | **3.4 KB** | 6.3 KB | 14.0 KB | 18.7 KB |
+| plain dump, gzip -9 | 3.2 KB | 5.9 KB | 12.2 KB | 17.3 KB |
+| `Vm::image`, raw | 239 KB | 288 KB | 481 KB | 501 KB |
+
+Where a snapshot's bytes go (median per section over 1,361 snapshots): scripts 11.3 KB
+(or 8 bytes each without sources), types 1.9 KB, strings 1.4 KB, records 1.3 KB,
+functions 330 B, the `Vm` record 61 B, builtins 15 B. The schema is a third of a
+sourceless snapshot. It is the same for every snapshot of a build: a host could keep it
+once per build and name it by its digest.
+
+The records, summed over the 1,361 snapshots: 38,611 ordinary objects, 34,982 closures,
+30,714 Boxes, 18,259 `ValueArray`s, 11,582 promises, 8,348 arrays, 4,572 builtin closures
+(in 659 snapshots), 3,574 suspended activations, 3,384 host calls, 3,308 builtin records
+(in 682 snapshots), then Maps, array iterators, errors and a few others. A typical
+snapshot holds 118 records.
+
+**Consecutive snapshots of one run** differ by little: `zstd -3 --patch-from` the previous
+snapshot makes the next one 259 bytes (median; p90 450 B, max 1.6 KB) over 876 pairs. The
+same for plain dumps gives 191 bytes. Deltas need no format support: the export is
+deterministic and breadth-first, so unchanged parts come out the same.
+
+### 4.3 Times
+
+Native release build, machine load 4–5, per idle point:
+
+| | median | p90 | p99 |
+| --- | ---: | ---: | ---: |
+| export (`Vm::snapshot`) | **50 µs** | 89 µs | 299 µs |
+| import (`Vm::from_snapshot`) | **189 µs** | 305 µs | 781 µs |
+| ... of which a fresh VM | 3 µs | 5 µs | 7 µs |
+| ... of which compiling the two scripts | 131 µs | 219 µs | 526 µs |
+| plain dump (`Vm::dump`) | **492 µs** | 940 µs | 2.1 ms |
+
+The graph itself costs about 55 µs of an import. A host that keeps the compiled prelude
+(pi's prelude image) would mostly pay that.
+
+### 4.4 Large state
+
+The cases pi hit with dumps, as an async function holding the data across an `await` and
+reading it afterwards; 21 runs each, native release:
+
+| case | snapshot raw | zstd -3 | export median (p99) | import median (p99) | dump raw | zstd -3 | dump time | delta to the next idle point |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| object of 1,000 × 100-char strings | 114 KB | 4.3 KB | 0.30 (0.38) ms | 0.14 (0.17) ms | 110 KB | 2.6 KB | 1.6 ms | 56 B |
+| array of 10⁶ numbers (⅓ doubles) | 4.9 MB | 2.4 MB | 3.0 (3.5) ms | 6.4 (7.1) ms | 8.3 MB | 1.8 MB | 153 ms | 786 B |
+| Map of 10,000 `{i, s}` | 372 KB | 26 KB | 3.5 (4.4) ms | 2.2 (2.7) ms | 377 KB | 17 KB | 12.5 ms | 90 B |
+| array of 20,000 log lines | 747 KB | 48 KB | 2.5 (2.7) ms | 0.36 (0.37) ms | 765 KB | 46 KB | 11.5 ms | 118 B |
+
+- Snapshots are 3.5–50× faster to write than dumps and about as large raw (the array:
+  0.6×). Compressed they are as large for the log lines and 1.35–1.65× larger for the
+  rest: the dump's text repeats more regularly than tagged records do, and a double is 8
+  raw bytes where the dump's decimal text compresses better.
+- `Vm::image` takes 5–130 µs and restores in 0.1–1.6 ms, at 0.4–8.6 MB raw.
+- The delta column is `zstd --patch-from` of the next idle point's snapshot against this
+  one: a run that keeps 5 MB of state pays under a kilobyte per call.
+
+### 4.5 Portability
+
+Build A is the prototype (7b2acff4). Build B is A plus a scratch commit that changes what
+a snapshot must not depend on, all at once (branch `scratch/0300-perturb`, kept, not for
+main):
+- three intrinsics inserted at id 0: every intrinsic id moves (`AsyncAwait` 386 → 389);
+- two well-known atoms inserted after `""`: every atom id moves (`length` 2 → 4);
+- a new builtin function first in the base prelude, installed last: every template and
+  object of the base moves (`BASE_END` 180,552 → 181,504; `JSON.parse` at offset 48,864 →
+  48,960);
+- `BoxCell` gains a field before `VALUE` (offset 8 → 16);
+- `HostCall`'s `ID` and `FN` swap offsets, and it gains a field;
+- `Interp`'s `HOST_CALL` and `NEXT_CALL_ID` swap offsets.
+
+The build hash (88e0ee33 → 60ba6f4f) and the layout hash change; an image of A does not
+load into B. Each build loads the other's 1,361 snapshots (harvest and programs) at their
+idle points of its own run, which then continues:
+
+| exported by → imported by | load and continue as the importer's own run | refused |
+| --- | ---: | ---: |
+| A → B | 1,361 | 0 |
+| B → A | 1,361 | 0 |
+
+B → A first refused every snapshot: B's `HostCall` has a field A lacks. The zero-state
+rule (3.3) accepts it, since the field is 0. Then the changes a snapshot must notice,
+each on top of B, against A's snapshots:
+
+| change | load and continue the same | refused, with the reason |
+| --- | ---: | --- |
+| two more instructions before every for-in and for-of loop (a lowering change) | 94 | 1,267: "the bytecode of the function at 1..10073 of script 1, which has a stored frame, differs in this build" |
+| two more instructions at the start of every function that is neither async nor a generator | **1,361** | 0: no frame is in such a function at an idle point, and their closures keep their interface |
+| `Array.prototype.push` renamed | 1,254 (+3 that continue unlike B's own run, +91 at idle points B's own run never reaches) | 13: "no builtin Array.prototype.push in this build" |
+| `BoxCell::VALUE` renamed `CONTENT` (a field removed, another added) | 156 (programs without Boxes) | 1,205: "BoxCell: no field VALUE in this build (and the snapshot's is not 0)" |
+
+- The three runs that continue "unlike B's own run" are not import errors: without
+  `push`, B's own run had already failed before that idle point, while the snapshot holds
+  A's past. A build that behaves differently can only be compared with itself from the
+  restore on, as with dumps.
+- The for-of change refuses 93% because the codemode body is one async function: a
+  lowering change to any construct the body uses reaches the function that waits. That is
+  what 2.2's "frames" column counts: since 0200, one merge (0259) did it, for 17 of 331
+  scripts.
+- Tried and dropped: guarding the builtin closure kinds' positional records (3.8) with a
+  hash of each kind's code. It refused 2 snapshots after B (the prelude function table
+  numbers moved) and 659 after the sync-function change (the builtins are compiled by the
+  same compiler). Code hashes are the wrong guard for builtins.
+
+### 4.6 Complexity
+
+| | lines (code lines) | shipped module, gzip -9 |
+| --- | ---: | ---: |
+| the snapshot module: export 1,004, import 1,233, mod 301, wire 222, schema 190, hash 140 | 3,090 (2,759) | +59.9 KB (427,888 → 487,758 B) |
+| the dumper: vm/dump*.rs without tests, call_site.rs | 21,836 (18,745) | +270.6 KB (427,888 → 698,441 B) |
+| ... plus the compiler's suspension maps, compiler/smap*.rs | 2,719 | |
+
+The snapshot's 60 KB were not tuned: they include the intrinsic names (8 KB of strings
+that the shipped module otherwise leaves out), the registry walk for builtin paths,
+generic Rust with `BTreeMap`s and formatted refusal messages. The dumper's were tuned
+(0298, `#[optimize(size)]`).
+
+### 4.7 What surprised
+
+- **It worked at once.** The first complete run covered all 1,164 harvest idle points
+  with no refusal. djs's heap was nearly self-describing already: values are tagged, and
+  cells are a named, typed layout table. Only the object classes' slots needed names; the
+  rest of the per-kind code is small rebuilds.
+- **The registers do not need to be understood.** 0141 spent most of its design on
+  naming every slot of a suspended frame by role. With the bytecode hash as the guard the
+  frame travels as a plain `ValueArray`, and the interface hash covers closures that hold
+  no frame.
+- **The schema is the largest part** of a small sourceless snapshot (1.9 of 5.4 KB raw).
+- **Import is mostly compilation** (70%).
+- **Breadth-first graphs need reference encoding to compress**: plain ids made the Map
+  case 3.4× larger after zstd.
+- **The builtins' records are the soft spot**: half the snapshots hold one (a
+  `Promise.all` element, a `finally` closure's data), their slots are positional, and no
+  cheap check guards their meaning.
+
+## 5. What it would take to ship, and what it cannot do (0300)
+
+### 5.1 To ship
+
+In the order a release needs them:
+1. **The slot table as a checked contract.** `schema.rs`'s class table generated from (or
+   tested against) heap/object.rs's constants, so that a slot moved or added shows up as a
+   failing test, like the registry's paths.
+2. **Named records for builtin closure kinds.** The records that builtin closures hold as
+   data (`Promise.all` elements, `finally` data, async-from-sync iterators) get a schema
+   per kind: a field list in builtins/*.ts that `NewRecord`/`RecordGet` use by name, and
+   that the snapshot writes by name. Until then a builtin change that reorders a record's
+   slots goes unnoticed (4.5's last row is why a code hash does not do).
+3. **A pin of the corpus's frame bytecode in the gate** (2.7): the bytecode hash of every
+   function of the corpus that can hold a frame, as a committed list. A change to it is a
+   deliberate decision, with a format note.
+4. **Golden snapshots**: a selection exported by each release and committed (a few
+   hundred KB), loaded by every later build in the gate, until the format window closes.
+   The branch's `snapshot_import_dir` test is the loader this needs.
+5. **A host API and pi's adapter**: `Sandbox.snapshot()`, `sandbox.loadSnapshot(bytes)`;
+   pi keeps the scripts and passes them by hash; deltas against the previous snapshot
+   (`--patch-from`-style, 4.2) on the host side; the schema per build kept apart.
+6. **pi's real prelude** in the harvest: its lockdown, its `tools` Proxy and its globals
+   have not been through a snapshot (the corpus prelude has no lockdown).
+7. **Size work** on the module (4.6), and the `WeakRef`/`FinalizationRegistry` and
+   `TextCodec` classes when a host needs them.
+
+Estimate: 1 and 2 are a week each (2 touches every builtin that makes a record); 3–5 a
+week together; 6 and 7 a few days each.
+
+### 5.2 What it cannot do
+
+- **Survive a lowering change in a waiting function.** The snapshot refuses with the
+  function and the reason; the session needs another way to continue (a replay of its
+  host calls, or the old engine). A dump re-enacts the run as JavaScript and survives
+  such changes; this is the one thing dumps can do that snapshots cannot.
+- **Snapshot anywhere.** Idle points only, as dumps. An image stays the in-process,
+  same-build form for arbitrary instructions.
+- **Survive renames.** A field, slot or builtin path that is renamed is gone for the
+  snapshot (4.5). Keeping old names readable is compatibility code, which djs does not
+  write; the alternative is a refusal and the fallback.
+- **Guard the builtins' record layouts** without 5.1's named records.
+- **Keep the old build's behaviour.** From the restore on, the importer's semantics apply,
+  as with dumps and replay.
+- **Be byte-identical across a round trip**: the imported heap has its own offsets,
+  shapes, collection points and hash key. Nothing a script can observe depends on them
+  with frozen builtins and strong weak references; with collected weak references, a
+  collection may happen at another point.
+
+### 5.3 Recommendation (0300)
+
+Make logical snapshots pi's persistence format and retire continuation dumps, with a
+fallback for refusals:
+- Coverage is at least the dumper's (all harvest points, everything the dump programs
+  hold, and what dumps refuse), equivalence is exact on the corpus, and the importer
+  checks every name it relies on.
+- It is 10× faster to write than a dump at typical sizes and 3.5–50× with large state.
+  Without its sources (which pi has) it is smaller than a dump: 2.7 against 3.4 KB zstd
+  at the median, 12.1 against 14.0 KB at p99; with them about twice. Deltas make the
+  per-call cost of a long run a few hundred bytes, for both.
+- It is an eighth of the dumper's code, and 60 KB instead of 270 KB of the shipped module.
+- It survives every engine change that keeps the waiting functions' bytecode and the
+  named schema: intrinsic, atom and opcode numbering, the base layout, cell layouts and
+  the code of every function that does not wait. By 2.6 (triaged, 0200..0298) a single
+  issue keeps every corpus script loadable 99% of the time, and over 30 issues 97.7% of
+  the scripts survive.
+- The refusal case needs a fallback, and that is the one real cost of dropping dumps: pi's
+  journal replay, which it has, or keeping the previous engine for a deploy. 5.1's gate pin
+  keeps that case rare and visible.
+
+Do 5.1's first three items before relying on it across releases; until then, use it
+within a build (where it is already a faster, smaller dump) and keep replay as the
+cross-release record.
+
+### Reproducing (0300)
+
+On branch `issue/0300-logical-snapshots` (the module, its tests and
+`scripts/research/0300/`); outputs go to work/scratch/0300.
+
+```sh
+F="-p djs-core --features snapshot --lib"; W=$PWD/work/scratch/0300
+# coverage and equivalence (4.1), sizes and times (4.2, 4.3), files for zstd
+DJS_SNAP=1 DJS_SNAP_MEASURE=1 DJS_SNAP_OUT=$W/harvest.tsv DJS_SNAP_DIR=$W/snaps \
+  cargo test --release $F vm::snapshot::tests::snapshot_ -- --ignored --nocapture
+python3 scripts/research/0300/sizes.py $W/harvest.tsv $W/snaps; python3 scripts/research/0300/deltas.py $W/snaps
+# large state (4.4)
+DJS_SNAP=1 DJS_SNAP_DIR=$W/large cargo test --release $F vm::snapshot::tests::large_state -- --ignored --nocapture
+# portability (4.5): build B in a worktree of branch scratch/0300-perturb (or -bytecode,
+# -syncfn, -builtin, -field), then load A's snapshots there
+DJS_SNAP_IMPORT=$W/snaps cargo test --release $F vm::snapshot::tests::snapshot_import_dir -- --ignored --nocapture
+# the shipped module with and without the dumper and the snapshot module (4.6)
+scripts/research/0300/wasm-sizes.sh
+```
