@@ -534,7 +534,7 @@ stress and determinism checks. A VM image carries the engine build hash (`vm::BU
 what an image means needs no bump of anything. `vm::tests::images_load_only_into_their_build`
 checks the refusal.
 
-## Logical snapshots (0301, 0302, D3700-D3704, D3710-D3712)
+## Logical snapshots (0301-0303, D3700-D3704, D3710-D3712, D3720-D3722)
 
 Snapshots (`crates/djs-core/src/vm/snapshot/`, docs/heap-snapshots-revisited.md) are
 tested in four places:
@@ -544,7 +544,17 @@ tested in four places:
   point alone and all of them chained; every run must continue like the uninterrupted one,
   and nothing may be refused. `DJS_SNAP_MEASURE=1 DJS_SNAP_OUT=file DJS_SNAP_DIR=dir` adds
   sizes and times per idle point (with the plain dump and the image beside them) and writes
-  the snapshots; `snapshot_import_dir` (`DJS_SNAP_IMPORT=dir`) loads another build's.
+  the snapshots; `snapshot_import_dir` (`DJS_SNAP_IMPORT=dir`) loads another build's. The
+  leg runs both again with `DJS_LAZY=1`, VMs that compile functions at their first call as
+  the shipped module does (D3721).
+- **Hosts' runs** (D3720, D3722): `vm::snapshot::host_tests` (in `test`: host values and
+  functions by name, other function ids in the loading host, named handles, refusals);
+  js/test/snapshot.test.ts (the Sandbox API with pi's code mode setup, js/test/pi-setup.ts)
+  and js/test/snapshot-harvest.test.ts (every harvest case in that setup, moved to a fresh
+  sandbox through a snapshot at every idle point, half of them without sources: the output
+  and outcome must be the uninterrupted run's), both in the "js tests" leg; the CLI's
+  `snapshot_after_every_idle_point`, `debugger_pauses_snapshot_and_resume` and the REPL's
+  `snapshot_a_waiting_session`.
 - **The negative control** (`negative_control_catches_a_broken_import`, in `test`): with an
   importer that loses dense elements, the corpus runs must differ.
 - **Malformed snapshots** (`malformed_snapshots_refuse`, in `test`: 400 deterministic
