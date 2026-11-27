@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0301 | Logical snapshots on main: the module, one slot table, import validation, gate legs (then 0302-0304, same agent) | psnap | .worktrees/psnap |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -19,6 +20,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0302 | Named records for builtin closure kinds | 0301 |
+| 0303 | Snapshots for hosts: Sandbox API, CLI, REPL, docs pauses, pi's setup | 0301 |
+| 0304 | Remove continuation dumps | 0301-0303 |
 | - | 0298 follow-ups: pre-sized cat! at the large joining sites (win back the +6% dump instructions); drop the factory's format-2 text (emit_group, ~2-3 KB raw); declined B items on record (free-names check -4.1, reread -4.2, TS stripping -2.2, inlining ~8-10 KB gz) | ready |
 | - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
@@ -54,7 +58,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | 0295 follow-ups: vm_define on a frozen object returns 0; DOMException run error message "Error" (2 vs 3 slots); tasks don't carry fuelUsed over a dump; pi's "stalled" case left to the host | ready |
 | - | 0294 follow-ups: bring the one module's size down (dumper ~335 KB gz: vm::dump ~720 KB raw code, smap/compile_cache +93 KB); re-record stale status.tsv rows (startup, heap, bounds, pi bench, dumps, engines, bridge) on a quiet machine; retire js/pi and the slim gate legs once pi is on host-driven runs; untrack scripts/__pycache__/*.pyc; v0.2.0 published 2026-11-23 (pi depends on it) | ready |
 | - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
-| - | Logical snapshots (0300) to ship, if the owner adopts them: slot table as a checked contract, named records for builtin closure kinds, gate pin of the corpus's waiting-function bytecode (0299 follow-up), golden snapshots, Sandbox API + pi adapter, pi prelude/namespaces through a snapshot; fallback for refusals | owner (decision) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
 | - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | dropped with image persistence (D2560); revisit for dumps |
