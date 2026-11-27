@@ -70,8 +70,8 @@ const THIS_DISPOSABLE_STACK: u16 = id("ThisDisposableStack");
 /// The fields every iterator helper starts with, and its kinds and states
 /// (builtins/iterator.ts, D3710).
 use crate::builtins::r#gen::records::{
-    disposable_stack_slots as stack_slot, disposable_states, helper_header as helper,
-    helper_kinds, helper_states,
+    disposable_stack_slots as stack_slot, disposable_states, helper_header as helper, helper_kinds,
+    helper_states,
 };
 
 impl Exec<'_> {

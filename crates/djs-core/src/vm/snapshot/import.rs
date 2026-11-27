@@ -5,9 +5,9 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
+use super::export::Slots;
 use super::export::*;
 use super::schema::{self, SlotTy};
-use super::export::Slots;
 use super::wire::{Reader, Short};
 use super::*;
 use crate::bytecode::template;
@@ -601,11 +601,11 @@ impl Loader<'_> {
                 // A record's slots are its kind's schema's (D3710).
                 let spec = match (record, schema::is_kinded(class.class)) {
                     (None, false) => Slots::class(class),
-                    (Some(r), true) => Slots::record(
-                        schema::record_by_name(class.class, r).ok_or_else(|| {
+                    (Some(r), true) => {
+                        Slots::record(schema::record_by_name(class.class, r).ok_or_else(|| {
                             refusal(format!("no {c} record kind {r} in this build"))
-                        })?,
-                    ),
+                        })?)
+                    }
                     _ => return Err(refusal(format!("{}: not a record type", ty.name))),
                 };
                 let mut slots = spec.slots.len() as u32;
@@ -1170,7 +1170,7 @@ impl Loader<'_> {
                 continue;
             };
             let o = Obj(self.cells[i]);
-            if spec.slots.iter().any(|(_, t)| *t == SlotTy::Buckets) {
+            if spec.slots.iter().any(|(_, t)| matches!(t, SlotTy::Buckets)) {
                 self.vm.heap_mut().collection_rehash(o);
             }
             if spec.class == ObjectClass::RegExp {
@@ -1475,9 +1475,8 @@ fn constants_agree(ty: &str, n: &str, t: &Ty, here: SlotTy) -> Result<(), Refusa
 /// This build's value of the named constant(s) `i` (a member index or members' bits) of
 /// field `n`.
 fn constant(ty: &str, n: &str, t: &Ty, here: SlotTy, i: u64) -> Result<i32, Refusal> {
-    let missing = |m: &str, set: &str| {
-        refusal(format!("{ty}.{n}: no {set} member {m} in this build"))
-    };
+    let missing =
+        |m: &str, set: &str| refusal(format!("{ty}.{n}: no {set} member {m} in this build"));
     match (t, here) {
         (Ty::Enum(set, names), SlotTy::Enum(c)) => {
             let m = names.get(i as usize).ok_or_else(|| short(Short))?;

@@ -235,11 +235,13 @@ impl Exec<'_> {
         let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
         let visited = self.heap.new_array(Some(proto), 0)?;
         let rec = self.heap.alloc_record(for_in::RECORD_KIND, None, 0)?;
-        self.heap.set_object_slot(rec, for_in::OBJECT, Value::object(o));
+        self.heap
+            .set_object_slot(rec, for_in::OBJECT, Value::object(o));
         self.heap.set_object_slot(rec, for_in::INDEX, Value::int(0));
         self.heap
             .set_object_slot(rec, for_in::VISITED, Value::object(visited));
-        self.heap.set_object_slot(rec, for_in::HAS_RESULT, Value::FALSE);
+        self.heap
+            .set_object_slot(rec, for_in::HAS_RESULT, Value::FALSE);
         Ok(Value::object(rec))
     }
 

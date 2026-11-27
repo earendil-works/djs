@@ -101,8 +101,16 @@ pub fn collect(decls: &[EnumDecl], modules: &[Module], errors: &mut Vec<Diagnost
             continue;
         }
         for t in &e.tags {
-            if !["record", "slots", "constants", "flags", "class", "rest", "extends"]
-                .contains(&t.name.as_str())
+            if ![
+                "record",
+                "slots",
+                "constants",
+                "flags",
+                "class",
+                "rest",
+                "extends",
+            ]
+            .contains(&t.name.as_str())
             {
                 errors.push(Diagnostic::new(
                     e.span,
@@ -211,12 +219,15 @@ pub fn collect(decls: &[EnumDecl], modules: &[Module], errors: &mut Vec<Diagnost
                     Some(b) if matches!(b.kind, EnumKind::Record { .. }) => {
                         // The base's fields by name, in order; their types are inherited.
                         let ok = info.fields.len() >= b.fields.len()
-                            && b.fields.iter().zip(&mut info.fields).all(|((bn, bt), (n, t))| {
-                                if *t == FieldTy::Value {
-                                    *t = bt.clone();
-                                }
-                                bn == n && bt == t
-                            });
+                            && b.fields
+                                .iter()
+                                .zip(&mut info.fields)
+                                .all(|((bn, bt), (n, t))| {
+                                    if *t == FieldTy::Value {
+                                        *t = bt.clone();
+                                    }
+                                    bn == n && bt == t
+                                });
                         if !ok {
                             errors.push(Diagnostic::new(
                                 e.span,
@@ -350,9 +361,11 @@ fn expr(enums: &Enums, e: &mut Expr, errors: &mut Vec<Diagnostic>) {
                 return;
             };
             let v = match info.kind {
-                EnumKind::Constants { .. } => {
-                    info.values.iter().find(|(n, _)| n == member).map(|(_, v)| *v)
-                }
+                EnumKind::Constants { .. } => info
+                    .values
+                    .iter()
+                    .find(|(n, _)| n == member)
+                    .map(|(_, v)| *v),
                 _ => info
                     .fields
                     .iter()
@@ -493,10 +506,7 @@ pub fn emit(enums: &Enums, sources: &Sources) -> String {
     for e in &enums.list {
         if let EnumKind::Slots { class } = &e.kind {
             for (i, (n, t)) in e.fields.iter().enumerate() {
-                let _ = writeln!(
-                    s,
-                    "    assert!(ObjectClass::{class}.slot(\"{n}\") == {i});"
-                );
+                let _ = writeln!(s, "    assert!(ObjectClass::{class}.slot(\"{n}\") == {i});");
                 let _ = writeln!(
                     s,
                     "    assert!(ObjectClass::{class}.slot_kind(\"{n}\").same({}));",

@@ -1451,10 +1451,22 @@ fn records_and_constants_travel_by_name() {
 fn a_missing_or_renamed_field_refuses() {
     use super::export::Skew;
     let cases = [
-        (Skew::RenameField("called"), "ElementRecord: no slot calledRenamed"),
-        (Skew::DropField("keys"), "ElementRecord: the snapshot has no field keys"),
-        (Skew::RenameMember("fulfilled"), "no PromiseStates member renamed"),
-        (Skew::RenameMember("suspendedYield"), "no HelperStates member renamed"),
+        (
+            Skew::RenameField("called"),
+            "ElementRecord: no slot calledRenamed",
+        ),
+        (
+            Skew::DropField("keys"),
+            "ElementRecord: the snapshot has no field keys",
+        ),
+        (
+            Skew::RenameMember("fulfilled"),
+            "no PromiseStates member renamed",
+        ),
+        (
+            Skew::RenameMember("suspendedYield"),
+            "no HelperStates member renamed",
+        ),
     ];
     for (skew, want) in cases {
         let (_, refusals, _) = records_case_with(skew);

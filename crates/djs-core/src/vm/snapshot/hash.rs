@@ -111,7 +111,9 @@ fn builtin(h: &Heap, f: &mut Fnv, k: u32) {
         .filter(|&o| h.object_class(o) == crate::heap::ObjectClass::Function);
     match fun {
         Some(o) => {
-            let name = h.arena().get::<u32>(h.closure_template(o), FuncTemplate::NAME);
+            let name = h
+                .arena()
+                .get::<u32>(h.closure_template(o), FuncTemplate::NAME);
             f.str("prelude");
             f.str(&h.atom_name(Atom::from_id(name)));
         }

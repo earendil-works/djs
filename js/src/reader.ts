@@ -75,12 +75,14 @@ const OBJ_PROTO = cells.Object.fields.PROTO.offset;
 const HDR_SIZE = LAYOUT.header.SIZE;
 // Slots the layout table does not describe (as the typed array's below):
 // an Error's slot 0 is its stack trace (interp/realm.rs `set_error_stack`), a string or a
-// record of 4 slots waiting for Error.prepareStackTrace whose slot 1 is the default
-// string (interp/run/stack.rs `PENDING_DEFAULT`); a DOMException has its name and message
-// in slots 1 and 2. A Date's slot 0 is its time value. A Map's or Set's slot 0 is its
-// entries, `[forward, removed, k0, v0, ...]`, a deleted key a hole (heap/collection.rs).
-const PENDING_STACK_SLOTS = 4;
-const PENDING_STACK_DEFAULT = 1;
+// PendingStack record waiting for Error.prepareStackTrace (its kind in the header, its
+// default string by name, D3710); a DOMException has its name and message in slots 1
+// and 2. A Date's slot 0 is its time value. A Map's or Set's slot 0 is its entries,
+// `[forward, removed, k0, v0, ...]`, a deleted key a hole (heap/collection.rs).
+const PENDING_STACK_KIND = LAYOUT.records.PendingStack.kind;
+const PENDING_STACK_DEFAULT = LAYOUT.records.PendingStack.fields.indexOf("defaultString");
+const OBJ_RECORD_KIND = LAYOUT.flags.OBJ_RECORD_KIND;
+const OBJ_RECORD_KIND_SHIFT = LAYOUT.flags.OBJ_RECORD_KIND_SHIFT;
 const COLLECTION_BASE = 2;
 /** How far a property lookup follows the prototype chain. */
 const PROTO_DEPTH = 64;
@@ -630,7 +632,8 @@ class Reader {
       if (stack === undefined && hi === ((TAG_PREFIX << 16) | tags.OBJECT) >>> 0) {
         // A stack waiting for Error.prepareStackTrace: its default string.
         const r = this.view.getUint32(at, true);
-        if (this.view.getUint32(r + OBJ_CLASS, true) === C_RECORD && this.slotCount(r) === PENDING_STACK_SLOTS) {
+        const kind = (this.view.getUint16(r + HDR_FLAGS, true) & OBJ_RECORD_KIND) >> OBJ_RECORD_KIND_SHIFT;
+        if (this.view.getUint32(r + OBJ_CLASS, true) === C_RECORD && kind === PENDING_STACK_KIND) {
           stack = this.slotIfString(r + OBJ_SLOTS + 8 * PENDING_STACK_DEFAULT);
         }
       }

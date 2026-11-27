@@ -743,7 +743,8 @@ pub fn layout_json() -> alloc::string::String {
              {ROPE_FLATTENED}, \"ROPE_APPEND\": {ROPE_APPEND}, \"STR_APPEND_BUF\": \
              {STR_APPEND_BUF}, \"OBJ_EXTENSIBLE\": {OBJ_EXTENSIBLE}, \"OBJ_INDEXED_PROPS\": \
              {OBJ_INDEXED_PROPS}, \"OBJ_LENGTH_READONLY\": {OBJ_LENGTH_READONLY}, \
-             \"OBJ_DICTIONARY\": {OBJ_DICTIONARY}, \"BIGINT_NEG\": {BIGINT_NEG} }},"
+             \"OBJ_DICTIONARY\": {OBJ_DICTIONARY}, \"OBJ_RECORD_KIND\": {OBJ_RECORD_KIND}, \
+             \"OBJ_RECORD_KIND_SHIFT\": {OBJ_RECORD_KIND_SHIFT}, \"BIGINT_NEG\": {BIGINT_NEG} }},"
         );
     }
     o.push_str("  \"objectClasses\": { ");
@@ -773,6 +774,29 @@ pub fn layout_json() -> alloc::string::String {
             o,
             "    \"{}\": {{ \"slots\": [{}], \"rest\": {rest} }}{sep}",
             c.name,
+            names.join(", ")
+        );
+    }
+    o.push_str("  },\n");
+    // The record schemas (D3710): a record's kind (in its header) names its fields.
+    o.push_str("  \"records\": {\n");
+    let records = crate::builtins::r#gen::records::RECORDS;
+    for (i, r) in records.iter().enumerate() {
+        let names: alloc::vec::Vec<alloc::string::String> = r
+            .fields
+            .iter()
+            .map(|(n, _)| alloc::format!("\"{n}\""))
+            .collect();
+        let rest = r.rest.map_or(alloc::string::String::from("null"), |r| {
+            alloc::format!("\"{r}\"")
+        });
+        let sep = if i + 1 < records.len() { "," } else { "" };
+        let _ = writeln!(
+            o,
+            "    \"{}\": {{ \"kind\": {}, \"class\": \"{:?}\", \"fields\": [{}], \"rest\": {rest} }}{sep}",
+            r.name,
+            r.kind,
+            r.class,
             names.join(", ")
         );
     }

@@ -307,7 +307,10 @@ fn combinator_step(
         heap.set_object_slot(r, element::CAPABILITY, cap);
         heap.set_object_slot(r, element::REMAINING, Value::object(remaining));
         let count = remaining_count::COUNT;
-        let n = heap.object_slot(remaining, count).as_number().unwrap_or(0.0);
+        let n = heap
+            .object_slot(remaining, count)
+            .as_number()
+            .unwrap_or(0.0);
         heap.set_object_slot(remaining, count, super::conv::number(n + 1.0));
         let mut closure = |k| -> Result<Value, HeapError> {
             let f = new_builtin_closure(heap, k, Value::object(r), 1)?;
@@ -382,12 +385,15 @@ pub(super) fn all_element_job(
     let values = values
         .as_object()
         .filter(|&v| heap.object_class(v) == ObjectClass::Array);
-    let (Some(values), Some(remaining), Some(index)) = (values, remaining, index.as_int())
-    else {
+    let (Some(values), Some(remaining), Some(index)) = (values, remaining, index.as_int()) else {
         return Ok(false);
     };
     let count = remaining_count::COUNT;
-    let left = heap.object_slot(remaining, count).as_number().unwrap_or(0.0) - 1.0;
+    let left = heap
+        .object_slot(remaining, count)
+        .as_number()
+        .unwrap_or(0.0)
+        - 1.0;
     let last = left == 0.0;
     let cap_promise = as_promise(heap, capability);
     if last

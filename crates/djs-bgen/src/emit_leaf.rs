@@ -32,7 +32,9 @@ enum Rt {
 
 fn rt(t: Type) -> Rt {
     match t {
-        Type::F64 | Type::I32 | Type::U32 | Type::IntLit(_) | Type::NumLit | Type::Schema => Rt::Num,
+        Type::F64 | Type::I32 | Type::U32 | Type::IntLit(_) | Type::NumLit | Type::Schema => {
+            Rt::Num
+        }
         Type::Bool => Rt::Bool,
         _ => Rt::Val,
     }

@@ -63,7 +63,8 @@ pub use gc::GcStats;
 pub use handle::Handle;
 pub use layout::Ref;
 pub use object::{
-    CLASSES, ClassSlots, ConstSet, Lookup, RecordSchema, record_schema, ObjectClass, PropFlags, Property, PropertyDescriptor, SlotKind,
+    CLASSES, ClassSlots, ConstSet, Lookup, ObjectClass, PropFlags, Property, PropertyDescriptor,
+    RecordSchema, SlotKind, record_schema,
 };
 pub use string::StrView;
 
