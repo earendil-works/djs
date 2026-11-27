@@ -8,8 +8,8 @@ There are three layers of tests:
    check: `console.log` formatting, error messages, stack traces, TypeScript, and codemode
    scripts.
 3. **Stress modes**, which re-run layers 1 and 2 under conditions that must not change the
-   outcome: suspend and restore from the VM's image every N instructions, dump and load
-   at every idle point, and the bytecode versus native builtin backend.
+   outcome: suspend and restore from the VM's image every N instructions, snapshot and
+   load at every idle point, and the bytecode versus native builtin backend.
 
 Plus ordinary Rust unit tests for internals (lexer, number conversion, heap, …).
 
@@ -290,47 +290,14 @@ every case a second (third) time; a transcript that differs from the plain djs r
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
-`--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest and
-its plain dumps leg use it (the shipped module, with the dumper, is lazy, D2993), its test262 leg runs the active
+`--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest uses
+it (native embedders can turn lazy functions on; the wasm modules compile eagerly, D3732), its test262 leg runs the active
 group both lazy and eager (in parallel), the other legs (unsafe-heap) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
 (D2991).
-`--dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
-session's globals, the prelude's state, open calls, pending promises, suspended
-activations as continuations, the prelude's `api` as the completion value), runs the dump
-in a fresh VM with the host's `$djs.seed`/`$djs.resume` and continues there, at most 50
-links per case; the transcript must equal the plain run's. The VMs have frozen builtins
-(D2836), so only cases with idle points are compared (only `codemode` and
-`codemode-harvest` have them). A refused dump ends the case's dumps and the run goes on.
-`--dump-out DIR` also writes every link's dump, the output before it and the plain run's
-transcript, and `scripts/dump-node.mjs DIR` runs each dump in node and requires the same
-transcript (node's clock pinned to djs's, its wording of the common TypeErrors mapped to
-djs's). Its `--refusals tests/dump-refusals.txt` is the ratchet of cases that may refuse
-(`--update` rewrites it). The gate leg "dumps (djs and node)" runs both.
-`--dump-from K` starts the chain at idle point K. A case marked `// difftest:
-dump-xfail <reason>` reproduces a known plain-dump bug: its differences (djs or node) are
-counted, not failures, and the mark is reported as stale once both continue identically
-(D2941).
-The plain-dump fuzzer (0208, D2940) finds such bugs: `node scripts/dump-fuzz/fuzz.mjs
---seed S --cases N --time SECS` generates codemode-like programs from consecutive seeds
-(scripts/dump-fuzz/gen.mjs, D2942: JSON data, Maps, Sets, Dates, RegExps, typed arrays,
-Errors, symbol keys, classes with accessors and static members; every third seed a
-TypeScript body; `fuzz.mjs gen S` prints one) and runs each with a chain of
-plain dumps starting at every idle point, in djs and node, then lists the distinct
-failure signatures with the smallest program of each. `fuzz.mjs check FILE...` runs given
-programs (case bodies) the same way, and `fuzz.mjs reduce FILE --sig TEXT` shrinks one
-while its failure signature contains TEXT. `fuzz.mjs regress` runs the frozen programs that once found bugs
-(scripts/dump-fuzz/regress/), then 300 fresh seeds from a random, printed start (`--seed`
-to repeat a run); with and without `--lazy` it is the dump exporters' check before a merge. It runs at most 4 niced processes (`--jobs`) and
-starts none while the load is above 30 (`--max-load`). It is not a gate leg; a finding becomes a
-corpus case (tests/corpus/codemode/plain-fuzz/), marked `dump-xfail` or listed in
-tests/dump-refusals.txt until it is fixed.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash
 (the graph alone, computed by a copying collection of a copy; D1720, D1725, D2040). The e2e
-test compares its plain and suspension modes the same way (its fourth mode, dump, runs
-every case with frozen builtins, dumps its final state, runs the dump in a fresh VM and
-dumps again: the second round must reproduce itself; `DJS_E2E_MODE=dump`; its output is
-not compared, refusals are counted, not failures), and
+test compares its plain and suspension modes the same way, and
 `scripts/determinism/native-vs-wasm.sh` compares native and wasm builds image for image
 and stop for stop (both in the gate).
 
@@ -527,7 +494,7 @@ Not armed: the rest of the corpus, e2e and test262, whose cases change builtins 
 
 ## Images (D3641)
 
-Images do not persist runs (dumps do, below; D2560, D2700) and never leave the process
+Images do not persist runs (snapshots do, below; D2700, D3700) and never leave the process
 that made them: the base image every VM is copied from, a native host's snapshots, the
 stress and determinism checks. A VM image carries the engine build hash (`vm::BUILD_HASH`,
 `Roots::BUILD`) and loads only into that build (`LoadError::OtherBuild`), so a change of
@@ -540,13 +507,13 @@ Snapshots (`crates/djs-core/src/vm/snapshot/`, docs/heap-snapshots-revisited.md)
 tested in four places:
 - **The gate leg "snapshots"**: `vm::snapshot::tests::snapshot_harvest` and
   `snapshot_programs` (ignored unless `DJS_SNAP=1`) export, import and continue at every
-  idle point of tests/corpus/codemode-harvest and of the tests/dump programs, each idle
+  idle point of tests/corpus/codemode-harvest and of the tests/snapshot/programs, each idle
   point alone and all of them chained; every run must continue like the uninterrupted one,
   and nothing may be refused. `DJS_SNAP_MEASURE=1 DJS_SNAP_OUT=file DJS_SNAP_DIR=dir` adds
-  sizes and times per idle point (with the plain dump and the image beside them) and writes
+  sizes and times per idle point (with the image beside them) and writes
   the snapshots; `snapshot_import_dir` (`DJS_SNAP_IMPORT=dir`) loads another build's. The
-  leg runs both again with `DJS_LAZY=1`, VMs that compile functions at their first call as
-  the shipped module does (D3721).
+  leg runs both again with `DJS_LAZY=1`, VMs that compile functions at their first call, as
+  a native embedder's can (D3721).
 - **Hosts' runs** (D3720, D3722): `vm::snapshot::host_tests` (in `test`: host values and
   functions by name, other function ids in the loading host, named handles, refusals);
   js/test/snapshot.test.ts (the Sandbox API with pi's code mode setup, js/test/pi-setup.ts)
@@ -577,44 +544,12 @@ tested in four places:
   (scripts/snapshot-perturb.py); the copy must pass the difftest corpus itself, and every
   snapshot must continue as its own run does or refuse, never differ.
 
-## Golden dumps (0178, D2560, D2619, D2920, D3643)
-
-Images are tied to a build; continuation dumps are not: a dump is a plain Script (D2830)
-that calls only the host's `$djs` (the dump runtime's helpers and the hooks `seed` and
-`resume`, D2890, D2903), so another VM, another process, and node, run it. Whether a later
-build still runs it is not promised until the owner declares the dump format stable
-(D3643): until then the helpers, the hooks and the goldens change with the code (D024).
-The golden dumps check the loader and the runtime against committed dumps (every gate run,
-`vm::dump_resume_tests::golden_dumps_load_and_finish`): tests/dump/golden/ has small
-programs (`NAME.src.js` Scripts, `NAME.body.js` codemode bodies) and the dumps the
-exporter wrote of them at every idle point, `NAME.K.dump.js` (K in the name: dumps have
-no comments). Each dump runs in the test host (`later`, `print`, `tools`, `console`), the
-`later` results are delivered, and the program's output up to idle point K plus the
-dump's run must equal the uninterrupted run's, plainly and under GC stress in slices of
-97 fuel. One program per operand role sequence (call, spread call, new, member, super
-member, object, array, binary, assignment, template, nested), loop kind (for-of over
-array/Map/generator, for-await over a sync iterable and an async generator, nested
-loops), re-enactment (then/catch/finally, held resolving functions, the combinators,
-iterators, generators, activations: a returned promise, `arguments`, shared cells), class
-case (fields, static block, accessor; derived with `super`; a class from a factory) and
-the codemode body; a program whose idle points are all refused (instances with private
-names, D2878) is listed in tests/dump/refusals.txt. Since the dumps are
-JavaScript, they hold the runtime and the engine to the format, not the exporter: a
-change to the exporter leaves them alone, and a change to the runtime or the hooks that
-breaks them shows in review. Such a change regenerates them in the same commit: delete the
-programs' `NAME.*.dump.js` and run `DJS_GOLDEN_WRITE=1 cargo test -p djs-core --lib
-write_golden_dumps -- --ignored`, which writes the dumps of every program that has none
-(new programs get theirs the same way).
-
-tests/dump/golden-host/ does the same for dumps a Sandbox writes of host-driven code
-mode runs (js/test/golden-host.test.ts, in the gate's js tests, D3596):
-`NAME.body.js` bodies that run in the test's scope (namespace and bound host functions by
-identity, `values`, the JSON boundary, source references or `inlineSources`) and
-`NAME.K.dump.js`, the dump at idle point K. Each loads in a fresh sandbox of that scope,
-without `sources` for an inlined one; its open calls are answered and
-the output up to K plus the loaded run's must equal the uninterrupted run's. Missing dumps
-(new programs, or deleted ones to regenerate) are written by `DJS_GOLDEN_WRITE=1 node
---test js/test/golden-host.test.ts`.
+The programs in tests/snapshot/programs/ (`NAME.src.js` Scripts, `NAME.body.js` codemode
+bodies; once the golden dump programs, D3730) cover one operand role sequence each (call,
+spread call, new, member, object, array, binary, assignment, template, nested), loop
+kinds (for-of over array/Map/generator, for-await), promise reactions and combinators,
+iterators, generators, activations and class cases. `snapshot_programs` runs them, and
+the CLI's tests run them through `djs run --snapshot-every-idle`.
 
 ## Peak memory claims (D2048)
 
@@ -664,7 +599,7 @@ of djs-core; the guide (`djs-docs
 check`); the JS host package's tests on the dev modules; the npm package (below); the
 codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
-GC stress, heap-image determinism and a dump at every idle point; the unsafe-heap build, which the shipped module uses (D3100;
+GC stress and heap-image determinism; snapshots at every idle point; the unsafe-heap build, which the shipped module uses (D3100;
 verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet;
 the size budget (below);
 the merge drivers of derived files (below).
@@ -780,33 +715,21 @@ appended, and the ids follow. A merge keeps one side of the file and scripts/reg
 
 ### Derived files that merge by themselves (D1791, 0214)
 
-Two derived files change with almost every corpus case, so two branches that add cases
-would conflict on them at every rebase. Both have merge drivers (`.gitattributes`,
-registered by `scripts/setup-merge-drivers.sh`, implemented in `scripts/merge-driver.py`):
-- `tests/smap/summary.txt`, the totals over the pinned suspension maps, is a generated
-  file (`djs-generated`): the merge keeps one side and `scripts/regen.sh` rewrites it with
-  `DJS_UPDATE_SMAP_SUMMARY=1 cargo test -p djs-core --lib compiler::smap_tests::pinned_maps`,
-  which writes only the summary and still checks the per-case pins (a changed pin stays
-  the gate's failure; `DJS_UPDATE_SMAPS=1` accepts pins and summary together).
-- `tests/scores/dump-size.tsv`, one `SUITE CASE RAW GZIP` row per case (D2906), merges
-  row by row (`djs-scores`): a row changed or added on one side takes that side's numbers;
-  a row changed on both takes the smaller number per column (it is a ratchet, and the gate
-  checks the merged score against the measured dumps); a row deleted on one side and
-  unchanged on the other is deleted, one deleted on one side and changed on the other stays
-  (the gate reports a line without a case). Suites keep their order, cases stay sorted. A
-  file that does not parse falls back to a line merge.
-
-`scripts/merge-driver-test.py` (the gate leg "merge drivers") runs scripted three-way
-merges through both drivers in a throwaway repository.
+Generated files have merge drivers (`.gitattributes`, registered by
+`scripts/setup-merge-drivers.sh`, implemented in `scripts/merge-driver.py`): a
+`djs-generated` file keeps one side and `scripts/regen.sh` (run by merge-to-main after the
+rebase) rewrites it from the merged sources; `djs-intrinsics` resolves conflicts that lie
+only in the intrinsics table. `scripts/merge-driver-test.py` (the gate leg "merge
+drivers") runs scripted three-way merges through the drivers in a throwaway repository.
 
 ### The npm package (D3105–D3109)
 
 `js/` is published as `@earendil-works/djs`. `scripts/npm-pack.sh` builds it (the one
-release module, with the dumper, D3600, tsc's JavaScript and declarations from js/src, with
+release module, with snapshots, D3600, tsc's JavaScript and declarations from js/src, with
 TypeScript pinned by js/package-lock.json) into target/npm/package and packs it;
 `scripts/npm-test.sh TARBALL node bun deno js-tests browser` installs the tarball in a clean
-directory and runs js/pkg-test/smoke.js (the package by its name: runs, a dump and a
-resume, the dump continued in the host's engine) in each runtime, js/test's
+directory and runs js/pkg-test/smoke.js (the package by its name: runs, a snapshot and a
+resume) in each runtime, js/test's
 tests and the sleep-snapshot example on the package, and smoke.js in headless Chromium as
 native modules and bundled by Vite and webpack. The gate's `npm package` leg packs with
 the gate's build of the module and runs the smoke test in node, so main stays publishable;
@@ -822,7 +745,7 @@ codemode use, work/research/0229). `scripts/bench-engines.sh` fetches and builds
 checkout and runs js/bench/engines/run.ts; `scripts/status.py engines` records the median of
 three runs as `engines/*` keys, which the page's `gen:status engines-*` tables read. Every
 engine's result must equal node's. The gate's `codemode workloads` leg runs the set once on
-djs's dev modules (`run.ts --quick --engines djs`), dumps and loads included, so a workload
+djs's dev modules (`run.ts --quick --engines djs`), so a workload
 that stops working fails the gate, not the next recording.
 `node js/bench/engines/ops.ts [FILTER...]` times single operations (string, number, regex,
 array, collection and async builtins on workload-shaped data) on djs and the two QuickJS
@@ -834,9 +757,10 @@ tool for work on a gap the comparison shows.
 The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) was to stay within
 1.5x quickjs-wasi's size, gzip -9, plus an allowance of 3,072 bytes the owner added to
 land speedups that had been parked for size (D3510) and the fuel fix (D3591). Since djs
-ships one module with the dumper (D3600), it is far above that (767.6 KB gzip, 2.68x, when it landed;
-698.4 KB, 2.44x, after 0297 and 0298): the owner accepted the growth (D3601), and the
-ceiling below is the limit, lowered by every change that brings the size down. The gate builds it beside its other steps (in
+shipped one module with the dumper (D3600), it is far above that (767.6 KB gzip, 2.68x, when it landed;
+698.4 KB, 2.44x, after 0297 and 0298; without the dumper, D3730, about 1.8x): the owner
+accepted the growth (D3601), and the ceiling below is the limit, lowered by every change
+that brings the size down. The gate builds it beside its other steps (in
 `target/size`) and its last step runs `scripts/size/budget.py` on it, which compares its
 gzip with `tests/scores/size.tsv`:
 
