@@ -513,7 +513,7 @@ return total;
     assert_eq!(got, want);
 }
 
-// ---- The dump test programs (tests/dump, tests/dump/golden) ---------------------------
+// ---- The snapshot test programs (tests/snapshot/programs) -----------------------------
 
 const P_LATER: u32 = 1;
 const P_PRINT: u32 = 2;
@@ -571,32 +571,27 @@ fn run_program(src: &str, at_idle: &mut dyn FnMut(&mut Vm, usize)) -> Vec<String
 }
 
 fn programs() -> Vec<(String, String)> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump");
-    let mut out = Vec::new();
-    for d in [dir.clone(), dir.join("golden")] {
-        let mut files: Vec<_> = std::fs::read_dir(&d)
-            .unwrap()
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.to_string_lossy().ends_with(".src.js"))
-            .collect();
-        files.sort();
-        for f in files {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/snapshot/programs");
+    let mut files: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.to_string_lossy().ends_with(".src.js"))
+        .collect();
+    files.sort();
+    files
+        .into_iter()
+        .map(|f| {
             let name = f
                 .file_name()
                 .unwrap()
                 .to_string_lossy()
                 .replace(".src.js", "");
-            let prefix = if d == dir { "" } else { "golden/" };
-            out.push((
-                format!("{prefix}{name}"),
-                std::fs::read_to_string(&f).unwrap(),
-            ));
-        }
-    }
-    out
+            (name, std::fs::read_to_string(&f).unwrap())
+        })
+        .collect()
 }
 
-/// Every idle point of the dump test programs, alone and chained.
+/// Every idle point of the snapshot test programs, alone and chained.
 #[test]
 #[ignore]
 fn snapshot_programs() {
