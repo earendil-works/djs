@@ -27,6 +27,31 @@ Hosts use snapshots instead of dumps.
 
 ## Log
 
+### Design (D3720)
+- A host's run is snapshotted in *host mode* (`SnapshotOptions::host: Some(HostNames)`), as
+  dumps named host values (D2971): host values (namespaces, `values`, converting functions,
+  module namespaces) are written by name, and the objects reachable from them through own
+  data properties as members (`ALL_TOOLS.0.schema`), never their content; host functions by
+  identity wherever they are (also an open call's function: `HostCall.FN` has type `hostfn`);
+  the handle table is not written, only the handles the host names (`named`), plus the host's
+  data string (`hostData`: call states, fuelUsed, clock).
+- Such a snapshot loads only *into the host's own VM* (`Vm::load_snapshot(base, bytes,
+  sources, &HostValues)`): a fresh sandbox made with the same options; its host values and
+  handles stay its own, the run's state comes from the snapshot (patches over its global,
+  Interp state, host calls, realm per-VM values). A plain VM snapshot (handles by index)
+  loads only with `from_snapshot`; each refuses the other.
+- Why not the whole heap: pi's ALL_TOOLS (every tool's description) and the namespaces with
+  their converting closures would be in every snapshot (KBs to tens of KBs), and the
+  sandbox's JS-side tables (handles, fn ids) would have to travel too.
+- `needs(bytes)`: the scripts stored by hash only (names) and the host names, so the host can
+  find sources and make lazily-made module values before the load.
+- The Vm record carries `frozenBuiltins` and `weakRefsStrong`; a load into a host VM with
+  another mode refuses; from_snapshot sets them (vm_from_snapshot no longer forces frozen).
+- FORMAT 2.
+
+### Steps
+- WIP commit 76128a88: export/import host mode, `load_snapshot`, `needs`, host_tests.rs.
+
 ## Follow-ups
 
 ## Result
