@@ -8,7 +8,7 @@
 # (names, producers) for shipping (D1575); --keep-names keeps the name section, for
 # profiling and size attribution (scripts/wasm-funcs.py). Switching rebuilds the module.
 # --docs builds the docs site's module (the `docs` feature: `djs_disasm` for the live
-# examples' bytecode; and `dump`, for the dumps of their `debugger;` pauses, D3050) into
+# examples' bytecode; and `snapshot`, for their `debugger;` pauses, D3050, D3720) into
 # its own target directory, target/docs-wasm, so it never replaces the shipping module.
 # The shipped module (and --keep-names, the shipped one with names) reads and writes
 # the arena unchecked (`unsafe-heap`, D3100): the wasm instance is the sandbox. The docs
@@ -19,7 +19,7 @@ features=(--features unsafe-heap,cold-unicode,dump,snapshot)
 target=target
 case "${1:-}" in
   --keep-names) export CARGO_PROFILE_WASM_STRIP=false ;;
-  --docs) features=(--features docs,dump); target=target/docs-wasm ;;
+  --docs) features=(--features docs,snapshot); target=target/docs-wasm ;;
   "") ;;
   *) echo "usage: scripts/build-wasm.sh [--keep-names | --docs]" >&2; exit 2 ;;
 esac

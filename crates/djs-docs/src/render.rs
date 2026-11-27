@@ -293,17 +293,17 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
     let ts = lang == "ts";
     let out_text = crate::run::run(code, ts);
     let disasm = crate::run::disasm(code, ts);
-    // An example with a `debugger;` shows the dump it writes at its first pause (D3050):
-    // built here, so that the page shows it without JavaScript too; live.js replaces it
-    // with the dump of each pause.
+    // An example with a `debugger;` shows the snapshot it is at its first pause (D3050,
+    // D3720), described: built here, so that the page shows it without JavaScript too;
+    // live.js replaces it with the snapshot of each pause.
     let dump = if has_debugger(code) {
         format!(
-            "<details class=\"live-dump-box\"><summary>The continuation dump at the first \
-             <code>debugger;</code></summary><pre class=\"code live-dump\"><code class=\"lang-js\">{}</code></pre></details>\n",
-            crate::highlight::highlight("js", &crate::run::dump(code, 1, ts))
+            "<details class=\"live-dump-box\"><summary>The snapshot at the first \
+             <code>debugger;</code></summary><pre class=\"code live-dump\"><code>{}</code></pre></details>\n",
+            esc(&crate::run::snapshot(code, 1, ts))
         )
     } else {
-        "<details class=\"live-dump-box\" hidden><summary></summary><pre class=\"code live-dump\"><code class=\"lang-js\"></code></pre></details>\n".to_string()
+        "<details class=\"live-dump-box\" hidden><summary></summary><pre class=\"code live-dump\"><code></code></pre></details>\n".to_string()
     };
     let tab = |id: &str, label: &str, selected: bool| {
         format!(
@@ -354,9 +354,9 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
 }
 
 /// The live examples' info tip (next to Run), on what `debugger;` does there.
-const INFO: &str = "A debugger; statement suspends the run into a continuation dump, \
-     JavaScript that recreates it. Continue resumes the run from that dump in a fresh \
-     engine. The icon links to the page on continuation dumps.";
+const INFO: &str = "A debugger; statement suspends the run into a snapshot, its state \
+     as data. Continue resumes the run from that snapshot in a fresh engine. The icon \
+     links to the page on snapshots.";
 
 /// The code has a `debugger` statement (the keyword as a token, not in a string or a
 /// comment).

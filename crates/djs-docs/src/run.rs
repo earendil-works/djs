@@ -79,8 +79,93 @@ pub fn run(src: &str, ts: bool) -> String {
     out
 }
 
-/// Host function ids of [`dump`]'s VMs.
+/// Host function ids of [`snapshot`]'s and [`dump`]'s VMs.
 const DEBUGGER: u32 = 2;
+
+/// The snapshot `src` is at its `nth` pause (from 1), described (`snapshot::describe`,
+/// without the record types' fields): a `debugger;` in an async function awaits the host's
+/// `debugger` there (D3050), and the run is snapshotted while it waits, as the live
+/// examples do with the Sandbox (D3720): `console` and `debugger` the host's values, the
+/// body by its hash. The text, or why there is none.
+pub fn snapshot(src: &str, nth: usize, ts: bool) -> String {
+    use djs_core::vm::snapshot::{BaseInfo, HostNames, SnapshotOptions, describe};
+    // As the editor has it: without the block's final newline.
+    let src = src.strip_suffix('\n').unwrap_or(src);
+    let mut vm = djs_prelude::new_vm(VmOptions::default()).expect("out of memory");
+    vm.set_now(0.0);
+    let console = vm.new_object().expect("out of memory");
+    let log = vm
+        .new_host_function(CONSOLE_LOG, "log")
+        .expect("out of memory");
+    vm.define(console, "log", log).expect("out of memory");
+    vm.define_global("console", Value::object(console))
+        .expect("out of memory");
+    let pause = vm
+        .new_async_host_function(DEBUGGER, "debugger")
+        .expect("out of memory");
+    vm.define_global("debugger", pause).expect("out of memory");
+    let opts = CompileOptions {
+        debugger_awaits: true,
+        ..body_options(ts)
+    };
+    let main = match vm.compile(src.as_bytes(), &opts) {
+        Ok(f) => f,
+        Err(e) => return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
+    };
+    // (`this` undefined, as the Sandbox calls a body.)
+    vm.call(main, Value::UNDEFINED, &[])
+        .expect("the VM is idle");
+    let mut pauses = 0;
+    let mut spent = 0;
+    loop {
+        match vm.run(1_000_000) {
+            Status::OutOfFuel if spent < 20 => spent += 1,
+            Status::OutOfFuel => return "(out of fuel)\n".into(),
+            Status::HostCall { call_id, .. } => {
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED))
+                    .expect("parked on this call");
+            }
+            Status::Idle => {
+                let open = vm.pending_host_calls();
+                let Some(&id) = open.first() else {
+                    return "(the run waits for nothing)\n".into();
+                };
+                pauses += 1;
+                if pauses < nth {
+                    vm.resolve_host_call(id, Ok(Value::UNDEFINED))
+                        .expect("an open call");
+                    continue;
+                }
+                let base = BaseInfo::new(djs_prelude::BASE, VmOptions::default())
+                    .expect("the base loads");
+                let host = HostNames {
+                    functions: vec![
+                        (CONSOLE_LOG, "console.log".to_string()),
+                        (DEBUGGER, "debugger".to_string()),
+                    ],
+                    values: vec![("console".to_string(), Value::object(console))],
+                    ..Default::default()
+                };
+                let opts = SnapshotOptions {
+                    sources: false,
+                    host: Some(host),
+                };
+                return match vm.snapshot_with(&base, &opts) {
+                    Ok(bytes) => {
+                        let text = describe(&bytes).unwrap_or_default();
+                        let lines: Vec<&str> =
+                            text.lines().filter(|l| !l.starts_with("type ")).collect();
+                        format!("{} bytes\n{}\n", bytes.len(), lines.join("\n"))
+                    }
+                    Err(e) => format!("(refused: {})\n", e.0.join("; ")),
+                };
+            }
+            Status::Done(_) => return "(the run ended without pausing)\n".into(),
+            Status::Threw(e) => return format!("Uncaught {}\n", vm.display(e)),
+            Status::HostOutOfMemory => return "out of host memory\n".into(),
+        }
+    }
+}
 
 /// The continuation dump `src` writes at its `nth` pause (from 1): a `debugger;` in an
 /// async function awaits the host's `debugger` there (D3050), and the run is dumped while
@@ -222,12 +307,12 @@ mod tests {
     }
 
     #[test]
-    fn examples_dump_at_debugger() {
+    fn examples_snapshot_at_debugger() {
         let src = "let n = 0;\nfor (const x of [1, 2]) {\n  n += x;\n  debugger;\n}\nreturn n;\n";
-        let d = dump(src, 1, false);
-        assert!(d.contains("$djs.resume("), "{d}");
-        assert!(d.contains("\"debugger\""), "{d}");
-        assert!(dump(src, 2, false).contains("$djs.resume("));
-        assert_eq!(dump(src, 3, false), "(the run ended without pausing)\n");
+        let d = snapshot(src, 1, false);
+        assert!(d.contains("1 HostCall"), "{d}");
+        assert!(d.contains("debugger()"), "{d}");
+        assert!(snapshot(src, 2, false).contains("1 HostCall"));
+        assert_eq!(snapshot(src, 3, false), "(the run ended without pausing)\n");
     }
 }

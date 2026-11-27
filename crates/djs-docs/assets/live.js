@@ -1,7 +1,7 @@
 // Live examples: every ```js live block of the guide is an editor whose code runs in
 // djs-wasm in the page (D2103). A `debugger;` in the code pauses the run there (D3050):
-// the page writes it out as a continuation dump, shows it under the output, and Continue
-// resumes the run from it in a fresh sandbox. The editor is a textarea with transparent text over the
+// the page writes it out as a snapshot (D3720), describes it under the output, and
+// Continue resumes the run from it in a fresh sandbox. The editor is a textarea with transparent text over the
 // highlighted `pre` the page already has (render.rs live_block): the textarea does the
 // editing (caret, selection, undo, input methods, screen readers) and highlight.js
 // repaints the `pre` under it on every input. Without JavaScript (or from file://) the
@@ -30,10 +30,10 @@ function lib() {
   ]).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => ({
     Sandbox,
     module,
-    // The docs build has the dumper (`vm_dump`), which a `debugger;` pause needs. The
+    // The docs build has snapshots (`vm_snapshot`), which a `debugger;` pause needs. The
     // instance's operations by name (the module has one export, `djs`) serve the Bytecode
     // tab.
-    dumps: "vm_dump" in (disasmExports = djsExports(module)),
+    snapshots: "vm_snapshot" in (disasmExports = djsExports(module)),
     kindNames: Object.fromEntries(Object.entries(LAYOUT.cells).map(([n, c]) => [c.kind, n])),
     classNames: Object.fromEntries(Object.entries(LAYOUT.objectClasses).map(([n, c]) => [c, n])),
   }));
@@ -313,26 +313,24 @@ const hasDebugger = (src) => tokens(src).some(([role, s]) => role === "keyword" 
 /** Bytes as KiB with one decimal, or bytes. */
 const size = (n) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KiB`);
 
-/** The gzip size of `text` (CompressionStream), or null where the browser has none. */
-async function gzipSize(text) {
+/** The gzip size of `bytes` (CompressionStream), or null where the browser has none. */
+async function gzipSize(bytes) {
   if (typeof CompressionStream === "undefined") return null;
-  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
   return (await new Response(stream).arrayBuffer()).byteLength;
 }
 
 /**
  * A run with `debugger;` pauses (D3050) as part of the normal Run: a task whose `debugger`
- * host function makes the run idle at the statement, so the page suspends it into a dump
- * there. Run turns into Continue, which resumes the run from that dump in a fresh
- * sandbox, on to the next pause or the end. The output of all of them is one transcript,
- * with a line at each pause; the current dump is one click away below it. A run that
- * cannot be dumped (a value the dumper refuses) says why and continues in the same
- * sandbox. Dumps need frozen builtins, so these runs have them.
+ * host function makes the run idle at the statement, so the page suspends it into a
+ * snapshot there (D3720). Run turns into Continue, which resumes the run from that
+ * snapshot in a fresh sandbox, on to the next pause or the end. The output of all of them
+ * is one transcript, with a line at each pause; the current snapshot's description is one
+ * click away below it. A run that cannot be snapshotted (a value the snapshot refuses)
+ * says why and continues in the same sandbox.
  *
  * Each pause line says where the run stopped (`Sandbox.callSite`, D3054): a line and
- * column of the example while the run is in its first part, and of the dump a later part
- * continued from (that part runs the dump's text), with a link that shows that dump with
- * the statement marked.
+ * column of the example, in every part of the run (a resumed run is in the same script).
  */
 async function runPausing(ex, l, id) {
   const { el } = ex;
@@ -343,71 +341,59 @@ async function runPausing(ex, l, id) {
   const src = ex.ta.value;
   const lines = [];
   const out = (...a) => lines.push(esc(a.map(show).join(" ")));
-  // `html` is markup: escaped text and dump links.
+  // `html` is markup: escaped text and snapshot links.
   const marker = (html) => lines.push(`<span class="live-pause">${html}</span>`);
   const showOut = () => (pane("out").innerHTML = lines.join("\n") || `<span class="muted">(no output)</span>`);
-  // The dumps of this run, in order: text and size, shown by the transcript's links.
-  const dumps = [];
-  const showDump = (i, site) => {
-    const d = dumps[i];
+  // The snapshots of this run, in order: their descriptions and sizes, shown by the
+  // transcript's links.
+  const snaps = [];
+  const showSnap = (i) => {
+    const d = snaps[i];
     box.hidden = false;
-    box.querySelector("summary").textContent = `Dump ${i + 1} of this run (${d.size})${site ? `, at line ${site.line}:${site.column}` : ""}`;
-    box.querySelector("code").innerHTML = paint(d.text, site ? markAt(d.text, site.line, site.column) : null);
+    box.querySelector("summary").textContent = `Snapshot ${i + 1} of this run (${d.size}), described`;
+    box.querySelector("code").textContent = d.text;
   };
   pane("out").onclick = (ev) => {
     const a = ev.target.closest?.("a.live-dump-link");
     if (!a) return;
     ev.preventDefault();
-    const site = a.dataset.line ? { line: Number(a.dataset.line), column: Number(a.dataset.col) } : null;
-    showDump(Number(a.dataset.dump), site);
+    showSnap(Number(a.dataset.dump));
     box.open = true;
-    // The marked statement in view inside the dump's own scroll box.
-    const pre = box.querySelector("pre");
-    const lh = parseFloat(getComputedStyle(pre).lineHeight) || 20;
-    pre.scrollTop = site ? Math.max(0, (site.line - 1) * lh - pre.clientHeight / 3) : 0;
+    box.querySelector("pre").scrollTop = 0;
     box.scrollIntoView({ block: "nearest" });
   };
-  const dumpLink = (i, site) =>
-    `<a href="#" class="live-dump-link" data-dump="${i}"${site ? ` data-line="${site.line}" data-col="${site.column}"` : ""}>dump ${i + 1}</a>`;
-  /**
-   * Where the run waits at its open pauses, as [text, html]: line and column in the
-   * example, or in the dump this part continued from (`from`, an index into `dumps`).
-   */
-  const where = (task, from) => {
+  const snapLink = (i) => `<a href="#" class="live-dump-link" data-dump="${i}">snapshot ${i + 1}</a>`;
+  /** Where the run waits at its open pauses, as text: lines and columns of the example. */
+  const where = (task) => {
     const sites = [];
     for (const c of task.calls) {
       if (c.fn !== "debugger") continue;
       const at = task.sandbox.callSite(c.id);
       if (at && !sites.some((s) => s.line === at.line && s.column === at.column)) sites.push(at);
     }
-    if (sites.length === 0) return ["debugger;", "<code>debugger;</code>"];
-    const inDump = sites[0].file === "dump.js" && from >= 0;
-    const pos = sites.map((s) => `${s.line}:${s.column}`).join(", ");
-    const head = `line${sites.length > 1 ? "s" : ""} ${pos}`;
-    if (!inDump) return [head, esc(head)];
-    return [`${head} of dump ${from + 1}`, `${esc(head)} of ${dumpLink(from, sites[0])}`];
+    if (sites.length === 0) return "debugger;";
+    return `line${sites.length > 1 ? "s" : ""} ${sites.map((s) => `${s.line}:${s.column}`).join(", ")}`;
   };
   // The pause may come while `start` or `resume` still runs, before `step` waits for it.
   let paused = false;
   let wake = null;
-  // Continues a pause in the same sandbox (after a refused dump).
+  // Continues a pause in the same sandbox (after a refused snapshot).
   let release = null;
   const opts = {
     module,
-    frozenBuiltins: true,
     typescript: ex.ts,
     console: { log: out, info: out, warn: out, error: out },
     fuelSlice: FUEL_SLICE,
     maxFuel: MAX_FUEL,
     now: 0,
-    // The pause: the run is idle while this call is open, so the task can be dumped.
+    // The pause: the run is idle while this call is open, so the task can be snapshotted.
     debugger: {
       call() {
         paused = true;
         wake?.();
         return new Promise((r) => (release = r));
       },
-      // Continued from a dump: the run goes on at once.
+      // Continued from a snapshot: the run goes on at once.
       resume() {},
     },
   };
@@ -417,7 +403,7 @@ async function runPausing(ex, l, id) {
     ex.cont = null;
     setRunLabel(ex, false);
   };
-  // `from`: the index of the dump this part continued from, -1 for the example.
+  // `from`: the index of the snapshot this part continued from, -1 for the example.
   const step = async (task, from) => {
     const atPause = paused ? Promise.resolve() : new Promise((r) => (wake = r));
     const end = task.result.then(
@@ -431,26 +417,33 @@ async function runPausing(ex, l, id) {
       const failure = first.e ? describe(first.e, src, false) : null;
       if (failure) lines.push(`<span class="live-error">${esc(failure.text)}</span>`);
       showOut();
-      setStatus(failure ? "threw" : resumes ? `ran to the end, continued ${resumes}× from a dump` : "ran to the end");
-      if (resumes) showDump(from, null);
+      setStatus(failure ? "threw" : resumes ? `ran to the end, continued ${resumes}× from a snapshot` : "ran to the end");
+      if (resumes) showSnap(from);
       done();
       return;
     }
     paused = false;
     wake = null;
     pauses++;
-    const [at, atHtml] = where(task, from);
-    let dump;
+    const at = where(task);
+    let snap;
+    let text;
     try {
-      dump = await task.suspend();
+      snap = await task.suspend();
+      // The description, without the record types' fields.
+      text = task.sandbox
+        .describeSnapshot(snap)
+        .split("\n")
+        .filter((t) => !t.startsWith("type "))
+        .join("\n");
     } catch (e) {
       if (id !== ex.runs) return task.sandbox.dispose();
-      // Not dumpable here: say why, and let Continue go on in this sandbox.
-      marker(`⏸ paused at ${atHtml}, but the run cannot be dumped here:`);
-      lines.push(`<span class="live-error">${esc(String(e?.message ?? e).replace(/^cannot dump:\s*/, "").trimEnd())}</span>`);
+      // Not snapshottable here: say why, and let Continue go on in this sandbox.
+      marker(`⏸ paused at ${esc(at)}, but the run cannot be snapshotted here:`);
+      lines.push(`<span class="live-error">${esc(String(e?.message ?? e).replace(/^cannot snapshot the run:\s*/, "").trimEnd())}</span>`);
       showOut();
       box.hidden = true;
-      setStatus(`paused at ${at} (pause ${pauses}), not dumpable`);
+      setStatus(`paused at ${at} (pause ${pauses}), not snapshottable`);
       ex.cont = () => {
         ex.cont = null;
         lines.push(`<span class="live-pause">▶ continued in the same sandbox</span>`);
@@ -466,22 +459,21 @@ async function runPausing(ex, l, id) {
     }
     task.sandbox.dispose();
     if (id !== ex.runs) return;
-    const gz = await gzipSize(dump);
-    const bytes = new TextEncoder().encode(dump).length;
-    const n = dumps.push({ text: dump, size: `${size(bytes)}${gz === null ? "" : `, ${size(gz)} gzipped`}` }) - 1;
-    marker(`⏸ paused at ${atHtml}: the run is now ${dumpLink(n, null)} (${esc(size(bytes))}), and its sandbox is gone`);
+    const gz = await gzipSize(snap);
+    const n = snaps.push({ text, size: `${size(snap.length)}${gz === null ? "" : `, ${size(gz)} gzipped`}` }) - 1;
+    marker(`⏸ paused at ${esc(at)}: the run is now ${snapLink(n)} (${esc(size(snap.length))}), and its sandbox is gone`);
     showOut();
-    showDump(n, null);
+    showSnap(n);
     setStatus(`paused at ${at} (pause ${pauses})`);
     ex.cont = async () => {
       ex.cont = null;
       setRunLabel(ex, false);
       resumes++;
-      lines[lines.length - 1] = `<span class="live-pause">⏸ paused at ${atHtml}: continued from ${dumpLink(n, null)} (${esc(size(bytes))}) in a fresh sandbox</span>`;
+      lines[lines.length - 1] = `<span class="live-pause">⏸ paused at ${esc(at)}: continued from ${snapLink(n)} (${esc(size(snap.length))}) in a fresh sandbox</span>`;
       showOut();
       setStatus("continuing…");
       try {
-        await step(await Sandbox.resume(dump, opts), n);
+        await step(await Sandbox.resume(snap, opts), n);
       } catch (e) {
         setStatus(`could not continue: ${e.message}`);
         done();
@@ -517,10 +509,10 @@ async function run(ex) {
       ex.cont = null;
       setRunLabel(ex, false);
     }
-    if (l.dumps && hasDebugger(src)) {
+    if (l.snapshots && hasDebugger(src)) {
       pane("bytecode").textContent = disasm(module, src, ex.ts) ?? ex.listing;
-      pane("heap").innerHTML = `<p class="muted">This run pauses at <code>debugger;</code>: each part of it runs in a sandbox of its own, which is gone once the run is a dump.</p>`;
-      pane("suspend").innerHTML = `<p class="muted">At each <code>debugger;</code> the run is suspended into a continuation dump; see the Output tab.</p>`;
+      pane("heap").innerHTML = `<p class="muted">This run pauses at <code>debugger;</code>: each part of it runs in a sandbox of its own, which is gone once the run is a snapshot.</p>`;
+      pane("suspend").innerHTML = `<p class="muted">At each <code>debugger;</code> the run is suspended into a snapshot; see the Output tab.</p>`;
       select(ex, "out");
       await runPausing(ex, l, id);
       return;
@@ -587,7 +579,7 @@ async function run(ex) {
       `the VM returned control to this page ${Math.max(0, slices - 1)} times between two instructions and resumed where it stopped. ` +
       `Nothing of the run was on the Rust stack in between; it is all in the arena (${kb(sb.heapSize)}).</p>` +
       `<p>That is how a host suspends a run inside its process. To keep a run beyond the process, a host waits for it to be idle ` +
-      `(only waiting on its tool calls) and writes it as a continuation dump: JavaScript that recreates it in a later djs.</p>`;
+      `(only waiting on its tool calls) and writes it as a snapshot: its state as data, which a fresh sandbox continues.</p>`;
     ex.sandbox?.dispose();
     ex.sandbox = sb;
     setStatus(failure ? (failure.text.startsWith("SyntaxError") ? "did not compile" : "threw") : `ran in ${ms.toFixed(1)} ms`);
