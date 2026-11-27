@@ -229,13 +229,16 @@ impl<'a> Exporter<'a> {
 
     /// Marks the host values (D3720): each root, and every object reachable from it
     /// through own data properties, as a member (dumps went two levels deep, D2971; a
-    /// snapshot keeps the identity of every object of the host's data). Host functions
-    /// are named by identity wherever they are, and a Proxy's insides are not looked at.
+    /// snapshot keeps the identity of every object of the host's data). A host function
+    /// that is no member is named by its identity, and a Proxy's insides are not looked
+    /// at.
     fn host_spots(&mut self, host: &HostNames) {
         let h = self.h;
         let mut todo = Vec::new();
         for (i, (_, v)) in host.values.iter().enumerate() {
-            if let Some(o) = self.host_object(*v) {
+            if let Some(o) = self.host_object(*v)
+                && self.h.object_class(o) != ObjectClass::HostFunction
+            {
                 self.host_spots.insert(o.offset(), HostSpot::Root(i));
                 todo.push(o);
             }
@@ -259,14 +262,10 @@ impl<'a> Exporter<'a> {
         }
     }
 
-    /// `v` as an object a host value can be: above the builtins, not a host function
-    /// (named by identity), not marked yet.
+    /// `v` as an object a host value can be: above the builtins, not marked yet.
     fn host_object(&self, v: Value) -> Option<Obj> {
         let o = v.as_object()?;
-        (o.offset() >= self.base_end
-            && self.h.object_class(o) != ObjectClass::HostFunction
-            && !self.host_spots.contains_key(&o.offset()))
-        .then_some(o)
+        (o.offset() >= self.base_end && !self.host_spots.contains_key(&o.offset())).then_some(o)
     }
 
     /// The host entry of cell `off`, a host value or a host function, or `None` when it
