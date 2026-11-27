@@ -61,7 +61,11 @@ const HELP: &str = "\
                       that recreates them, functions as their source, closures and
                       data as code, builtins by name (no file or `-` prints it;
                       needs --frozen)
-.restore <file>       replace the VM with a fresh one that ran a .dump file
+.snapshot [file]      write the session as a snapshot (D3720): its state as data, with
+                      what is in flight (open calls, waiting inputs), the host's values
+                      by name (default file: session.snapshot)
+.restore <file>       replace the VM with a fresh one that loaded a .snapshot file, or
+                      that ran a .dump file
 .clear                start over with a fresh VM
 
 tools.<name>(args) is an async host call: an input that waits on one returns to the
@@ -80,7 +84,7 @@ With --frozen, `debugger;` in an async function or an input pauses it ([paused] 
 .continue, .c [id]    continue the pause (the oldest, or #id) in place
 .abort                drop the paused input and everything else in flight (Ctrl-C
                       at an empty prompt does too)
-.dump then .restore of the file continue from the dump: the pause is open again.
+.snapshot (or .dump) then .restore of the file continue from it: the pause is open again.
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
@@ -1236,12 +1240,22 @@ impl Repl {
             ".restore" if arg.is_empty() => {
                 println!("usage: .restore <file> (a file .dump wrote)")
             }
+            ".snapshot" => self.snapshot(if arg.is_empty() {
+                "session.snapshot"
+            } else {
+                arg
+            }),
             ".restore" => match std::fs::read(arg) {
+                Ok(bytes) if crate::snapshots::is_snapshot(&bytes) => {
+                    self.restore_snapshot(arg, &bytes)
+                }
                 Ok(bytes) if crate::dumps::is_dump(&bytes) => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
                     self.restore_dump(arg, &src);
                 }
-                Ok(_) => println!("{arg} is not a djs dump (.restore reads what .dump writes)"),
+                Ok(_) => println!(
+                    "{arg} is not a djs snapshot or dump (.restore reads what .snapshot and .dump write)"
+                ),
                 Err(e) => println!("cannot read {arg}: {e}"),
             },
             ".clear" => {
@@ -1281,6 +1295,83 @@ impl Repl {
             },
             Err(e) => println!("{e}"),
         }
+    }
+
+    /// `.snapshot file`: the session as a snapshot (D3720), the waiting inputs as handles
+    /// by label and the open calls' origins.
+    fn snapshot(&mut self, file: &str) {
+        let handles = self.waiting_handles(None);
+        let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
+        let origins = self.origins.clone();
+        let origin = |id: u32| origins.get(&id).cloned();
+        match crate::snapshots::snapshot(&mut self.vm, &self.tools, &refs, &origin) {
+            Ok(b) => match std::fs::write(file, &b) {
+                Ok(()) => {
+                    let n = |k: usize, what: &str| {
+                        format!("{k} {what}{}", if k == 1 { "" } else { "s" })
+                    };
+                    let calls = self.vm.pending_host_calls().len();
+                    println!(
+                        "wrote {} bytes to {file} ({}, {})",
+                        b.len(),
+                        n(calls, "open call"),
+                        n(handles.len(), "waiting input")
+                    )
+                }
+                Err(e) => println!("cannot write {file}: {e}"),
+            },
+            Err(e) => println!("{e}"),
+        }
+    }
+
+    /// `.restore` of a snapshot (D3720): a fresh VM of the snapshot's builtins mode loads
+    /// it; its open calls keep their ids, its handles become waiting inputs again.
+    fn restore_snapshot(&mut self, arg: &str, bytes: &[u8]) {
+        let frozen = match djs_core::vm::snapshot::needs(bytes) {
+            Ok(n) => n.frozen_builtins,
+            Err(e) => {
+                println!("cannot load {arg}: {}", e.0.join("; "));
+                return;
+            }
+        };
+        self.replace_vm(new_vm(self.gc_stress, frozen));
+        let loaded = match crate::snapshots::load(&mut self.vm, &mut self.tools, bytes) {
+            Ok(l) => l,
+            Err(e) => {
+                println!("cannot load {arg}: {e}");
+                self.replace_vm(new_vm(self.gc_stress, self.frozen));
+                return;
+            }
+        };
+        println!("loaded {arg} into a fresh VM");
+        self.inputs = loaded
+            .handles
+            .iter()
+            .filter_map(|(n, _)| {
+                let n = n.strip_prefix("input ")?;
+                n.strip_suffix(" (value)").unwrap_or(n).parse::<u32>().ok()
+            })
+            .max()
+            .unwrap_or(0);
+        for id in self.vm.pending_host_calls() {
+            let o = loaded
+                .origins
+                .iter()
+                .find(|(i, _)| *i == id)
+                .map(|(_, o)| o.clone());
+            self.origins
+                .insert(id, o.unwrap_or_else(|| String::from("the snapshot")));
+        }
+        for (name, h) in loaded.handles {
+            self.waiting.push(Waiting::from_handle_name(name, h));
+        }
+        self.pending_after_restore();
+        self.current = String::from("the snapshot");
+        if let Outcome::Stopped(why) = self.pump(false) {
+            println!("{why}");
+        }
+        self.check_waiting();
+        self.report_rejections();
     }
 
     /// The waiting inputs as the host's handles of a dump, by label; with `entry`, also

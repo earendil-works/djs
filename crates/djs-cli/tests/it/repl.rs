@@ -177,12 +177,12 @@ fn fuel_and_suspension() {
 }
 
 #[test]
-fn restore_reads_only_dumps() {
+fn restore_reads_only_snapshots_and_dumps() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let other = format!("{dir}/repl-test-{}.bin", std::process::id());
     std::fs::write(&other, b"DJS\0 not a dump").unwrap();
     let out = repl(&format!("let r = 7\n.restore {other}\nr\n"));
-    assert!(out.contains("is not a djs dump"), "{out}");
+    assert!(out.contains("is not a djs snapshot or dump"), "{out}");
     assert!(out.ends_with("\n7\n"), "{out}");
     std::fs::remove_file(&other).unwrap();
     check(
@@ -676,5 +676,78 @@ fn debugger_abort() {
          [waiting] #3 tools.read({\"path\":\"a\"})\n\
          aborted input 1, with 1 other waiting input and 1 open call\n\
          no open calls\n1\nnothing is paused\n",
+    );
+}
+
+/// A waiting session as a snapshot (D3720): `.restore` loads it into a fresh VM, with the
+/// open call (same id, same origin), the waiting input and the globals; a later input's
+/// tool calls get the ids the uninterrupted session gives them.
+#[test]
+fn snapshot_a_waiting_session() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let snap = format!("{dir}/repl-wait-{}.snapshot", std::process::id());
+    let out = repl(&format!(
+        "async function get(p) {{ const v = await tools.read({{path: p}}); return v.toUpperCase() }}\n\
+         let out = []; get('a').then(v => out.push(v)); 0\n\
+         .snapshot {snap}\n.clear\n.restore {snap}\n.pending\n.resolve 2 \"hello\"\nout\n\
+         get('c').then(v => out.push(v)); 0\n.resolve 3 \"c!\"\nout\n"
+    ));
+    std::fs::remove_file(&snap).unwrap();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "[waiting] #2 tools.read({\"path\":\"a\"})",
+            "0",
+            &format!(
+                "wrote {} to {snap} (1 open call, 0 waiting inputs)",
+                lines[2]
+                    .split(" to ")
+                    .next()
+                    .unwrap()
+                    .trim_start_matches("wrote ")
+            ),
+            "a fresh VM",
+            &format!("loaded {snap} into a fresh VM"),
+            "waiting: #2 tools.read({\"path\":\"a\"})",
+            "#2 tools.read({\"path\":\"a\"})  input 2, at repl:1:35",
+            "[ 'HELLO' ]",
+            "[waiting] #3 tools.read({\"path\":\"c\"})",
+            "0",
+            "[ 'HELLO', 'C!' ]",
+        ],
+        "{out}"
+    );
+}
+
+/// A paused session as a snapshot: `.restore` and `.c` continue it in a fresh VM, where it
+/// pauses again at the loop's next `debugger;`, at the same place of the input.
+#[test]
+fn debugger_pauses_resume_from_the_snapshot() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let s1 = format!("{dir}/repl-pause-{}.snapshot", std::process::id());
+    let out = frozen(&format!(
+        "let n = 0\nfor (let i = 0; i < 4; i++) {{ n += i; debugger; }}\n.c\n\
+         .snapshot {s1}\n.restore {s1}\n.c\nn\n.c\n.c\nn\n"
+    ));
+    std::fs::remove_file(&s1).unwrap();
+    let lines: Vec<&str> = out
+        .lines()
+        .filter(|l| !l.starts_with(' ') && !l.starts_with("wrote "))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "[paused] #1 input 2 at repl:1:39",
+            "(.dump shows the continuation, .c continues, .abort drops it)",
+            "[paused] #2 input 2 at repl:1:39",
+            &format!("loaded {s1} into a fresh VM"),
+            "[paused] #2 input 2 at repl:1:39",
+            "[paused] #3 input 2 at repl:1:39",
+            "3",
+            "[paused] #4 input 2 at repl:1:39",
+            "6",
+        ],
+        "{out}"
     );
 }
