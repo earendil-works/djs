@@ -58,8 +58,8 @@ Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 <!-- gen:status size -->
 `djs_wasm.wasm`, the one module djs ships, is 1,875 KB (768 KB gzip, 627 KB brotli):
 1,669 KB of code, 108 KB of data, and the base snapshot (the initialized realm with all
-builtins, 191 KB) coded to 45 KB in a custom section; the dumper takes 335 KB of its
-gzip. Module sizes measured at 4987410c0d, 2026-11-23.
+builtins, 191 KB) coded to 45 KB in a custom section. Module sizes measured at
+4987410c0d, 2026-11-23.
 <!-- /gen -->
 
 ## The engine in numbers
@@ -93,21 +93,6 @@ instructions.
 | `bounds/instructions-median-pct` | 23.5 | 9041ad864d, 2026-11-21 |
 | `bounds/load` | 3.3 | 9041ad864d, 2026-11-21 |
 | `compile/typescript-lazy-time-pct` | 57 | ab471c4906, 2026-11-21 |
-| `dump/extra-gzip` | 334869 | 4987410c0d, 2026-11-23 |
-| `dumps/corpus-cases` | 300 | 4af5a6f108, 2026-11-21 |
-| `dumps/idle-points` | 1063 | 4af5a6f108, 2026-11-21 |
-| `dumps/load` | 3.7 | 4af5a6f108, 2026-11-21 |
-| `dumps/log-raw` | 1758796 | 4af5a6f108, 2026-11-21 |
-| `dumps/log-zstd` | 402678 | 4af5a6f108, 2026-11-21 |
-| `dumps/raw-p50` | 2573 | 4af5a6f108, 2026-11-21 |
-| `dumps/raw-p99` | 12378 | 4af5a6f108, 2026-11-21 |
-| `dumps/refused` | 0 | 4af5a6f108, 2026-11-21 |
-| `dumps/resume-ms-p50` | 0.279 | 4af5a6f108, 2026-11-21 |
-| `dumps/resume-ms-p99` | 2.119 | 4af5a6f108, 2026-11-21 |
-| `dumps/write-ms-p50` | 0.233 | 4af5a6f108, 2026-11-21 |
-| `dumps/write-ms-p99` | 1.601 | 4af5a6f108, 2026-11-21 |
-| `dumps/zstd-p50` | 1006 | 4af5a6f108, 2026-11-21 |
-| `dumps/zstd-p99` | 2962 | 4af5a6f108, 2026-11-21 |
 | `fuel/slice-us` | 8.6 | 211ecfb72c, 2026-11-21 |
 | `heap/append-10m-memory` | 33947648 | 51646c9e90, 2026-11-21 |
 | `heap/json5/dictionary` | 152.0 | 51646c9e90, 2026-11-21 |

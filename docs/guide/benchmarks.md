@@ -481,22 +481,6 @@ continue it later in a new sandbox. Here every workload runs through the sandbox
 asynchronous host tools and is dumped at every idle point, every time it waits on a call:
 
 <!-- gen:status engines-dumps -->
-![djs's continuation dumps per workload: size, and the time to write and to load one](gen/chart-engines-dumps.svg)
-
-| workload | idle points | dump, KiB (max) | gzip, KiB (max) | write, ms | load, ms |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| sequential | 4 | 1.2 (2.3) | 0.6 (0.9) | 0.30 | 0.25 |
-| fanout | 15 | 74.3 (139.1) | 17.1 (33.5) | 0.51 | 0.56 |
-| media | 2 | 0.4 (0.4) | 0.3 (0.3) | 0.14 | 0.19 |
-| inspect | 0 | | | | |
-| loop | 8 | 8.6 (15.5) | 3.1 (5.2) | 0.46 | 0.29 |
-| text | 5 | 52.2 (53.0) | 9.2 (9.4) | 0.73 | 0.74 |
-| json | 3 | 121.9 (122.0) | 20.5 (20.6) | 3.90 | 2.19 |
-| ts | 1 | 1.7 (1.7) | 0.8 (0.8) | 0.69 | 0.32 |
-| heavy | 97 | 42.1 (114.9) | 10.3 (25.2) | 0.50 | 0.55 |
-
-Medians over a workload's idle points; load: a new sandbox with the run loaded; measured
-at d0bc2eef16, 2026-11-21, load 3.1.
 <!-- /gen -->
 
 Most dumps are a few kilobytes, and gzip takes the larger ones to between a sixth and a

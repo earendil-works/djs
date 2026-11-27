@@ -306,18 +306,6 @@ answers, then the rest of the loop, with the values of the bindings and the iter
 remaining state passed in as arguments:
 
 <!-- gen:dump -->
-```js
-"djs-dump";
-$djs.k(async function (total, $djs_i1) {
-await $djs.resume(2, "debugger", []);
-for (const word of $djs_i1) {
-  total += word.length;
-  console.log(word, total);
-  debugger;
-}
-return total;
-}, $djs.source("example.js", "7ab0490b"), 1, 22)(4, ["frames", "arena"].values());
-```
 <!-- /gen -->
 
 ## Where to look
