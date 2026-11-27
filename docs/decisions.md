@@ -14428,3 +14428,64 @@ published; its 0.x semver and crates/djs-embed/CHANGES.md, the list of incompati
 changes for hosts that pin a git revision, were a compatibility promise. CHANGES.md goes,
 the crate takes the workspace version, and its API changes with djs like every other
 crate's: a host that moves its pin reads the commits.
+
+## D3700: Logical snapshots are djs's persistence format
+date: 2026-11-24 · by: psnap · issue: 0301
+A waiting run persists as a logical snapshot (`vm::snapshot`, the `snapshot` feature, in
+djs-core's defaults and the shipped module): at an idle point, one record per reachable
+cell above the base, cells by kind name and named fields from the layout table, objects by
+class with their slots named in heap/object.rs's table, builtins by registry path, builtin
+closure kinds by intrinsic name, host identities (function ids, call ids, handles) as they
+are, the per-VM objects of a fresh VM as patches. Code is never stored: scripts are
+compiled again (their sources travel or are given by hash) and functions are named by
+(script, source span). The owner adopted it over continuation dumps, which go in 0304
+(docs/heap-snapshots-revisited.md). The format has no version promise: D024 applies
+(owner, 2026-11-24): no readers for earlier formats or for dumps, no migration, no golden
+files frozen across releases; `FORMAT` changes with the encoding.
+
+## D3701: One slot table for the object classes
+date: 2026-11-24 · by: psnap · issue: 0301
+heap/object.rs's `object_classes!` declares every class once with its id and its internal
+slots by name (`CLASSES`, with a `SlotKind` where a slot is not a plain value: an
+intrinsic id, a Map's index, a RegExp's program, which a snapshot names or rebuilds). The
+enum, `from_u32`, `slots()` (allocation and verify), the generated JS layout
+(`objectSlots`), the snapshot and the modules' slot constants
+(`ObjectClass::Promise.slot("state")`) come from it; the prose descriptions are its doc
+comments. A class with a variable rest names it (`captures`, `fields`).
+
+## D3702: Snapshot bytes are trusted host input, validated for robustness
+date: 2026-11-24 · by: psnap · issue: 0301
+The host writes and keeps snapshots, so they are not a security boundary; but malformed
+bytes (a truncated file, a flipped bit) must refuse, never trap or corrupt the VM. The
+decoder bounds-checks every count and index and keeps numbers numbers; before anything
+runs, each object's slots are checked against what its class's code relies on, every
+suspended frame against its code (the pc on a reachable instruction, the registers within
+the frame, the operand count the resume point expects, no native frame), closures'
+captures against their templates, the host call and handle tables, and `Heap::verify` runs
+over the result. Cost: import median 189 -> 261 us on the harvest. Not yet covered: the
+builtin records' slot counts (a fuzz finds one panic in 100,000 mutations there), which
+0302's named records bring.
+
+## D3703: The snapshot gate leg and its negative control
+date: 2026-11-24 · by: psnap · issue: 0301
+The gate's "snapshots" leg exports, imports and continues at every idle point of the
+harvested corpus and the tests/dump programs, alone and chained, and fails on any refusal
+or difference. A negative control (an importer that drops dense elements) must make the
+corpus runs differ, so the comparison is known to see a broken import.
+
+## D3704: The corpus's waiting functions' bytecode is pinned
+date: 2026-11-24 · by: psnap · issue: 0301
+tests/snapshot/frame-bytecode.txt holds the normalized bytecode hash (the snapshot's own)
+of every function of the codemode corpus that can hold a frame at an idle point. A
+snapshot waiting in a function loads only into a build that compiles it to the same
+bytecode, so a compiler change that alters one is a decision that shows in review
+(regenerated with `DJS_UPDATE_FRAME_PIN=1`), like the registry. It is no compatibility
+promise (D3700): it makes the cost of such a change visible.
+
+## D3705: The size ceiling rises by the snapshot module until the dumper goes
+date: 2026-11-24 · by: psnap · issue: 0301
+The shipped module carries logical snapshots next to the dumper until 0304 removes the
+dumper: 698,440 -> 769,623 B gzip (+71.2 KB: the snapshot module, its import validation,
+and the intrinsic names it writes builtin closure kinds by). The ceiling is that plus the
+slack, 770,647 B (owner's instruction: raised by what it costs, recorded, lowered again in
+0304). The module is not tuned for size yet.

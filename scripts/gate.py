@@ -323,6 +323,11 @@ def jobs():
           ' sleep="$s"; rc=$?; rm -rf "$d" "$v" "$s"; exit $rc',
           cls="rust", needs=["build:difftest", "build:core-tests"],
           summary=r"^(stress|ratchet|dump-node|dump-size):"),
+        # 0301: logical snapshots (D3700, D3703) at every idle point of the corpus and of the
+        # tests/dump programs, each alone and chained, continued like the uninterrupted run;
+        # nothing refused. The negative control and the frame bytecode pin are in `test`.
+        J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
+          cls="rust", needs=["build:core-tests"]),
         # 0161: the unchecked accessor build (D2520): the verifier against corrupt images
         # and e2e in debug (the accessors assert their bounds), then the corpus in release,
         # where they really do not check, with suspension and GC stress.

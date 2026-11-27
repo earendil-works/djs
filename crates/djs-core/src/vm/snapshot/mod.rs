@@ -1,6 +1,6 @@
-//! Logical heap snapshots (issue 0300, a research prototype behind the `snapshot`
-//! feature): a waiting VM as a graph of named-field records, keyed by bytecode hashes
-//! instead of the build.
+//! Logical snapshots (D3700): djs's persistence format. A waiting VM as a graph of
+//! named-field records, keyed by bytecode hashes instead of the build (issues 0300, 0301;
+//! docs/heap-snapshots-revisited.md).
 //!
 //! **When**: at an idle point only (no frames on the stack, no queued jobs, nothing in the
 //! host inbox; open async host calls are fine), the moments a dump is taken.

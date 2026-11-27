@@ -428,8 +428,7 @@ pub(super) fn load(
     }
     l.rebuild()?;
     l.root()?;
-    l.vm
-        .heap()
+    l.vm.heap()
         .verify()
         .map_err(|e| refusal(format!("the imported heap does not verify: {e:?}")))?;
     if let Some(st) = stats {
@@ -590,7 +589,10 @@ impl Loader<'_> {
                     if n == "template"
                         && let F::Fn(i) = f
                     {
-                        template = *self.functions.get(*i as usize).ok_or_else(|| short(Short))?;
+                        template = *self
+                            .functions
+                            .get(*i as usize)
+                            .ok_or_else(|| short(Short))?;
                     }
                 }
                 // Slots the snapshot's class has and this build's lacks: refused below
@@ -776,6 +778,11 @@ impl Loader<'_> {
     }
 
     fn set_elements(&mut self, o: Obj, vs: &[V]) -> Result<(), Refusal> {
+        #[cfg(test)]
+        if BROKEN.with(|b| b.get()) {
+            // The negative control (tests.rs): an importer that loses elements.
+            return Ok(());
+        }
         if vs.is_empty() {
             return Ok(());
         }
@@ -885,15 +892,20 @@ impl Loader<'_> {
             // A power of two with room for every entry (the rehash probes for a free
             // bucket): the snapshot's count, if it is one.
             let used = match h.object_slot(o, 0).as_internal() {
-                Some(e) if h.cell_kind(e) == CellKind::ValueArray
-                    || h.cell_kind(e) == CellKind::EphemeronArray =>
+                Some(e)
+                    if h.cell_kind(e) == CellKind::ValueArray
+                        || h.cell_kind(e) == CellKind::EphemeronArray =>
                 {
                     h.value_array_len(e)
                 }
                 _ => 0,
             };
             let need = (2 * (used / 2 + 1)).next_power_of_two().max(8);
-            let b = if b.is_power_of_two() && b >= need { b } else { need };
+            let b = if b.is_power_of_two() && b >= need {
+                b
+            } else {
+                need
+            };
             let ix = h.alloc_u32_array(b).map_err(oom)?;
             h.set_object_slot(o, k, Value::internal(ix));
         }
@@ -1136,7 +1148,10 @@ impl Loader<'_> {
         use crate::heap::cells::HostCall;
         let h = self.vm.heap();
         let bad = |w: &str| refusal(format!("the host call table: {w}"));
-        let t = r.get().filter(|&t| h.cell_kind(t) == CellKind::ValueArray).ok_or_else(|| bad("not an array"))?;
+        let t = r
+            .get()
+            .filter(|&t| h.cell_kind(t) == CellKind::ValueArray)
+            .ok_or_else(|| bad("not an array"))?;
         let mut ids = Vec::new();
         for i in 0..h.value_array_len(t) {
             let c = h
@@ -1152,10 +1167,16 @@ impl Loader<'_> {
                 return Err(bad("a call id is 0 or twice"));
             }
             ids.push(id);
-            if !args.get().is_some_and(|x| h.cell_kind(x) == CellKind::ValueArray) {
+            if !args
+                .get()
+                .is_some_and(|x| h.cell_kind(x) == CellKind::ValueArray)
+            {
                 return Err(bad("a call's arguments are not an array"));
             }
-            if !p.as_object().is_some_and(|o| h.object_class(o) == ObjectClass::Promise) {
+            if !p
+                .as_object()
+                .is_some_and(|o| h.object_class(o) == ObjectClass::Promise)
+            {
                 return Err(bad("an open call at an idle point without a promise"));
             }
         }
@@ -1355,4 +1376,13 @@ pub fn describe(bytes: &[u8]) -> Result<String, Refusal> {
         out += &format!("type {} {{ {} }}\n", t.name, f.join(", "));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+std::thread_local! {
+    /// The negative control: the gate must see a broken importer (tests.rs).
+    pub(super) static BROKEN: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
 }

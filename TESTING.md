@@ -534,6 +534,29 @@ stress and determinism checks. A VM image carries the engine build hash (`vm::BU
 what an image means needs no bump of anything. `vm::tests::images_load_only_into_their_build`
 checks the refusal.
 
+## Logical snapshots (0301, D3700-D3704)
+
+Snapshots (`crates/djs-core/src/vm/snapshot/`, docs/heap-snapshots-revisited.md) are
+tested in four places:
+- **The gate leg "snapshots"**: `vm::snapshot::tests::snapshot_harvest` and
+  `snapshot_programs` (ignored unless `DJS_SNAP=1`) export, import and continue at every
+  idle point of tests/corpus/codemode-harvest and of the tests/dump programs, each idle
+  point alone and all of them chained; every run must continue like the uninterrupted one,
+  and nothing may be refused. `DJS_SNAP_MEASURE=1 DJS_SNAP_OUT=file DJS_SNAP_DIR=dir` adds
+  sizes and times per idle point (with the plain dump and the image beside them) and writes
+  the snapshots; `snapshot_import_dir` (`DJS_SNAP_IMPORT=dir`) loads another build's.
+- **The negative control** (`negative_control_catches_a_broken_import`, in `test`): with an
+  importer that loses dense elements, the corpus runs must differ.
+- **Malformed snapshots** (`malformed_snapshots_refuse`, in `test`: 400 deterministic
+  truncations and bit flips; `malformed_snapshots_refuse_long` with `DJS_SNAP_FUZZ=N`):
+  each refuses, or loads and runs to its end, and none panics.
+- **The frame bytecode pin** (`frame_bytecode_pin`, in `test`): tests/snapshot/frame-bytecode.txt
+  lists the normalized bytecode hash of every corpus function that can hold a frame. A
+  snapshot waiting in a function loads only into a build that compiles it alike, so a
+  compiler change that alters one shows here; regenerate it deliberately with
+  `DJS_UPDATE_FRAME_PIN=1 cargo test -p djs-core --lib frame_bytecode_pin`. It is no
+  compatibility promise (D024 applies): it makes the change a visible decision.
+
 ## Golden dumps (0178, D2560, D2619, D2920, D3643)
 
 Images are tied to a build; continuation dumps are not: a dump is a plain Script (D2830)

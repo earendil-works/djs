@@ -97,11 +97,12 @@ pub(super) fn object(h: &Heap, o: Obj) -> Check {
             }
             let a = h.arena();
             let caps = u32::from(a.get::<u16>(t, FuncTemplate::CAPTURES));
-            let home = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS))
-                & template::func_flags::HOME
-                != 0;
+            let home =
+                u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)) & template::func_flags::HOME != 0;
             if n != caps + u32::from(home) {
-                return Err(format!("a closure with {n} slots, its template needs {caps}"));
+                return Err(format!(
+                    "a closure with {n} slots, its template needs {caps}"
+                ));
             }
             for i in 0..caps {
                 if internal_of(h, h.object_slot(o, i), CellKind::BoxCell).is_none() {
@@ -164,7 +165,8 @@ pub(super) fn object(h: &Heap, o: Obj) -> Check {
             int(s("flags"), 0, i32::MAX, "the flags")?;
             let r = s("reactions");
             if !r.is_undefined() {
-                let a = internal_of(h, r, CellKind::ValueArray).ok_or("the reactions are not an array")?;
+                let a = internal_of(h, r, CellKind::ValueArray)
+                    .ok_or("the reactions are not an array")?;
                 if !h.value_array_len(a).is_multiple_of(3) {
                     return Err(String::from("the reactions are not triples"));
                 }
@@ -284,27 +286,36 @@ fn generator(h: &Heap, g: Obj) -> Check {
     if state == COMPLETED || state == EXECUTING {
         // Executing: only between a resume and the next suspension, never at an idle point.
         if state == EXECUTING || !fv.is_undefined() {
-            return Err(String::from("a completed or running activation with a frame"));
+            return Err(String::from(
+                "a completed or running activation with a frame",
+            ));
         }
         return Ok(());
     }
     let f = internal_of(h, fv, CellKind::ValueArray).ok_or("no frame")?;
     let len = h.value_array_len(f);
     let callee = h.value_array_get(f, 0);
-    let callee = object_of(h, callee, ObjectClass::Function).ok_or("the callee is not a closure")?;
+    let callee =
+        object_of(h, callee, ObjectClass::Function).ok_or("the callee is not a closure")?;
     let t = h.closure_template(callee);
     let a = h.arena();
     let params = u32::from(a.get::<u16>(t, FuncTemplate::PARAMS));
     let locals = u32::from(a.get::<u16>(t, FuncTemplate::LOCALS));
     let max_stack = u32::from(a.get::<u16>(t, FuncTemplate::STACK));
-    let hp = s("hp").as_int().filter(|&x| x >= 0).ok_or("hp is not an int")? as u32;
+    let hp = s("hp")
+        .as_int()
+        .filter(|&x| x >= 0)
+        .ok_or("hp is not an int")? as u32;
     let sb = hp + frame::HEADER + locals;
     if hp < 2 + params || sb > len || len - sb > max_stack {
         return Err(format!(
             "a frame of {len} slots does not fit its function (hp {hp}, {params} params, {locals} locals, stack {max_stack})"
         ));
     }
-    let argc = h.value_array_get(f, hp + frame::ARGC).as_int().unwrap_or(-1);
+    let argc = h
+        .value_array_get(f, hp + frame::ARGC)
+        .as_int()
+        .unwrap_or(-1);
     if argc < 0 || argc as u32 > hp - 2 {
         return Err(String::from("the frame's argument count does not fit"));
     }
@@ -313,17 +324,24 @@ fn generator(h: &Heap, g: Obj) -> Check {
             return Err(String::from("a frame header slot is not an int"));
         }
     }
-    let flags = h.value_array_get(f, hp + frame::FLAGS).as_int().unwrap_or(0);
+    let flags = h
+        .value_array_get(f, hp + frame::FLAGS)
+        .as_int()
+        .unwrap_or(0);
     if flags & frame::FLAG_NATIVE != 0 {
         return Err(String::from("a native frame"));
     }
     // The pc on an instruction of reachable code, where the operand stack holds what the
     // resume pushes on top of the saved values (one value, or a yield's two).
-    let pc = s("pc").as_int().filter(|&x| x >= 0).ok_or("the pc is not an int")? as u32;
+    let pc = s("pc")
+        .as_int()
+        .filter(|&x| x >= 0)
+        .ok_or("the pc is not an int")? as u32;
     let code = template::code(h, t);
     let handlers = HandlerTable::new(template::handlers(h, t)).map_err(|_| "bad handlers")?;
     let hs: alloc::vec::Vec<_> = handlers.iter().collect();
-    let depths = stack::stack_depths(code, &hs).map_err(|_| "the function's code does not check")?;
+    let depths =
+        stack::stack_depths(code, &hs).map_err(|_| "the function's code does not check")?;
     let depth = *depths.get(pc as usize).ok_or("the pc is past the code")?;
     if depth == stack::UNKNOWN_DEPTH || decode::decode(code, pc).is_err() {
         return Err(format!("the pc {pc} is not on a reachable instruction"));

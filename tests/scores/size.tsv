@@ -30,11 +30,13 @@
 # compile cache and the dump maps' export go, 767,573 -> 750,859 B; lowered by 0298, the dumper's
 # diet: 750,859 -> 717,284 B, and D3660, the dumper optimized for size: -> 701,709 B; 0297, D3642:
 # the slim build goes, 701,738 B: the guards were constant there; 0298: the parser's suspension-map
-# hooks out of line, 698,440 B).
+# hooks out of line, 698,440 B); raised by 0301, D3705: logical snapshots in the shipped module
+# (the module, its import validation, the intrinsic names), 698,440 -> 769,623 B, the ceiling that
+# plus the slack; 0304 removes the dumper and lowers it.
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 # budget_allowance_gzip: added to 1.5x by the owner (D3510, 2026-11-21) to land the speedups
 # parked for size, raised by 1,024 for the fuel fix (D3591, 2026-11-22); the ceiling below
 # still rises only by recorded batches.
 quickjs_wasi_gzip	286655
 budget_allowance_gzip	3072
-ceiling_gzip	699464
+ceiling_gzip	770647

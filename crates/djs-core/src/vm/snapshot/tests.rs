@@ -427,6 +427,13 @@ fn snapshot_harvest() {
     if let Some(p) = out_path {
         std::fs::write(p, lines).unwrap();
     }
+    // The gate's contract (D3703): every idle point of the corpus exports, imports and
+    // continues like the uninterrupted run, alone and chained.
+    assert!(
+        st.refusals.is_empty() && st.import_refusals.is_empty(),
+        "snapshots refused"
+    );
+    assert!(st.differ.is_empty(), "runs differ after a snapshot");
 }
 
 fn diff(got: &Result<Vec<String>, String>, want: &[String]) -> String {
@@ -670,6 +677,10 @@ fn snapshot_programs() {
     for l in notes.iter().take(40) {
         std::println!("{l}");
     }
+    assert!(
+        notes.is_empty(),
+        "snapshots of the dump programs refused or differ"
+    );
 }
 
 /// `DJS_SNAP_DESCRIBE=file cargo test ... describe_file -- --ignored --nocapture`
@@ -1067,8 +1078,15 @@ text(String(re.exec("ab cd ")?.groups.w) + " " + Object.getOwnPropertySymbols(o)
 fn fuzz_seeds() -> Vec<Vec<u8>> {
     let mut seeds = Vec::new();
     for (name, src) in programs() {
-        if !["plan", "generator", "asyncgen", "combinators", "golden/class-fields", "golden/using"]
-            .contains(&name.as_str())
+        if ![
+            "plan",
+            "generator",
+            "asyncgen",
+            "combinators",
+            "golden/class-fields",
+            "golden/using",
+        ]
+        .contains(&name.as_str())
         {
             continue;
         }
@@ -1145,7 +1163,11 @@ fn fuzz(rounds: usize) -> (usize, usize) {
             Ok(true) => loaded += 1,
             Ok(false) => {}
             Err(_) if std::env::var_os("DJS_SNAP_FUZZ_ALL").is_some() => {
-                *PANICS.lock().unwrap().entry(LAST.lock().unwrap().clone()).or_default() += 1;
+                *PANICS
+                    .lock()
+                    .unwrap()
+                    .entry(LAST.lock().unwrap().clone())
+                    .or_default() += 1;
             }
             Err(_) => panic!("round {round}: a malformed snapshot panicked"),
         }
@@ -1168,7 +1190,12 @@ fn hook() {
         let bt = std::backtrace::Backtrace::force_capture().to_string();
         let at = bt
             .lines()
-            .filter(|l| l.contains("djs_core::") && !l.contains("fail::") && !l.contains("object_slot") && !l.contains("snapshot::tests"))
+            .filter(|l| {
+                l.contains("djs_core::")
+                    && !l.contains("fail::")
+                    && !l.contains("object_slot")
+                    && !l.contains("snapshot::tests")
+            })
             .take(9)
             .map(|l| l.trim().split("::").last().unwrap_or("?").to_string())
             .collect::<Vec<_>>()
@@ -1194,4 +1221,117 @@ fn malformed_snapshots_refuse_long() {
         .unwrap_or(20_000);
     let (tried, loaded) = fuzz(n);
     std::println!("fuzz: {tried} malformed snapshots, {loaded} loaded and ran");
+}
+
+/// The negative control (D3703): an importer that loses dense elements must make the
+/// corpus runs differ, or the harvest's comparison sees nothing.
+#[test]
+fn negative_control_catches_a_broken_import() {
+    let (prelude, cases) = corpus();
+    super::import::BROKEN.with(|b| b.set(true));
+    let mut caught = 0;
+    for (_, case) in cases.iter().take(12) {
+        let Ok(want) = run(&prelude, case, None) else {
+            continue;
+        };
+        let got = run(
+            &prelude,
+            case,
+            Some(&mut |vm: &mut Vm, _: Handle, _k: usize| {
+                let _ = roundtrip(vm);
+            }),
+        );
+        if got.as_ref() != Ok(&want) {
+            caught += 1;
+        }
+    }
+    super::import::BROKEN.with(|b| b.set(false));
+    assert!(caught > 0, "a broken importer went unnoticed");
+}
+
+// ---- The pin of the corpus's waiting functions (D3704) ---------------------------------
+
+fn pin_file() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/snapshot/frame-bytecode.txt")
+}
+
+/// The bytecode hash (the snapshot's, hash.rs) of every corpus function that can hold a
+/// frame (async functions, generators), as `script<TAB>start..end<TAB>hash`.
+fn frame_pins() -> String {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus");
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    for d in ["codemode", "codemode-harvest"] {
+        files.extend(
+            std::fs::read_dir(root.join(d))
+                .unwrap()
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|x| x == "js")),
+        );
+    }
+    files.sort();
+    let mut out = String::from(
+        "# The normalized bytecode (vm/snapshot/hash.rs) of every function of the codemode corpus\n\
+         # that can hold a frame at an idle point (D3704): a snapshot waiting in one loads only\n\
+         # into a build that compiles it to the same bytecode. A change here is a decision:\n\
+         # regenerate with DJS_UPDATE_FRAME_PIN=1 cargo test -p djs-core --lib frame_bytecode_pin\n",
+    );
+    let mut vm = program_vm();
+    for f in files {
+        let case = std::fs::read_to_string(&f).unwrap();
+        let name = f.strip_prefix(&root).unwrap().to_string_lossy().to_string();
+        let src = format!("(async (tools, console) => {{{case}\n}})");
+        let Ok(v) = vm.compile(src.as_bytes(), &CompileOptions::script("case.js")) else {
+            continue;
+        };
+        let h = vm.heap();
+        let mut stack = alloc::vec![h.closure_template(v.as_object().unwrap())];
+        let mut rows = Vec::new();
+        while let Some(t) = stack.pop() {
+            let flags = u32::from(
+                h.arena()
+                    .get::<u16>(t, crate::heap::cells::FuncTemplate::FLAGS),
+            );
+            use crate::bytecode::template::func_flags::{ASYNC, GENERATOR};
+            let d = crate::bytecode::template::debug_info(h, t);
+            if flags & (ASYNC | GENERATOR) != 0 {
+                rows.push((d.src_start, d.src_end, super::hash::template_hash(h, t)));
+            }
+            for i in 0..crate::bytecode::template::child_count(h, t) {
+                if let Some(c) = crate::bytecode::template::child(h, t, i).and_then(|r| r.get()) {
+                    stack.push(c);
+                }
+            }
+        }
+        rows.sort();
+        for (a, b, hash) in rows {
+            out += &format!("{name}\t{a}..{b}\t{hash:016x}\n");
+        }
+    }
+    out
+}
+
+/// The pin is current: a compiler change that changes a waiting function's bytecode shows
+/// here (a snapshot waiting in it no longer loads into the new build).
+#[test]
+fn frame_bytecode_pin() {
+    let got = frame_pins();
+    if std::env::var_os("DJS_UPDATE_FRAME_PIN").is_some() {
+        std::fs::create_dir_all(pin_file().parent().unwrap()).unwrap();
+        std::fs::write(pin_file(), &got).unwrap();
+        return;
+    }
+    let want = std::fs::read_to_string(pin_file()).unwrap_or_default();
+    if got != want {
+        let changed = got
+            .lines()
+            .filter(|l| !want.lines().any(|w| w == *l))
+            .take(10)
+            .collect::<Vec<_>>()
+            .join("\n");
+        panic!(
+            "the bytecode of waiting corpus functions changed (tests/snapshot/frame-bytecode.txt); \
+             snapshots waiting in them will not load into this build. If that is intended, \
+             regenerate with DJS_UPDATE_FRAME_PIN=1. New or changed:\n{changed}"
+        );
+    }
 }
