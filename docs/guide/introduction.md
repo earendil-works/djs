@@ -78,9 +78,9 @@ models read those messages and the hosts' tests expect them.
 - The **builtins** (`Array.prototype.map`, `JSON.parse`, ...) are written in a strict
   subset of TypeScript and compiled twice: to bytecode that ships in the base snapshot,
   and, for the hot ones, to Rust state machines that can suspend in the middle.
-- The **dumper** writes a waiting run as a *continuation dump*: a JavaScript program
-  that recreates the run's data, its functions stopped at their `await`s and its open
-  tool calls. Loading a dump is running it.
+- **Snapshots** write a waiting run as data: its objects, its functions stopped at their
+  `await`s and its open tool calls, by kind and field names. Loading one compiles the
+  scripts again and checks each waiting function's bytecode.
 - The **host** loads the djs-wasm module, sends values in through a compact wire format
   and reads results by walking the arena directly, with a reader generated from the same
   layout tables as the engine. The `@earendil-works/djs` package wraps all of that in one class,
@@ -106,13 +106,13 @@ const result = await sandbox.runAsync(
 ```
 
 [The JavaScript interface](js-api.md) covers everything the host package offers, from
-this one call to runs that are suspended into a dump and continued in another process.
+this one call to runs that are suspended into a snapshot and continued in another process.
 
 ## How to read this guide
 
 The first part, *Using djs*, describes what a user of djs sees: the
 [language](language.md) and its [TypeScript](typescript.md) support, the [JavaScript
-interface](js-api.md) for hosts, [continuation dumps](dumps.md), [limits](limits.md) on
+interface](js-api.md) for hosts, [snapshots](persistence.md), [limits](limits.md) on
 fuel, memory and depth, [determinism](determinism.md), and [the command line and the
 REPL](cli.md). The last page of the part shows how [one agent host](pi.md) wires djs up.
 
@@ -125,5 +125,5 @@ layouts and intrinsics, generated from the engine's own tables.
 Code samples marked *live* run in djs-wasm in your browser on the docs site: edit them
 and they run again. The output shown under each sample was produced by running it in
 this build of djs when the guide was checked, so it cannot drift from what djs actually
-does. A sample with a `debugger;` statement pauses there and shows the continuation dump
-of the run at that point.
+does. A sample with a `debugger;` statement pauses there and shows the snapshot of the
+run at that point.

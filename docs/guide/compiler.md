@@ -325,9 +325,8 @@ interpreter](interpreter.md#making-it-fast) fills.
 
 Most of a compile is the second phase: resolving names, the re-emit with its peepholes,
 short forms and stack check, and writing the template. A function that never runs does
-not need any of it. A library, a [continuation dump](dumps.md) or the code that loads
-one defines many functions of which few are called, so djs can defer that phase to a
-function's first call.
+not need any of it. A library defines many functions of which few are called, so djs can
+defer that phase to a function's first call.
 
 **What stays at load.** The whole unit is still parsed, with phase-1 code for every
 function. So every early error is reported when the script loads, never later, and
@@ -356,16 +355,15 @@ check, not a compile. Since the load already reported every error, nothing can f
 that point except memory.
 
 A function's code is the same whether it is compiled with its unit or at its first
-call. That matters for [continuation dumps](dumps.md): to name a suspended frame's
-slots, the dumper compiles the same source again and relies on getting identical code.
-So in a build with lazy functions, every function that may compile lazily has a
+call. That matters for [snapshots](persistence.md): the loading VM compiles the run's
+scripts again, eagerly or lazily as its options say, and checks the code against the
+hashes the snapshot carries. So in a build with lazy functions, every function that may compile lazily has a
 constant pool of its own in every compile, and the rule for what is lazy looks only at
 the function and its parent's text, which a compile of the function alone sees too.
 
 **Where it is on.** Lazy compilation is a build feature and a per-VM option, off by
 default. Native builds have the feature, so an embedder can turn it on per VM; the wasm
-module with the dumper has it and turns it on for every VM; the shipped codemode modules
-leave it out. An image that a host seals as a prelude, to start many runs from,
+modules leave it out. An image that a host seals as a prelude, to start many runs from,
 compiles all its lazy functions first, so no run pays for them.
 
 > **Trade-off.** Parse twice over keeping a tree. Keeping the first parse's state for
@@ -373,10 +371,9 @@ compiles all its lazy functions first, so no run pays for them.
 > carry. Parsing again needs nothing stored: the source is kept anyway, for `toString`
 > and stack traces. The cost: a function that runs is parsed twice, so it costs more
 > than an eager compile, while a function that never runs costs well under one. Lazy
-> compilation wins where most functions never run (dumps, libraries: TypeScript's own
+> compilation wins where most functions never run (libraries: TypeScript's own
 > compiler, a single 9 MB file, loads in <!--n compile/typescript-lazy-time-pct .0-->57<!--/n-->% of the time) and loses on codemode
-> scripts, whose callbacks nearly all run, which is why the codemode modules leave it
-> out.
+> scripts, whose callbacks nearly all run, which is why the wasm modules leave it out.
 
 ## What the missing tree costs
 

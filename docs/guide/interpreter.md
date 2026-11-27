@@ -210,8 +210,8 @@ from a conversion, take the same path. A Rust operation returns a fault instead 
 throwing; the loop turns it into an error object, with a QuickJS-style stack trace read
 from the frame records and the templates' line tables, and throws it at the instruction
 that failed. A frame is named by its function's own `name` when that is a string data
-property, else by the name the compiler gave it: a renamed function, a method with a
-computed key and a continuation of a loaded dump show the name the program knows. A
+property, else by the name the compiler gave it: a renamed function and a method with a
+computed key show the name the program knows. A
 closure whose `name` was never touched keeps it unstored, so the common frame costs no
 property lookup. An allocation that hits the heap cap is a fault too: for instructions that
 allocate before they change anything, the loop collects and runs the instruction once
@@ -272,7 +272,7 @@ function 0 <anonymous>: params=0 locals=4 stack=3 captures=0
 <!-- /gen -->
 
 The completion is in locals, not on the operand stack, so a function stopped inside a
-`finally` block holds nothing an image or a dump has to interpret: the kind is a number
+`finally` block holds nothing an image or a snapshot has to interpret: the kind is a number
 that means the same in any build. Closing a `for-of` loop's iterator when a jump or a
 `return` leaves the loop works the same way.
 

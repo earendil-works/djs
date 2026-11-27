@@ -18,7 +18,7 @@ ends.
 ## Why it matters
 
 A run can stop between any two instructions and continue, from an image of its memory or
-from a [continuation dump](dumps.md), and the host hands it inputs and reads results
+from a [snapshot](persistence.md), and the host hands it inputs and reads results
 without the VM doing any I/O ([the JavaScript interface](js-api.md)). Determinism is
 what makes that useful:
 
@@ -145,9 +145,9 @@ interface](js-api.md#deterministic-runs-and-journals) has the options). With
 
 With a fixed clock as well, the same code, parameters and results in the same order do
 the same thing on every run, with any fuel slice, and across restores from images (the
-clock is in the heap). A continuation dump keeps `Math.random`'s sequence and the ids
-of the run's host calls too, so a run resumed from a dump makes the calls an
-uninterrupted run makes, under the same ids.
+clock is in the heap). A snapshot keeps `Math.random`'s state and the ids of the run's
+host calls too, so a run resumed from a snapshot makes the calls an uninterrupted run
+makes, under the same ids.
 
 ## Canonical hashes and journals
 
@@ -213,10 +213,10 @@ Some things are deliberately outside the guarantee:
   different fuel on the same script.
 - **Other builds.** Journals are tied to the build hash, which covers the engine's
   sources (its math library's included) and features: a different build may run the same
-  script in a different number of steps. Images are tied only to what they depend on
-  ([images](snapshots.md#what-an-image-depends-on)), so a VM restored into
-  another build goes on with that build's code; that happens only inside a process, since
-  runs persist as dumps.
+  script in a different number of steps. Images load only into the build that made
+  them ([images](snapshots.md#what-an-image-depends-on)); a run loaded from a
+  [snapshot](persistence.md) into another build goes on with that build's code for every
+  function it does not wait in.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
   before every fuel slice, so what `Date.now()` returns depends on timing, as it does in
   any engine.

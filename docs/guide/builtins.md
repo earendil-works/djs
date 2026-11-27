@@ -15,7 +15,7 @@ can use.
 > user code while converting their arguments, to straight-line Rust (`@rust`). A few
 > bytecode builtins also have a hand-written Rust entry for everyday arguments (`@fast`).
 > Because the builtins live at fixed offsets in every VM, a VM can treat them as frozen
-> without changing a byte of them, which is what continuation dumps rely on.
+> without changing a byte of them.
 
 ## Why builtins cannot be ordinary Rust
 
@@ -514,12 +514,13 @@ the other methods that create their result through the array's constructor norma
 check that `Array.prototype.constructor` and `Array[Symbol.species]` are still the
 originals; when both objects are frozen builtins, that check is the offset compare.
 
-**Why dumps need it.** A [continuation dump](dumps.md) is a JavaScript program that
-rebuilds a run, and it does not copy the builtins: it writes a builtin the run looked up
-as the expression that finds it again in the loading VM, and a method a half-done call
-had already read as a second read of it. That is only right if no builtin can change
-between the moment the run read it and the load. Frozen builtins guarantee it, so only a
-VM with frozen builtins can write a dump ([what a dump needs](dumps.md#what-a-dump-needs)).
+**Snapshots and changed builtins.** A [snapshot](persistence.md) does not copy the
+builtins: it names each builtin the run refers to by its path, and the loading VM finds
+its own. That is only right if the run left the builtins as the base has them. The heap
+notes the first write into the builtin prefix, in either mode, and a snapshot of a run
+whose builtins were written is refused. Frozen builtins make such a write fail where the
+script makes it, so a host that persists runs learns of it at once rather than at the
+next snapshot.
 
 > **Trade-off.** A region check over freezing the objects. Freezing at startup costs
 > time and memory in every VM and rewrites the base; marking frozen objects in their

@@ -48,7 +48,7 @@ when called plainly), and nothing else of sloppy mode.
 
 > **Trade-off.** Strict only, over both modes. Sloppy mode doubles the semantics of
 > scopes, `arguments`, `this` and assignments, and every one of those paths would need
-> the same care for suspension, dumps and determinism as the strict one. Scripts written
+> the same care for suspension, snapshots and determinism as the strict one. Scripts written
 > today, and every script a model writes, are strict-compatible. The cost: an old
 > snippet that relies on sloppy semantics (an implicit global, `arguments.callee`) fails
 > with an error instead of running.
@@ -85,7 +85,7 @@ a meaning, such as a tool server's functions.
 ```js
 import { search_issues } from "@mcp/github";
 import * as linear from "@mcp/linear";
-const hits = await search_issues({ q: "dumps" });
+const hits = await search_issues({ q: "snapshots" });
 return await linear.create_issue({ title: hits[0].title });
 ```
 
@@ -107,15 +107,15 @@ A body that imports is still a body, not a module:
 - `import()` is not an import of a host module: it returns a rejected promise, as below;
 - import attributes (`with { type: "json" }`) are not supported.
 
-A run that imported functions [dumps](dumps.md) like any other: an imported function is
-written as the host function it is, a namespace as the host's object, and the script is
-the one the run started with, imports included.
+A run that imported functions is [snapshotted](persistence.md) like any other: an
+imported function is named as the host function it is, a namespace as the host's
+object, and the script is the one the run started with, imports included.
 
 The second kind of code is a **Script** in the specification's sense: top-level `var`
 and function declarations become properties of the global object, `let`, `const` and
 `class` go into a global lexical scope that later Scripts see, and the Script has a
 completion value. The REPL runs every input as a Script ([the REPL](cli.md#the-repl)),
-the test suites use them, and a continuation dump is one ([dumps](dumps.md)). A Script
+and the test suites use them. A Script
 has no top-level `await`.
 
 ## Modules
@@ -277,9 +277,10 @@ class MyError extends Error {
 ```
 
 Frozen builtins protect the host's helpers from a script that patches a prototype, and
-they are what lets djs write [continuation dumps](dumps.md): a builtin that cannot change
-can be written in a dump by naming it. The mode is chosen when the sandbox is created and
-stays with it.
+they keep a run one a [snapshot](persistence.md) can hold: a snapshot names the builtins
+instead of writing them, so it refuses a run that changed one, and with frozen builtins
+the script fails at the write instead. The mode is chosen when the sandbox is created
+and stays with it.
 
 ## Where to look
 

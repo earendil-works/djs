@@ -75,8 +75,9 @@ slice (a million units by default) and `maxFuel` the budget of one run, which fa
 a `fuel` error when it is used up: `out of fuel after 10000000 units`. The run is
 abandoned, and the sandbox stays usable. Fuel is counted over the whole run, across host
 calls, promise jobs and the steps of a host-driven run, and the last slice is cut to what
-is left, so the budget is exact. A host that dumps a run and loads it later carries the
-count over itself: a dump holds the run's state, not its spending.
+is left, so the budget is exact. A [snapshot](persistence.md) carries the count: a
+loaded run goes on counting from it, so the budget holds across any number of snapshots
+and loads.
 
 A run that waits on async host calls uses no fuel while it waits.
 

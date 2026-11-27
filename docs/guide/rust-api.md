@@ -227,7 +227,7 @@ opt-level = 1
 The profile line is for debug builds: unoptimized, the engine runs several times slower.
 The crate's one feature is `unicode`, on by default: Unicode property escapes in regular
 expressions and `String.prototype.normalize`, about 60 KB of native code. The engine's
-other build options (dumps, lazy compilation, the compile cache) stay off, since an
+other build options (snapshots, lazy compilation, the compile cache) stay off, since an
 embedder does not use them. What the build pulls in at run time is four crates of the
 repository, the engine, its base image, its math functions and the embedding crate,
 and no third-party crate.

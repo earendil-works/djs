@@ -9,19 +9,19 @@ everywhere else, hosts are described in general.
 
 > **In short.** pi's durable code mode runs each script as a host-driven run of a plain
 > `Sandbox`: no prelude, every tool and output helper a host function with a stable
-> identity, and the latest dump of the idle run is the script's state.
+> identity, and the latest snapshot of the idle run is the script's state.
 
 ## Durable code mode on host-driven runs
 
 pi's durable code mode, being built on djs, drops the prelude altogether: a script runs as
 a [host-driven run](js-api.md#host-driven-runs) of a plain `Sandbox`, and everything it
 can reach outside the language is a host function named by a stable identity. No code
-of pi's sits in the VM, so none is in a dump.
+of pi's sits in the VM, so none is in a snapshot.
 
 - **One module.** pi's code mode (the coding agent's, rollups) and its durable code mode
-  load the same file, the package's one module: it has the
-  [dumper](dumps.md#what-a-dump-needs), so the durable mode writes its dumps in the VM the script
-  runs in, and the other modes carry it unused.
+  load the same file, the package's one module: it has
+  [snapshots](persistence.md), so the durable mode writes its snapshots in the VM the
+  script runs in, and the other modes carry them unused.
 - **Tools and globals are async host functions** with identities such as `tools.read`,
   `searchTools` or `@mcp/github#search_issues`, bound as the `tools` namespace, as
   globals, or as bindings of the body. The run never calls them: they show up in
@@ -33,7 +33,7 @@ of pi's sits in the VM, so none is in a dump.
 - **MCP servers are host modules** (`modules`): a script imports their tools
   (`import { search_issues } from "@mcp/github"`) after reading the module's `.d.ts`,
   which pi writes from the same descriptor, and `tools.*` stays for pi's own tools.
-- **`ALL_TOOLS` is host data** (`values`): a dump names it instead of carrying the tool
+- **`ALL_TOOLS` is host data** (`values`): a snapshot names it instead of carrying the tool
   list, and the resuming process gives it again.
 - **The JSON boundary** makes what a script passes to tools, stores and returns what
   pi's prelude made of it: JSON, with a `TypeError` at the call for a cycle or a BigInt.
@@ -46,18 +46,17 @@ of pi's sits in the VM, so none is in a dump.
   misspelled tool throws pi's hint at the read (`missingMember`). A script ends when its
   body does: calls still running then are in `run.dropped`, and pi cancels them.
 - **Saving.** Before a call leaves the VM, and before the script parks to wait for a
-  person or a slow job, pi writes the idle run as a dump, with the output and store
-  writes so far. A restart or a wake, maybe weeks later, loads the
-  dump with `loadRun` and the same scope, finds each open call's task by its id and goes
-  on. Nothing is replayed, and no journal is kept: the latest dump is the script's
-  state. [Dumps and later builds](dumps.md#dumps-and-later-builds) says what a dump
-  relies on; until the dump format is declared stable, a waiting dump may not load
-  after an upgrade of djs. The same setup persists through
-  [snapshots](js-api.md#snapshots) (`run.snapshot()`, `loadSnapshot` with the same
-  scope): its namespaces with their aliases and hints, `ALL_TOOLS`, the converting
+  person or a slow job, pi writes the idle run as a snapshot (`run.snapshot()`), with
+  the output and store writes so far. A restart or a wake, maybe weeks later, loads it
+  with `loadSnapshot` and the same scope, finds each open call's task by its id and goes
+  on. Nothing is replayed, and no journal is kept: the latest snapshot is the script's
+  state. The namespaces with their aliases and hints, `ALL_TOOLS`, the converting
   functions and the imported modules are named in the snapshot and are the resuming
-  sandbox's own, the fuel used travels with it, and djs's tests move every harvested
-  script of pi's through a snapshot at each of its idle points in this setup.
+  sandbox's own, and the fuel used travels with it. djs's tests move every harvested
+  script of pi's through a snapshot at each of its idle points in this setup. [Later
+  builds](persistence.md#later-builds) says what a snapshot relies on: an upgrade of djs
+  that compiles a waiting function differently refuses the snapshots waiting in it, with
+  the reason.
 - **Steps.** pi runs code mode on its own thread, so each `advance` is bounded:
   `yieldMs` keeps pi responsive while a script computes, and pi's abort signal stops
   the step.
@@ -111,13 +110,12 @@ An agent host that wants djs for its codemode builds on the `Sandbox`:
 3. **Limits.** Choose a heap cap, a fuel budget and a slice ([limits](limits.md)); in a
    host-driven run, bound each step with a signal, a fuel budget and yields to your
    event loop ([bounded steps](js-api.md#host-driven-runs)).
-4. **Frozen builtins** instead of a lockdown in a prelude, which also makes dumps
-   possible.
+4. **Frozen builtins** instead of a lockdown in a prelude: a script that writes a builtin
+   fails at the write, and the run stays one a snapshot can hold.
 5. **Persistence.** Start each script as a task; when the agent must wait long (a person,
    a slow job), suspend the task into a snapshot, store it with the open calls' state,
-   and resume it later with `Sandbox.resume` ([snapshots](js-api.md#snapshots)). Or, as
-   pi's durable code mode does, drive the run yourself and keep its latest snapshot (or
-   dump).
+   and resume it later with `Sandbox.resume` ([snapshots](persistence.md)). Or, as
+   pi's durable code mode does, drive the run yourself and keep its latest snapshot.
 6. **Values at the boundary.** `jsonBoundary` gives tools JSON, as a prelude that
    stringifies arguments would, without a prelude ([the JSON
    boundary](js-api.md#the-json-boundary)).
