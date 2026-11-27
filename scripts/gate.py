@@ -59,7 +59,7 @@ DOCS = re.compile(r"^(docs/|work/|\.github/|[^/]+\.md$)")
 JS_ONLY = re.compile(r"^(js/|examples/)")
 # Generated from Rust and checked by a Rust test, or (abi.ts: the operation numbers, D3320)
 # compared with Rust by one: in the rust class.
-RUST_KEEP = {"js/src/layout.generated.ts", "js/src/dump-runtime.js", "js/src/abi.ts"}
+RUST_KEEP = {"js/src/layout.generated.ts", "js/src/abi.ts"}
 
 
 def in_class(cls, path):
@@ -237,29 +237,29 @@ def jobs():
           cls="rust", group="target/clippy"),
 
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
-        # with only `unicode` (no `dump`, `lazy` or `embed`), and the shipped wasm module in
-        # release (with the dumper, D3600, and unchecked, D3100). Libraries only: the tests
+        # with only `unicode` (no `lazy`, `snapshot` or `embed`), and the shipped wasm module
+        # in release (with snapshots, D3600, and unchecked, D3100). Libraries only: the tests
         # build in the default combination.
         J("clippy (djs-core feature combinations)", "CARGO_TARGET_DIR=target/clippy-combos cargo clippy"
           " -p djs-core --no-default-features --features unicode --lib --quiet -- -D warnings",
           cls="rust", group="target/clippy-combos"),
         J("clippy (wasm main module in release)",
           "CARGO_TARGET_DIR=target/clippy-wasm-main cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
-          " --release --features unsafe-heap,cold-unicode,dump,snapshot --quiet -- -D warnings",
+          " --release --features unsafe-heap,cold-unicode,snapshot --quiet -- -D warnings",
           cls="rust", group="target/clippy-wasm-main"),
 
         # --- wasm32 dev builds: djs-core no_std, and the module the js tests load (0023),
-        # with the dumper as the shipped module (D3600).
+        # with snapshots as the shipped module (D3600).
         J("no_std/wasm build of djs-core",
           "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
           cls="rust", group="target/wasm-dev"),
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
-          " --features compiled-prelude,dump,snapshot --quiet", group="target/wasm-dev", build=True),
+          " --features compiled-prelude,snapshot --quiet", group="target/wasm-dev", build=True),
 
-        # --- The shipped module, with the dumper (D3600): LTO, one codegen unit, one core
+        # --- The shipped module, with snapshots (D3600): LTO, one codegen unit, one core
         # each, and unchecked arena access, as scripts/build-wasm.sh builds it (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,dump,snapshot --quiet",
+          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,snapshot --quiet",
           group="target/size", build=True),
 
         # --- Unit and integration tests of the workspace (through scripts/test-runner.sh,
@@ -274,12 +274,12 @@ def jobs():
         # --- The host-side JS package (0018), on the dev modules.
         J("js tests", f"DJS_WASM=$PWD/{wasm} node --test js/test/*.test.ts",
           cls="nodocs", needs=["build:wasm"]),
-        # 0257: the nesting limits on the shipped module's 64 KiB stack (D3280): compiles
-        # up to the small stack's limits fit it, deeper ones move to the larger stack.
+        # 0257: the nesting limits on the shipped module's stack (D3280): compiles up to
+        # its limits fit it, deeper ones move to the larger stack.
         J("js nesting (shipped module)", f"DJS_WASM=$PWD/{size_mod} node --test js/test/nesting.test.ts",
           cls="nodocs", needs=["build:size"]),
         # 0229: the codemode workload set of the benchmarks page runs on djs and gives node's
-        # results, with a dump and a load at every idle point (D3113); 0238: every payload of
+        # results (D3113); 0238: every payload of
         # the bridge benchmark reads back as it went in (D3165): about 4 s.
         J("codemode workloads", f"DJS_WASM=$PWD/{wasm} node js/bench/engines/run.ts --quick --engines djs"
           f" && DJS_WASM=$PWD/{wasm} node js/bench/engines/bridge.ts --quick --engines djs",
@@ -304,29 +304,14 @@ def jobs():
           cls="nodocs", needs=["build:core-tests"]),
 
         # --- The corpus (0016, 0072): ratchet, suspension and GC stress, heap images.
-        # (Dumps: the plain dumps leg.)
         # Lazy functions (D2990) here and in test262's leg; the other legs run eager.
         J("difftest", f"{G}/bin/djs-difftest --engine djs --lazy --ratchet --suspend-every 97 --gc-stress"
           f" --determinism --quiet --no-diff --times {G}/times/difftest.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
-        # 0201: dumps (D2830) at every idle point of the corpus (chains of at most 50),
-        # continued in djs and in node; refusals only as tests/dump-refusals.txt lists.
-        # 0207: and their size, against tests/scores/dump-size.tsv (D2901, per case: D2906), with the tests/dump
-        # programs' dumps (dumps_at_every_idle_point writes them to DJS_DUMP_OUT)
-        # and the sleep-dump example's (the_sleep_example_dumps, DJS_SLEEP_OUT).
-        J("dumps (djs and node)", f'd=$(mktemp -d); v=$(mktemp -d); s=$(mktemp -d); {G}/bin/djs-difftest'
-          f' --engine djs --lazy --ratchet --quiet --no-diff --dump-out "$d" && node scripts/dump-node.mjs "$d"'
-          ' --refusals tests/dump-refusals.txt'
-          f' && DJS_DUMP_OUT="$v" DJS_SLEEP_OUT="$s" {tests} {G}/core-tests.json --'
-          ' dumps_at_every_idle_point the_sleep_example_dumps'
-          ' && node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv corpus="$d" programs="$v"'
-          ' sleep="$s"; rc=$?; rm -rf "$d" "$v" "$s"; exit $rc',
-          cls="rust", needs=["build:difftest", "build:core-tests"],
-          summary=r"^(stress|ratchet|dump-node|dump-size):"),
         # 0301: logical snapshots (D3700, D3703) at every idle point of the corpus and of the
-        # tests/dump programs, each alone and chained, continued like the uninterrupted run;
+        # tests/snapshot programs, each alone and chained, continued like the uninterrupted run;
         # nothing refused. The negative control and the frame bytecode pin are in `test`.
-        # 0303: and again with lazy functions, as the shipped module compiles (D2990, D3721).
+        # 0303: and again with lazy functions (D2990, D3721).
         J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored"
           f" && DJS_LAZY=1 DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
           cls="rust", needs=["build:core-tests"]),
@@ -343,7 +328,7 @@ def jobs():
           f" --gc-stress --quiet --no-diff --times {G}/times/difftest-unsafe.tsv",
           cls="rust", needs=["build:unsafe-release"], summary=r"^(stress|ratchet):"),
         # 0007: test262's active group against the ratchet, with lazy functions (D2990) and,
-        # alongside, eager as the shipped main module runs.
+        # alongside, eager as the shipped module runs.
         J("test262", f"./scripts/fetch-test262.sh > /dev/null; e=$(mktemp); rc=0;"
           f" {{ {G}/bin/djs-test262 run --engine djs --group active --quiet"
           " --expected tests/test262/expected-failures.txt > \"$e\" 2>&1 && echo 0 >> \"$e\" || echo 1 >> \"$e\"; } &"
@@ -926,7 +911,6 @@ PATHS_ALLOWED = {
     ("crates/djs-bench/src/wasm.rs", "js/bench/wasm.bench.ts"),
     # In the rust class (RUST_KEEP).
     ("crates/djs-core/src/heap/layout.rs", "js/src/layout.generated.ts"),
-    ("crates/djs-core/src/vm/dump_runtime.rs", "js/src/dump-runtime.js"),
 }
 # A repository path in a string literal: at its start, or after `../` (relative to a crate).
 PATH_LITERAL = re.compile(r'(?:"|\.\./)((?:js|examples|docs|work|\.github)/[^"\s)]*|[A-Z][A-Za-z_-]*\.md(?="))')

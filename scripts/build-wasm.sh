@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Builds djs-wasm with the `wasm` profile: target/wasm32-unknown-unknown/wasm/djs_wasm.wasm,
 # the one module djs ships (the npm package's wasm/djs.wasm) and the default module location
-# of js/src/sandbox.ts. It has logical snapshots (`snapshot`, D3700) and, until 0304, the
-# dumper (the `dump` feature, with what it turns on: lazy
-# functions, the compile cache, the prelude's names), so every host dumps and resumes with the
-# module it runs (D3600). The profile strips the custom sections
+# of js/src/sandbox.ts. It has logical snapshots (`snapshot`, D3700), so every host
+# suspends and resumes runs with the module it runs (D3600). The profile strips the custom sections
 # (names, producers) for shipping (D1575); --keep-names keeps the name section, for
 # profiling and size attribution (scripts/wasm-funcs.py). Switching rebuilds the module.
 # --docs builds the docs site's module (the `docs` feature: `djs_disasm` for the live
@@ -15,7 +13,7 @@
 # module keeps the checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-features=(--features unsafe-heap,cold-unicode,dump,snapshot)
+features=(--features unsafe-heap,cold-unicode,snapshot)
 target=target
 case "${1:-}" in
   --keep-names) export CARGO_PROFILE_WASM_STRIP=false ;;

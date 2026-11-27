@@ -713,8 +713,6 @@ fn options(memory_limit: u32) -> VmOptions {
         } else {
             memory_limit as usize
         },
-        #[cfg(feature = "lazy")]
-        lazy_functions: true,
         ..VmOptions::default()
     }
 }
