@@ -245,7 +245,7 @@ def jobs():
           cls="rust", group="target/clippy-combos"),
         J("clippy (wasm main module in release)",
           "CARGO_TARGET_DIR=target/clippy-wasm-main cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
-          " --release --features unsafe-heap,cold-unicode,dump --quiet -- -D warnings",
+          " --release --features unsafe-heap,cold-unicode,dump,snapshot --quiet -- -D warnings",
           cls="rust", group="target/clippy-wasm-main"),
 
         # --- wasm32 dev builds: djs-core no_std, and the module the js tests load (0023),
@@ -254,12 +254,12 @@ def jobs():
           "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
           cls="rust", group="target/wasm-dev"),
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
-          " --features compiled-prelude,dump --quiet", group="target/wasm-dev", build=True),
+          " --features compiled-prelude,dump,snapshot --quiet", group="target/wasm-dev", build=True),
 
         # --- The shipped module, with the dumper (D3600): LTO, one codegen unit, one core
         # each, and unchecked arena access, as scripts/build-wasm.sh builds it (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,dump --quiet",
+          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,dump,snapshot --quiet",
           group="target/size", build=True),
 
         # --- Unit and integration tests of the workspace (through scripts/test-runner.sh,
