@@ -16,8 +16,8 @@ import { cpus, loadavg, platform, release } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { constants as Z, brotliCompressSync, gzipSync } from "node:zlib";
-import { answer, catalog, record, stripBody } from "../../../tests/bench/codemode/tools.ts";
-import { allJs, bodyProgram, djs, type Engine, monty } from "./engines.ts";
+import { record, stripBody } from "../../../tests/bench/codemode/tools.ts";
+import { allJs, bodyProgram, type Engine, monty } from "./engines.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const root = join(here, "../../..");
