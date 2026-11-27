@@ -18,6 +18,9 @@ default = ["unicode", "dump", "lazy", "embed"]
 # `Vm::dump` (0167, docs/continuation-dumps.md): a VM's bindings written as JavaScript.
 # Code only: images and the base do not depend on it.
 dump = []
+# Logical heap snapshots (0300, a research prototype): `Vm::snapshot`/`Vm::from_snapshot`,
+# a waiting VM as a graph of named-field records keyed by bytecode hashes. Code only.
+snapshot = ["intrinsic-names"]
 # Lazy function compilation (0218, D2990): with `VmOptions::lazy_functions`, a function
 # body is compiled at its first call; the load still parses everything. Code only: a
 # build without it treats a lazy template as corrupt bytecode, and `Vm::seal` compiles

@@ -28,6 +28,8 @@ mod format;
 mod image;
 mod module;
 pub mod registry;
+#[cfg(feature = "snapshot")]
+pub mod snapshot;
 
 use alloc::string::String;
 use alloc::vec::Vec;

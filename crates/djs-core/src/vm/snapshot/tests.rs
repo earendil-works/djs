@@ -1,0 +1,1062 @@
+//! Logical snapshots on the harvested codemode corpus (0300): every case of
+//! tests/corpus/codemode-harvest runs as the difftest runs it (vm/dump_harvest.rs), and
+//! at idle points the VM is exported, imported into a fresh VM, and the run goes on there.
+//!
+//! `DJS_SNAP=1 cargo test -p djs-core --features snapshot --lib vm::snapshot -- --ignored --nocapture`
+//! (`DJS_SNAP_OUT=file`: one line per idle point; `DJS_SNAP_DIR=dir`: the snapshots and
+//! dumps themselves, for compressed sizes).
+
+extern crate std;
+
+use alloc::collections::BTreeMap;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use std::time::Instant;
+
+use super::super::dump::DumpOptions;
+use super::super::dump_harvest as dh;
+use super::*;
+use crate::compiler::CompileOptions;
+use crate::heap::Handle;
+use crate::interp::Status;
+use crate::value::{Obj, Value};
+
+const OUTPUT: u32 = 0;
+const DONE: u32 = 1;
+const LATER: u32 = 2;
+
+pub(super) fn info() -> &'static BaseInfo {
+    static INFO: std::sync::OnceLock<BaseInfo> = std::sync::OnceLock::new();
+    INFO.get_or_init(|| BaseInfo::new(dh::base(), dh::frozen()).unwrap())
+}
+
+fn get(vm: &mut Vm, o: Obj, name: &str) -> Value {
+    let k = vm.heap_mut().atom_str(name).unwrap();
+    vm.heap()
+        .find_property(o, k)
+        .and_then(|(_, p)| p.value())
+        .unwrap_or(Value::UNDEFINED)
+}
+
+/// What happens at an idle point: `k` counts them from 0 over the whole run.
+type AtIdle<'a> = &'a mut dyn FnMut(&mut Vm, Handle, usize);
+
+/// Runs `f` as the difftest's djs engine does (dump_harvest's `idle_call`): output and
+/// done recorded, `later` calls settled at idle points, oldest first.
+#[allow(clippy::too_many_arguments)]
+fn idle_call(
+    vm: &mut Vm,
+    api: Handle,
+    f: Value,
+    this: Value,
+    args: &[Value],
+    out: &mut Vec<String>,
+    mut at_idle: Option<AtIdle<'_>>,
+    k: &mut usize,
+) -> Result<Value, String> {
+    vm.call(f, this, args).map_err(|e| format!("{e:?}"))?;
+    let mut slices = 0;
+    loop {
+        match vm.run(10_000_000) {
+            Status::Done(v) => return Ok(v),
+            Status::Threw(e) => return Err(format!("threw {}", vm.display(e))),
+            Status::OutOfFuel => {
+                slices += 1;
+                if slices > 100 {
+                    return Err("out of fuel".into());
+                }
+            }
+            Status::HostCall { call_id, fn_id } => {
+                let info = vm.host_call(call_id).ok_or("no call")?;
+                let s = |v: Value| {
+                    v.as_string()
+                        .map(|t| vm.heap().str_to_string(t))
+                        .unwrap_or_default()
+                };
+                match fn_id {
+                    OUTPUT => out.push(s(info.args[0])),
+                    DONE => out.push(format!("=== {} {}", s(info.args[0]), s(info.args[1]))),
+                    _ => return Err("unknown host function".into()),
+                }
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED))
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            Status::Idle => {
+                if let Some(h) = at_idle.as_deref_mut() {
+                    h(vm, api, *k);
+                }
+                *k += 1;
+                let Some(&id) = vm.pending_host_calls().iter().min() else {
+                    return Err("idle with nothing pending".into());
+                };
+                let info = vm.host_call(id).ok_or("no call")?;
+                let v = info.args.first().copied().unwrap_or(Value::UNDEFINED);
+                let rejected = info.args.get(1) == Some(&Value::TRUE);
+                vm.resolve_host_call(id, if rejected { Err(v) } else { Ok(v) })
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            s => return Err(format!("{s:?}")),
+        }
+    }
+}
+
+/// A case's transcript; `at_idle` is called at each idle point of the script's run.
+fn run(prelude: &str, case: &str, at_idle: Option<AtIdle<'_>>) -> Result<Vec<String>, String> {
+    let mut vm = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+    let mut out = Vec::new();
+    let mut k = 0;
+    let p = vm
+        .compile(prelude.as_bytes(), &CompileOptions::script("prelude.js"))
+        .map_err(|e| e.message)?;
+    let g = Value::object(vm.global());
+    let none = vm.heap_mut().new_handle(Value::UNDEFINED).unwrap();
+    let setup = idle_call(&mut vm, none, p, g, &[], &mut out, None, &mut k)?;
+    let host = vm.new_object().map_err(|e| format!("{e:?}"))?;
+    for (id, name) in [(OUTPUT, "output"), (DONE, "done"), (LATER, "later")] {
+        let f = if id == LATER {
+            vm.new_async_host_function(id, name)
+        } else {
+            vm.new_host_function(id, name)
+        }
+        .map_err(|e| format!("{e:?}"))?;
+        vm.define(host, name, f).map_err(|e| format!("{e:?}"))?;
+    }
+    let apiv = idle_call(
+        &mut vm,
+        none,
+        setup,
+        Value::UNDEFINED,
+        &[Value::object(host)],
+        &mut out,
+        None,
+        &mut k,
+    )?;
+    let api = vm
+        .heap_mut()
+        .new_handle(apiv)
+        .map_err(|e| format!("{e:?}"))?;
+    let src = format!("(async (tools, console) => {{{case}\n}})");
+    let script = vm
+        .compile(src.as_bytes(), &CompileOptions::script("case.js"))
+        .map_err(|e| e.message)?;
+    let g = Value::object(vm.global());
+    let f = idle_call(&mut vm, api, script, g, &[], &mut out, None, &mut k)?;
+    let apiv = vm.heap().get_handle(api);
+    let runf = get(&mut vm, apiv.as_object().unwrap(), "run");
+    k = 0;
+    idle_call(&mut vm, api, runf, apiv, &[f], &mut out, at_idle, &mut k)?;
+    let apiv = vm.heap().get_handle(api);
+    let stalled = get(&mut vm, apiv.as_object().unwrap(), "stalled");
+    idle_call(&mut vm, api, stalled, apiv, &[], &mut out, None, &mut k)?;
+    Ok(out
+        .into_iter()
+        .map(|o| {
+            o.lines()
+                .filter(|l| !l.trim_start().starts_with("at "))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect())
+}
+
+/// Exports and imports `vm` in place.
+fn roundtrip(vm: &mut Vm) -> Result<usize, String> {
+    let bytes = vm
+        .snapshot(info())
+        .map_err(|e| format!("export: {}", e.0.join(" | ")))?;
+    let n = bytes.len();
+    *vm = Vm::from_snapshot(info(), &bytes).map_err(|e| format!("import: {}", e.0.join(" | ")))?;
+    Ok(n)
+}
+
+fn corpus() -> (String, Vec<(String, String)>) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus");
+    let prelude = std::fs::read_to_string(root.join("prelude.js")).unwrap();
+    let dir = std::env::var_os("DJS_SNAP_CASES")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| root.join("codemode-harvest"));
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "js"))
+        .collect();
+    files.sort();
+    let filter = std::env::var("DJS_SNAP_FILTER").unwrap_or_default();
+    let cases = files
+        .into_iter()
+        .filter(|f| f.to_string_lossy().contains(&filter))
+        .map(|f| {
+            (
+                f.file_stem().unwrap().to_string_lossy().to_string(),
+                std::fs::read_to_string(&f).unwrap(),
+            )
+        })
+        .collect();
+    (prelude, cases)
+}
+
+/// The first reason, without the record's position: "Object.Foo: why".
+fn reason(e: &str) -> String {
+    let e = e.split(" | ").next().unwrap_or(e);
+    let e = match e.split_once("record ") {
+        Some((a, b)) => format!("{a}record {}", b.split_once(' ').map_or(b, |x| x.1)),
+        None => e.to_string(),
+    };
+    e.chars().take(140).collect()
+}
+
+#[derive(Default)]
+struct Stats {
+    cases: usize,
+    with_idle: usize,
+    idle: usize,
+    exported: usize,
+    imported: usize,
+    single_same: usize,
+    single_differ: usize,
+    chain_same: usize,
+    chain_differ: usize,
+    chain_failed: usize,
+    refusals: BTreeMap<String, usize>,
+    import_refusals: BTreeMap<String, usize>,
+    differ: Vec<String>,
+}
+
+#[test]
+#[ignore]
+fn snapshot_harvest() {
+    if std::env::var_os("DJS_SNAP").is_none() {
+        return;
+    }
+    let (prelude, cases) = corpus();
+    let out_path = std::env::var_os("DJS_SNAP_OUT");
+    let dir = std::env::var_os("DJS_SNAP_DIR").map(std::path::PathBuf::from);
+    if let Some(d) = &dir {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let measure = std::env::var_os("DJS_SNAP_MEASURE").is_some();
+    let mut lines = String::from(
+        "case\tk\tsnap\texport_us\timport_us\tdump\tdump_us\timage\tsources\trecords\tnosrc\tfresh_us\tcompile_us\n",
+    );
+    let mut st = Stats::default();
+    for (name, case) in &cases {
+        st.cases += 1;
+        let Ok(want) = run(&prelude, case, None) else {
+            continue;
+        };
+        // Every idle point: export, and, measured, the dump and the image beside it.
+        let mut points = 0;
+        let mut first_err: Vec<(usize, Result<(), String>)> = Vec::new();
+        let r = run(
+            &prelude,
+            case,
+            Some(&mut |vm: &mut Vm, api: Handle, k: usize| {
+                points += 1;
+                let t0 = Instant::now();
+                let snap = vm.snapshot(info());
+                let export_us = t0.elapsed().as_micros();
+                let snap = match snap {
+                    Ok(s) => s,
+                    Err(e) => {
+                        first_err.push((k, Err(format!("export: {}", e.0.join(" | ")))));
+                        return;
+                    }
+                };
+                let t0 = Instant::now();
+                let loaded = Vm::from_snapshot_stats(info(), &snap);
+                let import_us = t0.elapsed().as_micros();
+                let (records, ok) = match &loaded {
+                    Ok((_, s)) => (s.records, Ok(())),
+                    Err(e) => (0, Err(format!("import: {}", e.0.join(" | ")))),
+                };
+                first_err.push((k, ok));
+                if measure || dir.is_some() {
+                    let apiv = vm.heap().get_handle(api);
+                    let handles = [("run", apiv)];
+                    let opts = DumpOptions {
+                        base_names: dh::base_names(),
+                        host_fn_name: &dh::host_fn_name,
+                        handles: &handles,
+                        ..Default::default()
+                    };
+                    let t0 = Instant::now();
+                    let dump = vm.dump(&opts, None).ok();
+                    let dump_us = t0.elapsed().as_micros();
+                    let mut img = vm.clone_for_image();
+                    let image = img.image().len();
+                    let sources = sources_len(&snap);
+                    let nosrc = vm
+                        .snapshot_with(info(), &SnapshotOptions { sources: false })
+                        .unwrap();
+                    let wrapped = format!("(async (tools, console) => {{{case}\n}})");
+                    Vm::from_snapshot_with(
+                        info(),
+                        &nosrc,
+                        &[prelude.as_bytes(), wrapped.as_bytes()],
+                    )
+                    .unwrap();
+                    // What an import costs before its records: a fresh VM, then the
+                    // scripts compiled into it.
+                    let t0 = Instant::now();
+                    let mut fresh = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+                    let fresh_us = t0.elapsed().as_micros();
+                    let t0 = Instant::now();
+                    fresh
+                        .compile(prelude.as_bytes(), &CompileOptions::script("prelude.js"))
+                        .unwrap();
+                    fresh
+                        .compile(wrapped.as_bytes(), &CompileOptions::script("case.js"))
+                        .unwrap();
+                    let compile_us = t0.elapsed().as_micros();
+                    lines += &format!(
+                        "{name}\t{k}\t{}\t{export_us}\t{import_us}\t{}\t{dump_us}\t{image}\t{sources}\t{records}\t{}\t{fresh_us}\t{compile_us}\n",
+                        snap.len(),
+                        dump.as_ref().map_or(0, |d| d.len()),
+                        nosrc.len(),
+                    );
+                    if let Some(d) = &dir {
+                        std::fs::write(d.join(format!("{name}-{k}.snap")), &snap).unwrap();
+                        std::fs::write(d.join(format!("{name}-{k}.nosrc")), &nosrc).unwrap();
+                        if let Some(t) = dump {
+                            std::fs::write(d.join(format!("{name}-{k}.dump.js")), t).unwrap();
+                        }
+                    }
+                }
+            }),
+        );
+        if r.as_ref() != Ok(&want) {
+            st.differ
+                .push(format!("{name}: the run with exports differs"));
+        }
+        if points == 0 {
+            continue;
+        }
+        st.with_idle += 1;
+        st.idle += points;
+        for (_, e) in &first_err {
+            match e {
+                Ok(()) => {
+                    st.exported += 1;
+                    st.imported += 1;
+                }
+                Err(m) if m.starts_with("export") => {
+                    *st.refusals.entry(reason(m)).or_default() += 1;
+                }
+                Err(m) => {
+                    st.exported += 1;
+                    *st.import_refusals.entry(reason(m)).or_default() += 1;
+                }
+            }
+        }
+        // Each idle point alone: continue in the imported VM.
+        for (k, e) in &first_err {
+            if e.is_err() {
+                continue;
+            }
+            let got = run(
+                &prelude,
+                case,
+                Some(&mut |vm: &mut Vm, _: Handle, j: usize| {
+                    if j == *k {
+                        roundtrip(vm).unwrap();
+                    }
+                }),
+            );
+            if got.as_ref() == Ok(&want) {
+                st.single_same += 1;
+            } else {
+                st.single_differ += 1;
+                st.differ
+                    .push(format!("{name}@{k}: {:?}", diff(&got, &want)));
+            }
+        }
+        // A chain: through a snapshot at every idle point.
+        let mut failed = None;
+        let got = run(
+            &prelude,
+            case,
+            Some(&mut |vm: &mut Vm, _: Handle, k: usize| {
+                if failed.is_none()
+                    && let Err(e) = roundtrip(vm)
+                {
+                    failed = Some(format!("{k}: {e}"));
+                }
+            }),
+        );
+        if failed.is_some() {
+            st.chain_failed += 1;
+        } else if got.as_ref() == Ok(&want) {
+            st.chain_same += 1;
+        } else {
+            st.chain_differ += 1;
+            st.differ
+                .push(format!("{name} (chain): {:?}", diff(&got, &want)));
+        }
+    }
+    std::println!(
+        "cases: {}, with idle points: {}, idle points: {}, exported: {}, imported: {}",
+        st.cases,
+        st.with_idle,
+        st.idle,
+        st.exported,
+        st.imported
+    );
+    std::println!(
+        "single idle point, transcript as uninterrupted: {} same, {} differ",
+        st.single_same,
+        st.single_differ
+    );
+    std::println!(
+        "chains (every idle point): {} same, {} differ, {} with a refusal",
+        st.chain_same,
+        st.chain_differ,
+        st.chain_failed
+    );
+    std::println!("export refusals (idle points, first reason):");
+    for (r, n) in &st.refusals {
+        std::println!("  {n:5}  {r}");
+    }
+    std::println!("import refusals:");
+    for (r, n) in &st.import_refusals {
+        std::println!("  {n:5}  {r}");
+    }
+    for d in st.differ.iter().take(30) {
+        std::println!("differs: {d}");
+    }
+    if let Some(p) = out_path {
+        std::fs::write(p, lines).unwrap();
+    }
+}
+
+fn diff(got: &Result<Vec<String>, String>, want: &[String]) -> String {
+    match got {
+        Err(e) => e.chars().take(200).collect(),
+        Ok(g) => {
+            let i = g
+                .iter()
+                .zip(want)
+                .position(|(a, b)| a != b)
+                .unwrap_or(g.len().min(want.len()));
+            format!(
+                "line {i}: got {:?}, want {:?}",
+                g.get(i).map(|s| s.chars().take(120).collect::<String>()),
+                want.get(i).map(|s| s.chars().take(120).collect::<String>())
+            )
+        }
+    }
+}
+
+/// The bytes of the scripts' sources in a snapshot (what a host that keeps the sources
+/// itself would not need stored).
+fn sources_len(snap: &[u8]) -> usize {
+    super::import::sources_len(snap).unwrap_or(0)
+}
+
+impl Vm {
+    /// A copy of this VM (for its image, without disturbing the run).
+    fn clone_for_image(&self) -> Vm {
+        Vm::from_bytes(self.bytes().to_vec(), self.opts).unwrap()
+    }
+}
+
+#[test]
+fn a_small_run_round_trips() {
+    let prelude = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/prelude.js"),
+    )
+    .unwrap();
+    let case = r#"
+const m = new Map([["a", 1]]);
+const s = new Set([1, 2]);
+const re = /a(b+)c/g;
+let total = 0;
+for (const x of [1, 2, 3]) {
+  const r = await later({ x, y: [x, x * 2] });
+  total += r.x;
+  m.set("k" + x, r.y);
+  text(`${x}: ${JSON.stringify(r)} ${re.exec("xabbc") && re.lastIndex}`);
+}
+const all = await Promise.all([later(1), later(2), later("three")]);
+text(JSON.stringify([...m], null, 0) + " " + s.size + " " + all.join(","));
+class P { #x = 1; get x() { return this.#x; } }
+const p = new P();
+const tag = (s) => s;
+const site = () => tag`a${1}b`;
+const t1 = site();
+await later(0);
+text(String(p.x) + " " + Symbol.for("k").toString() + " " + Math.random() + " " + (t1 === site()));
+return total;
+"#;
+    let want = run(&prelude, case, None).unwrap();
+    let got = run(
+        &prelude,
+        case,
+        Some(&mut |vm: &mut Vm, _: Handle, _k: usize| {
+            roundtrip(vm).unwrap();
+        }),
+    )
+    .unwrap();
+    assert_eq!(got, want);
+}
+
+// ---- The dump test programs (tests/dump, tests/dump/golden) ---------------------------
+
+const P_LATER: u32 = 1;
+const P_PRINT: u32 = 2;
+
+fn program_vm() -> Vm {
+    let mut vm = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+    let later = vm.new_async_host_function(P_LATER, "later").unwrap();
+    vm.define_global("later", later).unwrap();
+    let print = vm.new_host_function(P_PRINT, "print").unwrap();
+    vm.define_global("print", print).unwrap();
+    vm
+}
+
+/// Runs program `src`, calling `at_idle(vm, k)` at idle point `k` (from 0): its lines.
+fn run_program(src: &str, at_idle: &mut dyn FnMut(&mut Vm, usize)) -> Vec<String> {
+    let mut vm = program_vm();
+    let f = vm
+        .compile(src.as_bytes(), &CompileOptions::script("src.js"))
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    let mut k = 0;
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, P_PRINT);
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle | Status::Done(_) => {
+                if vm.pending_host_calls().is_empty() {
+                    break;
+                }
+                at_idle(&mut vm, k);
+                k += 1;
+                let id = *vm.pending_host_calls().iter().min().unwrap();
+                let info = vm.host_call(id).unwrap();
+                let v = info.args.first().copied().unwrap_or(Value::UNDEFINED);
+                let rejected = info.args.get(1).copied() == Some(Value::TRUE);
+                vm.resolve_host_call(id, if rejected { Err(v) } else { Ok(v) })
+                    .unwrap();
+            }
+            Status::Threw(e) => {
+                let m = vm.display(e);
+                lines.push(format!("threw {m}"));
+                break;
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+    lines
+}
+
+fn programs() -> Vec<(String, String)> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump");
+    let mut out = Vec::new();
+    for d in [dir.clone(), dir.join("golden")] {
+        let mut files: Vec<_> = std::fs::read_dir(&d)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.to_string_lossy().ends_with(".src.js"))
+            .collect();
+        files.sort();
+        for f in files {
+            let name = f
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .replace(".src.js", "");
+            let prefix = if d == dir { "" } else { "golden/" };
+            out.push((
+                format!("{prefix}{name}"),
+                std::fs::read_to_string(&f).unwrap(),
+            ));
+        }
+    }
+    out
+}
+
+/// Every idle point of the dump test programs, alone and chained.
+#[test]
+#[ignore]
+fn snapshot_programs() {
+    if std::env::var_os("DJS_SNAP").is_none() {
+        return;
+    }
+    let (mut points, mut same, mut differ) = (0, 0, 0);
+    let (mut chain_same, mut chain_differ, mut chain_refused) = (0, 0, 0);
+    let mut refusals: BTreeMap<String, usize> = BTreeMap::new();
+    let mut notes = Vec::new();
+    let dir = std::env::var_os("DJS_SNAP_DIR").map(std::path::PathBuf::from);
+    for (name, src) in programs() {
+        let want = run_program(&src, &mut |_, _| {});
+        let mut n = 0;
+        let mut errs = Vec::new();
+        run_program(&src, &mut |vm, k| {
+            n += 1;
+            match vm.snapshot(info()) {
+                Err(e) => errs.push((k, format!("export: {}", e.0.join(" | ")))),
+                Ok(b) => {
+                    if let Some(d) = &dir {
+                        let f = format!("prog-{}-{k}.snap", name.replace('/', "_"));
+                        std::fs::write(d.join(f), &b).unwrap();
+                    }
+                    if let Err(e) = Vm::from_snapshot(info(), &b) {
+                        errs.push((k, format!("import: {}", e.0.join(" | "))));
+                    }
+                }
+            }
+        });
+        points += n;
+        for (k, e) in &errs {
+            *refusals.entry(reason(e)).or_default() += 1;
+            notes.push(format!(
+                "{name}@{k}: {}",
+                e.chars().take(300).collect::<String>()
+            ));
+        }
+        for k in 0..n {
+            if errs.iter().any(|(j, _)| *j == k) {
+                continue;
+            }
+            let got = run_program(&src, &mut |vm, j| {
+                if j == k {
+                    roundtrip(vm).unwrap();
+                }
+            });
+            if got == want {
+                same += 1;
+            } else {
+                differ += 1;
+                notes.push(format!("{name}@{k} differs: {:?}", diff(&Ok(got), &want)));
+            }
+        }
+        if n == 0 {
+            continue;
+        }
+        let mut refused = false;
+        let got = run_program(&src, &mut |vm, _| {
+            if !refused && roundtrip(vm).is_err() {
+                refused = true;
+            }
+        });
+        if refused {
+            chain_refused += 1;
+        } else if got == want {
+            chain_same += 1;
+        } else {
+            chain_differ += 1;
+            notes.push(format!(
+                "{name} (chain) differs: {:?}",
+                diff(&Ok(got), &want)
+            ));
+        }
+    }
+    std::println!(
+        "programs: idle points {points}: {same} continue the same, {differ} differ, {} refused",
+        refusals.values().sum::<usize>()
+    );
+    std::println!("chains: {chain_same} same, {chain_differ} differ, {chain_refused} refused");
+    for (r, n) in &refusals {
+        std::println!("  {n:5}  {r}");
+    }
+    for l in notes.iter().take(40) {
+        std::println!("{l}");
+    }
+}
+
+/// `DJS_SNAP_DESCRIBE=file cargo test ... describe_file -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn describe_file() {
+    let Some(f) = std::env::var_os("DJS_SNAP_DESCRIBE") else {
+        return;
+    };
+    let f = std::path::PathBuf::from(f);
+    let files: Vec<std::path::PathBuf> = if f.is_dir() {
+        let mut v: Vec<_> = std::fs::read_dir(&f)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "snap"))
+            .collect();
+        v.sort();
+        v
+    } else {
+        alloc::vec![f]
+    };
+    for f in files {
+        let b = std::fs::read(&f).unwrap();
+        std::println!("== {}\n{}", f.display(), describe(&b).unwrap());
+    }
+}
+
+// ---- Large live state (the cases pi hit with dumps) -----------------------------------
+
+const LARGE: &[(&str, &str)] = &[
+    (
+        "object-100k-strings",
+        "const o = {}; for (let i = 0; i < 1000; i++) o['k' + i] = 'x'.repeat(96) + String(i).padStart(4, '0'); const use = () => Object.keys(o).length + o.k7;",
+    ),
+    (
+        "array-1e6-numbers",
+        "const a = []; for (let i = 0; i < 1e6; i++) a.push(i % 3 ? i : i * 1.5); const use = () => a.length + a[999999];",
+    ),
+    (
+        "map-10k",
+        "const m = new Map(); for (let i = 0; i < 10000; i++) m.set('key' + i, { i, s: 'v' + i }); const use = () => m.size + m.get('key77').s;",
+    ),
+    (
+        "log-20k-lines",
+        "const log = []; for (let i = 0; i < 20000; i++) log.push(`[${i}] request ${i * 7 % 1000} served in ${i % 97} ms`); const use = () => log.length + log[12345];",
+    ),
+];
+
+fn percentile(xs: &mut [u128], p: f64) -> u128 {
+    xs.sort();
+    xs[((xs.len() as f64 - 1.0) * p).round() as usize]
+}
+
+/// `DJS_SNAP=1 cargo test --release ... large_state -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn large_state() {
+    if std::env::var_os("DJS_SNAP").is_none() {
+        return;
+    }
+    let dir = std::env::var_os("DJS_SNAP_DIR").map(std::path::PathBuf::from);
+    let reps: usize = std::env::var("DJS_SNAP_REPS")
+        .ok()
+        .and_then(|r| r.parse().ok())
+        .unwrap_or(15);
+    let _ = info();
+    std::println!(
+        "case\tsnap_bytes\texport_med_us\texport_p99_us\timport_med_us\timport_p99_us\tdump_bytes\tdump_med_us\timage_bytes\timage_med_us\trestore_med_us"
+    );
+    for (name, setup) in LARGE {
+        let src = format!(
+            "(async () => {{ {setup}\n const r = await later(1); print(typeof r, use());\n await later(2); print('done', use()); }})();"
+        );
+        let mut vm = program_vm();
+        let f = vm
+            .compile(src.as_bytes(), &CompileOptions::script("src.js"))
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        loop {
+            match vm.run(u64::MAX / 2) {
+                Status::Idle | Status::Done(_) => break,
+                Status::OutOfFuel => {}
+                s => panic!("{s:?}"),
+            }
+        }
+        vm.collect().unwrap();
+        let (mut ex, mut im, mut du, mut ig, mut rs) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let mut snap = Vec::new();
+        let mut dump = String::new();
+        let mut image = 0;
+        let handles: [(&str, Value); 0] = [];
+        let opts = DumpOptions {
+            base_names: dh::base_names(),
+            host_fn_name: &|id| match id {
+                P_LATER => Some("later".into()),
+                P_PRINT => Some("print".into()),
+                _ => None,
+            },
+            handles: &handles,
+            ..Default::default()
+        };
+        for _ in 0..reps {
+            let t = Instant::now();
+            snap = vm.snapshot(info()).unwrap();
+            ex.push(t.elapsed().as_micros());
+            let t = Instant::now();
+            let v = Vm::from_snapshot(info(), &snap).unwrap();
+            im.push(t.elapsed().as_micros());
+            drop(v);
+            let t = Instant::now();
+            dump = vm.dump(&opts, None).unwrap_or_default();
+            du.push(t.elapsed().as_micros());
+            let t = Instant::now();
+            let bytes = vm.image().to_vec();
+            ig.push(t.elapsed().as_micros());
+            image = bytes.len();
+            let t = Instant::now();
+            let v = Vm::from_bytes(bytes, vm.opts).unwrap();
+            rs.push(t.elapsed().as_micros());
+            drop(v);
+        }
+        // The imported VM finishes like the original.
+        let mut a = Vm::from_snapshot(info(), &snap).unwrap();
+        let mut lines = Vec::new();
+        for v in [&mut vm, &mut a] {
+            let mut l = Vec::new();
+            while let Some(&id) = v.pending_host_calls().iter().min() {
+                v.resolve_host_call(id, Ok(Value::int(1))).unwrap();
+                loop {
+                    match v.run(u64::MAX / 2) {
+                        Status::HostCall { call_id, .. } => {
+                            let args = v.host_call(call_id).unwrap().args;
+                            l.push(v.display(args[0]));
+                            v.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+                        }
+                        Status::Idle | Status::Done(_) => break,
+                        s => panic!("{s:?}"),
+                    }
+                }
+            }
+            lines.push(l);
+        }
+        assert_eq!(lines[0], lines[1], "{name}");
+        // The next idle point's snapshot, for a delta against this one.
+        let mut next = None;
+        {
+            let mut v = Vm::from_snapshot(info(), &snap).unwrap();
+            let id = *v.pending_host_calls().iter().min().unwrap();
+            v.resolve_host_call(id, Ok(Value::int(1))).unwrap();
+            loop {
+                match v.run(u64::MAX / 2) {
+                    Status::HostCall { call_id, .. } => {
+                        v.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+                    }
+                    Status::Idle | Status::Done(_) => break,
+                    s => panic!("{s:?}"),
+                }
+            }
+            if !v.pending_host_calls().is_empty() {
+                next = Some(v.snapshot(info()).unwrap());
+            }
+        }
+        if let Some(d) = &dir {
+            std::fs::create_dir_all(d).unwrap();
+            std::fs::write(d.join(format!("large-{name}.snap")), &snap).unwrap();
+            std::fs::write(d.join(format!("large-{name}.dump.js")), &dump).unwrap();
+            if let Some(n) = &next {
+                std::fs::write(d.join(format!("large-{name}.next.snap")), n).unwrap();
+            }
+        }
+        std::println!(
+            "{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{image}\t{}\t{}",
+            snap.len(),
+            percentile(&mut ex, 0.5),
+            percentile(&mut ex, 0.99),
+            percentile(&mut im, 0.5),
+            percentile(&mut im, 0.99),
+            dump.len(),
+            percentile(&mut du, 0.5),
+            percentile(&mut ig, 0.5),
+            percentile(&mut rs, 0.5),
+        );
+    }
+}
+
+/// Snapshots another build wrote (`DJS_SNAP_IMPORT=dir`, the files of `DJS_SNAP_DIR`):
+/// each is loaded at its idle point of this build's run, which goes on from it; the
+/// transcript must be this build's uninterrupted one.
+#[test]
+#[ignore]
+fn snapshot_import_dir() {
+    let Some(dir) = std::env::var_os("DJS_SNAP_IMPORT").map(std::path::PathBuf::from) else {
+        return;
+    };
+    let (prelude, cases) = corpus();
+    let (mut tried, mut same, mut differ, mut unreached) = (0, 0, 0, 0);
+    let mut refused: BTreeMap<String, usize> = BTreeMap::new();
+    let mut notes = Vec::new();
+    let mut check = |name: &str,
+                     want: &[String],
+                     got: Result<Vec<String>, String>,
+                     err: Option<Option<String>>| {
+        tried += 1;
+        match err {
+            // This build's run never got to that idle point.
+            None => unreached += 1,
+            Some(Some(e)) => {
+                *refused.entry(reason(&e)).or_default() += 1;
+                if notes.len() < 20 {
+                    notes.push(format!(
+                        "{name}: {}",
+                        e.chars().take(300).collect::<String>()
+                    ));
+                }
+            }
+            Some(None) if got.as_deref() == Ok(want) => same += 1,
+            Some(None) => {
+                differ += 1;
+                notes.push(format!("{name} differs: {}", diff(&got, want)));
+            }
+        }
+    };
+    for (name, case) in &cases {
+        let Ok(want) = run(&prelude, case, None) else {
+            continue;
+        };
+        for k in 0.. {
+            let Ok(bytes) = std::fs::read(dir.join(format!("{name}-{k}.snap"))) else {
+                break;
+            };
+            let mut err = None;
+            let got = run(
+                &prelude,
+                case,
+                Some(&mut |vm: &mut Vm, _: Handle, j: usize| {
+                    if j == k {
+                        match Vm::from_snapshot(info(), &bytes) {
+                            Ok(v) => {
+                                *vm = v;
+                                err = Some(None);
+                            }
+                            Err(e) => err = Some(Some(e.0.join(" | "))),
+                        }
+                    }
+                }),
+            );
+            check(&format!("{name}@{k}"), &want, got, err);
+        }
+    }
+    for (name, src) in programs() {
+        let want = run_program(&src, &mut |_, _| {});
+        for k in 0.. {
+            let f = format!("prog-{}-{k}.snap", name.replace('/', "_"));
+            let Ok(bytes) = std::fs::read(dir.join(f)) else {
+                break;
+            };
+            let mut err = None;
+            let got = run_program(&src, &mut |vm, j| {
+                if j == k {
+                    match Vm::from_snapshot(info(), &bytes) {
+                        Ok(v) => {
+                            *vm = v;
+                            err = Some(None);
+                        }
+                        Err(e) => err = Some(Some(e.0.join(" | "))),
+                    }
+                }
+            });
+            check(&format!("{name}@{k}"), &want, Ok(got), err);
+        }
+    }
+    std::println!(
+        "imported from {}: {tried} snapshots, {same} continue as this build's run, {differ} differ, {} refused, {unreached} at idle points this build's run does not reach",
+        dir.display(),
+        refused.values().sum::<usize>()
+    );
+    for (r, n) in &refused {
+        std::println!("  {n:5}  {r}");
+    }
+    for l in &notes {
+        std::println!("{l}");
+    }
+}
+
+/// What a build's internals look like, for the portability experiment.
+#[test]
+#[ignore]
+fn probe_build() {
+    let i = info();
+    let h = Vm::from_base(dh::base(), dh::frozen()).unwrap();
+    let h = h.heap();
+    let id = |n: &str| crate::bytecode::intrinsics::names().position(|x| x == n);
+    std::println!(
+        "build {:08x} layout {:08x} base_end {} base bytes {} | intrinsic ids: AsyncAwait {:?} PromiseResolveFunction {:?} | atom ids: length {} then {} | BoxCell.VALUE @{} HostCall.ID @{} HostCall.FN @{} Interp.NEXT_CALL_ID @{} | JSON.parse at {:?}, Promise.prototype.then at {:?}",
+        super::super::BUILD_HASH,
+        crate::heap::cells::LAYOUT_HASH,
+        h.base_end(),
+        dh::base().len(),
+        id("AsyncAwait"),
+        id("PromiseResolveFunction"),
+        crate::heap::atoms::LENGTH.id(),
+        crate::heap::atoms::PROTOTYPE.id(),
+        crate::heap::cells::BoxCell::VALUE.offset,
+        crate::heap::cells::HostCall::ID.offset,
+        crate::heap::cells::HostCall::FN.offset,
+        crate::heap::cells::Interp::NEXT_CALL_ID.offset,
+        i.cells.get("JSON.parse"),
+        i.cells.get("Promise.prototype.then"),
+    );
+}
+
+/// Classes the corpus does not hold at idle points, round-tripped at every idle point.
+#[test]
+fn more_classes_round_trip() {
+    let prelude = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/prelude.js"),
+    )
+    .unwrap();
+    let case = r#"
+const buf = new ArrayBuffer(16);
+const u8 = new Uint8Array(buf, 2, 8);
+u8.set([1, 2, 3, 250]);
+const dv = new DataView(buf);
+dv.setFloat64(8, Math.PI);
+const f64 = new Float64Array([1.5, -0, NaN]);
+const wm = new WeakMap();
+const key = {};
+wm.set(key, "weak");
+const ws = new WeakSet([key]);
+const d = new Date(86400000 * 365);
+const big = 12345678901234567890123n * -3n;
+const sym = Symbol("local");
+const o = { [sym]: 1, get g() { return this.v * 2; }, set g(x) { this.v = x; }, v: 4 };
+Object.defineProperty(o, "hidden", { value: 7, enumerable: false });
+const sparse = [1, , 3];
+sparse[100] = "far";
+const frozen = Object.freeze({ a: [1, 2] });
+const err = new TypeError("boom", { cause: 1 });
+const px = new Proxy({ t: 1 }, { get: (t, k) => (k in t ? t[k] : `no ${String(k)}`) });
+function* gen() { let i = 0; while (true) yield i++; }
+const g = gen();
+g.next();
+async function* agen() { yield 1; yield await later(2); yield 3; }
+const ag = agen();
+const first = await ag.next();
+const bound = function (a, b) { return this.k + a + b; }.bind({ k: 10 }, 1);
+const it = new Map([[1, "a"], [2, "b"]]).entries();
+it.next();
+const strIt = "héllo"[Symbol.iterator]();
+strIt.next();
+const re = /(?<w>\w+)\s/gy;
+re.lastIndex = 0;
+re.exec("ab cd ");
+const counter = (() => { let n = 0; return () => ++n; })();
+counter();
+const second = await ag.next();
+text(JSON.stringify([...u8], null, 0) + " " + dv.getFloat64(8) + " " + [...f64].map(String).join("/"));
+text([wm.get(key), ws.has(key), d.toISOString(), String(big), o[sym], o.g, (o.g = 5, o.g), o.hidden].join(" "));
+text([sparse.length, 1 in sparse, sparse[100], Object.isFrozen(frozen), frozen.a.length, err.name, err.message, err.cause].join(" "));
+text([px.t, px.zz, g.next().value, first.value, second.value, (await ag.next()).value, bound(2), it.next().value.join(":"), strIt.next().value, re.lastIndex, counter()].join(" "));
+text(String(re.exec("ab cd ")?.groups.w) + " " + Object.getOwnPropertySymbols(o).length);
+"#;
+    let want = run(&prelude, case, None).unwrap();
+    assert!(!want.iter().any(|l| l.contains("throw")), "{want:?}");
+    let mut n = 0;
+    let got = run(
+        &prelude,
+        case,
+        Some(&mut |vm: &mut Vm, _: Handle, _k: usize| {
+            let b = vm.snapshot(info()).unwrap();
+            let d = describe(&b).unwrap();
+            for c in [
+                "Object.TypedArray",
+                "Object.WeakMap",
+                "BigInt",
+                "Object.Proxy",
+                "Object.Generator",
+            ] {
+                assert!(d.contains(c), "{c} not in the snapshot");
+            }
+            *vm = Vm::from_snapshot(info(), &b).unwrap();
+            n += 1;
+        }),
+    )
+    .unwrap();
+    assert!(n > 0);
+    assert_eq!(got, want);
+}

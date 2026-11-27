@@ -975,7 +975,7 @@ impl Heap {
     }
 
     /// The string of a string atom; `None` for an array index or a symbol.
-    #[cfg(feature = "dump")]
+    #[cfg(any(feature = "dump", feature = "snapshot"))]
     pub fn atom_string_of(&self, a: Atom) -> Option<crate::value::Str> {
         if a.is_int() || a.is_null() || a.is_symbol() {
             return None;
@@ -1057,6 +1057,17 @@ impl Heap {
     /// A string value or `undefined`.
     pub fn symbol_description(&self, s: Sym) -> Value {
         self.arena().get(s.0, Symbol::DESCRIPTION)
+    }
+}
+
+/// For logical snapshots (vm/snapshot, 0300): a symbol cell made field by field gets its
+/// atom here.
+#[cfg(feature = "snapshot")]
+impl Heap {
+    pub(crate) fn register_symbol_atom(&mut self, s: Sym) -> Result<(), HeapError> {
+        let idx = self.push_atom_entry(Value::symbol(s))?;
+        self.arena_mut().set(s.0, Symbol::ATOM, SYM_BIT | idx);
+        Ok(())
     }
 }
 

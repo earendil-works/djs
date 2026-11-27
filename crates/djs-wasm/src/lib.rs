@@ -1753,4 +1753,73 @@ ops! {
     #[cfg(feature = "cold-unicode")] 62 djs_tables_ptr(a, b);
     #[cfg(feature = "cold-unicode")] 63 djs_tables_set();
     64 vm_tables_need(a);
+    #[cfg(feature = "snapshot")] 65 vm_snapshot(a);
+    #[cfg(feature = "snapshot")] 66 vm_from_snapshot(a, b);
+}
+
+// ---- Logical snapshots (0300, a research prototype) ---------------------------------
+
+#[cfg(feature = "snapshot")]
+instance_locals! {
+    /// What the snapshots of this instance are relative to: made from the base at the
+    /// first use, with the options of the first VM that asked.
+    static SNAP_BASE: RefCell<Option<djs_core::vm::snapshot::BaseInfo>> = RefCell::new(None);
+}
+
+#[cfg(feature = "snapshot")]
+fn with_snap_base<R>(
+    opts: VmOptions,
+    f: impl FnOnce(&djs_core::vm::snapshot::BaseInfo) -> R,
+) -> Result<R, String> {
+    SNAP_BASE.with(|b| {
+        let mut b = b.borrow_mut();
+        if b.is_none() {
+            let base = take_base().ok_or_else(|| String::from("no base snapshot"))?;
+            *b = Some(djs_core::vm::snapshot::BaseInfo::new(&base, opts)?);
+        }
+        Ok(f(b.as_ref().unwrap()))
+    })
+}
+
+/// A logical snapshot of idle VM `vm` in the out buffer: its length, or -1 with the
+/// reasons it was refused in the out buffer.
+#[cfg(feature = "snapshot")]
+pub extern "C" fn vm_snapshot(vm: u32) -> i32 {
+    with(|s| {
+        let slot = s.slot(vm);
+        let opts = slot.vm.options();
+        let r = with_snap_base(opts, |b| slot.vm.snapshot(b).map_err(|e| e.0.join("\n")));
+        match r.and_then(|r| r) {
+            Ok(bytes) => {
+                s.set_out(&bytes);
+                bytes.len() as i32
+            }
+            Err(e) => {
+                s.set_out(e.as_bytes());
+                -1
+            }
+        }
+    })
+}
+
+/// A new VM from the snapshot in staging[0..len] (`vm_snapshot`'s bytes): its number, or
+/// 0 with the reason in the out buffer.
+#[cfg(feature = "snapshot")]
+pub extern "C" fn vm_from_snapshot(len: usize, memory_limit: u32) -> u32 {
+    let bytes = with(|s| s.staging[..len].to_vec());
+    let opts = VmOptions {
+        frozen_builtins: true,
+        ..options(memory_limit)
+    };
+    let vm = with_snap_base(opts, |b| {
+        Vm::from_snapshot(b, &bytes).map_err(|e| e.0.join("\n"))
+    })
+    .and_then(|r| r);
+    with(|s| match vm {
+        Ok(vm) => s.add_vm(vm),
+        Err(e) => {
+            s.set_out(e.as_bytes());
+            0
+        }
+    })
 }

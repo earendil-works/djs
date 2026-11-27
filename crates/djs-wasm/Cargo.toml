@@ -30,6 +30,8 @@ docs = ["djs-core/intrinsic-names"]
 # default feature (the native tools and tests pick it per crate), but the one shipped
 # module has it (scripts/build-wasm.sh, D3600), and so does the gate's debug build.
 dump = ["djs-core/dump", "djs-core/lazy", "djs-prelude/names"]
+# Logical snapshots (0300, a research prototype): `vm_snapshot`, `vm_from_snapshot`.
+snapshot = ["djs-core/snapshot"]
 # Unchecked arena field access in djs-core (D2520). The shipped module turns it on
 # (scripts/build-wasm.sh, D3100); native builds, the docs module and the tests don't.
 unsafe-heap = ["djs-core/unsafe-heap"]

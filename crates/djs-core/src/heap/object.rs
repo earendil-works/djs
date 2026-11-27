@@ -2890,3 +2890,39 @@ impl Heap {
 const fn atom_int_max() -> u32 {
     super::atom::MAX_INT_ATOM
 }
+
+/// The raw property storage, for logical snapshots (vm/snapshot, 0300): slots in storage
+/// order (shape descriptors or table entries, deleted entries as a null key), and adding
+/// a property at the end without the [[DefineOwnProperty]] checks.
+#[cfg(feature = "snapshot")]
+impl Heap {
+    pub(crate) fn snap_prop_slots(&self, o: Obj) -> u32 {
+        self.prop_slots(o)
+    }
+
+    pub(crate) fn snap_prop(&self, o: Obj, i: u32) -> Option<(Atom, Property)> {
+        let key = self.prop_key(o, i);
+        (!key.is_null()).then(|| (key, self.prop_read(o, i)))
+    }
+
+    pub(crate) fn snap_prop_insert(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        p: &Property,
+    ) -> Result<(), HeapError> {
+        self.prop_insert(o, key, p)
+    }
+
+    pub(crate) fn snap_obj_flags(&self, o: Obj) -> u16 {
+        self.obj_flags(o)
+    }
+
+    pub(crate) fn snap_set_obj_flag(&mut self, o: Obj, flag: u16, on: bool) {
+        self.set_obj_flag(o, flag, on)
+    }
+
+    pub(crate) fn snap_elements(&self, o: Obj) -> u32 {
+        self.arena().get::<Ref>(o.0, Object::ELEMENTS).0
+    }
+}

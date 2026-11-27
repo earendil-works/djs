@@ -180,7 +180,7 @@ impl<'a> CompileOptions<'a> {
 
     /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
     /// keeps no source: never compiled again).
-    #[cfg(any(feature = "dump", feature = "lazy"))]
+    #[cfg(any(feature = "dump", feature = "lazy", feature = "snapshot"))]
     pub(crate) fn from_bits(filename: &'a str, params: &'a [&'a str], bits: u32) -> Self {
         CompileOptions {
             goal: match bits & 3 {

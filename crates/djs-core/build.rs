@@ -69,6 +69,7 @@ fn features() -> Vec<String> {
                 && f != "lazy"
                 && f != "prelude"
                 && f != "intrinsic-names"
+                && f != "snapshot"
                 && f != "cold-unicode"
         })
         .collect()
