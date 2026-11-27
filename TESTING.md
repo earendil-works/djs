@@ -534,7 +534,7 @@ stress and determinism checks. A VM image carries the engine build hash (`vm::BU
 what an image means needs no bump of anything. `vm::tests::images_load_only_into_their_build`
 checks the refusal.
 
-## Logical snapshots (0301, D3700-D3704)
+## Logical snapshots (0301, 0302, D3700-D3704, D3710-D3712)
 
 Snapshots (`crates/djs-core/src/vm/snapshot/`, docs/heap-snapshots-revisited.md) are
 tested in four places:
@@ -556,6 +556,16 @@ tested in four places:
   compiler change that alters one shows here; regenerate it deliberately with
   `DJS_UPDATE_FRAME_PIN=1 cargo test -p djs-core --lib frame_bytecode_pin`. It is no
   compatibility promise (D024 applies): it makes the change a visible decision.
+- **Records and constants by name** (0302, D3710, D3712; in `test`):
+  `records_and_constants_travel_by_name` holds every kind of builtin record at idle points
+  and continues it from snapshots written as another build would (fields and constant
+  members in reverse order); `a_missing_or_renamed_field_refuses` checks that a field or
+  a constant member the build does not have refuses, naming the record kind and field.
+- **The perturbation leg** (full-only, `scripts/snapshot-perturb.sh`): this build's
+  snapshots of the corpus and the programs load into a copy whose builtins list record
+  fields in another order and give state constants other values
+  (scripts/snapshot-perturb.py); the copy must pass the difftest corpus itself, and every
+  snapshot must continue as its own run does or refuse, never differ.
 
 ## Golden dumps (0178, D2560, D2619, D2920, D3643)
 

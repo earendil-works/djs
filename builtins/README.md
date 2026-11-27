@@ -37,6 +37,8 @@ bgen does not need node and is stricter than tsc.
   i32 only (`>>>` gives u32); no mixing of numeric types, except that i32 and u32 widen
   to f64 where a value is assigned or passed; integer literals adapt if they fit.
   Integer overflow is a bug in the builtin (D1171).
+- `enum` declarations (records and named constants, below) and their members as
+  `Name.member`.
 - Not in the subset: property access (`o.x`, `o[k]`: use `Get`, `Set`, ...), object and
   array literals, `new`, closures and nested functions, `arguments`, `eval`,
   generators, `async`, classes, `switch`, labels, `typeof`/`in`/`instanceof`,
@@ -76,6 +78,58 @@ When a new builtin needs an operation no intrinsic offers, add a leaf to
 `intrinsics.d.ts` (and its Rust), keep it free of user code, and let the builtin do the
 rest. Messages follow QuickJS; `crates/djs-bgen/tests/behavior.js` checks the builtins
 against qjs's natives, including proxy trap order.
+
+## Records and named constants
+
+State that builtins keep between calls (a capability, the data of a Promise.all element
+function, an async generator's request, an iterator helper's fields) lives in internal
+records, and states and flags are numbers. Both are named by `enum` declarations
+(D3710), so that a logical snapshot writes them by name and another build reads them by
+name: a build that orders the fields or numbers the constants differently continues the
+snapshot the same, one that lacks a field or a constant refuses it.
+
+```ts
+/** A PromiseCapability Record of a constructor other than %Promise%. @record */
+enum Capability {
+  promise,
+  resolve,
+  reject,
+}
+
+/** A module record's flags. @flags */
+enum ModuleFlags {
+  json = 1,
+  tla = 2,
+}
+
+const r: Obj = NewRecord(Capability);
+RecordSet(r, Capability.promise, promise);
+```
+
+- `@record`: the fields of a kind of record, its slots in order. `NewRecord(Name)` makes
+  one (its fields undefined); the record carries its kind in its header. `Name.field` is
+  the slot index, so `RecordGet(r, Capability.resolve)` is the same slot access as a
+  number. `@class IteratorHelper` makes it an iterator helper's schema
+  (`CreateIteratorHelper(Name, kind)`); `@rest name` gives it a variable tail after the
+  fields (records the engine makes, such as a module's requested modules); `@extends
+  Base` says its fields start with Base's, so code that reads only those takes either.
+  A field holding constants says which: `/** @enum GeneratorStates */ state,` or
+  `/** @flags ModuleFlags */ flags,`.
+- `@constants`: named values (`= value` each, or one more than the previous member).
+  `@flags`: named bits (`= 1`, `= 2`, ...). Use the members in code (`state ===
+  GeneratorStates.completed`), never their numbers: the numbers are free to change.
+- `@slots Class`: names slots of an object class that builtins read with `RecordGet`
+  (`DisposableStackSlots`). The class table (heap/object.rs) is the source of those
+  names; the generated Rust checks the enum against it when it compiles.
+
+Enums in intrinsics.d.ts are `declare enum`: records the engine makes, and constants
+of its classes (`PromiseStates`, `GeneratorStates`). `scripts/bgen.sh` writes them all
+to `crates/djs-core/src/builtins/gen/records.rs`: a module per enum with the field
+indexes or values as constants (`element_record::CALLED`, `promise_states::FULFILLED`,
+`RECORD_KIND`, `FIELD_COUNT`), which the engine's own readers of the records use, and the
+tables the snapshot reads. Record kinds are numbered in declaration order (at most 63:
+they fit six bits of the object header); nothing outside one build depends on the
+numbers.
 
 ## Tags
 

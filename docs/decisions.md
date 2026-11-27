@@ -14491,3 +14491,47 @@ slack, 770,647 B (owner's instruction: raised by what it costs, recorded, lowere
 0304). The module is not tuned for size yet. Its static data (the intrinsic names among
 it) also takes every codemode workload's wasm memory one page up (+64 KiB, the
 codemode-memory rows, D3367); 0304 brings that back too.
+
+## D3710: Builtin records and state constants have named schemas
+date: 2026-11-27 · by: psnap · issue: 0302
+Every kind of internal record the builtins or the engine make (34 kinds: capabilities,
+Promise.all element data, async generator requests, iterator helpers per kind, `using`
+scopes, module records, ...) is an `@record` enum in builtins/*.ts (`declare enum` in
+intrinsics.d.ts for the engine's), and the constants stored in records and class slots
+(promise, generator, helper, module and disposable states, promise and module flags) are
+`@constants`/`@flags` enums; `@slots Class` names class slots builtins read. bgen resolves
+`Name.member` to the number and `NewRecord(Name)` to the kind, so the code is the same slot
+access as before, and generates `builtins/gen/records.rs` (constants per enum, the schema
+and constant tables), which the Rust readers and the class table use: positional record
+access is gone from builtins and engine. A record carries its kind in six bits of the
+object header (`OBJ_RECORD_KIND`; Record and IteratorHelper), not in a slot: no memory,
+and the layouts the dumper reads until 0304 stay. Snapshots write a record as
+`Object.Record.<Kind>` with its fields by name and constants as member names
+(`enum:Set`, `bits:Set`); import maps them to this build's slots and values, refuses a
+field the snapshot lacks or this build lacks, and a member this build lacks, naming the
+record kind and the field, and checks every record's slot count against its kind
+(which also ends the last fuzz panic, a Promise.all element record of the wrong size).
+Constants in plain arrays (a resource's dispose kind) are named in code but travel as
+numbers.
+
+## D3711: The bytecode hash names `get_builtin` slots
+date: 2026-11-27 · by: psnap · issue: 0302
+The prelude function table's slot numbers move whenever a builtin comes or goes (the known
+builtins start after the prelude's functions), so a frame-holding function's hash (D3700)
+names a `get_builtin` immediate by what the slot holds: a known builtin by its global and
+member names, a prelude function by its function's name. Without it, adding a builtin
+function changed every pinned function that reads `Math.floor` and refused their
+snapshots; with it, 0302's builtin changes leave tests/snapshot/frame-bytecode.txt as main
+computes it with the same hash.
+
+## D3712: A perturbed build continues the corpus's snapshots
+date: 2026-11-27 · by: psnap · issue: 0302
+The full-only gate leg "snapshot perturbation" (scripts/snapshot-perturb.sh) takes the
+snapshots at every idle point of the corpus and the tests/dump programs, builds a copy of
+the tree whose builtins list several records' fields in reverse and give promise,
+generator, helper and disposable states and the promise flags other values, checks the
+copy against the difftest corpus, and loads every snapshot into it: none may continue
+differently (at 0302: 1,361 of 1,361 continue the same, none refused). It costs two builds
+(~10 CPU-min), so it runs with `--full`. In `test`, an exporter skewed as another build
+would write (fields and members reversed, a field or a member renamed or missing) checks
+the same in-process.
