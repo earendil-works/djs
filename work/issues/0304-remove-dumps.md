@@ -18,13 +18,13 @@ taxonomy, statement state in named temporaries as a *requirement*: keep the lowe
 No compatibility code (owner: earlier releases need not load).
 
 ## Acceptance criteria
-- [ ] Nothing of dumps left (grep for dump, smap, $djs, continuation in code, tests, scripts
+- [x] Nothing of dumps left (grep for dump, smap, $djs, continuation in code, tests, scripts
       and docs; what stays has a reason in the log).
-- [ ] One guide page on persistence (snapshots), written for how djs is now; the guide's
+- [x] One guide page on persistence (snapshots), written for how djs is now; the guide's
       pages that described dumps rewritten or removed; ARCH.md and TESTING.md follow.
-- [ ] Size: the shipped module's gz size measured before and after; the ceiling lowered to
+- [x] Size: the shipped module's gz size measured before and after; the ceiling lowered to
       the new size.
-- [ ] Decisions recorded (what was removed, superseding the dump decisions).
+- [x] Decisions recorded (what was removed, superseding the dump decisions).
 
 ## Log
 - Size before (main a87745f2 + the status commit): 785,187 B gz (1,865,016 raw).
