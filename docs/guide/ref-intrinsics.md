@@ -253,29 +253,29 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 240 | `PromiseCreate` | leaf | 1 | A new pending Promise with prototype proto. |
 | 241 | `IsPromise` | leaf | 1 | Whether v is a Promise object (has [[PromiseState]]). |
 | 242 | `IntrinsicPromise` | leaf | 0 | The realm's %Promise% constructor. |
-| 243 | `PromiseState` | leaf | 1 | [[PromiseState]]: 0 pending, 1 fulfilled, 2 rejected. |
+| 243 | `PromiseState` | leaf | 1 | [[PromiseState]]: a `PromiseStates` member. |
 | 244 | `PromiseResult` | leaf | 1 | [[PromiseResult]]. |
 | 245 | `FulfillPromise` | leaf | 2 | FulfillPromise ( promise, value ), 27.2.1.4: reactions become jobs. No-op unless pending. |
 | 246 | `RejectPromise` | leaf | 2 | RejectPromise ( promise, reason ), 27.2.1.7, with the rejection tracker. No-op unless pending. |
 | 247 | `PromiseClaimResolve` | leaf | 1 | Sets the [[AlreadyResolved]] of p's own resolving functions (and internal capability); false if it was already set. |
 | 248 | `PerformPromiseThen` | leaf | 4 | PerformPromiseThen ( promise, onFulfilled, onRejected, resultCapability ), 27.2.5.4.1, without the result: handlers that are not callable count as empty. |
-| 249 | `PromiseCombinatorRun` | leaf | 5 | The elements of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race 3) that an Array values iterator gives without user code (as `IteratorFastValue` would), one after another while their steps run no user code either: `fixed` is the Record [C, promiseResolve, capability, values, remaining, resolveFn, rejectFn], C %Promise% with the original `resolve`, and the element a Promise of %Promise% or a value that fulfills one without a `then` call, whose `then`, `constructor` and %Promise%[@@species] are the original ones. Each is done as the loop body would (values slot, element Record, functions, `then`); returns the next index. |
+| 249 | `PromiseCombinatorRun` | leaf | 5 | The elements of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race 3) that an Array values iterator gives without user code (as `IteratorFastValue` would), one after another while their steps run no user code either: `fixed` is the CombinatorRecord (promise.ts), C %Promise% with the original `resolve`, and the element a Promise of %Promise% or a value that fulfills one without a `then` call, whose `then`, `constructor` and %Promise%[@@species] are the original ones. Each is done as the loop body would (values slot, ElementRecord, functions, `then`); returns the next index. |
 | 250 | `EnqueuePromiseResolveThenableJob` | leaf | 3 | Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. |
-| 251 | `NewRecord` | leaf | 1 | A new internal Record with n slots, all undefined. |
-| 252 | `RecordGet` | leaf | 2 | Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper). |
+| 251 | `NewRecord` | leaf | 1 | A new internal record of `schema` (an `@record` enum), its fields undefined. Its kind is in its header, so snapshots write it by name. |
+| 252 | `RecordGet` | leaf | 2 | Field i (`Schema.field`) of a record, or a slot of an object that keeps its state in slots (`@slots` enums: DisposableStack, FinalizationRegistry). |
 | 253 | `RecordSet` | leaf | 3 |  |
 | 254 | `NewBuiltinClosure` | leaf | 3 | A function (name "", `length`) that calls the builtin `kind` (the table in interp/run/intrinsics.rs: 0 PromiseResolveFunction, 1 PromiseRejectFunction, 2 GetCapabilitiesExecutor, 3 PromiseAllResolveElement, 4 PromiseAllSettledResolveElement, 5 PromiseAllSettledRejectElement, 6 PromiseAnyRejectElement, 7 PromiseThenFinally, 8 PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11 AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13 AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15 ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected, 18 AsyncDisposeFulfilled, 19 AsyncDisposeRejected, 20 DecoratorAddInitializer, 21 DecoratorAccessGet, 22 DecoratorAccessSet, 23 DecoratorAccessHas, 24 DecoratorParamCall) with `this` = data and its own arguments. |
-| 255 | `GeneratorState` | leaf | 1 | The state of a generator object (not an async state), or -1 for anything else. |
+| 255 | `GeneratorState` | leaf | 1 | The state of a generator object (not an async state, a `GeneratorStates` member), or -1 for anything else. |
 | 256 | `GeneratorSetState` | leaf | 2 |  |
-| 257 | `GeneratorResume` | reentrant | 3 | Resumes a suspended generator or async function (state 0 or 1) in a frame of its own: mode 0 continues with value (a generator at a yield gets `value false`, an async function the value), 1 throws value at the suspension point, 2 (generators at a yield) returns value from there (`value true`). The result is what the activation hands back when it next suspends or completes. |
+| 257 | `GeneratorResume` | reentrant | 3 | Resumes a suspended generator or async function (start or suspendedYield) in a frame of its own: mode `ResumeMode.next` continues with value (a generator at a yield gets `value false`, an async function the value), `throw` throws value at the suspension point, `return` (generators at a yield) returns value from there (`value true`). The result is what the activation hands back when it next suspends or completes. |
 | 258 | `IsAsyncFunctionState` | leaf | 1 | Whether v is the state of an async function call. |
 | 259 | `AsyncFunctionPromise` | leaf | 1 | The result promise of an async function call. |
 | 260 | `AsyncGeneratorState` | leaf | 1 | The state of an async generator, or -1 for anything else. |
 | 261 | `AsyncGeneratorEnqueue` | leaf | 2 | Appends a request to the generator's queue. |
 | 262 | `AsyncGeneratorFirstRequest` | leaf | 1 | The oldest request, or undefined. |
 | 263 | `AsyncGeneratorDequeue` | leaf | 1 | Removes and returns the oldest request (undefined if none). |
-| 264 | `CreateAsyncFromSyncIterator` | leaf | 2 | CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: a Record [iterator, next] with %AsyncFromSyncIteratorPrototype%. |
-| 265 | `CreateIteratorHelper` | leaf | 3 | A new IteratorHelper object of `kind` (0: Iterator.from's wrapper, with %WrapForValidIteratorPrototype%; else a helper, with %IteratorHelperPrototype%): slot 0 kind, 1 state 0, 2 iterator, 3 next, the others undefined. |
+| 264 | `CreateAsyncFromSyncIterator` | leaf | 2 | CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: an AsyncFromSyncIterator record with %AsyncFromSyncIteratorPrototype%. |
+| 265 | `CreateIteratorHelper` | leaf | 2 | A new IteratorHelper object of record `schema` (iterator.ts) and `kind` (a HelperKinds member; `wrap`: Iterator.from's wrapper, with %WrapForValidIteratorPrototype%, else a helper, with %IteratorHelperPrototype%): its state `start`, the other fields undefined. |
 | 266 | `ThisIteratorHelper` | leaf | 2 | v if it is an iterator helper (wrap false) or Iterator.from's wrapper (wrap true), else TypeError "Iterator Helper object expected" / "Iterator Wrap object expected". |
 | 267 | `WeakRefCreate` | leaf | 2 | A new WeakRef with prototype proto and target (AddToKeptObjects ( target ) too). |
 | 268 | `WeakRefDeref` | leaf | 1 | WeakRefDeref of v (AddToKeptObjects of a live target): the target, or undefined once it died. TypeError "WeakRef object expected" for anything else. |

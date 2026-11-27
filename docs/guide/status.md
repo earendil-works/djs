@@ -74,7 +74,7 @@ gzip. Module sizes measured at 4987410c0d, 2026-11-23.
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 50 |
 | difftest corpus cases | 669 |
-| base snapshot, bytes | 190,912 |
+| base snapshot, bytes | 191,320 |
 <!-- /gen -->
 
 ## Every recorded measurement
