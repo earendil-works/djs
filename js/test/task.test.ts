@@ -1,6 +1,6 @@
-// Tasks (0189, D2770, D2771): runs the sandbox drives, suspended into a dump while they wait
-// on host calls and continued from it. Async host functions declared `{ call, save,
-// resume }` carry their state through the dump.
+// Tasks (0189, D2770, D2771): runs the sandbox drives, suspended into a snapshot while they
+// wait on host calls and continued from it (D3720). Async host functions declared `{ call,
+// save, resume }` carry their state through the snapshot.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -12,8 +12,17 @@ interface Setup {
 }
 
 async function setup(): Promise<Setup> {
-  // Dumps need frozen builtins (D2836).
   return { module: await loadModule(), frozenBuiltins: true };
+}
+
+/** The open calls a snapshot holds, as a fresh sandbox loads them: function, arguments, state. */
+function heldCalls(snapshot: Uint8Array, opts: SandboxOptions): [string, unknown[], unknown][] {
+  const sb = new Sandbox(opts);
+  try {
+    return sb.loadSnapshot(snapshot).calls.map((c) => [c.fn, c.args, c.state]);
+  } finally {
+    sb.dispose();
+  }
 }
 
 /** A promise the test resolves by hand. */
@@ -107,9 +116,11 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
   const sb = new Sandbox(h.opts);
   const task = sb.start(CODE, { n: 1 });
   const dump = await task.suspend();
-  assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\)/);
-  assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\)/);
-  assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\)/);
+  assert.deepEqual(heldCalls(dump, h.opts), [
+    ["tools.job", [1], { n: 1, step: "started, saved" }],
+    ["tools.again", ["x"], undefined],
+    ["tools.plain", ["y"], undefined],
+  ]);
   await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
   assert.ok(h.seen.calls[0].signal.aborted, "the suspended task stops waiting for its calls");
   assert.equal(h.seen.saved.length, 1);
@@ -129,35 +140,35 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
   await h.answer("again x", "B2");
   // Dumped again while waiting on job(2): a fresh call's state, saved.
   const second = await again.suspend();
-  assert.match(second, /\$djs\.resume\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\)/);
+  assert.deepEqual(heldCalls(second, h.opts), [["tools.job", [2], { n: 2, step: "started, saved" }]]);
   again.sandbox.dispose();
   const third = await Sandbox.resume(second, h.opts);
   await h.answer("resumed 2", "D3");
   assert.deepEqual(await third.result, [
     "A2",
     "B2",
-    "caught tools.plain: the call was open when the run was dumped, and the host function has no hooks to continue it",
+    "caught tools.plain: the call was open when the run was suspended, and the host function has no hooks to continue it",
     "D3",
   ]);
-  assert.deepEqual(h.lines, ["start 1", "got A2 B2 caught tools.plain: the call was open when the run was dumped, and the host function has no hooks to continue it"]);
+  assert.deepEqual(h.lines, ["start 1", "got A2 B2 caught tools.plain: the call was open when the run was suspended, and the host function has no hooks to continue it"]);
   third.sandbox.dispose();
 });
 
-test("checkpoint dumps and goes on; a dump that fails leaves the task running", async () => {
+test("checkpoint snapshots and goes on; a snapshot that fails leaves the task running", async () => {
   const h = host({ module: await loadModule(), frozenBuiltins: true });
   const sb = new Sandbox(h.opts);
-  const task = sb.start("const w = new WeakMap(); const r = await tools.job(1); return [r, await tools.job(2)];");
-  // A weak collection cannot be written: the task goes on.
-  await assert.rejects(task.checkpoint(), (e: unknown) => e instanceof SandboxError && /weak collection/.test(e.message));
+  const task = sb.start("const w = new WeakRef({}); const r = await tools.job(1); return [r, await tools.job(2), typeof w.deref()];");
+  // A weak reference cannot be written: the task goes on.
+  await assert.rejects(task.checkpoint(), (e: unknown) => e instanceof SandboxError && /cannot snapshot the run:\n.*WeakRef/.test(e.message));
   await h.answer("job 1", "A");
   // One task at a time.
   assert.throws(() => sb.start("return 1"), /a run is in progress/);
   await h.answer("job 2", "B");
-  assert.deepEqual(await task.result, ["A", "B"]);
+  assert.deepEqual(await task.result, ["A", "B", "object"]);
 
   const t2 = sb.start("const r = await tools.job(5); return r + 1;");
   const cp = await t2.checkpoint();
-  assert.match(cp, /"tools\.job", \[5\], \{"n":5/);
+  assert.deepEqual(heldCalls(cp, h.opts), [["tools.job", [5], { n: 5, step: "started, saved" }]]);
   await h.answer("job 5", 41);
   assert.equal(await t2.result, 42);
   // The checkpoint resumes on its own.
