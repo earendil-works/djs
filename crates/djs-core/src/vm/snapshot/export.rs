@@ -576,9 +576,6 @@ impl<'a> Exporter<'a> {
             }
             None => self.refuse(String::from("a function template without a script")),
         }
-        if template::code(self.h, t) == [crate::bytecode::Op::Lazy as u8] {
-            self.refuse(String::from("a lazy function template"));
-        }
         let i = self.functions.len() as u32;
         self.functions.push(t);
         self.function_ids.insert(t, i);

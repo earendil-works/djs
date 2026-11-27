@@ -606,7 +606,9 @@ impl Loader<'_> {
                 params.split(',').collect()
             };
             let opts = crate::compiler::CompileOptions::from_bits(&name, &ps, bits);
-            let root = self.vm.compile_unit(src, &opts).map_err(|e| {
+            // Eagerly, also in a VM that compiles lazily (D2990): a function the exporter's
+            // lazy parent made at its first call is a template of the script only then.
+            let root = crate::compiler::compile(self.vm.heap_mut(), src, &opts).map_err(|e| {
                 refusal(format!(
                     "script {i} ({name}) does not compile: {}",
                     e.message

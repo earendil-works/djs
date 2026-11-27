@@ -326,7 +326,9 @@ def jobs():
         # 0301: logical snapshots (D3700, D3703) at every idle point of the corpus and of the
         # tests/dump programs, each alone and chained, continued like the uninterrupted run;
         # nothing refused. The negative control and the frame bytecode pin are in `test`.
-        J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
+        # 0303: and again with lazy functions, as the shipped module compiles (D2990, D3721).
+        J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored"
+          f" && DJS_LAZY=1 DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
           cls="rust", needs=["build:core-tests"]),
         # 0302: the corpus's snapshots continue by name in a build whose builtins list record
         # fields in another order and give state constants other values (D3712). It builds
