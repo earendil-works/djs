@@ -1,6 +1,6 @@
 # 0301: Logical snapshots on main: the module, one slot table, import validation, gate legs
 
-status: open
+status: in-progress
 agent: psnap
 branch: issue/0301-snapshots-on-main
 depends-on: 0300
