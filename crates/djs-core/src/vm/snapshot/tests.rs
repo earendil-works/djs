@@ -287,7 +287,7 @@ fn snapshot_harvest() {
                     let image = img.image().len();
                     let sources = sources_len(&snap);
                     let nosrc = vm
-                        .snapshot_with(info(), &SnapshotOptions { sources: false })
+                        .snapshot_with(info(), &SnapshotOptions { sources: false, ..Default::default() })
                         .unwrap();
                     let wrapped = format!("(async (tools, console) => {{{case}\n}})");
                     Vm::from_snapshot_with(

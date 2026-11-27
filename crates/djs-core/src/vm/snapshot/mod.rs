@@ -34,6 +34,8 @@ mod hash;
 mod import;
 mod schema;
 #[cfg(test)]
+mod host_tests;
+#[cfg(test)]
 mod tests;
 mod wire;
 
@@ -46,10 +48,10 @@ use crate::heap::{Property, Ref};
 use crate::value::Value;
 use wire::Writer;
 
-pub use import::{SnapshotStats, describe};
+pub use import::{SnapshotStats, describe, needs};
 
 /// The format version: bumped whenever the encoding changes.
-pub const FORMAT: u8 = 1;
+pub const FORMAT: u8 = 2;
 const MAGIC: &[u8; 6] = b"DJSNAP";
 
 /// What a build knows about its base image, made once per base: the builtins' registry
@@ -105,17 +107,70 @@ impl BaseInfo {
 }
 
 /// How a snapshot is written.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SnapshotOptions {
     /// Store the scripts' sources (else their hashes: the importer is given the sources,
     /// as a host that keeps its prelude and scripts can).
     pub sources: bool,
+    /// A host's run (D3720): what the host names instead of the snapshot writing it.
+    /// Such a snapshot loads only into a VM of that host ([`Vm::load_snapshot`]).
+    pub host: Option<HostNames>,
 }
 
 impl Default for SnapshotOptions {
     fn default() -> Self {
-        SnapshotOptions { sources: true }
+        SnapshotOptions {
+            sources: true,
+            host: None,
+        }
     }
+}
+
+/// What a host names in a snapshot of its run instead of writing it (D3720), as dumps
+/// name host values (D2971): the loading host makes them again, and they stay its own.
+#[derive(Clone, Debug, Default)]
+pub struct HostNames {
+    /// Host function ids and their identities: a host function object and the function
+    /// of an open call are written by identity.
+    pub functions: Vec<(u32, String)>,
+    /// The host values by name (namespace objects, frozen data, converting functions):
+    /// each written as its name, and the objects its own data properties hold, two levels
+    /// deep, as members of it.
+    pub values: Vec<(String, Value)>,
+    /// The values the host holds for the run, by name: written, and new handles of the
+    /// loading VM after a load. The handle table itself is not written.
+    pub handles: Vec<(String, Value)>,
+    /// The host's own data of the run (its calls' states, its counters), kept as it is.
+    pub data: String,
+}
+
+/// What a host gives a load of a snapshot of its run (D3720).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HostValues<'a> {
+    /// Its host functions: identity, id and the function object.
+    pub functions: &'a [(&'a str, u32, Value)],
+    /// Its host values by name.
+    pub values: &'a [(&'a str, Value)],
+}
+
+/// What [`Vm::load_snapshot`] gave back.
+#[derive(Debug, Default)]
+pub struct Loaded {
+    /// The handles the host held for the run, by name, as new handles of this VM.
+    pub handles: Vec<(String, crate::heap::Handle)>,
+    /// The open host calls, by id, oldest first (reported already: `new_host_calls` does
+    /// not list them again).
+    pub calls: Vec<u32>,
+    /// The host's data ([`HostNames::data`]).
+    pub data: String,
+}
+
+/// What loading a snapshot needs from the host: the names of the scripts it stores by
+/// hash only, and the host values and functions it names.
+#[derive(Debug, Default, PartialEq)]
+pub struct Needs {
+    pub sources: Vec<String>,
+    pub host: Vec<String>,
 }
 
 /// The hash a snapshot names a source by when it does not store it.
@@ -144,7 +199,7 @@ impl Vm {
     ) -> Result<Vec<u8>, Refusal> {
         let h = self.heap();
         export::refuse_unless_idle(h).map_err(|e| Refusal(alloc::vec![e]))?;
-        let mut ex = export::Exporter::new(h, base);
+        let mut ex = export::Exporter::new(h, base, opts.host.as_ref());
         let mut root = Writer::default();
         ex.root(&mut root);
         // Every record first: a frame found late pins its function.
@@ -181,6 +236,20 @@ impl Vm {
         sources: &[&[u8]],
     ) -> Result<Vm, Refusal> {
         import::load(base, bytes, sources, None).map(|(vm, _)| vm)
+    }
+
+    /// Loads a snapshot of a host's run (written with [`SnapshotOptions::host`]) into
+    /// this VM, the host's: a fresh one with the host's setup (its globals, functions and
+    /// values) and nothing running (D3720). The run's state comes from the snapshot, the
+    /// host values from `host`, by name. A refusal may leave this VM changed: drop it.
+    pub fn load_snapshot(
+        &mut self,
+        base: &BaseInfo,
+        bytes: &[u8],
+        sources: &[&[u8]],
+        host: &HostValues<'_>,
+    ) -> Result<Loaded, Refusal> {
+        import::load_into(self, base, bytes, sources, host)
     }
 
     /// [`Vm::from_snapshot`], counting what it did.
@@ -278,6 +347,24 @@ fn container(
     w.u(intrinsics.len() as u64);
     for i in intrinsics {
         w.u(u64::from(i));
+    }
+    w.u(ex.host_entries.len() as u64);
+    for e in &ex.host_entries {
+        match *e {
+            export::HostEntry::Root(n) => {
+                w.byte(0);
+                w.u(u64::from(n));
+            }
+            export::HostEntry::Member(p, k) => {
+                w.byte(1);
+                w.u(u64::from(p));
+                w.u(u64::from(k));
+            }
+            export::HostEntry::Function(n) => {
+                w.byte(2);
+                w.u(u64::from(n));
+            }
+        }
     }
     w.u(scripts.len() as u64);
     for (n, p, bits, src) in &scripts {

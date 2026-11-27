@@ -39,6 +39,16 @@ enum V {
     Base(u32, bool),
     Fn(u32),
     Script(u32),
+    /// A host value or function (D3720): its host entry.
+    Host(u32),
+}
+
+/// A host entry as the snapshot has it (export's `HostEntry`, string ids).
+#[derive(Clone, Copy, Debug)]
+enum HostEntry {
+    Root(u32),
+    Member(u32, u32),
+    Function(u32),
 }
 
 #[derive(Clone, Debug)]
@@ -60,6 +70,8 @@ enum F {
     Tail(Vec<Vec<F>>),
     Fn(u32),
     Intr(u32),
+    /// A host call's function, by its host entry (D3720).
+    HostFn(u32),
     Buckets(u64),
     Flags(u64),
     /// A named constant field's member index (an enum) or members' bits (D3710).
@@ -78,6 +90,7 @@ enum Ty {
     Props,
     Function,
     Intrinsic,
+    HostFn,
     Buckets,
     Program,
     Flags(Vec<String>),
@@ -103,6 +116,7 @@ fn parse_ty(s: &str, sets: &BTreeMap<String, Vec<String>>) -> Option<Ty> {
         "props" => Ty::Props,
         "function" => Ty::Function,
         "intrinsic" => Ty::Intrinsic,
+        "hostfn" => Ty::HostFn,
         "buckets" => Ty::Buckets,
         "program" => Ty::Program,
         _ => {
@@ -142,6 +156,7 @@ struct Snap<'a> {
     strings: Vec<(bool, &'a [u8])>,
     bases: Vec<u32>,
     intrinsics: Vec<u32>,
+    host: Vec<HostEntry>,
     /// Name, parameters, options, and the source or its hash.
     scripts: Vec<ScriptEntry<'a>>,
     /// Script, span, whether the bytecode is pinned, the hash, the template objects made
@@ -180,6 +195,7 @@ impl<'a> Snap<'a> {
             strings: Vec::new(),
             bases: Vec::new(),
             intrinsics: Vec::new(),
+            host: Vec::new(),
             scripts: Vec::new(),
             functions: Vec::new(),
             records: Vec::new(),
@@ -229,6 +245,20 @@ impl<'a> Snap<'a> {
         let n = r.u().map_err(short)?;
         for _ in 0..n {
             s.intrinsics.push(r.u32().map_err(short)?);
+        }
+        s.marks.push(("host", r.at));
+        let n = r.u().map_err(short)?;
+        for i in 0..n {
+            s.host.push(match r.byte().map_err(short)? {
+                0 => HostEntry::Root(r.u32().map_err(short)?),
+                // A member's parent comes before it.
+                1 => match r.u32().map_err(short)? {
+                    p if u64::from(p) < i => HostEntry::Member(p, r.u32().map_err(short)?),
+                    _ => return Err(short(Short)),
+                },
+                2 => HostEntry::Function(r.u32().map_err(short)?),
+                _ => return Err(short(Short)),
+            });
         }
         s.marks.push(("scripts", r.at));
         let n = r.u().map_err(short)?;
@@ -304,6 +334,7 @@ fn value(r: &mut Reader<'_>) -> Result<V, Short> {
         V_BASE_INTERNAL => V::Base(r.u32()?, true),
         V_FN => V::Fn(r.u32()?),
         V_SCRIPT => V::Script(r.u32()?),
+        V_HOST => V::Host(r.u32()?),
         _ => return Err(Short),
     })
 }
@@ -345,6 +376,7 @@ fn field(r: &mut Reader<'_>, t: &Ty) -> Result<F, Short> {
             _ => return Err(Short),
         },
         Ty::Intrinsic => F::Intr(r.u32()?),
+        Ty::HostFn => F::HostFn(r.u32()?),
         Ty::Buckets => F::Buckets(r.u()?),
         Ty::Program => F::None,
         Ty::Flags(_) => F::Flags(r.u()?),
@@ -388,9 +420,14 @@ enum Kind {
 }
 
 struct Loader<'a> {
-    vm: Vm,
+    vm: &'a mut Vm,
     snap: &'a Snap<'a>,
     base: &'a BaseInfo,
+    /// A host's VM (D3720): its host values; `None` for a fresh VM.
+    host: Option<&'a HostValues<'a>>,
+    /// Per host entry: its value, and for a host function its id.
+    host_vals: Vec<(Value, u32)>,
+    loaded: Loaded,
     cells: Vec<u32>,
     kinds: Vec<Kind>,
     strs: Vec<u32>,
@@ -411,11 +448,46 @@ pub(super) fn load(
     stats: Option<&mut SnapshotStats>,
 ) -> Result<(Vm, ()), Refusal> {
     let snap = Snap::parse(bytes)?;
-    let vm = Vm::from_base(&base.image, base.opts).map_err(|e| refusal(format!("{e:?}")))?;
+    let mut vm = Vm::from_base(&base.image, base.opts).map_err(|e| refusal(format!("{e:?}")))?;
+    run(&mut vm, &snap, base, sources, None, stats)?;
+    Ok((vm, ()))
+}
+
+/// [`Vm::load_snapshot`]: a host's run into the host's VM `vm` (D3720).
+pub(super) fn load_into(
+    vm: &mut Vm,
+    base: &BaseInfo,
+    bytes: &[u8],
+    sources: &[&[u8]],
+    host: &HostValues<'_>,
+) -> Result<Loaded, Refusal> {
+    let snap = Snap::parse(bytes)?;
+    // The host's VM as it was made: nothing runs, waits or is queued.
+    export::refuse_unless_idle(vm.heap())
+        .map_err(|e| refusal(format!("the VM to load into is {e}")))?;
+    if vm.heap().value_array_len(state::host_calls(vm.heap())) != 0 {
+        return Err(refusal(String::from(
+            "the VM to load into has open host calls: load into a fresh one",
+        )));
+    }
+    run(vm, &snap, base, sources, Some(host), None)
+}
+
+fn run(
+    vm: &mut Vm,
+    snap: &Snap<'_>,
+    base: &BaseInfo,
+    sources: &[&[u8]],
+    host: Option<&HostValues<'_>>,
+    stats: Option<&mut SnapshotStats>,
+) -> Result<Loaded, Refusal> {
     let mut l = Loader {
         vm,
-        snap: &snap,
+        snap,
         base,
+        host,
+        host_vals: Vec::new(),
+        loaded: Loaded::default(),
         cells: Vec::new(),
         kinds: Vec::new(),
         strs: alloc::vec![0; snap.strings.len()],
@@ -459,7 +531,44 @@ pub(super) fn load(
                 .or_default() += 1;
         }
     }
-    Ok((l.vm, ()))
+    l.loaded.calls = l.vm.pending_host_calls();
+    Ok(l.loaded)
+}
+
+/// What loading `bytes` needs from the host ([`Needs`]).
+pub fn needs(bytes: &[u8]) -> Result<Needs, Refusal> {
+    let s = Snap::parse(bytes)?;
+    let text = |i: u32| -> Result<String, Refusal> {
+        let (two, d) = *s.strings.get(i as usize).ok_or_else(|| short(Short))?;
+        Ok(string_of(two, d))
+    };
+    let mut out = Needs::default();
+    for &(name, _, _, src) in &s.scripts {
+        if src.is_err() {
+            out.sources.push(text(name)?);
+        }
+    }
+    for e in &s.host {
+        match *e {
+            HostEntry::Root(n) | HostEntry::Function(n) => out.host.push(text(n)?),
+            HostEntry::Member(..) => {}
+        }
+    }
+    Ok(out)
+}
+
+fn string_of(two: bool, d: &[u8]) -> String {
+    if two {
+        let units: Vec<u16> = d
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        d.iter().map(|&b| b as char).collect()
+    }
 }
 
 impl Loader<'_> {
@@ -469,17 +578,7 @@ impl Loader<'_> {
             .strings
             .get(i as usize)
             .ok_or_else(|| short(Short))?;
-        Ok(if two {
-            let units: Vec<u16> = d
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|c| u16::from_le_bytes(*c))
-                .collect();
-            String::from_utf16_lossy(&units)
-        } else {
-            d.iter().map(|&b| b as char).collect()
-        })
+        Ok(string_of(two, d))
     }
 
     /// Compiles the scripts again and finds the functions, checking their bytecode.
@@ -583,7 +682,81 @@ impl Loader<'_> {
                 .ok_or_else(|| refusal(format!("no intrinsic {name} in this build")))?;
             self.intrinsics.push(id as u16);
         }
+        self.host_values()
+    }
+
+    /// The host entries as the host's values (D3720).
+    fn host_values(&mut self) -> Result<(), Refusal> {
+        let snap = self.snap;
+        if snap.host.is_empty() {
+            return Ok(());
+        }
+        let Some(host) = self.host else {
+            return Err(refusal(String::from(
+                "a snapshot of a host's run: load it into the host's VM",
+            )));
+        };
+        for k in 0..snap.host.len() {
+            let v = match snap.host[k] {
+                HostEntry::Root(n) => {
+                    let name = self.text(n)?;
+                    let v = host
+                        .values
+                        .iter()
+                        .find(|(m, _)| *m == name)
+                        .map(|(_, v)| *v)
+                        .or_else(|| {
+                            host.functions
+                                .iter()
+                                .find(|(m, ..)| *m == name)
+                                .map(|(.., v)| *v)
+                        })
+                        .ok_or_else(|| refusal(format!("this host has no host value {name}")))?;
+                    (v, 0)
+                }
+                HostEntry::Member(p, key) => {
+                    let key = self.text(key)?;
+                    let parent = self.host_vals[p as usize].0;
+                    let h = self.vm.heap_mut();
+                    let k = h.atom_str(&key).map_err(oom)?;
+                    let v = parent
+                        .as_object()
+                        .and_then(|o| match h.get_own_property(o, k) {
+                            Some(Property::Data { value, .. }) => value.as_object(),
+                            _ => None,
+                        })
+                        .ok_or_else(|| {
+                            refusal(format!(
+                                "the host value {} has no object member {key} in this host",
+                                self.host_path(p)
+                            ))
+                        })?;
+                    (Value::object(v), 0)
+                }
+                HostEntry::Function(n) => {
+                    let name = self.text(n)?;
+                    let (_, id, v) = host
+                        .functions
+                        .iter()
+                        .find(|(m, ..)| *m == name)
+                        .ok_or_else(|| refusal(format!("this host has no host function {name}")))?;
+                    (*v, *id)
+                }
+            };
+            self.host_vals.push(v);
+        }
         Ok(())
+    }
+
+    /// Host entry `k` as text, for refusals: `ALL_TOOLS.0.schema`.
+    fn host_path(&self, k: u32) -> String {
+        match self.snap.host.get(k as usize) {
+            Some(HostEntry::Root(n) | HostEntry::Function(n)) => self.text(*n).unwrap_or_default(),
+            Some(HostEntry::Member(p, key)) => {
+                format!("{}.{}", self.host_path(*p), self.text(*key).unwrap_or_default())
+            }
+            None => String::new(),
+        }
     }
 
     fn allocate(&mut self) -> Result<(), Refusal> {
@@ -748,6 +921,7 @@ impl Loader<'_> {
             V::Script(i) => {
                 Value::internal(*self.scripts.get(i as usize).ok_or_else(|| short(Short))?)
             }
+            V::Host(i) => self.host_vals.get(i as usize).ok_or_else(|| short(Short))?.0,
         })
     }
 
@@ -1147,6 +1321,19 @@ impl Loader<'_> {
                 }
                 continue;
             }
+            if let F::HostFn(e) = f {
+                let fi = layout
+                    .fields
+                    .iter()
+                    .find(|x| x.name == name && is_host_call_fn(spec, x))
+                    .ok_or_else(|| refusal(format!("{}.{name}: not a host function", ty.name)))?;
+                let id = match self.snap.host.get(*e as usize) {
+                    Some(HostEntry::Function(_)) => self.host_vals[*e as usize].1,
+                    _ => return Err(short(Short)),
+                };
+                self.write_field(off + fi.offset, fi, &Ty::Uint, &F::U(u64::from(id)))?;
+                continue;
+            }
             let Some(fi) = layout.fields.iter().find(|x| x.name == name) else {
                 // A field this build does not have: fine while it holds the zero state
                 // (what a new cell starts with), else its meaning would be lost.
@@ -1343,10 +1530,55 @@ impl Loader<'_> {
                     self.vm.heap_mut().arena_mut().set(0, Roots::HOST_CALLS, r)
                 }
                 ("handles", F::V(v)) => {
+                    if self.host.is_some() {
+                        return Err(refusal(String::from(
+                            "a snapshot of a VM, not of a host's run: load it into a fresh VM",
+                        )));
+                    }
                     let v = self.val(*v)?;
                     let r = Ref(v.ref_offset().unwrap_or(0));
                     self.check_handles(r)?;
                     self.vm.heap_mut().arena_mut().set(0, Roots::HANDLES, r)
+                }
+                ("named", F::Vs(vs)) => {
+                    if self.host.is_none() {
+                        return Err(refusal(String::from(
+                            "a snapshot of a host's run: load it into the host's VM",
+                        )));
+                    }
+                    for pair in vs.chunks(2) {
+                        let [V::Str(n), v] = *pair else {
+                            return Err(short(Short));
+                        };
+                        let name = self.text(n)?;
+                        let v = self.val(v)?;
+                        let h = self.vm.heap_mut().new_handle(v).map_err(oom)?;
+                        self.loaded.handles.push((name, h));
+                    }
+                }
+                ("hostData", F::V(V::Str(n))) => self.loaded.data = self.text(*n)?,
+                ("frozenBuiltins" | "weakRefsStrong", F::U(u)) => {
+                    let on = *u != 0;
+                    let frozen = name == "frozenBuiltins";
+                    let h = self.vm.heap_mut();
+                    let now = if frozen {
+                        h.frozen_builtins()
+                    } else {
+                        h.weak_refs_strong()
+                    };
+                    if self.host.is_some() && now != on {
+                        return Err(refusal(format!(
+                            "the snapshot's VM had {} {}, this one {}",
+                            if frozen { "frozen builtins" } else { "strong weak references" },
+                            if on { "on" } else { "off" },
+                            if now { "on" } else { "off" },
+                        )));
+                    }
+                    if frozen {
+                        h.set_frozen_builtins(on);
+                    } else {
+                        h.set_weak_refs_strong(on);
+                    }
                 }
                 ("global" | "globalLex" | "symbolRegistry", _) => {}
                 ("random", F::Vs(vs)) => {

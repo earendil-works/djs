@@ -23,8 +23,34 @@ pub(super) struct TypeDef {
     pub fields: Vec<(String, String)>,
 }
 
+/// A host value a snapshot names (D3720): a root by its name, an object its root (or a
+/// member) holds under a key, or a host function by its identity.
+#[derive(Clone, Copy)]
+pub(super) enum HostEntry {
+    /// The name (a string id).
+    Root(u32),
+    /// The parent entry and the key (a string id).
+    Member(u32, u32),
+    /// The identity (a string id).
+    Function(u32),
+}
+
+/// Where a host value sits, before it is written: a root (its index in
+/// `HostNames::values`) or a member (the parent cell and the key).
+#[derive(Clone, Copy)]
+enum HostSpot {
+    Root(usize),
+    Member(u32, Atom),
+}
+
 pub(super) struct Exporter<'a> {
     h: &'a Heap,
+    /// A host's run (D3720): what it names.
+    host: Option<&'a HostNames>,
+    host_spots: BTreeMap<u32, HostSpot>,
+    host_ids: BTreeMap<u32, u32>,
+    host_fn_ids: BTreeMap<u32, u32>,
+    pub host_entries: Vec<HostEntry>,
     base: &'a BaseInfo,
     base_end: u32,
     pub types: Vec<TypeDef>,
@@ -149,9 +175,14 @@ pub(super) fn refuse_unless_idle(h: &Heap) -> Result<(), String> {
 }
 
 impl<'a> Exporter<'a> {
-    pub fn new(h: &'a Heap, base: &'a BaseInfo) -> Exporter<'a> {
+    pub fn new(h: &'a Heap, base: &'a BaseInfo, host: Option<&'a HostNames>) -> Exporter<'a> {
         let mut e = Exporter {
             h,
+            host,
+            host_spots: BTreeMap::new(),
+            host_ids: BTreeMap::new(),
+            host_fn_ids: BTreeMap::new(),
+            host_entries: Vec::new(),
             base,
             base_end: h.base_end(),
             types: Vec::new(),
@@ -190,7 +221,110 @@ impl<'a> Exporter<'a> {
             e.queue.push_back(o);
         }
         e.record_count = 3;
+        if let Some(host) = host {
+            e.host_spots(host);
+        }
         e
+    }
+
+    /// Marks the host values (D3720): each root, and the objects of its own data
+    /// properties two levels deep, as dumps name them (D2971). Host functions are named
+    /// by identity wherever they are, and a Proxy's insides are not looked at.
+    fn host_spots(&mut self, host: &HostNames) {
+        let h = self.h;
+        let mut level = Vec::new();
+        for (i, (_, v)) in host.values.iter().enumerate() {
+            if let Some(o) = self.host_object(*v) {
+                self.host_spots.insert(o.offset(), HostSpot::Root(i));
+                level.push(o);
+            }
+        }
+        for _ in 0..2 {
+            let mut next = Vec::new();
+            for o in level {
+                if h.object_class(o) == ObjectClass::Proxy {
+                    continue;
+                }
+                for k in h.own_keys(o) {
+                    if h.atom_symbol(k).is_some() {
+                        continue;
+                    }
+                    if let Some(Property::Data { value, .. }) = h.get_own_property(o, k)
+                        && let Some(c) = self.host_object(value)
+                    {
+                        self.host_spots
+                            .insert(c.offset(), HostSpot::Member(o.offset(), k));
+                        next.push(c);
+                    }
+                }
+            }
+            level = next;
+        }
+    }
+
+    /// `v` as an object a host value can be: above the builtins, not a host function
+    /// (named by identity), not marked yet.
+    fn host_object(&self, v: Value) -> Option<Obj> {
+        let o = v.as_object()?;
+        (o.offset() >= self.base_end
+            && self.h.object_class(o) != ObjectClass::HostFunction
+            && !self.host_spots.contains_key(&o.offset()))
+        .then_some(o)
+    }
+
+    /// The host entry of cell `off`, a host value or a host function, or `None` when it
+    /// is neither (or the snapshot is no host's).
+    fn host_entry(&mut self, off: u32) -> Option<u32> {
+        let host = self.host?;
+        if let Some(&i) = self.host_ids.get(&off) {
+            return Some(i);
+        }
+        let entry = match self.host_spots.get(&off).copied() {
+            Some(HostSpot::Root(i)) => HostEntry::Root(self.str_lit(&host.values[i].0)),
+            Some(HostSpot::Member(p, k)) => {
+                let parent = self.host_entry(p)?;
+                let n = self.h.atom_name(k);
+                HostEntry::Member(parent, self.str_lit(&n))
+            }
+            None => {
+                let o = Obj(off);
+                if self.h.cell_kind(off) != CellKind::Object
+                    || self.h.object_class(o) != ObjectClass::HostFunction
+                {
+                    return None;
+                }
+                let id = self.h.object_slot(o, 0).as_int().unwrap_or(-1) as u32;
+                let i = self.host_function(id);
+                self.host_ids.insert(off, i);
+                return Some(i);
+            }
+        };
+        let i = self.host_entries.len() as u32;
+        self.host_entries.push(entry);
+        self.host_ids.insert(off, i);
+        Some(i)
+    }
+
+    /// The host entry of host function `id`, by its identity.
+    fn host_function(&mut self, id: u32) -> u32 {
+        if let Some(&i) = self.host_fn_ids.get(&id) {
+            return i;
+        }
+        let name = self
+            .host
+            .and_then(|h| h.functions.iter().find(|(i, _)| *i == id))
+            .map(|(_, n)| n.clone());
+        let n = match name {
+            Some(n) => self.str_lit(&n),
+            None => {
+                self.refuse(format!("a host function (id {id}) the host has no name for"));
+                0
+            }
+        };
+        let i = self.host_entries.len() as u32;
+        self.host_entries.push(HostEntry::Function(n));
+        self.host_fn_ids.insert(id, i);
+        i
     }
 
     pub fn h(&self) -> &'a Heap {
@@ -382,6 +516,14 @@ impl<'a> Exporter<'a> {
             w.u(u64::from(id));
             return;
         }
+        if !internal
+            && kind == CellKind::Object
+            && let Some(i) = self.host_entry(off)
+        {
+            w.byte(V_HOST);
+            w.u(u64::from(i));
+            return;
+        }
         match kind {
             CellKind::FuncTemplate => {
                 let id = self.function_id(off);
@@ -516,14 +658,19 @@ impl<'a> Exporter<'a> {
     }
 
     /// The fields of generic kind `spec` that a snapshot writes, with their types.
-    fn kind_fields(spec: &KindSpec) -> Vec<(String, String)> {
+    fn kind_fields(spec: &KindSpec, host: bool) -> Vec<(String, String)> {
         let l = spec.kind.layout();
         let mut out = Vec::new();
         for f in l.fields {
             if spec.skip.contains(&f.name) || spec.count == Some(f.name) {
                 continue;
             }
-            out.push((f.name.to_string(), field_ty(f.ty).to_string()));
+            let ty = if host && is_host_call_fn(spec, f) {
+                "hostfn"
+            } else {
+                field_ty(f.ty)
+            };
+            out.push((f.name.to_string(), ty.to_string()));
         }
         if !spec.flags.is_empty() {
             out.push((
@@ -551,12 +698,19 @@ impl<'a> Exporter<'a> {
     fn generic(&mut self, w: &mut Writer, off: u32, spec: &KindSpec) {
         let h = self.h;
         let l = spec.kind.layout();
-        let t = self.type_id(l.name, || Self::kind_fields(spec));
+        let host = self.host.is_some();
+        let t = self.type_id(l.name, || Self::kind_fields(spec, host));
         w.u(u64::from(t));
         self.path.push(l.name.to_string());
         let a = h.arena();
         for f in l.fields {
             if spec.skip.contains(&f.name) || spec.count == Some(f.name) {
+                continue;
+            }
+            if host && is_host_call_fn(spec, f) {
+                // An open call's function by identity (D3720).
+                let i = self.host_function(a.read::<u32>(off + f.offset));
+                w.u(u64::from(i));
                 continue;
             }
             self.field(w, off + f.offset, f);
@@ -923,7 +1077,13 @@ impl<'a> Exporter<'a> {
     /// The VM's own state besides the graph: the interpreter's, the host calls and
     /// handles, the realm's per-VM values.
     pub fn root(&mut self, w: &mut Writer) {
+        let host = self.host;
         let t = self.type_id("Vm", || {
+            let handles: &[(&str, &str)] = if host.is_some() {
+                &[("named", "values"), ("hostData", "value")]
+            } else {
+                &[("handles", "ref")]
+            };
             [
                 ("nextCallId", "uint"),
                 ("state", "uint"),
@@ -933,7 +1093,10 @@ impl<'a> Exporter<'a> {
                 ("rejections", "ref"),
                 ("reported", "uint"),
                 ("hostCalls", "ref"),
-                ("handles", "ref"),
+            ]
+            .iter()
+            .chain(handles)
+            .chain(&[
                 ("global", "value"),
                 ("globalLex", "value"),
                 ("symbolRegistry", "value"),
@@ -944,8 +1107,9 @@ impl<'a> Exporter<'a> {
                 ("keptObjects", "value"),
                 ("registries", "value"),
                 ("modules", "value"),
-            ]
-            .iter()
+                ("frozenBuiltins", "uint"),
+                ("weakRefsStrong", "uint"),
+            ])
             .map(|(a, b)| (a.to_string(), b.to_string()))
             .collect()
         });
@@ -970,7 +1134,22 @@ impl<'a> Exporter<'a> {
         self.reference(w, a.get(i, Interp::REJECTIONS));
         w.u(u64::from(a.get(i, Interp::REPORTED)));
         self.reference(w, a.get(0, Roots::HOST_CALLS));
-        self.reference(w, a.get(0, Roots::HANDLES));
+        match host {
+            // The handles the host holds for the run, by name; not its handle table.
+            Some(host) => {
+                w.u(2 * host.handles.len() as u64);
+                for (n, v) in &host.handles {
+                    let s = self.str_lit(n);
+                    w.byte(V_STR);
+                    w.str_ref(s);
+                    self.value(w, *v);
+                }
+                let s = self.str_lit(&host.data);
+                w.byte(V_STR);
+                w.str_ref(s);
+            }
+            None => self.reference(w, a.get(0, Roots::HANDLES)),
+        }
         for k in 0..3 {
             w.byte(V_REC);
             w.rec_ref(k);
@@ -992,6 +1171,8 @@ impl<'a> Exporter<'a> {
             let v = intrinsic(h, i);
             self.value(w, v);
         }
+        w.u(u64::from(h.frozen_builtins()));
+        w.u(u64::from(h.weak_refs_strong()));
         self.path.pop();
         // Realm intrinsics above the prefix that the snapshot does not know.
         let r = crate::interp::realm::realm(h);
@@ -1059,6 +1240,8 @@ pub(super) const V_BASE: u8 = 11;
 pub(super) const V_BASE_INTERNAL: u8 = 12;
 pub(super) const V_FN: u8 = 13;
 pub(super) const V_SCRIPT: u8 = 14;
+/// A host value or function (D3720): its host entry.
+pub(super) const V_HOST: u8 = 15;
 
 pub(super) const PROP_ACCESSOR: u64 = 8;
 
@@ -1080,6 +1263,11 @@ pub(super) const REALM_CACHES: &[u32] = &[
     Intrinsic::RegExpCache as u32,
     Intrinsic::UnitStrings as u32,
 ];
+
+/// A host call's function id, which a host's snapshot writes by identity (D3720).
+pub(super) fn is_host_call_fn(spec: &KindSpec, f: &FieldInfo) -> bool {
+    spec.kind == CellKind::HostCall && f.name == "FN"
+}
 
 pub(super) fn natural_tag(k: CellKind) -> u16 {
     match k {
