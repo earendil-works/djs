@@ -1,10 +1,10 @@
 # workload	first KiB	warm KiB (scripts/size/codemode-memory.ts, D3367)
-idle	512	512
-sequential	640	640
-fanout	1600	1600
-media	896	896
-inspect	576	576
-loop	768	768
-text	1024	1024
-json	1344	1344
-heavy	4096	4096
+idle	576	576
+sequential	704	704
+fanout	1664	1664
+media	960	960
+inspect	640	640
+loop	832	832
+text	1088	1088
+json	1408	1408
+heavy	4160	4160

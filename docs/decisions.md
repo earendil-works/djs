@@ -14488,4 +14488,6 @@ The shipped module carries logical snapshots next to the dumper until 0304 remov
 dumper: 698,440 -> 769,623 B gzip (+71.2 KB: the snapshot module, its import validation,
 and the intrinsic names it writes builtin closure kinds by). The ceiling is that plus the
 slack, 770,647 B (owner's instruction: raised by what it costs, recorded, lowered again in
-0304). The module is not tuned for size yet.
+0304). The module is not tuned for size yet. Its static data (the intrinsic names among
+it) also takes every codemode workload's wasm memory one page up (+64 KiB, the
+codemode-memory rows, D3367); 0304 brings that back too.
