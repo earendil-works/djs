@@ -59,6 +59,65 @@ pub(super) struct Exporter<'a> {
 
 const PATCH_NAMES: [&str; 3] = ["Patch.Global", "Patch.GlobalLex", "Patch.SymbolRegistry"];
 
+/// Tests (tests.rs): an exporter that writes what another build would (D3712): the slots
+/// and the constants' members in another order, or a field or a member by another name, or
+/// a field less.
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(super) enum Skew {
+    None,
+    Reverse,
+    RenameField(&'static str),
+    RenameMember(&'static str),
+    DropField(&'static str),
+}
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static SKEW: core::cell::Cell<Skew> = const { core::cell::Cell::new(Skew::None) };
+}
+
+fn skew() -> Skew {
+    #[cfg(test)]
+    return SKEW.with(|s| s.get());
+    #[cfg(not(test))]
+    Skew::None
+}
+
+/// The order a snapshot writes slots `0..n` in (reversed by the `Reverse` skew).
+fn slot_order(n: usize) -> Vec<usize> {
+    let mut v: Vec<usize> = (0..n).collect();
+    if skew() == Skew::Reverse {
+        v.reverse();
+    }
+    v
+}
+
+/// A field's name as written (the `RenameField` skew).
+fn field_name(n: &str) -> String {
+    match skew() {
+        Skew::RenameField(r) if r == n => format!("{n}Renamed"),
+        _ => n.to_string(),
+    }
+}
+
+/// Whether a field is written (the `DropField` skew drops one).
+fn field_written(n: &str) -> bool {
+    !matches!(skew(), Skew::DropField(d) if d == n)
+}
+
+/// The index constant set `c`'s member `i` is written as (reversed by the `Reverse` skew).
+fn member_index(c: &ConstSet, i: usize) -> usize {
+    if skew() == Skew::Reverse {
+        c.members.len() - 1 - i
+    } else {
+        i
+    }
+}
+
 pub(super) fn refuse_unless_idle(h: &Heap) -> Result<(), String> {
     if !matches!(
         state::state(h),
@@ -569,8 +628,11 @@ impl<'a> Exporter<'a> {
         } else {
             f.push((String::from("elements"), String::from("values")));
         }
-        for (n, t) in spec.slots {
-            f.push((n.to_string(), schema::slot_ty_name(*t)));
+        for i in slot_order(spec.slots.len()) {
+            let (n, t) = spec.slots[i];
+            if field_written(n) {
+                f.push((field_name(n), schema::slot_ty_name(t)));
+            }
         }
         if let Some(r) = spec.rest {
             f.push((r.to_string(), String::from("values")));
@@ -624,7 +686,11 @@ impl<'a> Exporter<'a> {
         if count < fixed || (spec.rest.is_none() && count != fixed) {
             self.refuse(format!("{count} slots, the schema has {fixed}"));
         }
-        for (i, (n, ty)) in spec.slots.iter().enumerate() {
+        for i in slot_order(spec.slots.len()) {
+            let (n, ty) = &spec.slots[i];
+            if !field_written(n) {
+                continue;
+            }
             let v = if (i as u32) < count {
                 h.object_slot(o, i as u32)
             } else {
@@ -677,7 +743,7 @@ impl<'a> Exporter<'a> {
             for (i, (_, b)) in c.members.iter().enumerate() {
                 known |= b;
                 if n & b != 0 {
-                    bits |= 1 << i;
+                    bits |= 1 << member_index(c, i);
                 }
             }
             if n & !known != 0 {
@@ -686,7 +752,7 @@ impl<'a> Exporter<'a> {
             w.u(bits + 1);
         } else {
             match c.members.iter().position(|(_, m)| *m == n) {
-                Some(i) => w.u(i as u64 + 1),
+                Some(i) => w.u(member_index(c, i) as u64 + 1),
                 None => {
                     self.refuse(format!("{n} is no {} member", c.name));
                     w.u(0);
@@ -1052,7 +1118,18 @@ pub(super) fn flagsets(consts: &[&'static ConstSet]) -> Vec<(&'static str, Vec<&
         }
     }
     for c in consts {
-        v.push((c.name, c.members.iter().map(|(n, _)| *n).collect()));
+        let mut names: Vec<&'static str> = c.members.iter().map(|(n, _)| *n).collect();
+        if skew() == Skew::Reverse {
+            names.reverse();
+        }
+        if let Skew::RenameMember(m) = skew() {
+            for n in &mut names {
+                if *n == m {
+                    *n = "renamed";
+                }
+            }
+        }
+        v.push((c.name, names));
     }
     v
 }

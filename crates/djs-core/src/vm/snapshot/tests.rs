@@ -1335,3 +1335,132 @@ fn frame_bytecode_pin() {
         );
     }
 }
+
+// ---- Records and constants by name (D3710, D3712) ---------------------------------------
+
+/// State the corpus seldom holds at an idle point, all of it in named records: Promise.all
+/// and allSettled elements, finally, an async generator's queue, iterator helpers of every
+/// kind, a for-in over a proxy, `using` and `await using`, Array.fromAsync,
+/// disposeAsync.
+const RECORDS_CASE: &str = r#"
+const all = Promise.all([later(1), later(2), 3]);
+const settled = Promise.allSettled([later(4), Promise.reject(5)]);
+const any = Promise.any([Promise.reject(6), later(7)]);
+const fin = later(8).finally(() => text("finally"));
+async function* agen() { yield 1; yield await later(2); yield 3; }
+const ag = agen();
+const q = [ag.next(), ag.next(), ag.next(), ag.return(9)];
+function* nat() { let i = 0; while (true) yield i++; }
+const helpers = [
+  nat().map((x) => x * 2), nat().filter((x) => x % 2), nat().take(5), nat().drop(2),
+  nat().flatMap((x) => [x, x]), Iterator.concat([1, 2], [3]), Iterator.from({ next() { return { done: false, value: 1 }; } }),
+];
+for (const h of helpers) h.next();
+const inner = helpers[4];
+inner.next();
+const proxied = new Proxy({ a: 1, b: 2, c: 3 }, {});
+const keys = [];
+async function walk() { for (const k in Object.create(proxied)) { keys.push(k); await later(0); } }
+const walking = walk();
+async function uses() {
+  using a = { [Symbol.dispose]() { text("dispose a"); } };
+  await using b = { async [Symbol.asyncDispose]() { text("dispose b"); } };
+  await later(1);
+  return "used";
+}
+const using1 = uses();
+const fromAsync = Array.fromAsync([later(1), later(2)], async (x) => x + (await later(10)));
+const stack = new AsyncDisposableStack();
+stack.defer(async () => { await later(0); text("deferred"); });
+const disposing = stack.disposeAsync();
+await later(0);
+text(JSON.stringify(await all) + JSON.stringify(await settled) + (await any) + (await fin));
+text(JSON.stringify(await Promise.all(q)));
+text(JSON.stringify(helpers.map((h) => h.next().value)) + inner.next().value);
+await walking;
+text(keys.join(",") + (await using1) + JSON.stringify(await fromAsync));
+await disposing;
+"#;
+
+fn records_case_with(skew: super::export::Skew) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let prelude = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/prelude.js"),
+    )
+    .unwrap();
+    let want = run(&prelude, RECORDS_CASE, None).unwrap();
+    let (mut descs, mut refusals) = (Vec::new(), Vec::new());
+    let got = run(
+        &prelude,
+        RECORDS_CASE,
+        Some(&mut |vm: &mut Vm, _: Handle, _k: usize| {
+            super::export::SKEW.with(|s| s.set(skew));
+            let b = vm.snapshot(info());
+            super::export::SKEW.with(|s| s.set(super::export::Skew::None));
+            let b = b.unwrap();
+            descs.push(describe(&b).unwrap());
+            match Vm::from_snapshot(info(), &b) {
+                Ok(v) => *vm = v,
+                Err(e) => refusals.push(e.0.join(" | ")),
+            }
+        }),
+    )
+    .unwrap();
+    assert_eq!(got.len(), want.len());
+    if refusals.is_empty() {
+        assert_eq!(got, want);
+    }
+    assert!(!want.iter().any(|l| l.contains("throw")), "{want:?}");
+    (descs, refusals, want)
+}
+
+/// Records are written by kind and named field, constants by name: a snapshot of a build
+/// whose records list their fields in another order and whose constants list their
+/// members in another order continues the same.
+#[test]
+fn records_and_constants_travel_by_name() {
+    let (descs, refusals, _) = records_case_with(super::export::Skew::None);
+    assert!(refusals.is_empty(), "{refusals:?}");
+    let all = descs.join("\n");
+    for t in [
+        "Object.Record.ElementRecord",
+        "Object.Record.RemainingCount",
+        "Object.Record.FinallyData",
+        "Object.Record.AsyncGeneratorRequest",
+        "Object.IteratorHelper.CallbackHelper",
+        "Object.IteratorHelper.LimitHelper",
+        "Object.IteratorHelper.FlatMapHelper",
+        "Object.IteratorHelper.ConcatHelper",
+        "Object.IteratorHelper.IteratorHelper",
+        "Object.Record.ForInState",
+        "Object.Record.UsingRecord",
+        "Object.Record.FromAsyncState",
+        "Object.Record.AsyncDisposeState",
+        "Enum(\"GeneratorStates\"",
+        "Enum(\"HelperStates\"",
+        "Bits(\"PromiseFlags\"",
+    ] {
+        assert!(all.contains(t), "{t} not in any snapshot");
+    }
+    let (_, refusals, _) = records_case_with(super::export::Skew::Reverse);
+    assert!(refusals.is_empty(), "{refusals:?}");
+}
+
+/// A field or a constant this build does not have refuses the snapshot, naming the record
+/// kind and the field.
+#[test]
+fn a_missing_or_renamed_field_refuses() {
+    use super::export::Skew;
+    let cases = [
+        (Skew::RenameField("called"), "ElementRecord: no slot calledRenamed"),
+        (Skew::DropField("keys"), "ElementRecord: the snapshot has no field keys"),
+        (Skew::RenameMember("fulfilled"), "no PromiseStates member renamed"),
+        (Skew::RenameMember("suspendedYield"), "no HelperStates member renamed"),
+    ];
+    for (skew, want) in cases {
+        let (_, refusals, _) = records_case_with(skew);
+        assert!(
+            refusals.iter().any(|r| r.contains(want)),
+            "{want} not among {refusals:?}"
+        );
+    }
+}
