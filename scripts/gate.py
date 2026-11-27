@@ -328,6 +328,11 @@ def jobs():
         # nothing refused. The negative control and the frame bytecode pin are in `test`.
         J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
           cls="rust", needs=["build:core-tests"]),
+        # 0302: the corpus's snapshots continue by name in a build whose builtins list record
+        # fields in another order and give state constants other values (D3712). It builds
+        # both trees in target/perturb (~10 CPU-min).
+        J("snapshot perturbation", "scripts/snapshot-perturb.sh", cls="rust", full_only=True,
+          group="target/perturb", summary=r"^perturb:"),
         # 0161: the unchecked accessor build (D2520): the verifier against corrupt images
         # and e2e in debug (the accessors assert their bounds), then the corpus in release,
         # where they really do not check, with suspension and GC stress.
