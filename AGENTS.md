@@ -41,7 +41,7 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
 - No `unsafe` in `djs-core` unless a decision records why. Heap access is bounds checked,
   except in the shipped wasm module, which builds with `unsafe-heap` (D3100): the wasm
   instance is its sandbox, and heap/layout/access.rs is the only `unsafe`. Native
-  builds, the dump module and every test build keep the checks.
+  builds and every test build keep the checks.
 - Prefer plain, direct code. Comments explain *why*. Keep modules focused; no speculative
   abstraction.
 - No compatibility code (D024, D3640): change formats and ABI in place; don't keep
@@ -116,7 +116,7 @@ stay true as the code changes:
   and merge-to-main does it after the rebase (scripts/regen.sh).
 - `cargo run -q -p djs-docs -- check` (part of the gate) fails on stale generated parts,
   broken links, the writing rules below, and an example whose output (`gen:run`,
-  `gen:dump`) changed. If the new output is right, accept it with `regen --examples`
+  `gen:snapshot`) changed. If the new output is right, accept it with `regen --examples`
   and reread the text around it.
 - The guide is self-contained and describes djs as it is (owner's rules, D2102, D3051): a
   page explains what it needs in its own words. No mentions of or links to ARCH.md,

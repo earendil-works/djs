@@ -9,8 +9,8 @@ their results and return data, and replaces QuickJS in pi's codemode.
 - **Suspend anywhere.** The interpreter never recurses on the Rust stack for JS calls; it
   can stop between any two instructions and resume, also inside callbacks, getters and
   async functions.
-- **Persistence as code.** A run waiting on its tools can be written out as a
-  continuation dump: a plain JavaScript program that recreates it.
+- **Persistence.** A run waiting on its tools can be written out as a snapshot, its
+  state as named records, and continued in another process or a later build.
 - **No AST.** A single pass compiles to stack bytecode; TypeScript is erased while
   parsing.
 - **Deterministic.** Clock, randomness and weak references come from the host; the same
