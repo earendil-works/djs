@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0301 | Logical snapshots on main: the module, one slot table, import validation, gate legs (then 0302-0304, same agent) | psnap | .worktrees/psnap |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -20,9 +19,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0302 | Named records for builtin closure kinds | 0301 |
-| 0303 | Snapshots for hosts: Sandbox API, CLI, REPL, docs pauses, pi's setup | 0301 |
-| 0304 | Remove continuation dumps | 0301-0303 |
 | - | 0298 follow-ups: pre-sized cat! at the large joining sites (win back the +6% dump instructions); drop the factory's format-2 text (emit_group, ~2-3 KB raw); declined B items on record (free-names check -4.1, reread -4.2, TS stripping -2.2, inlining ~8-10 KB gz) | ready |
 | - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
@@ -47,25 +43,26 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Per-op gaps vs best QuickJS (0229): trim 2.8, padStart/End 2.5, Object.entries+fromEntries 2.3, Math.floor 2.2, slice 1.9, sort cmp 1.9, Map.set 1.8, toFixed 1.8, toLowerCase/String(i) 1.7; wasm/* sizes in status.tsv stale (status.py size); compare monty snapshots on the page; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
 | - | Fuel follow-ups (0289): cached-hash Map/Set/atom lookups with long keys uncharged; owed work under GC stress not slice-exact; confirm the wall-clock table in wasm; split('') 20x tight loop per fuel (50 ns per piece) | ready |
 | - | No djs-core unit test checks builtin (native) frame names in traces; only the difftest errors cases caught a regression (0290) | ready |
-| - | Plain-dump 'crossing callbacks' refusal (s13-s10173, seed 689232 with --lazy): open since 0211 | ready |
 | - | new Error 30k vs 18.7k (CaptureStack converts frame names to Rust strings); derived class construct 1.2-1.6x (super_call opcode) (0236) | ready |
 | - | Embedding follow-ups (0240-0248): module code accepts HTML-like comments; the dumper knows no module records or TextCodec objects; host-function Throws have no stack; Step::Wait reports async calls only when the VM waits; import() loads are not fuel-metered; minor GCs walk the whole sealed snapshot region (12% of a 64 KiB body call; a card table would also let reset copy only what changed); non-ASCII TextEncoder.encode ~5x node; publishing djs-embed to crates.io needs builtins/gen and djs-libm sources inside the packaged crates | ready |
 | - | Bridge follow-ups (0238): Sandbox sync host call ~3 us vs ~1.7 us C embedding; Uint8Array in with one copy (like long ASCII strings); Math.max ratio 1.08 -> 1.79 vs QuickJS (noise or regression?); lazily read tool results (host buffer read on demand; ties to result buffers) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Publish workflow: test (node 22) flaked on examples/sleep-dump "done after at least 40 ms" (two 20 ms sleeps measured just under 40 ms on CI; v0.2.0 run, passed on rerun): make it timer-tolerant | ready |
-| - | Dump cost grows with live state (pi durable saves before every launched call; the remote step protocol also loads each step): pi measured 100 KB of state ~12 ms and ~150 KB per step, a 1e6-element array ~1 s and 5 MB per step. Profile dump/load of large arrays/objects (dense array fast path, string tables); consider incremental dumps | ready |
 | - | 0295 follow-ups: vm_define on a frozen object returns 0; DOMException run error message "Error" (2 vs 3 slots); tasks don't carry fuelUsed over a dump; pi's "stalled" case left to the host | ready |
 | - | 0294 follow-ups: bring the one module's size down (dumper ~335 KB gz: vm::dump ~720 KB raw code, smap/compile_cache +93 KB); re-record stale status.tsv rows (startup, heap, bounds, pi bench, dumps, engines, bridge) on a quiet machine; retire js/pi and the slim gate legs once pi is on host-driven runs; untrack scripts/__pycache__/*.pyc; v0.2.0 published 2026-11-23 (pi depends on it) | ready |
 | - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
-| - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
+| - | Snapshot follow-ups (0302-0304): positional class constants left (iterator kinds, RegExp/Proxy/TextCodec flags, typed array kinds, frame header, resource kinds, module trap ops); IteratorHelper slot 0 duplicates the header kind; the types section is most of a small snapshot (share the schema per build: owner/format); `djs resume --explain`; live.js browser test; a snapshot-cost table for engines.md and re-recorded engines/* numbers; corpus provenance comments + frame-pin regen; an elastic retry in the snapshot loader (-64 KiB per instance) | ready |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
-| - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | dropped with image persistence (D2560); revisit for dumps |
 
 ## Done
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0304 | Continuation dumps removed; snapshots the only persistence format | 644b850c (agent psnap; D3730-D3734; -62.6k lines; shipped module 785,187 -> 510,652 B gz, ceiling 511,676; ABI 11; guide persistence.md) |
+| 0303 | Snapshots for hosts: Sandbox API, pi's setup, CLI/REPL, docs pauses, sleep-snapshot example | a87745f2 (agent psnap; D3720-D3723; ABI 10; host-mode snapshots name host values at any depth) |
+| 0302 | Named records for builtin closure kinds and state constants | 9d6dad60 (agent psnap; D3710-D3713; 34 record kinds; full-only gate leg snapshot perturbation) |
+| 0301 | Logical snapshots on main: one slot table, import validation, gate leg, frame bytecode pin | f8ac7387 (agent psnap; D3700-D3705) |
 | 0300 | Heap snapshots revisited (2): logical snapshot prototype keyed by named bytecode | 027e32ad (agent psnap; doc only, engine on branch issue/0300-logical-snapshots; 1,164/1,164 harvest idle points, 2.7 KB zstd vs dump 3.4 KB, export 50 µs vs 492 µs, 3.1k lines/+60 KB gz vs dumper 24.5k/270 KB; owner decision pending) |
 | 0299 | Heap snapshots revisited (1): psychoscript analysis; bytecode/schema stability over 196 merges | d258225a (agent psnapr; docs/heap-snapshots-revisited.md §1-2: awaiting functions' named bytecode changed at 6/195 merges (1/95 since 0200); psychoscript 3.6 KB zstd median vs plain dump 2.8 KB) |
 | 0298 | The dumper's size: same dumps, far less code | 4e9735f4..8636abd6 (agent pdiet; 4 merges; D3660 optimize(size) on dump code; dumper 334.6 -> ~270 KB gz, module 698,440 B gz; dump instructions +6% native; B items declined by the owner) |
