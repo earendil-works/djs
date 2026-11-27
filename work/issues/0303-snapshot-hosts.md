@@ -1,6 +1,6 @@
 # 0303: Snapshots for hosts: Sandbox API, CLI, REPL, docs-site pauses, pi's setup
 
-status: open
+status: in-progress
 agent: psnap
 branch: issue/0303-snapshot-hosts
 depends-on: 0301
