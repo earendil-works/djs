@@ -797,7 +797,7 @@ TypeScript pinned by js/package-lock.json) into target/npm/package and packs it;
 `scripts/npm-test.sh TARBALL node bun deno js-tests browser` installs the tarball in a clean
 directory and runs js/pkg-test/smoke.js (the package by its name: runs, a dump and a
 resume, the dump continued in the host's engine) in each runtime, js/test's
-tests and the sleep-dump example on the package, and smoke.js in headless Chromium as
+tests and the sleep-snapshot example on the package, and smoke.js in headless Chromium as
 native modules and bundled by Vite and webpack. The gate's `npm package` leg packs with
 the gate's build of the module and runs the smoke test in node, so main stays publishable;
 .github/workflows/publish.yml runs everything on the release module (node 20, 22 and 24,

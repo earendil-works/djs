@@ -1,7 +1,7 @@
 {
   "name": "@earendil-works/djs",
   "version": "0.2.0",
-  "description": "A small, sandboxed JavaScript and TypeScript engine in WebAssembly: runs untrusted scripts with fuel and memory limits, and suspends runs into dumps that continue later.",
+  "description": "A small, sandboxed JavaScript and TypeScript engine in WebAssembly: runs untrusted scripts with fuel and memory limits, and suspends runs into snapshots that continue later.",
   "keywords": ["javascript", "typescript", "sandbox", "interpreter", "webassembly", "wasm", "codemode"],
   "type": "module",
   "license": "MIT OR Apache-2.0",

@@ -4,8 +4,8 @@ djs is a small JavaScript and TypeScript engine compiled to WebAssembly, made fo
 untrusted scripts inside a host: agent tool scripts, plugins, user code. Every sandbox is
 its own wasm instance with its own heap, so sandboxes share nothing. Scripts get only the
 host functions you give them, run under a fuel budget and a memory cap, and a run that
-waits on the host can be suspended into a dump, a plain JavaScript file, and continued
-later in another process.
+waits on the host can be suspended into a snapshot and continued later in another
+process.
 
 The module has no imports and the package no dependencies: it runs in node (20 or newer),
 Bun, Deno, browsers and web workers.
@@ -38,21 +38,23 @@ Options include `typescript: true` (scripts are TypeScript), `console` (where
 `console.log` goes), `globals`, `deterministic` (repeatable runs) and `frozenBuiltins`.
 Errors are `SandboxError`s with a `kind`: `threw`, `syntax`, `fuel`, `memory`, ...
 
-## Dumps
+## Snapshots
 
-The package has one module, `wasm/djs.wasm`, and it has the dumper: a sandbox with frozen
-builtins can suspend a run that waits on the host into a dump, and any sandbox can
-continue it.
+A run that waits on the host can be suspended into a snapshot, bytes the host keeps, and
+continued by a sandbox made with the same options, in this or another process. The
+sandbox's host functions and values are named in it, not written.
 
 ```js
-const sandbox = await Sandbox.create({ frozenBuiltins: true, asyncFunctions });
+const sandbox = await Sandbox.create({ asyncFunctions });
 const task = sandbox.start(code, params);
-const dump = await task.suspend(); // later, anywhere: (await Sandbox.resume(dump, options)).result
+const snapshot = await task.suspend(); // later, anywhere: (await Sandbox.resume(snapshot, options)).result
 ```
 
-To continue a dump in a JavaScript engine other than djs, the package also exports the
-dump runtime's `helpers` (and `script`, the same as a Script; `scriptFor(dump)`, only the
-helpers a dump needs).
+A host-driven run (`sandbox.begin`) has `run.snapshot()` and `sandbox.loadSnapshot(bytes)`.
+The package's module also writes continuation dumps (`run.dump()`, with frozen builtins),
+JavaScript that recreates a run; to continue one in a JavaScript engine other than djs,
+the package exports the dump runtime's `helpers` (and `script`, the same as a Script;
+`scriptFor(dump)`, only the helpers a dump needs).
 
 ## Loading the module
 
@@ -75,7 +77,7 @@ not know the pattern, serve the `.wasm` file yourself and pass its URL:
 
 ## Documentation
 
-The guide, with the whole API, the language djs runs, limits, determinism and dumps:
+The guide, with the whole API, the language djs runs, limits, determinism and snapshots:
 https://earendil-works.github.io/djs/js-api.html
 
 ## License

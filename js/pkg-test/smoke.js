@@ -12,7 +12,7 @@ function eq(actual, expected, what) {
 }
 
 /**
- * `tools.wait(v)`: never settles while `w.hold` (the run waits there to be dumped), else
+ * `tools.wait(v)`: never settles while `w.hold` (the run waits there to be suspended), else
  * resolves to `got v`; a resumed call resolves to `resumed v`.
  */
 function waiter() {
@@ -66,19 +66,26 @@ export async function smoke() {
   for (const s of [sb, io, ts]) s.dispose();
   done.push("run, runAsync, console, typescript, errors");
 
-  // The package's one module has the dumper: a task suspended into a dump and resumed.
+  // A task suspended into a snapshot and resumed in a fresh sandbox.
   const w = waiter();
   const opts = { frozenBuiltins: true, asyncFunctions: { "tools.wait": w.fn } };
   const a = await Sandbox.create(opts);
   const task = a.start(SCRIPT, { x: "a" });
-  const dump = await task.suspend();
+  const snapshot = await task.suspend();
   a.dispose();
   w.hold = false;
-  if (!dump.startsWith('"djs-dump";')) throw new Error(`not a dump: ${dump.slice(0, 40)}`);
-  const resumed = await Sandbox.resume(dump, opts);
+  if (!(snapshot instanceof Uint8Array)) throw new Error("not a snapshot");
+  const resumed = await Sandbox.resume(snapshot, opts);
   eq(await resumed.result, ["resumed a", "got resumed a!"], "resume");
   resumed.sandbox.dispose();
   done.push("suspend and resume");
+
+  // The package's one module has the dumper: a host-driven run written as a dump.
+  const d = await Sandbox.create(opts);
+  const run = d.begin(SCRIPT, { x: "a" });
+  const dump = run.dump({ [run.calls[0].id]: { v: "a" } });
+  d.dispose();
+  if (!dump.startsWith('"djs-dump";')) throw new Error(`not a dump: ${dump.slice(0, 40)}`);
 
   // The dump continued in the host's own engine, with the dump runtime's helpers.
   const g = globalThis;
