@@ -6,9 +6,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { type AsyncHostFunction, type HostCall, loadModule, type Run, RunExit, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
-
-const quiet = { log() {}, info() {}, warn() {}, error() {} };
+import { type AsyncHostFunction, type HostCall, loadModule, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
+import { answer, piOptions, piRun } from "./pi-setup.ts";
 
 test("a task suspended into a snapshot resumes through the hooks, ids and all", async () => {
   const module = await loadModule();
@@ -76,91 +75,6 @@ test("a snapshot without sources names its script by hash; describe tells what i
 
 // ---- pi's code mode setup -------------------------------------------------------------
 
-const TOOLS = [
-  { name: "read", jsName: "read", description: "Reads a file. ".repeat(40) },
-  { name: "my-tool", jsName: "my_tool", description: "Does a thing. ".repeat(40) },
-];
-
-/** The sandbox options of pi's code mode (pi-mono packages/codemode/src/run.ts `sandboxOptions`). */
-function piOptions(module: WebAssembly.Module, out: string[], fuel = 1e9): SandboxOptions {
-  const host = () => {};
-  const asyncFunctions: Record<string, () => void> = { "@mcp/github#search": host, searchTools: host, later: host };
-  const aliases: Record<string, string[]> = {};
-  const listed = TOOLS.map((t) => ({ name: t.jsName, description: t.description }));
-  for (const t of TOOLS) {
-    asyncFunctions[`tools.${t.jsName}`] = host;
-    if (t.name !== t.jsName) aliases[`tools.${t.jsName}`] = [t.name];
-  }
-  const log = (...a: unknown[]) => void out.push(a.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(" "));
-  return {
-    module,
-    maxFuel: fuel,
-    frozenBuiltins: true,
-    typescript: true,
-    console: { log, info: log, warn: log, error: log, debug: log },
-    unhandledRejections: "collect",
-    functions: {
-      text: (v: unknown) => void out.push(`text ${typeof v === "string" ? v : JSON.stringify(v)}`),
-      image: () => {},
-      exit: () => {
-        throw new RunExit("exited");
-      },
-      store: () => {},
-      load: () => undefined,
-    },
-    asyncFunctions,
-    aliases,
-    missingMember: (ns, member) => (ns === "tools" ? `tools.${member} is not a tool. ALL_TOOLS lists every tool.` : undefined),
-    values: { ALL_TOOLS: listed },
-    modules: (specifier) => (specifier === "@mcp/github" ? { exports: { search: "@mcp/github#search" } } : undefined),
-    jsonBoundary: { except: ["text", "image", "store", "later"] },
-  };
-}
-
-/** Answers every open call as the test host does: `later(v, rejected)` with v, a tool with its arguments. */
-function answer(run: Run): void {
-  for (const c of run.calls) {
-    if (c.fn === "later") run.settle(c.id, c.args[1] === true ? { ok: false, value: c.args[0] } : { ok: true, value: c.args[0] });
-    else run.settle(c.id, { ok: true, value: { fn: c.fn, args: c.args } });
-  }
-}
-
-/**
- * Runs `code` in pi's setup to its end, answering at every idle point: straight through,
- * or (`moves`) snapshotting it there and going on in a fresh sandbox each time. Its
- * output, outcome and the snapshots' sizes.
- */
-async function piRun(module: WebAssembly.Module, code: string, moves: boolean, fuel?: number) {
-  const out: string[] = [];
-  let sb = new Sandbox(piOptions(module, out, fuel));
-  let run = sb.begin(code, {}, { filename: "codemode.js", start: false });
-  const sizes: number[] = [];
-  let hostText = false;
-  try {
-    await run.advance();
-    while (run.state === "idle") {
-      if (moves) {
-        const snap = run.snapshot();
-        sizes.push(snap.length);
-        hostText ||= new TextDecoder("latin1").decode(snap).includes("Does a thing");
-        const used = run.fuelUsed;
-        sb.dispose();
-        sb = new Sandbox(piOptions(module, out, fuel));
-        run = sb.loadSnapshot(snap);
-        assert.equal(run.fuelUsed, used);
-      }
-      answer(run);
-      await run.advance();
-    }
-  } catch (e) {
-    if (!(e instanceof SandboxError)) throw e;
-    out.push(`step: ${e.kind}`);
-  }
-  const outcome = run.state === "done" ? { value: run.value, exited: run.exited } : { error: run.error?.message };
-  sb.dispose();
-  return { out, outcome, sizes, hostText };
-}
-
 const PI_CODE = `
 import { search } from "@mcp/github";
 import * as gh from "@mcp/github";
@@ -190,7 +104,7 @@ test("pi's setup through snapshots: host values keep their identity, the boundar
     "text [true,true,true,true]",
     "text TypeError: tools.Read is not a tool. ALL_TOOLS lists every tool.",
   ]);
-  assert.equal(moved.sizes.length, 4);
+  assert.equal(moved.sizes.length, 5);
   // ALL_TOOLS's descriptions are the host's: never in a snapshot.
   assert.equal(moved.hostText, false);
   assert.ok(Math.max(...moved.sizes) < 6000, String(moved.sizes));
