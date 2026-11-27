@@ -1,6 +1,6 @@
 # 0304: Remove continuation dumps
 
-status: open
+status: in-progress
 agent: psnap
 branch: issue/0304-remove-dumps
 depends-on: 0301, 0302, 0303
