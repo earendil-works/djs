@@ -1702,6 +1702,11 @@ pub fn describe(bytes: &[u8]) -> Result<String, Refusal> {
         let members = s.host.len() - host.len();
         out += &format!("host values: {} (and {members} members)\n", host.join(" "));
     }
+    for ((name, _), f) in s.types[s.root.0 as usize].fields.iter().zip(&s.root.1) {
+        if let ("hostData", F::V(V::Str(i))) = (name.as_str(), f) {
+            out += &format!("host data: {}\n", text(*i));
+        }
+    }
     for (sc, a, b, pinned, _, sites) in &s.functions {
         out += &format!(
             "function {sc}:{a}..{b}{}{}\n",

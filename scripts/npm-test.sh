@@ -3,7 +3,7 @@
 # installs it into a clean directory and runs, per argument,
 #   node | bun | deno   js/pkg-test/smoke.js, which imports the package by name and uses its
 #                       API, in that runtime;
-#   js-tests            js/test's tests and the sleep-dump example on the package (node >= 22.18:
+#   js-tests            js/test's tests and the sleep-snapshot example on the package (node >= 22.18:
 #                       they are TypeScript), on its module; the tests of internal modules
 #                       (base, trap, wire, imports, nesting) and of pi's adapter stay out: the
 #                       package does not export them;
@@ -41,17 +41,20 @@ for what in "$@"; do
     deno) deno run --allow-read=. main.js ;;
     js-tests)
       rm -rf js examples tests && mkdir -p js/test examples tests/dump
-      cp -R "$repo/examples/sleep-dump" examples/
+      cp -R "$repo/examples/sleep-snapshot" examples/
       # golden-host.test.ts's programs and their dumps.
       cp -R "$repo/tests/dump/golden-host" tests/dump/
-      rm -rf examples/sleep-dump/out
+      rm -rf examples/sleep-snapshot/out
       for f in "$repo"/js/test/*.test.ts; do
         # (imports.test.ts and nesting.test.ts test internal helpers beside the Sandbox.)
         case "$(basename "$f")" in
           base.test.ts | trap.test.ts | wire.test.ts | imports.test.ts | nesting.test.ts | pi-vm.test.ts | pi-pool.test.ts) continue ;;
+          # (The harvest corpus is the repository's.)
+          snapshot-harvest.test.ts) continue ;;
         esac
         cp "$f" js/test/
       done
+      cp "$repo/js/test/pi-setup.ts" js/test/
       # The sources' relative imports become the package's entry points.
       node -e '
         const fs = require("fs");
@@ -63,7 +66,7 @@ for what in "$@"; do
           if (left) { console.error(`${f}: imports ${left[0]}, which the package does not export`); process.exit(1); }
           fs.writeFileSync(f, s);
         }
-      ' js/test/*.ts examples/sleep-dump/*.ts
+      ' js/test/*.ts examples/sleep-snapshot/*.ts
       DJS_WASM=$pkg/wasm/djs.wasm node --test js/test/*.test.ts
       ;;
     browser)
