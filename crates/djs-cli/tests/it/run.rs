@@ -184,6 +184,69 @@ fn explain_a_dump() {
     assert!(r.2.contains("not a djs dump"), "{}", r.2);
 }
 
+/// `run --snapshot-after K` then `resume`, for every idle point K of a script, prints
+/// what the uninterrupted run prints; so does `--snapshot-every-idle` (D3720).
+fn every_snapshot_point(script: &str, args: &[&str]) -> u64 {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let mut full_args = args.to_vec();
+    full_args.push(script);
+    let full = djs(&full_args);
+    let mut k = 1u64;
+    loop {
+        let out = format!("{dir}/snap-{}-{k}.snapshot", std::process::id());
+        let ks = k.to_string();
+        let mut a = args.to_vec();
+        a.extend_from_slice(&["--snapshot-after", &ks, &out, script]);
+        let head = djs(&a);
+        if !std::path::Path::new(&out).exists() {
+            assert_eq!(
+                (head.0, &head.1),
+                (full.0, &full.1),
+                "{script}: no snapshot at {k}"
+            );
+            break;
+        }
+        let mut r = vec!["resume"];
+        r.extend(resume_args(args));
+        r.push(&out);
+        let tail = djs_cmd(&r);
+        std::fs::remove_file(&out).unwrap();
+        assert_eq!(head.0, 0, "{script} k={k}: {head:?}");
+        assert_eq!(
+            (
+                tail.0,
+                format!("{}{}", head.1, tail.1),
+                format!("{}{}", head.2, tail.2)
+            ),
+            full,
+            "{script} k={k}"
+        );
+        k += 1;
+    }
+    let mut e = args.to_vec();
+    e.extend_from_slice(&["--snapshot-every-idle", script]);
+    assert_eq!(djs(&e), full, "{script} --snapshot-every-idle");
+    k - 1
+}
+
+/// Every idle point of the CLI's test scripts through a snapshot.
+#[test]
+fn snapshot_after_every_idle_point() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/run");
+    let reads = format!("{dir}/reads.src.js");
+    let answers = format!("{dir}/reads.json");
+    assert!(every_snapshot_point(&reads, &["--tools", &answers]) > 0);
+    let tmp = env!("CARGO_TARGET_TMPDIR");
+    let body = format!("{tmp}/snap-body-{}.js", std::process::id());
+    std::fs::write(
+        &body,
+        "const a = await tools.read({ path: 'a' });\nconsole.log(a, await later(2));\nconst r = await Promise.all([later(3), tools.read({ path: 'b' })]);\nconsole.log(r);\n",
+    )
+    .unwrap();
+    assert!(every_snapshot_point(&body, &["--body", "--tools", &answers]) >= 3);
+    std::fs::remove_file(&body).unwrap();
+}
+
 /// `run --dump-after K` then `resume`, for every idle point K of a script, prints what
 /// the uninterrupted run prints; so does `--dump-every-idle`. The number of idle points.
 fn every_idle_point(script: &str, args: &[&str]) -> u64 {
@@ -394,17 +457,17 @@ fn an_unknown_host_function() {
     }
 }
 
-/// `--debugger OUT` (D3060): the first `debugger;` pause writes the run to OUT and stops;
-/// `resume --debugger OUT OUT` steps to the next pause (a re-dump of a resumed run),
+/// `--debugger OUT` (D3060): the first `debugger;` pause writes the run to OUT as a
+/// snapshot (D3720) and stops; `resume --debugger OUT OUT` steps to the next pause,
 /// `resume OUT` goes on to the end. Together they print what the run without pauses
 /// prints; without the flag `debugger;` does nothing.
 #[test]
-fn debugger_pauses_dump_and_resume() {
+fn debugger_pauses_snapshot_and_resume() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let id = std::process::id();
     let (js, dump) = (
         format!("{dir}/pause-{id}.js"),
-        format!("{dir}/pause-{id}.dump.js"),
+        format!("{dir}/pause-{id}.snapshot"),
     );
     std::fs::write(
         &js,
@@ -432,36 +495,37 @@ main().then((t) => console.log('total', t));
             format!("djs: paused at {js}:6:5, wrote {dump}\n")
         )
     );
-    let text = std::fs::read_to_string(&dump).unwrap();
-    assert!(text.contains("\"debugger\", []);"), "{text}");
-    // The continuation copies the loop's `debugger;`, which pauses again.
+    let d = djs_cmd(&["describe", &dump]);
+    assert!(d.1.contains(" debugger() "), "{d:?}");
+    // The loop's next `debugger;` pauses again, at the same place in the script.
     let r = djs_cmd(&["resume", "--debugger", &dump, &dump]);
-    assert_eq!(r.0, 0, "{r:?}");
-    assert_eq!(r.1, "step 2 3\n");
-    assert!(
-        r.2.starts_with(&format!("djs: paused at {dump}:")),
-        "{}",
-        r.2
+    assert_eq!(
+        r,
+        (
+            0,
+            "step 2 3\n".into(),
+            format!("djs: paused at {js}:6:5, wrote {dump}\n")
+        )
     );
     let r = djs_cmd(&["resume", &dump]);
     assert_eq!(r, (0, "step 3 6\ntotal 6\n".into(), String::new()));
-    // Every pause, from the start, in --dump-every-idle's fresh VMs too.
-    let r = djs(&["--dump-every-idle", "--debugger", &dump, &js]);
+    // Every pause, from the start, in --snapshot-every-idle's fresh VMs too.
+    let r = djs(&["--snapshot-every-idle", "--debugger", &dump, &js]);
     assert_eq!(r.1, "step 1 1\n");
     for f in [&js, &dump] {
         std::fs::remove_file(f).unwrap();
     }
 }
 
-/// A codemode body pauses at its top level; its dump refers to the file (`$djs.source`),
-/// compiled again with the pause option.
+/// A codemode body pauses at its top level; its snapshot holds the body, compiled again
+/// with the pause option.
 #[test]
 fn debugger_pauses_a_body() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let id = std::process::id();
     let (js, dump) = (
         format!("{dir}/pause-body-{id}.js"),
-        format!("{dir}/pause-body-{id}.dump.js"),
+        format!("{dir}/pause-body-{id}.snapshot"),
     );
     std::fs::write(
         &js,
@@ -477,11 +541,6 @@ fn debugger_pauses_a_body() {
             String::new(),
             format!("djs: paused at {js}:1:1, wrote {dump}\n")
         )
-    );
-    assert!(
-        std::fs::read_to_string(&dump)
-            .unwrap()
-            .contains("$djs.source("),
     );
     let r = djs_cmd(&["resume", "--debugger", &dump, &dump]);
     assert_eq!(r.0, 0, "{r:?}");

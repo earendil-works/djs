@@ -6,8 +6,8 @@
 //! parameters are the CLI's default bindings `tools` and `console`, and the functions
 //! `--bind NAME=IDENTITY` adds (D2972).
 //!
-//! `djs resume [same options] <dump.js>` runs a dump (a plain Script, D2830) in a fresh
-//! VM and goes on the same way (D2603).
+//! `djs resume [same options] <file>` loads a snapshot (D3720) into a fresh VM, or runs a
+//! dump (a plain Script, D2830) there, and goes on the same way (D2603).
 //!
 //! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`) or a tool
 //! call the answers file has no answer for, 2 usage or compile error.
@@ -38,31 +38,42 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
                      restored from the heap image\n\
   --tools FILE       answer `tools.x()` calls from FILE, one at a time whenever the\n\
                      run is idle (docs/cli.md)\n\
+  --snapshot-after K OUT\n\
+                     write the run as a snapshot (D3720) to OUT at idle point K (from\n\
+                     1) and stop; `djs resume OUT` continues it\n\
+  --snapshot-every-idle\n\
+                     at every idle point, snapshot the run and continue in a fresh VM\n\
+                     that loaded the snapshot\n\
   --dump-after K OUT write the run as a dump (`\"djs-dump\";`, a Script, D2830) to OUT\n\
                      at idle point K (from 1) and stop; `djs resume OUT` continues it\n\
   --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
                      ran the dump\n\
   --debugger OUT     `debugger;` in an async function (or a --body) pauses: at the\n\
-                     first pause, write the run as a dump to OUT and stop; `djs\n\
+                     first pause, write the run as a snapshot to OUT and stop; `djs\n\
                      resume OUT` continues it\n\
-                     (with any of these, the VM has frozen builtins, which dumps need)";
+                     (with the dump options, the VM has frozen builtins, which dumps need)";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
-                [--suspend-every N] [--debugger OUT] <dump.js>\n\
-  runs a dump (`\"djs-dump\";`, a Script) in a fresh VM with frozen builtins, to its\n\
-  end, answering open calls as `djs run` does (--dump-after, --dump-every-idle and\n\
-  --debugger as for run); a `debugger;` pause the dump holds continues at once\n\
+                [--suspend-every N] [--debugger OUT] <file.snapshot | dump.js>\n\
+  loads a snapshot (D3720) into a fresh VM, or runs a dump (`\"djs-dump\";`, a Script)\n\
+  in one with frozen builtins, and goes on to the end, answering open calls as `djs run`\n\
+  does (--snapshot-after, --snapshot-every-idle, --dump-after, --dump-every-idle and\n\
+  --debugger as for run); a `debugger;` pause it holds continues at once\n\
   --explain          only load it, print its open calls and suspended activations (where\n\
                      each stopped in the dump, with the source line), and exit";
 
-/// Dumps at idle points (D2604). An idle point is a stop with only host calls open,
-/// before the run answers one, so each answer starts a new one.
+/// Dumps (D2604) or snapshots (D3720) at idle points. An idle point is a stop with only
+/// host calls open, before the run answers one, so each answer starts a new one.
 #[derive(Clone, Debug, Default)]
 pub struct Dumping {
     /// `--dump-after K OUT`.
     pub after: Option<(u64, String)>,
     /// `--dump-every-idle`.
     pub every_idle: bool,
+    /// `--snapshot-after K OUT`.
+    pub snapshot_after: Option<(u64, String)>,
+    /// `--snapshot-every-idle`.
+    pub snapshot_every_idle: bool,
 }
 
 pub fn main(args: &[String]) -> i32 {
@@ -109,6 +120,16 @@ fn command(args: &[String], resume: bool) -> i32 {
                 }
             },
             "--dump-every-idle" => opts.dumping.every_idle = true,
+            "--snapshot-after" => match (it.next().and_then(|k| k.parse().ok()), it.next()) {
+                (Some(k), Some(out)) if k > 0 => {
+                    opts.dumping.snapshot_after = Some((k, out.clone()))
+                }
+                _ => {
+                    eprintln!("{usage}");
+                    return 2;
+                }
+            },
+            "--snapshot-every-idle" => opts.dumping.snapshot_every_idle = true,
             "--debugger" => match it.next() {
                 Some(out) => opts.debugger = Some(out.clone()),
                 None => {
@@ -162,6 +183,16 @@ fn command(args: &[String], resume: bool) -> i32 {
     opts.resume = resume;
     let stdout = std::io::stdout();
     let stderr = std::io::stderr();
+    if resume && crate::snapshots::is_snapshot(&src) {
+        return resume_snapshot(
+            &src,
+            &path,
+            &opts,
+            &mut tools,
+            &mut stdout.lock(),
+            &mut stderr.lock(),
+        );
+    }
     if resume {
         let text = String::from_utf8_lossy(&src);
         if explain {
@@ -279,6 +310,40 @@ pub fn resume_dump(
     }
     let load = Some(crate::dumps::PlainLoad::default());
     drive_from(vm, filename, None, load, opts, tools, out, err)
+}
+
+/// Loads a snapshot (D3720) into a fresh VM of its builtins' mode and runs it to its end;
+/// exit codes as `run`.
+pub fn resume_snapshot(
+    bytes: &[u8],
+    filename: &str,
+    opts: &RunOptions,
+    tools: &mut Tools,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> i32 {
+    let frozen = match djs_core::vm::snapshot::needs(bytes) {
+        Ok(n) => n.frozen_builtins,
+        Err(e) => {
+            let _ = writeln!(err, "djs: cannot load {filename}: {}", e.0.join("; "));
+            return 2;
+        }
+    };
+    let mut vm = new_vm_with(opts, frozen);
+    match crate::snapshots::load(&mut vm, tools, bytes) {
+        Ok(l) => {
+            let run = l
+                .handles
+                .into_iter()
+                .find(|(n, _)| n == "run")
+                .map(|(_, h)| h);
+            drive_from(vm, filename, run, None, opts, tools, out, err)
+        }
+        Err(e) => {
+            let _ = writeln!(err, "djs: cannot load {filename}: {e}");
+            2
+        }
+    }
 }
 
 /// `djs resume --explain` (D2641): what a dump holds in flight, for a reader, since the
@@ -416,8 +481,8 @@ pub struct RunOptions {
     pub resume: bool,
     /// `--bind NAME=IDENTITY`: more body parameters, bound to host functions (D2972).
     pub binds: Vec<(String, String)>,
-    /// `--debugger OUT`: `debugger;` pauses (D3050); the first pause dumps the run to OUT
-    /// and stops it (D3060).
+    /// `--debugger OUT`: `debugger;` pauses (D3050); the first pause snapshots the run to
+    /// OUT and stops it (D3060).
     pub debugger: Option<String>,
 }
 
@@ -432,12 +497,9 @@ impl RunOptions {
                 gc_stress: self.gc_stress,
                 ..Default::default()
             },
-            // Dumps need frozen builtins (D2836), and a resumed run goes on as the dumped
-            // one, which had them.
-            frozen_builtins: self.resume
-                || self.dumping.after.is_some()
-                || self.dumping.every_idle
-                || self.debugger.is_some(),
+            // Dumps need frozen builtins (D2836), and a resumed dump goes on as the dumped
+            // run, which had them. (A snapshot's VM has the mode of the one it came from.)
+            frozen_builtins: self.resume || self.dumping.after.is_some() || self.dumping.every_idle,
             ..Default::default()
         }
     }
@@ -445,7 +507,16 @@ impl RunOptions {
 
 /// A VM with the globals `djs run` provides (`console.log`).
 pub fn new_vm(opts: &RunOptions) -> Vm {
-    let mut vm = djs_prelude::new_vm(opts.vm_options()).expect("out of memory creating the VM");
+    new_vm_with(opts, opts.vm_options().frozen_builtins)
+}
+
+/// [`new_vm`] with frozen builtins or not (a snapshot's mode).
+pub fn new_vm_with(opts: &RunOptions, frozen: bool) -> Vm {
+    let vo = VmOptions {
+        frozen_builtins: frozen,
+        ..opts.vm_options()
+    };
+    let mut vm = djs_prelude::new_vm(vo).expect("out of memory creating the VM");
     // The VM reads no clock itself (D1383): give it the wall clock, in UTC.
     vm.set_now(now_ms());
     let console = vm.new_object().expect("oom");
@@ -561,13 +632,31 @@ fn drive_from(
                         }
                     };
                 }
+                if let Some((k, path)) = &opts.dumping.snapshot_after
+                    && *k == idle_points
+                {
+                    let _ = out.flush();
+                    return match snapshot_run(&mut vm, run, tools) {
+                        Ok(b) => match std::fs::write(path, &b) {
+                            Ok(()) => 0,
+                            Err(e) => {
+                                let _ = writeln!(err, "djs: cannot write {path}: {e}");
+                                2
+                            }
+                        },
+                        Err(e) => {
+                            let _ = writeln!(err, "djs: at idle point {k}: {e}");
+                            1
+                        }
+                    };
+                }
                 if let Some(path) = &opts.debugger
                     && let Some(&id) = new.iter().find(|&&id| tools.is_pause(&vm, id))
                 {
                     let _ = out.flush();
                     let at = pause_position(&vm, id, filename);
-                    return match dump_run(&vm, run, tools) {
-                        Ok(d) => match std::fs::write(path, &d.text) {
+                    return match snapshot_run(&mut vm, run, tools) {
+                        Ok(b) => match std::fs::write(path, &b) {
                             Ok(()) => {
                                 let _ = writeln!(err, "djs: paused at {at}, wrote {path}");
                                 0
@@ -582,6 +671,31 @@ fn drive_from(
                             1
                         }
                     };
+                }
+                if opts.dumping.snapshot_every_idle {
+                    // The snapshot of this idle point, loaded in a fresh VM, which is at
+                    // the same idle point before the next answer.
+                    let fresh = snapshot_run(&mut vm, run, tools).and_then(|b| {
+                        let mut fresh = new_vm_with(opts, vm.frozen_builtins());
+                        let l = crate::snapshots::load(&mut fresh, tools, &b)?;
+                        let run = l
+                            .handles
+                            .into_iter()
+                            .find(|(n, _)| n == "run")
+                            .map(|(_, h)| h);
+                        Ok((fresh, run))
+                    });
+                    match fresh {
+                        Ok(f) => {
+                            (vm, run) = f;
+                            reloaded = true;
+                            continue;
+                        }
+                        Err(e) => {
+                            let _ = writeln!(err, "djs: at idle point {idle_points}: {e}");
+                            return 1;
+                        }
+                    }
                 }
                 if opts.dumping.every_idle {
                     // The dump of this idle point, loaded in a fresh VM, which runs to the
@@ -619,6 +733,12 @@ fn drive_from(
                     let _ = writeln!(
                         err,
                         "djs: --dump-after {k}: the run ended after {idle_points} idle points"
+                    );
+                }
+                if let Some((k, _)) = &opts.dumping.snapshot_after {
+                    let _ = writeln!(
+                        err,
+                        "djs: --snapshot-after {k}: the run ended after {idle_points} idle points"
                     );
                 }
                 // Like qjs: unhandled rejections are reported once the jobs ran out.
@@ -725,6 +845,16 @@ fn dump_run(
     };
     let handles: Vec<(&str, Value)> = run.map(|v| ("run", v)).into_iter().collect();
     crate::dumps::dump(vm, tools, &handles, &|_| None, true)
+}
+
+/// Snapshots the run at an idle point (D3720); the result promise of a run resumed from a
+/// dump is the handle `run` (a body's own is the entry call's, which the VM keeps).
+fn snapshot_run(vm: &mut Vm, run: Option<Handle>, tools: &Tools) -> Result<Vec<u8>, String> {
+    let handles: Vec<(&str, Value)> = run
+        .map(|h| ("run", vm.heap().get_handle(h)))
+        .into_iter()
+        .collect();
+    crate::snapshots::snapshot(vm, tools, &handles, &|_| None)
 }
 
 /// The system clock in ms since the epoch.

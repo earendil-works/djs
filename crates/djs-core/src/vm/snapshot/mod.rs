@@ -187,6 +187,8 @@ pub struct Loaded {
 pub struct Needs {
     pub sources: Vec<String>,
     pub host: Vec<String>,
+    /// The VM had frozen builtins: a host VM to load it into must have them too.
+    pub frozen_builtins: bool,
 }
 
 /// The hash a snapshot names a source by when it does not store it.

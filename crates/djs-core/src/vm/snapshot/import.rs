@@ -559,6 +559,11 @@ pub fn needs(bytes: &[u8]) -> Result<Needs, Refusal> {
             HostEntry::Member(..) => {}
         }
     }
+    for ((name, _), f) in s.types[s.root.0 as usize].fields.iter().zip(&s.root.1) {
+        if let ("frozenBuiltins", F::U(u)) = (name.as_str(), f) {
+            out.frozen_builtins = *u != 0;
+        }
+    }
     Ok(out)
 }
 
