@@ -7,7 +7,7 @@ its TypeScript client. Values go in through the wire format and come out through
 reads (docs/wire.md, both halves).
 
 ```sh
-scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped, with the dumper
+scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped, with snapshots
 scripts/build-wasm.sh --keep-names # with the name section (profiling, scripts/wasm-funcs.py)
 node --test js/test/*.test.ts    # sandbox.test.ts needs a build ($DJS_WASM overrides the path)
 scripts/npm-pack.sh                # the npm package: target/npm/earendil-works-djs-VERSION.tgz
@@ -16,7 +16,7 @@ scripts/npm-test.sh TARBALL node   # its smoke test (also bun, deno, js-tests, b
 
 The npm package (D3105–D3109, D3602) has one entry point, `.` (`src/index.ts`): the whole
 API with the package's one module, wasm/djs.wasm, as the default (`$DJS_WASM` overrides
-it), and the dump runtime's `helpers`, `script` and `scriptFor`; besides it only
+it); besides it only
 `./wasm/*.wasm` and `./package.json`. It finds its module with
 `new URL("../wasm/djs.wasm", import.meta.url)`, which bundlers copy as an asset;
 `Sandbox.defaultModule()` is the hook the entry point overrides.
@@ -56,8 +56,8 @@ const sb = await Sandbox.create({
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
-const task = sb.start(code, params);                            // a task: suspend() into a dump while it waits
-const run = sb.begin(code, params);                             // a run the host drives; run.dump() while idle
+const task = sb.start(code, params);                            // a task: suspend() into a snapshot while it waits
+const run = sb.begin(code, params);                             // a run the host drives; run.snapshot() while idle
 sb.dispose();
 ```
 
@@ -78,7 +78,7 @@ sb.dispose();
   the wire format cannot carry (a function, a cycle) becomes such an error too.
 - **Identities and bindings (D2970, D2972).** `functions` and `asyncFunctions` are keyed
   by the function's identity, any string (`readFile`, `tools.read`,
-  `@sdk/our-stuff#myTool`): calls, journals, `run.calls` and dumps name the function by
+  `@sdk/our-stuff#myTool`): calls, journals, `run.calls` and snapshots name the function by
   it, and the sandbox makes one function object per identity. An identity `ns.member` of
   two identifiers also makes the function member `member` of the namespace object `ns`
   (identity `ns`). Where scripts find them is separate: `globals` maps global names to
@@ -94,7 +94,7 @@ sb.dispose();
   them to return synchronously (a promise is a TypeError in the VM); `runAsync` awaits a
   promise while the VM stays parked at the call.
 - `asyncFunctions` are *async* host functions (D1374), plain functions or `{ call, save,
-  resume }` with hooks for dumps (below): a call returns a promise in the VM
+  resume }` with hooks for snapshots (below): a call returns a promise in the VM
   at once and the script goes on, so several calls are outstanding together (`Promise.all`
   over tools). `runAsync` starts each call as soon as `vm_run` returns, and when only
   pending calls are left (IDLE) awaits whichever settles first, passes its result back and
@@ -136,8 +136,8 @@ sb.dispose();
     not grow. That is not a script error, scripts cannot catch it, and the call is
     abandoned.
   - `fuel`: `maxFuel` ran out. `trap`: the module trapped (a djs bug), with the panic
-    message. `misuse`: a dump that does not load, a missing host function, a disposed
-    sandbox.
+    message. `misuse`: a snapshot that is refused or does not load, a missing host
+    function, a disposed sandbox.
 
   After a `trap` the sandbox is unusable. Every other error leaves it usable. A failed
   run that left the VM mid-call (`fuel`, or a host-side error escaping the run loop) is
@@ -155,12 +155,12 @@ sb.dispose();
   A host `collect()` at exactly that point can then fail for lack of to-space; collect
   when the VM is idle or done instead.
 
-### Tasks: suspending a run into a dump (D2770, D2771)
+### Tasks: suspending a run into a snapshot (D2770, D2771, D3720)
 
 `runAsync` returns only at the end. A task is the same run, driven by the sandbox, that
-can be suspended into a continuation dump while it waits on async host calls and
-continued from it later, in another sandbox or process (examples/sleep-dump shows all of
-it):
+can be suspended into a snapshot (D3700) while it waits on async host calls and
+continued from it later, in another sandbox or process (examples/sleep-snapshot shows
+all of it):
 
 ```ts
 const sleep: AsyncHostFunction<{ due: number }> = {
@@ -171,8 +171,8 @@ const sleep: AsyncHostFunction<{ due: number }> = {
 const opts = { asyncFunctions: { "tools.sleep": sleep } };
 const task = (await Sandbox.create(opts)).start(code, params, { filename: "task.js" });
 task.calls;                                 // the open calls: { id, fn, args, startedAt, state, signal }
-const dump = await task.suspend();          // at the next idle point: save() per call, dump, stop
-const again = await Sandbox.resume(dump, opts); // any time later, any process
+const snap = await task.suspend();          // at the next idle point: save() per call, snapshot, stop
+const again = await Sandbox.resume(snap, opts); // any time later, any process
 await again.result;
 ```
 
@@ -181,48 +181,29 @@ await again.result;
   outcome; it rejects with a SandboxError (`threw`, `fuel`, ...).
 - `suspend()` waits for the next idle point with no result left to deliver, takes each
   open call's state (its function's `save(call)`, by default `call.state`; JSON data) and
-  writes the run as a dump, the states with their calls (`$djs.resume(id, name, args,
-  state)`). The task stops: the calls' `signal`s abort,
-  their late results are dropped, and `result` rejects with kind `suspended` (counted as
-  handled). A dump that fails (a value that cannot be written, a `save` that throws, a
-  state that is not JSON) rejects the `suspend` only, and the task goes on.
-  `checkpoint()` dumps the same way and goes on. Both reject if the run ends first.
-- `Sandbox.resume(dump, opts)` makes a sandbox from `opts` (the same host functions, by
-  name), loads the dump and drives it as a task (`task.sandbox` is the new sandbox;
-  `sb.resume(dump)` does it in an existing fresh one). Each open call continues by its
+  writes the run as a snapshot, the states with their calls (the host's data). The task
+  stops: the calls' `signal`s abort, their late results are dropped, and `result` rejects
+  with kind `suspended` (counted as handled). A snapshot that is refused (a `WeakRef`,
+  written builtins, D3290), a `save` that throws or a state that is not JSON rejects the
+  `suspend` only, and the task goes on. `checkpoint()` snapshots the same way and goes
+  on. Both reject if the run ends first. `{ sources: false }` stores the scripts' hashes
+  instead of their texts.
+- `Sandbox.resume(snap, opts)` makes a sandbox from `opts` (the same host functions, by
+  name), loads the snapshot and drives it as a task (`task.sandbox` is the new sandbox;
+  `sb.resume(snap)` does it in an existing fresh one). Each open call continues by its
   function's hooks: `resume(state, call)` with the saved state; `call` again for a
   function without `resume`; a plain function's call is rejected (an Error naming the
   function), since the sandbox cannot know whether calling it again is safe.
-- **Dumps** (`"djs-dump";`, D2830, D2890): the sandbox writes its dumps (tasks',
-  `Run.dump`, `dump`) as ordinary Scripts in which every suspended function is a
-  continuation, the rest of its code from where it waits. Dumps need frozen builtins
-  (`frozenBuiltins`, D2836): in a sandbox without them every dump throws a `misuse`
-  SandboxError (`dumps need frozen builtins`). `Sandbox.resume`, `loadRun` and `load`
-  run a dump with the global object `$djs` defined, which holds the
-  dump runtime's helpers (`vm_dump_runtime`, D2903) and the hooks: the dump calls
-  `$djs.seed(lo, hi, next)` first (Math.random's state where the run used it, restored
-  with `vm_restore_math_random` as one that ran, and the id of the next host call where it
-  is not one past the highest reopened call's; `$djs.seed(next)` for the id alone, or no
-  call, D2837) and `$djs.resume(id, name, args, state)` for each open call, which opens call `id` of the
-  host function `name` again under the same id (`vm_open_call`) and gives the dump its
-  promise. A host value the dump holds (a host function, a namespace object such as
-  `tools` or `console`) is written as `$djs.host(name)`, by its identity rather than by
-  where it is bound (D2971), and the sandbox answers with the object it made for that
-  name, so `===` holds across the load. The calls opened that way are the loaded calls above, with their states, and
-  go to the hooks as described. The hooks are served only while the Script runs to its
-  first stop (an idle point, or the end); then the sandbox sets the id counter from
-  `next` (`vm_set_next_call_id`), so the run's later calls get the ids the uninterrupted
-  run gives them (D2897), and deletes `$djs` and the dump's `$dump` (D2916). A dump
-  names the codemode body it continues as `$djs.source(name, hash, params)` instead of
-  carrying its text again (D2882): the sandbox compiles the script `name` it ran (this
-  process's scripts, or the `sources` option's) as it runs bodies, the one with that hash
-  (`scriptHash`, the same as `vm::script_hash`); a host without it gets a clear error, and the
-  `inlineSources` option writes the text instead. Sync host
-  functions the dump's code calls meanwhile are called (they must return
-  synchronously). The Script's completion value is the run's promise. Loading a dump
-  needs no dumper and no frozen builtins: it is code, and node runs it
-  too, given the same host functions and a `host` hook that returns them
-  (examples/sleep-dump: `run.sh --node`).
+- **Snapshots** (D3700, D3720; the guide's persistence.md): the run's records by kind and
+  field names, builtins by registry path, functions by (script, span) with a bytecode
+  hash for those with frames, compiled again on load. The sandbox's own values are named,
+  not written: host functions by identity, namespaces (with `aliases` and
+  `missingMember`), `values`, host modules' namespaces and the JSON boundary's converting
+  functions; the loading sandbox must give the same names, and a missing one is a
+  `misuse` error before anything loads (`djs_snapshot_needs`). Scripts stored by hash are
+  found among this process's scripts or through the `sources` option. A refused load
+  leaves the sandbox unusable. `describeSnapshot(snap)` describes one; `callSite(id)`
+  says where the run waits on an open call (`vm_call_site`, D3054).
 - The hooks see a `HostCall`: `id`, `fn`, `args`, `startedAt` (this sandbox's
   `Date.now()` when it started or resumed the call), `state` (set it any time; a resumed
   call starts with its saved state, so it is saved again by default) and `signal`
@@ -239,46 +220,38 @@ run.state;                                  // "idle" | "done" | "threw"
 run.calls;                                  // [{ id, fn: "sleep", args: [5000] }]: open, not called
 run.settle(id, { ok: true, value });        // a result (ok false: rejects with value)
 await run.advance();                        // to the next idle point; run.value / run.error at the end
-const text = run.dump({ [id]: { due } });   // only while idle (and frozen builtins): a dump, with call states
-const again = (await Sandbox.create({ asyncFunctions })).loadRun(text); // same calls, same ids
+const snap = run.snapshot({ states: { [id]: { due } } }); // only while idle: a snapshot, with call states
+const again = (await Sandbox.create({ asyncFunctions })).loadSnapshot(snap); // same calls, same ids
 again.calls;                                // [{ id, fn: "sleep", args: [5000], state: { due } }]
 ```
 
 - A host-driven run never calls async host functions: it lists them in `run.calls`, and
   the host answers with `settle`, in any order (results are still macrotasks, D1670).
   Sync host functions are called as in `run`. The sandbox runs nothing else meanwhile.
-- `dump(states)` writes the idle VM as a dump (with frozen builtins, see above): its data, the suspended
-  activations, the open calls (by the host's function names, with the states given for
-  them, JSON data by call id) and the run's result promise, named `run`. `loadRun` loads
-  the dump into a fresh sandbox made with the same host functions, by name, and
-  continues: `again.calls` are the open calls with their ids and states. What the host
-  does with them (deliver a recorded result, issue the call again, reject it) is its own
-  policy; no hooks run.
-- `sb.load(text)` loads a dump into an existing sandbox and returns `{ calls }`.
+- `snapshot({ states })` writes the idle run as a snapshot: its state, the open calls
+  with the states given for them (JSON data by call id; a state only for an open call,
+  D3734) and the fuel used. `loadSnapshot` loads it into a fresh sandbox made with the
+  same options and returns the run: `again.calls` are the open calls with their ids and
+  states, and `fuelUsed` goes on from the snapshot's. What the host does with the calls
+  (deliver a recorded result, issue the call again, reject it) is its own policy; no
+  hooks run.
 - `run`, `runAsync`, `replay` and tasks are this loop with the host's part built in (D2634): they
   call each async host function as soon as the script calls it, pass results back before
   every fuel slice, and wait at idle points. `begin(code, params, { journal })` records a
   host-driven run (its `settle`s in order, a check at every idle point), and `replay` runs
-  that journal like a `runAsync` one. A dump names the run's result without taking a
-  handle, so it leaves the VM byte for byte as it was (D2633): a recorded run can be
-  dumped and still replays.
+  that journal like a `runAsync` one. A snapshot leaves the VM as it was, so a recorded
+  run can be snapshotted and still replays.
 
-**One module (D3600).** djs ships one module, and it has the dumper (cargo feature `dump`,
-with lazy functions and the compile cache it turns on): `scripts/build-wasm.sh` builds it, and
-every host, the ones that persist runs and the ones that never do, loads the same file. It
-costs the module about 335 KB gzip (767.6 KB against 432.9 KB without the dumper, measured
-at 0294; the owner accepted the growth, D3601). The Sandbox needs that module: the
-feature stays a build knob for size measurements, not a configuration hosts use.
+**One module (D3600, D3730).** djs ships one module, and it has snapshots (cargo feature
+`snapshot`): `scripts/build-wasm.sh` builds it, and every host, the ones that persist runs
+and the ones that never do, loads the same file. It compiles eagerly (no lazy functions,
+D3732) and links a 128 KiB stack, since snapshot loads compile the scripts inside one
+operation (D3733). The Sandbox needs that module.
 
-**Storing dumps (D2703).** A dump is plain JavaScript text and stays that way: the
-format is a Script, not a container. Hosts compress it when they store it, with zstd at
-level 3 (node: `zlib.zstdCompressSync(text, { params: { [zlib.constants.ZSTD_c_compressionLevel]: 3 } })`,
-and `zstdDecompressSync` back): over the harvested corpus a dump is 6.1 KB raw and 1.7 KB
-compressed at the median, 17 KB compressed at p99; a session holding a 1.8 MB log is
-394 KB. That is a third of what the image containers took (5.1 KB at the median), with
-no dictionary and no reference image to keep: any zstd reads it, and so does any later
-djs once decompressed. Level 19 saves a fifth to a quarter more on megabyte dumps (big-log
-394 → 299 KB), at a much slower compression.
+**Storing snapshots.** A snapshot is binary and self-describing; most of a small one is
+its record types (names of kinds and fields), which compress well. Hosts compress
+snapshots when they store them (zstd or gzip); docs/heap-snapshots-revisited.md 4.2 has
+sizes over the corpus.
 
 ### Journals: record and replay (D1730)
 
@@ -320,7 +293,7 @@ the hash does not depend on fuel slices or when the VM last collected.
 ### Images inside a process (D2700)
 
 Heap images are not a persistence format: a run that must outlive its process is written
-as a continuation dump. Images remain the engine's in-process mechanism: the base image
+as a snapshot (D3700). Images remain the engine's in-process mechanism: the base image
 every VM is copied from, a native host's snapshots and the stress and determinism checks.
 `vm_arena_ptr`/`vm_arena_len` read an image; a wasm host loads none. The REPL's `.heap`
 reports on the live VM's heap.
@@ -394,12 +367,11 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_outcome(vm) -> h` | the entry call's outcome while no frame is active, also at IDLE (a function the host called while async calls are pending); any number of times; out[0] = 1 if it threw; 0 if none (D2650) |
-| `vm_dump(vm, len) -> 0/1` | (feature `dump`) a dump (a plain Script, D2830) of the idle VM in out; the VM needs frozen builtins (D2836). Staging, six lines: host globals and names to dump (comma-separated), the host's function identities in id order, the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome), the host roots as `handle:name` (tab-separated; written as `$djs.host(name)`, D2971) and the open calls' states as `call_id:byte_len` (tab-separated), then the states' JSON texts one after another (D2770). 1: refused, reasons in out. It needs no base image: the module has its base's builtin names (D3020). Loading a dump is running it as a Script: no export (D2890) |
-| `vm_open_call(vm, parked, fn_id) -> 0/-1` | while parked on the sync call `parked`, a plain dump's `$djs.resume(id, name, args, state)`: opens async call `id` of host function `fn_id` with `args`' elements under that id, and returns its promise from `parked` (`Vm::open_host_call`, D2890). The call is not reported by `vm_new_host_calls`; the next new call gets a higher id. -1: the reason in out (an open id, not an array), for the host to throw at the call |
-| `vm_dump_runtime(vm, len) -> h` | a new object holding the plain dump runtime's helpers (D2903), evaluated from staging[0..len], the runtime's Script (js/src/dump-runtime.js `scriptFor(dump)`, the helpers the dump names, or `script`, all of them; the module does not carry it): the host adds its hooks (`seed`, `resume`) and defines it as the global `$djs` before it runs a plain dump. Runs the VM, so call it while the VM is not running. 0: out of memory or not the runtime's text |
-| `vm_set_dump_source_refs(vm, on)` | whether `vm_dump` names codemode bodies by `$djs.source` (1, the default) or writes their text (0) (D2882) |
-| `vm_set_next_call_id(vm, id)` | the id the next host call gets: after a plain dump's load, its `$djs.seed`'s `next` or one past the highest reopened call, whichever is larger (`Vm::set_next_call_id`, D2897) |
-| `vm_restore_math_random(vm, lo, hi)` | a plain dump's `$djs.seed(lo, hi)`: `Math.random`'s state `hi << 32 \| lo`, as one that ran, so that the next dump writes it again (`Vm::restore_math_random`, D2837) |
+| `vm_snapshot(vm, len) -> n/-1` | (feature `snapshot`) a snapshot of idle VM `vm` (D3700) in out, its length; -1: refused, the reasons in out. staging[0..len]: the flags (bit 0: store the sources; bit 1: a host's run, D3720), then for a host's run its functions (count, then id and identity each), its values (count, then handle and name each), the handles it holds for the run (count, then handle and name each) and its data |
+| `vm_load_snapshot(vm, len) -> 0/1` | loads the snapshot of a host's run into `vm`, a fresh VM of the host's. staging: the snapshot (length and bytes), the candidate sources (count, then each), the host functions (count, then id, handle and identity each) and the host values (count, then handle and name each). 0: out holds the handles the host held (count, then handle and name each), the open calls' ids and the host's data; 1: the reasons in out, and the VM is to be freed |
+| `djs_snapshot_needs(len) -> 0/1` | what loading the snapshot in staging needs: the scripts stored by hash only and the host values and functions it names (`snapshot::needs`) |
+| `djs_snapshot_describe(len) -> 0/1` | the snapshot in staging described for people (`snapshot::describe`) in out |
+| `vm_call_site(vm, id) -> len` | where the run waits on open call `id`: `line:col:file` in out, its length; 0 when nothing waits on it at a known position (D3054) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |
@@ -560,9 +532,10 @@ host code and runs at the same speed.
 
 - **Host refs** (ARCH "Data passing") are not built: pass-through data such as images is
   copied in and out.
-- **Persistence** is by continuation dumps (D2560): another sandbox or process loads one
-  or refuses it with a reason; a later djs only once the dump format is declared stable
-  (D3643). A run computing between idle points cannot be persisted (D2561): give it
-  fuel to reach one, or rerun it.
+- **Persistence** is by snapshots (D3700, D3730): another sandbox or process loads one,
+  a later build too when it compiles the waiting functions to the same bytecode and knows
+  the builtins and fields named; otherwise it refuses with a reason. A run computing
+  between idle points cannot be persisted (D2561): give it fuel to reach one, or rerun
+  it.
 - **Sync host functions** run one at a time (the VM parks); use `asyncFunctions` for
   concurrent calls.
