@@ -1,6 +1,6 @@
 # 0302: Named records for builtin closure kinds
 
-status: open
+status: in-progress
 agent: psnap
 branch: issue/0302-named-builtin-records
 depends-on: 0301
