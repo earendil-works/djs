@@ -80,6 +80,22 @@ leg "snapshots" runs both modes.
   bindings (node part dropped: it ran the dump in node), new js/test/snapshot.test.ts (pi's
   setup: aliases, missingMember, values identity, jsonBoundary, module imports, RunExit,
   fuel across loads; pi-like snapshots 3.0-4.2 KB with the TS source inside).
+- Harvest in pi's setup (js/test/snapshot-harvest.test.ts): all 300 cases, deterministic
+  clock and seed, moved to a fresh sandbox at every idle point (one call answered per idle
+  point, every other snapshot without sources): all continue the same; ~7 s on the dev
+  module.
+- examples/sleep-dump -> examples/sleep-snapshot (git mv; README rewritten: what the snapshot
+  holds, read from `describeSnapshot`); js/test/sleep-snapshot.test.ts; npm-test.sh copies
+  it and pi-setup.ts, skips snapshot-harvest (the corpus is the repository's).
+- Host functions a host value holds are its members (console.log keeps its identity in the
+  CLI, where print and console.log share an id).
+- CLI (crates/djs-cli/src/snapshots.rs): host mode with `tools`/`console` as values, fixed ids
+  + made tools as functions, data = tools' state (made, answered) + call origins. `djs run
+  --snapshot-after K OUT`, `--snapshot-every-idle`, `--debugger OUT` writes a snapshot, `djs
+  resume` takes snapshots (by magic) in a VM of the snapshot's builtins mode (`Needs::
+  frozen_builtins`), `djs describe FILE`. REPL `.snapshot [file]`, `.restore` of snapshots.
+  Tests: snapshot_after_every_idle_point, debugger_pauses_snapshot_and_resume,
+  snapshot_a_waiting_session, debugger_pauses_resume_from_the_snapshot.
 
 ## Follow-ups
 
