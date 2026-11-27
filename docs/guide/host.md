@@ -7,7 +7,7 @@ module's operations: how a VM is made and driven, how host calls are reported an
 how values cross in each direction, how the base snapshot gets into the module, and which
 builds of the module exist. Most hosts never see this level: the `Sandbox` of [the
 JavaScript interface](js-api.md) wraps it, and persists runs as
-[snapshots](js-api.md#snapshots) or [continuation dumps](dumps.md).
+[snapshots](persistence.md).
 
 > **In short.** djs-wasm is a WebAssembly module with no imports and an ABI of integer
 > operations behind one exported function. Data crosses through a staging buffer (in) and
@@ -37,9 +37,11 @@ formatting code, to stay small: its standard library is built so that a panic is
 `unreachable` trap, and the `Sandbox` reports such a trap as an engine panic. A debug or
 native build of the engine reproduces the real message. Every sandbox gets its own instance, so one trap cannot affect another.
 
-The stack is small and can grow for one call. The shipped module links a 64 KiB shadow
-stack at the bottom of memory, enough for any compile short of deep nesting; the
+The stack can be small and grow for one call. A module without snapshots links a 64 KiB
+shadow stack at the bottom of memory, enough for any compile short of deep nesting; the
 parser's full nesting limits need about 128 KiB ([limits](limits.md#nesting-in-source)).
+The shipped module links those 128 KiB from the start: loading a snapshot compiles the
+run's scripts again inside one operation, which cannot stop halfway for a larger stack.
 A host that turns the elastic stack on (`djs_elastic_stack(1)`) gets a compile that
 would nest deeper back before it has any effect: `vm_compile` returns `-1` (`u32::MAX`),
 `vm_run` the status NEED_STACK. The host then takes a block with `djs_stack(len)`, which
@@ -60,9 +62,10 @@ not wrap; the nesting limits, which leave about a tenth of it to spare, are what
 it there.
 
 > **Trade-off.** A small stack that a host moves for deep compiles, over a stack large
-> enough for any of them. Every instance saves 64 KiB, about a sixth of an idle one; the
+> enough for any of them. Every instance of a module without snapshots saves 64 KiB; the
 > cost is a protocol for hosts (one wrapper) and a compile run twice for code that nests
-> deeper than scripts do.
+> deeper than scripts do. The shipped module gives the 64 KiB back for snapshot loads,
+> which would otherwise need the same protocol inside the loader.
 
 Rarely used tables come the same way. The Unicode property tables of `\p{…}` in regular
 expressions (25 KB) and the normalization tables (23 KB) are not in the shipped module's
@@ -101,7 +104,7 @@ chapter calls them by name (`vm_run`), and
 a function object for every exported function of every instance: with one export per
 operation, about 70 of them, that was a quarter of the time `new WebAssembly.Instance`
 takes, paid by every sandbox. Operation 0 is `djs_abi_version` in every version, and
-`djs_has(op)` tells whether a build has an operation (the dump and docs builds have more).
+`djs_has(op)` tells whether a build has an operation (the docs build has more).
 All arguments are integers except the `f64` clock of `vm_set_now` and
 `vm_resolve_host_call_at`. Data crosses through two buffers in linear memory:
 
@@ -111,7 +114,7 @@ All arguments are integers except the `f64` clock of `vm_set_now` and
   several pieces take their lengths and read them one after another (`vm_compile_file`:
   the file name, the parameter names, the source);
 - the **out** buffer, module to host: operations that return data (an error message,
-  display text, value bits, a host call record, a dump) fill it, and the host reads it at
+  display text, value bits, a host call record, a snapshot) fill it, and the host reads it at
   `djs_out_ptr()` and `djs_out_len()`.
 
 Both stay valid until the next call into the module. Any call can grow memory, which
@@ -140,26 +143,12 @@ The shipped module has <!--n wasm/ops-->74<!--/n--> operations. By area:
 | host functions and calls | `vm_new_host_function`, `vm_new_async_host_function`, `vm_host_call`, `vm_host_call_info`, `vm_new_host_calls`, `vm_resolve_host_call`, `vm_resolve_host_call_at` |
 | the environment | `vm_set_now`, `vm_set_time_zone_offset`, `vm_set_random_seed`, `vm_set_weak_refs`, `vm_canonical_hash` ([determinism](determinism.md)) |
 | snapshots | `vm_snapshot`, `vm_load_snapshot`, `djs_snapshot_needs`, `djs_snapshot_describe` ([below](#snapshots)); `vm_call_site` |
-| loading a dump | `vm_dump_runtime`, `vm_open_call`, `vm_restore_math_random`, `vm_set_next_call_id` |
 
 `vm_call_site` says where the run waits on open call `id`: `line:col:file` in the out
 buffer, the position of the `await` of the innermost activation waiting on it, directly
 or through `Promise.all` and the like; 0 when nothing waits on it at a known position.
 The `Sandbox` offers it as `callSite(id)`, and the live examples of this site use it to
 say where a run paused.
-
-The dump build adds the dumper and what serves it:
-
-| operation | does |
-| --- | --- |
-| `vm_dump` | writes the idle VM as a dump into the out buffer, or the reasons it refuses, one per line. Staging names the host's globals, its function names by id, the values it wants back, its namespace objects and its state of each open call |
-| `vm_set_dump_source_refs` | whether a dump names the script the run started with by reference (the default) or carries its text |
-
-Loading a dump needs no operation of its own: it is running a Script with `$djs` defined.
-The four "loading a dump" operations serve the hooks while it runs: `vm_dump_runtime`
-evaluates the runtime's helpers from text the host passes, `vm_open_call` reopens an open
-call under its old id from inside the `$djs.resume` hook, and the other two restore
-`Math.random`'s state and the next call id.
 
 ### Snapshots
 
@@ -374,24 +363,19 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `snapshot` (snapshots), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
+| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `snapshot` (snapshots) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
 | docs module | `docs` and `snapshot` | this site's live examples: `djs_disasm`, the bytecode listing an edited example shows, and snapshots for their `debugger;` pauses |
 
-The `dump` feature brings the writer of continuation dumps, the suspension-map recording
-in the compiler, the table of the base's builtin names, and lazy compilation of functions
-at their first call. The `snapshot` feature brings snapshots, which need none of that.
+A host that persists runs calls `vm_snapshot` on the idle VM itself, in the module it
+runs in; it leaves the VM as it was, so the run goes on there or in whichever sandbox
+loads the snapshot.
 
-A host that persists runs calls `vm_snapshot` (or `vm_dump`) on the idle VM itself, in
-the module it runs in; either leaves the VM as it was, so the run goes on there or in
-whichever sandbox loads it.
-
-> **Trade-off.** One module with the dumper. The dumper and what serves it nearly double
-> the module (<!--n dump/extra-gzip kb-->335 KB<!--/n--> more with gzip), and hosts that never persist a
-> run do not need them. djs ships them in its one module anyway: every host gets the same
-> file, a host that persists runs dumps in the VM it runs, with no image copied into a
-> second instance, and no two modules of one build have to be kept together. The cost is
-> the bigger download and compile for the hosts that never dump; bringing the size down
-> again is separate work.
+> **Trade-off.** One module with snapshots. Hosts that never persist a run do not need
+> the writer and the loader, but djs ships them in its one module anyway: every host gets
+> the same file, a host that persists runs snapshots the VM it runs, with no image copied
+> into a second instance, and no two modules of one build have to be kept together. The
+> cost is a somewhat larger download and compile, and the larger stack above, for the
+> hosts that never snapshot.
 
 ## Where to look
 
