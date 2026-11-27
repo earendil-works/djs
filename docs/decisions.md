@@ -14607,3 +14607,68 @@ its host-value resolution, the host names on export, `needs`, `describe` (now re
 the module), the four operations and their staging tables (+23 KB raw code, measured per
 function against main). The ceiling is that plus the slack, 786,101 B, as D3705 and D3713
 raised it; 0304 removes the dumper and lowers it. The codemode-memory rows stay.
+
+## D3730: Continuation dumps are removed; snapshots are djs's only persistence format
+date: 2026-11-27 · by: psnap · issue: 0304
+With snapshots the persistence format (D3700, D3720, D3722), continuation dumps go in one
+issue, without compatibility code (D024; earlier releases need not load): the dumper
+(vm/dump*.rs), the compiler's suspension maps and their ~310 parser hooks (compiler/smap*.rs)
+and the dump-only compiler and VM API (temporaries' names, scans, private entries, the
+base's builtin names table, `djs_optsize`, the base64 fast path the dumper used), djs-core's
+`dump` feature and djs-prelude's `names` feature; the `$djs` hooks and the dump runtime
+(js/src/dump-runtime.js), the Sandbox's dump paths (`Run.dump`, `dump`/`load`, `loadRun`,
+`inlineSources`, string `resume`), djs-wasm's dump operations (ABI 11, the operations
+renumbered); the CLI's `--dump-after`/`--dump-every-idle`/`resume --explain` and the REPL's
+`.dump`/`.dump-every`; difftest's `--dumps`/`--dump-out`/`--dump-from`/`dump-xfail`;
+djs-docs' `gen:dump` and the engines' dump table; scripts/dump-costs, dump-fuzz,
+dump-node.mjs, dump-size, the gate leg "dumps (djs and node)", tests/dump, tests/smap,
+tests/dump-refusals.txt, tests/scores/dump-size.tsv and its `scores` merge driver; the
+guide's dumps.md and continuations.md (persistence.md replaces them) and
+docs/continuation-dumps.md. Code the dumps needed as a requirement keeps its lowering
+(statement state in temporaries) but loses the rule. Bytecode is unchanged (the frame pin
+passes). Size: 785,187 -> 510,652 B gzip (1,865,016 -> 1,192,832 raw); the ceiling is that
+plus the slack, 511,676; codemode memory is one 64 KiB page lower in every row (the data
+segment 108 -> 79 KB). This supersedes the dump decisions, among them D2352-D2355,
+D2560 (snapshots persist runs now), D2563, D2564, D2580-D2584, D2603, D2604, D2613-D2619,
+D2622-D2628, D2631-D2641, D2701-D2704, D2735, D2770's dump form (states stay, D3720),
+D2801, D2802, D2830-D2840, D2861, D2877-D2906, D2916, D2920, D2940-D2951, D2971's dump
+form (host values stay named, D3720), D2993, D2994, D3020, D3025, D3041, D3050's "in dump
+builds only", D3060's `--frozen` pause mode (D3731), D3150, D3596, D3600's "with the
+dumper" (one module stays, with snapshots), D3601, D3643, D3660 and D3705's "until the
+dumper goes".
+
+## D3731: The REPL's `--debugger` makes `debugger;` a pause; `--frozen` only freezes the builtins
+date: 2026-11-27 · by: psnap · issue: 0304
+D3060 tied REPL pauses to `djs repl --frozen`, the dumping mode. Snapshots need no frozen
+builtins, so the two are separate flags: `--debugger` installs the host's `debugger` and
+compiles inputs with `debugger_awaits`; `--frozen` gives the VMs frozen builtins (D2304). A
+VM restored from a snapshot (`.restore`) always has `debugger`, since a snapshot may hold a
+pause. `djs run --debugger OUT` keeps its meaning.
+
+## D3732: The shipped module compiles eagerly
+date: 2026-11-27 · by: psnap · issue: 0304
+D2993 made the module with the dumper lazy (the dumper's loads defined many functions few
+called). Without dumps nothing in the shipped module profits: measured at 0304, lazy
+compilation costs +5.0 KB gzip (515,646 against 510,652 B) and codemode memory is the same
+in every row. So the shipped and docs modules leave djs-core's `lazy` out; native builds
+keep it as a per-VM option, and the gate's snapshot and difftest legs still run lazy VMs
+(D3721). Supersedes D2993.
+
+## D3733: Modules with snapshots keep the 128 KiB stack
+date: 2026-11-27 · by: psnap · issue: 0304
+djs-wasm's build.rs linked 128 KiB for debug builds and the dump module, 64 KiB otherwise
+(D3280). Loading a snapshot compiles the run's scripts inside `vm_load_snapshot`, which has
+no NEED_STACK retry for the host's elastic stack, so a module with the `snapshot` feature
+(the shipped one) keeps 128 KiB; 64 KiB remains for release modules without snapshots.
+An elastic retry inside the loader would give the 64 KiB back; not done.
+
+## D3734: A Sandbox run's result is the entry call's outcome; states only for open calls
+date: 2026-11-27 · by: psnap · issue: 0304
+The `run` handle a run kept for its result promise existed for dumps (a dump named the
+result as its completion value, D2633, D2895). Without them a run's result is always the
+VM's entry call outcome (`vm_outcome`), so a sandbox's snapshot holds no handles of its
+own. `Run.snapshot({ states })` refuses a state for a call that is not open (`misuse`), as
+the dump writer did. Also from 0304: djs-docs' `gen:dump [N]` region is `gen:snapshot
+[N]`, the description of the snapshot at the block's Nth pause (`snapshot::describe`); the
+dump test programs moved from tests/dump to tests/snapshot/programs (golden/combinators to
+combinators-2.src.js), run by `snapshot_programs` and the CLI's tests.
