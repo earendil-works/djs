@@ -49,6 +49,15 @@ Hosts use snapshots instead of dumps.
   another mode refuses; from_snapshot sets them (vm_from_snapshot no longer forces frozen).
 - FORMAT 2.
 
+### Lazy functions (D3721)
+The shipped module compiles functions lazily (D2990, D2993): every snapshot refused ("a lazy
+function template"). Now: the export writes a lazy template like any (span + interface
+hash); the import compiles every script eagerly, so functions a lazy parent made at its
+first call exist; the interface hash reads only the capture names (a lazy template that
+captures nothing has no names table) and drops synthetic bindings' numbers (`<fields 3>`:
+counted per compiled unit). DJS_LAZY=1 harvest: 1164/1164 same, programs 197/197; the gate
+leg "snapshots" runs both modes.
+
 ### Steps
 - WIP commit 76128a88: export/import host mode, `load_snapshot`, `needs`, host_tests.rs.
 
