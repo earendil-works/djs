@@ -40,7 +40,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 9;
+pub const ABI_VERSION: u32 = 10;
 
 /// `vm_run` results.
 pub mod status {
@@ -839,8 +839,7 @@ pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
 /// Where the run in `vm` waits on open call `call_id` (D3054, `Vm::call_site`): the out
 /// buffer holds `line:col:file` (the script's name as compiled: the host's for its body,
 /// the dump's loader name for code a dump carries). Returns its length, 0 when nothing
-/// waits on the call at a known position. Dump builds only, for the docs site's pauses.
-#[cfg(feature = "dump")]
+/// waits on the call at a known position. For the docs site's pauses.
 pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
     with(|s| {
         let text = s
@@ -881,8 +880,6 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             typescript: goal & 2 != 0,
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
-            // Only the dump module compiles `debugger;` as a pause (D3050).
-            #[cfg(feature = "dump")]
             debugger_awaits: goal & 16 != 0,
             ..CompileOptions::script("")
         };
@@ -938,8 +935,6 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
             typescript: goal & 2 != 0,
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
-            // Only the dump module compiles `debugger;` as a pause (D3050).
-            #[cfg(feature = "dump")]
             debugger_awaits: goal & 16 != 0,
             ..CompileOptions::script("")
         };
@@ -1710,7 +1705,7 @@ ops! {
     19 vm_collect(a);
     20 vm_compile_file(a, b, c, d, e);
     #[cfg(feature = "dump")] 21 vm_set_dump_source_refs(a, b);
-    #[cfg(feature = "dump")] 22 vm_call_site(a, b);
+    22 vm_call_site(a, b);
     #[cfg(feature = "docs")] 23 djs_disasm(a, b, c);
     24 vm_global(a);
     25 vm_new_object(a, b);
@@ -1753,11 +1748,13 @@ ops! {
     #[cfg(feature = "cold-unicode")] 62 djs_tables_ptr(a, b);
     #[cfg(feature = "cold-unicode")] 63 djs_tables_set();
     64 vm_tables_need(a);
-    #[cfg(feature = "snapshot")] 65 vm_snapshot(a);
-    #[cfg(feature = "snapshot")] 66 vm_from_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 65 vm_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 66 vm_load_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 67 djs_snapshot_needs(a);
+    #[cfg(feature = "snapshot")] 68 djs_snapshot_describe(a);
 }
 
-// ---- Logical snapshots (0300, a research prototype) ---------------------------------
+// ---- Logical snapshots (D3700, D3720) ---------------------------------
 
 #[cfg(feature = "snapshot")]
 instance_locals! {
@@ -1781,14 +1778,86 @@ fn with_snap_base<R>(
     })
 }
 
-/// A logical snapshot of idle VM `vm` in the out buffer: its length, or -1 with the
-/// reasons it was refused in the out buffer.
+/// Little-endian words and length-prefixed byte strings of the snapshot operations'
+/// staging and out buffers.
 #[cfg(feature = "snapshot")]
-pub extern "C" fn vm_snapshot(vm: u32) -> i32 {
+struct Words<'a> {
+    buf: &'a [u8],
+    at: usize,
+}
+
+#[cfg(feature = "snapshot")]
+impl<'a> Words<'a> {
+    fn u32(&mut self) -> u32 {
+        let w = staged(self.buf, self.at, 4);
+        self.at += 4;
+        u32::from_le_bytes([w[0], w[1], w[2], w[3]])
+    }
+
+    fn bytes(&mut self) -> &'a [u8] {
+        let n = self.u32() as usize;
+        let b = staged(self.buf, self.at, n);
+        self.at += n;
+        b
+    }
+
+    fn text(&mut self) -> &'a str {
+        core::str::from_utf8(self.bytes())
+            .unwrap_or_else(|_| panic!("djs-wasm: staged text is not UTF-8"))
+    }
+}
+
+#[cfg(feature = "snapshot")]
+fn put_u32(out: &mut Vec<u8>, w: u32) {
+    out.extend_from_slice(&w.to_le_bytes());
+}
+
+#[cfg(feature = "snapshot")]
+fn put_bytes(out: &mut Vec<u8>, b: &[u8]) {
+    put_u32(out, b.len() as u32);
+    out.extend_from_slice(b);
+}
+
+/// A logical snapshot of idle VM `vm` (D3700) in the out buffer: its length, or -1 with
+/// the reasons it was refused in the out buffer. staging[0..len]: the flags (bit 0: store
+/// the sources; bit 1: a host's run, D3720), then for a host's run its functions (count,
+/// then id and identity each), its values (count, then handle and name each), the handles
+/// it holds for the run (count, then handle and name each) and its data.
+#[cfg(feature = "snapshot")]
+pub extern "C" fn vm_snapshot(vm: u32, len: usize) -> i32 {
+    use djs_core::vm::snapshot::{HostNames, SnapshotOptions};
     with(|s| {
-        let slot = s.slot(vm);
-        let opts = slot.vm.options();
-        let r = with_snap_base(opts, |b| slot.vm.snapshot(b).map_err(|e| e.0.join("\n")));
+        let (slot, staging) = s.vm_and_staging(vm);
+        let mut w = Words {
+            buf: &staging[..len],
+            at: 0,
+        };
+        let flags = w.u32();
+        let host = (flags & 2 != 0).then(|| {
+            let mut host = HostNames::default();
+            for _ in 0..w.u32() {
+                let id = w.u32();
+                host.functions.push((id, String::from(w.text())));
+            }
+            for _ in 0..w.u32() {
+                let v = slot.value(w.u32());
+                host.values.push((String::from(w.text()), v));
+            }
+            for _ in 0..w.u32() {
+                let v = slot.value(w.u32());
+                host.handles.push((String::from(w.text()), v));
+            }
+            host.data = String::from(w.text());
+            host
+        });
+        let opts = SnapshotOptions {
+            sources: flags & 1 != 0,
+            host,
+        };
+        let vmo = slot.vm.options();
+        let r = with_snap_base(vmo, |b| {
+            slot.vm.snapshot_with(b, &opts).map_err(|e| e.0.join("\n"))
+        });
         match r.and_then(|r| r) {
             Ok(bytes) => {
                 s.set_out(&bytes);
@@ -1802,24 +1871,109 @@ pub extern "C" fn vm_snapshot(vm: u32) -> i32 {
     })
 }
 
-/// A new VM from the snapshot in staging[0..len] (`vm_snapshot`'s bytes): its number, or
-/// 0 with the reason in the out buffer.
+/// Loads the snapshot of a host's run (D3720) into `vm`, a fresh VM of the host's.
+/// staging[0..len]: the snapshot (length and bytes), the candidate sources (count, then
+/// each), the host functions (count, then id, handle and identity each) and the host
+/// values (count, then handle and name each). Returns 0, the out buffer holding the
+/// handles the host held (count, then handle and name each), the open calls (count, then
+/// each id) and the host's data; or 1 with the reasons in the out buffer (the VM may have
+/// changed: free it).
 #[cfg(feature = "snapshot")]
-pub extern "C" fn vm_from_snapshot(len: usize, memory_limit: u32) -> u32 {
-    let bytes = with(|s| s.staging[..len].to_vec());
-    let opts = VmOptions {
-        frozen_builtins: true,
-        ..options(memory_limit)
+pub extern "C" fn vm_load_snapshot(vm: u32, len: usize) -> u32 {
+    use djs_core::vm::snapshot::HostValues;
+    let staging = with(|s| s.staging[..len].to_vec());
+    let mut w = Words {
+        buf: &staging,
+        at: 0,
     };
-    let vm = with_snap_base(opts, |b| {
-        Vm::from_snapshot(b, &bytes).map_err(|e| e.0.join("\n"))
-    })
-    .and_then(|r| r);
-    with(|s| match vm {
-        Ok(vm) => s.add_vm(vm),
-        Err(e) => {
-            s.set_out(e.as_bytes());
+    let bytes = w.bytes();
+    let sources: Vec<&[u8]> = (0..w.u32()).map(|_| w.bytes()).collect();
+    let mut functions = Vec::new();
+    let mut values = Vec::new();
+    let r = with(|s| {
+        let slot = s.slot(vm);
+        for _ in 0..w.u32() {
+            let id = w.u32();
+            let v = slot.value(w.u32());
+            functions.push((w.text(), id, v));
+        }
+        for _ in 0..w.u32() {
+            let v = slot.value(w.u32());
+            values.push((w.text(), v));
+        }
+        let host = HostValues {
+            functions: &functions,
+            values: &values,
+        };
+        let vmo = slot.vm.options();
+        with_snap_base(vmo, |b| {
+            slot.vm
+                .load_snapshot(b, bytes, &sources, &host)
+                .map_err(|e| e.0.join("\n"))
+        })
+        .and_then(|r| r)
+    });
+    with(|s| match r {
+        Ok(l) => {
+            let mut out = Vec::new();
+            put_u32(&mut out, l.handles.len() as u32);
+            for (n, h) in &l.handles {
+                put_u32(&mut out, h.index() + 1);
+                put_bytes(&mut out, n.as_bytes());
+            }
+            put_u32(&mut out, l.calls.len() as u32);
+            for c in &l.calls {
+                put_u32(&mut out, *c);
+            }
+            put_bytes(&mut out, l.data.as_bytes());
+            s.set_out(&out);
             0
         }
+        Err(e) => {
+            s.set_out(e.as_bytes());
+            1
+        }
     })
+}
+
+/// What loading the snapshot in staging[0..len] needs from the host (`snapshot::needs`):
+/// 0 and in the out buffer the scripts stored by hash only (count, then each name) and the
+/// host values and functions it names (count, then each name); or 1 with the reason.
+#[cfg(feature = "snapshot")]
+pub extern "C" fn djs_snapshot_needs(len: usize) -> u32 {
+    with(|s| match djs_core::vm::snapshot::needs(&s.staging[..len]) {
+        Ok(n) => {
+            let mut out = Vec::new();
+            for list in [&n.sources, &n.host] {
+                put_u32(&mut out, list.len() as u32);
+                for x in list {
+                    put_bytes(&mut out, x.as_bytes());
+                }
+            }
+            s.set_out(&out);
+            0
+        }
+        Err(e) => {
+            s.set_out(e.0.join("\n").as_bytes());
+            1
+        }
+    })
+}
+
+/// The snapshot in staging[0..len] described for people (`snapshot::describe`), in the
+/// out buffer: 0, or 1 with the reason it cannot be read.
+#[cfg(feature = "snapshot")]
+pub extern "C" fn djs_snapshot_describe(len: usize) -> u32 {
+    with(
+        |s| match djs_core::vm::snapshot::describe(&s.staging[..len]) {
+            Ok(t) => {
+                s.set_out(t.as_bytes());
+                0
+            }
+            Err(e) => {
+                s.set_out(e.0.join("\n").as_bytes());
+                1
+            }
+        },
+    )
 }

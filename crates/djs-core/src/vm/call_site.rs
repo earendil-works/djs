@@ -1,6 +1,6 @@
 //! Where a run waits on an open host call (D3054): the position of the activation that
 //! waits on it, for a host that shows where a run paused (the docs site's live examples
-//! at `debugger;`). Dump builds only, like the pause itself (D3050).
+//! at `debugger;`, D3050).
 
 use alloc::string::String;
 use alloc::vec::Vec;

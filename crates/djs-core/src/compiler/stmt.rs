@@ -133,7 +133,6 @@ impl Parser<'_, '_> {
             TokenKind::Throw => self.parse_throw(),
             TokenKind::Switch => self.parse_switch(Vec::new()),
             TokenKind::Try => self.parse_try(),
-            #[cfg(feature = "dump")]
             TokenKind::Debugger if self.debugger_awaits && self.f.is_async => {
                 self.parse_debugger_await()
             }
@@ -197,7 +196,6 @@ impl Parser<'_, '_> {
     /// ordinary await of a call; its operand's text is the keyword, which a dump never
     /// copies (the site's operand is the awaited value), while a later `debugger;` in a
     /// continuation's text is copied as written and pauses again.
-    #[cfg(feature = "dump")]
     fn parse_debugger_await(&mut self) -> PResult<()> {
         let start = self.tok.start;
         self.syn_open(NodeKind::Expr, start);

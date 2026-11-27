@@ -270,4 +270,3 @@ fn a_host_function_without_a_name_refuses() {
     assert!(e.0[0].contains("host function (id 2)"), "{e:?}");
     let _ = a.run();
 }
-

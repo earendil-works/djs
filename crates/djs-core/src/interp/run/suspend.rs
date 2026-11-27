@@ -147,8 +147,8 @@ pub(crate) fn dequeue_request(heap: &mut Heap, g: Obj) -> Value {
     first
 }
 
-/// A suspended activation as the dumper reads it (0172).
-#[cfg(feature = "dump")]
+/// A suspended activation as the dumper and `Vm::call_site` read it (0172).
+#[cfg_attr(not(feature = "dump"), allow(dead_code))]
 pub(crate) struct Suspended {
     pub kind: i32,
     pub state: i32,
@@ -164,7 +164,6 @@ pub(crate) struct Suspended {
 }
 
 /// Reads activation `g`.
-#[cfg(feature = "dump")]
 pub(crate) fn read_activation(heap: &Heap, g: Obj) -> Suspended {
     let int = |slot| heap.object_slot(g, slot).as_int().unwrap_or(0);
     let list = |v: Value| -> alloc::vec::Vec<Value> {

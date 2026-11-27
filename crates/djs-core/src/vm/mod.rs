@@ -15,7 +15,6 @@
 //! references: valid until the next `run` or collection. Keep them in a
 //! [`Handle`](crate::heap::Handle) to hold them longer.
 
-#[cfg(feature = "dump")]
 mod call_site;
 #[cfg(feature = "dump")]
 pub mod dump;
@@ -43,7 +42,6 @@ use crate::interp::run::{self, Exec};
 use crate::interp::{Continuation, state};
 pub use crate::interp::{ErrorKind, ExecOptions, RunState, Status};
 use crate::value::{Obj, Str, Value};
-#[cfg(feature = "dump")]
 pub use call_site::CallSite;
 pub use module::{IMPORT_FN_ID, ModuleKind, ModuleLoader, ModuleSource};
 

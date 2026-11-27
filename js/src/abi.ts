@@ -20,7 +20,8 @@ export const OPS = [
   "vm_take_unhandled_rejections", "vm_promise_state", "vm_resolve_host_call",
   "vm_resolve_host_call_at", "vm_open_call", "vm_restore_math_random", "vm_set_next_call_id",
   "djs_elastic_stack", "djs_stack", "djs_alloc_stats", "djs_has", "djs_tables_ptr",
-  "djs_tables_set", "vm_tables_need", "vm_snapshot", "vm_from_snapshot",
+  "djs_tables_set", "vm_tables_need", "vm_snapshot", "vm_load_snapshot", "djs_snapshot_needs",
+  "djs_snapshot_describe",
 ] as const;
 
 /** An operation's name. */
