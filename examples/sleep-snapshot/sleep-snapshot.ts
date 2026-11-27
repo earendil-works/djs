@@ -78,8 +78,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, snapshot);
     console.log(`host: suspended the run into ${relative(".", file)} (${snapshot.length} bytes) and dropped the sandbox; it holds:`);
-    // The summary lines; the record types' fields follow them.
-    console.log(described.split("\n").filter((l) => l !== "" && !l.startsWith("type ")).join("\n").replace(/^/gm, "  | "));
+    console.log(described.trimEnd().replace(/^/gm, "  | "));
   }
   if (mode !== "start") {
     console.log(`host: resuming ${relative(".", file)} in a new sandbox`);

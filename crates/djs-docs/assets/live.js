@@ -430,12 +430,7 @@ async function runPausing(ex, l, id) {
     let text;
     try {
       snap = await task.suspend();
-      // The description, without the record types' fields.
-      text = task.sandbox
-        .describeSnapshot(snap)
-        .split("\n")
-        .filter((t) => !t.startsWith("type "))
-        .join("\n");
+      text = task.sandbox.describeSnapshot(snap);
     } catch (e) {
       if (id !== ex.runs) return task.sandbox.dispose();
       // Not snapshottable here: say why, and let Continue go on in this sandbox.

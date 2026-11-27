@@ -153,9 +153,7 @@ pub fn snapshot(src: &str, nth: usize, ts: bool) -> String {
                 return match vm.snapshot_with(&base, &opts) {
                     Ok(bytes) => {
                         let text = describe(&bytes).unwrap_or_default();
-                        let lines: Vec<&str> =
-                            text.lines().filter(|l| !l.starts_with("type ")).collect();
-                        format!("{} bytes\n{}\n", bytes.len(), lines.join("\n"))
+                        format!("{} bytes\n{text}", bytes.len())
                     }
                     Err(e) => format!("(refused: {})\n", e.0.join("; ")),
                 };

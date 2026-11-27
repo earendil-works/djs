@@ -104,8 +104,7 @@ see docs/host.md).
 ## What the output looks like
 
 In one process (`run.sh`); `[vm]` lines are the script's `console.log`, and the `|` lines
-are what the host prints about the snapshot it wrote (`sandbox.describeSnapshot`, without
-the record types' fields):
+are what the host prints about the snapshot it wrote (`sandbox.describeSnapshot`):
 
 ```
 host: starting sleep.js with ms = 1000
@@ -152,8 +151,8 @@ are two node processes, and the snapshot travels as a file.
 
 Read the description from the middle. The run's state is 21 **records**, one per object
 or internal cell the run can reach beyond what a fresh sandbox has, each written by its
-kind's name with its fields by name (the type table at the top lists them, which is most
-of the bytes of so small a snapshot):
+kind's name with its fields by name (the `types` section at the top lists the kinds and
+their fields once, which is most of the bytes of so small a snapshot):
 
 - two **Generator** records, the suspended activations of `step("first", 1000)` and of the
   script's body, each with its frame (the stopped function's registers and operand stack,

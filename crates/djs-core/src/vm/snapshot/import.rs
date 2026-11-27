@@ -1730,14 +1730,6 @@ pub fn describe(bytes: &[u8]) -> Result<String, Refusal> {
     for (t, n) in by {
         out += &format!("  {n:6} {t}\n");
     }
-    for t in &s.types {
-        let f: Vec<String> = t
-            .fields
-            .iter()
-            .map(|(n, t)| format!("{n}: {t:?}"))
-            .collect();
-        out += &format!("type {} {{ {} }}\n", t.name, f.join(", "));
-    }
     Ok(out)
 }
 
