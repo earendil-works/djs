@@ -11,9 +11,6 @@
 //!
 //! Stress variants: `suspend_every` runs N fuel at a time and continues each slice in a
 //! fresh VM restored from the heap image; `gc_stress` collects at every safepoint.
-//! `dump_every_idle` (0172, 0201) dumps the VM at every idle point (a plain dump, D2830,
-//! whose completion value is the prelude's `api`) and continues in a fresh VM that runs
-//! the dump.
 //! Their transcripts must equal the plain run's (checked by the runner).
 
 use std::time::{Duration, Instant};
@@ -39,16 +36,6 @@ const STRESS_SLICE: u64 = 20_000;
 const OUTPUT: u32 = 0;
 const DONE: u32 = 1;
 const LATER: u32 = 2;
-/// A plain dump's `$djs.seed(lo, hi)` (D2832).
-const SEED: u32 = 3;
-/// A plain dump's `$djs.resume(id, name, args)`: the open call, under its id (D2890).
-const RESUME: u32 = 4;
-/// A plain dump's `$djs.source(name, hash, params, 1)` (D2882): the case's function, its
-/// wrapper Script evaluated again.
-const SOURCE: u32 = 5;
-/// A plain dump's `$djs.host(name)`: the host function of that name (D2971).
-const HOST: u32 = 6;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
     /// Suspend every N fuel and continue in a VM restored from the heap image.
@@ -57,25 +44,9 @@ pub struct Djs {
     pub gc_stress: bool,
     /// Report the raw heap image's hash and the canonical hash (`--determinism`).
     pub image: bool,
-    /// Dump at every idle point (a plain dump, D2830) and continue in a fresh VM that runs
-    /// the dump as a Script; a chain of at most `PLAIN_LINKS` dumps, then the run goes on.
-    /// The VMs have frozen builtins, which dumps need (D2836).
-    pub dump_every_idle: bool,
-    /// With `dump_every_idle`: the first idle point that is dumped (0 or 1: every one). The plain
-    /// fuzzer (scripts/dump-fuzz) starts a chain at every idle point, so that each site
-    /// is also dumped from its original function, not only from a continuation (D2940).
-    pub dump_from: u32,
     /// Lazy functions (`VmOptions::lazy_functions`, D2990).
     pub lazy: bool,
 }
-
-/// The longest chain of plain dumps a case runs through (later idle points are not
-/// dumped).
-pub const PLAIN_LINKS: u32 = 50;
-
-/// `--dump-out DIR`: every plain dump goes to `DIR/<case>/<link>.js`, with the output
-/// lines before it in `<link>.pre` (for the node check, scripts/dump-node.mjs).
-pub static PLAIN_OUT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
 impl Djs {
     pub fn label(&self) -> String {
@@ -85,12 +56,6 @@ impl Djs {
         }
         if self.gc_stress {
             s += " --gc-stress";
-        }
-        if self.dump_every_idle {
-            s += " --dumps";
-        }
-        if self.dump_from > 1 {
-            s += &format!(" --dump-from {}", self.dump_from);
         }
         if self.lazy {
             s += " --lazy";
@@ -102,10 +67,6 @@ impl Djs {
 impl Engine for Djs {
     fn name(&self) -> &str {
         "djs"
-    }
-
-    fn only_with_idle_points(&self) -> bool {
-        self.dump_every_idle
     }
 
     fn run(&self, job: &Job<'_>) -> RunResult {
@@ -185,28 +146,8 @@ struct Session {
     start: Instant,
     timeout: Duration,
     suspend: bool,
-    /// Dump at every idle point (`dump_every_idle`): the options of a fresh VM and the
-    /// clock to set in it.
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    dump: Option<(VmOptions, f64)>,
-    /// How many dumps were taken.
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    links: u32,
-    /// [`Djs::dump_from`].
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    dump_from: u32,
-    /// The case's name (for `--dump-out`).
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    name: String,
     /// The prelude's api object.
     api: Option<Handle>,
-    /// A plain dump being loaded: `$djs.seed`'s next call id and the highest reopened id,
-    /// for the counter after the load (D2897).
-    plain_ids: (Option<u32>, u32),
-    /// The case's wrapper Script and its options (`$djs.source`), and while a dump loads
-    /// the function it makes.
-    case: Option<(String, CompileOptions<'static>)>,
-    source_fn: Option<djs_core::heap::Handle>,
 }
 
 /// The corpus areas whose cases never change builtins, run with the prefix write barrier
@@ -226,17 +167,11 @@ impl Djs {
                 ..ExecOptions::default()
             },
             prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),
-            // Dumps are written only with frozen builtins (D2836), as pi's next mode runs.
-            frozen_builtins: self.dump_every_idle,
             #[cfg(feature = "lazy")]
             lazy_functions: self.lazy,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
-        #[cfg(not(feature = "dump"))]
-        if self.dump_every_idle {
-            return Err("--dumps needs the `dump` feature".into());
-        }
         // The wall clock, read once per case, in UTC (D1383); the qjs engine runs with
         // TZ=UTC to match.
         vm.set_now(job.now);
@@ -255,14 +190,7 @@ impl Djs {
             start: Instant::now(),
             timeout: job.timeout,
             suspend: self.suspend_every.is_some(),
-            dump: self.dump_every_idle.then_some((opts, job.now)),
-            links: 0,
-            dump_from: self.dump_from,
-            name: job.name.to_string(),
             api: None,
-            plain_ids: (None, 0),
-            case: None,
-            source_fn: None,
         })
     }
 }
@@ -311,7 +239,6 @@ impl Session {
             emit_decorator_metadata: job.decorator_metadata,
             ..CompileOptions::script(name)
         };
-        self.case = Some((src.clone(), copts));
         match self.vm.compile(src.as_bytes(), &copts) {
             Ok(script) => {
                 // (Read again: the global object moves when the heap is collected.)
@@ -354,177 +281,6 @@ impl Session {
         Ok(())
     }
 
-    /// Dumps the idle VM (a plain dump, D2830) and replaces it by a fresh VM that ran the
-    /// dump: the fresh VM gets the host's functions as globals (`output`, `done`, `later`,
-    /// and `$djs`: the dump runtime with `seed` and `resume`, which issues the call again)
-    /// and runs the dump as a Script, whose completion value is the api.
-    #[cfg(feature = "dump")]
-    fn dump_and_load(&mut self) -> Result<(), Stop> {
-        let (opts, now) = self.dump.ok_or("no dump options")?;
-        use djs_core::vm::dump::DumpOptions;
-        if self.links >= PLAIN_LINKS || self.idle_points + 1 < self.dump_from {
-            return Ok(());
-        }
-        self.links += 1;
-        let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
-        let handles = [("run", api)];
-        let text = self.vm.dump(
-            &DumpOptions {
-                host_fn_name: &host_fn_name,
-                handles: &handles,
-                // The case's function by reference (D2882): the corpus measures it.
-                source_refs: true,
-                base_names: djs_core::vm::dump::BaseNames {
-                    builtins: djs_prelude::BASE_NAMES,
-                    globals: djs_prelude::BASE_GLOBALS,
-                },
-                ..DumpOptions::default()
-            },
-            None,
-        );
-        let text = match text {
-            Ok(t) => t,
-            Err(e) => {
-                // A refusal is no failure: the run goes on without dumps. The node check
-                // holds the list of cases that may refuse (tests/dump-refusals.txt).
-                self.links = PLAIN_LINKS;
-                if let Some(dir) = PLAIN_OUT.get() {
-                    let d = dir.join(&self.name);
-                    let msg = e.message().split_whitespace().collect::<Vec<_>>().join(" ");
-                    let why = format!("idle point {}: {msg}\n", self.idle_points + 1);
-                    std::fs::create_dir_all(&d)
-                        .and_then(|_| std::fs::write(d.join("refused"), why))
-                        .map_err(|e| format!("--dump-out: {e}"))?;
-                }
-                return Ok(());
-            }
-        };
-        if let Some(dir) = PLAIN_OUT.get() {
-            let d = dir.join(&self.name);
-            let w = std::fs::create_dir_all(&d)
-                .and_then(|_| std::fs::write(d.join(format!("{}.js", self.links)), &text))
-                .and_then(|_| {
-                    let mut pre = self.output.join("\n");
-                    if !pre.is_empty() {
-                        pre.push('\n');
-                    }
-                    std::fs::write(d.join(format!("{}.pre", self.links)), pre)
-                });
-            w.map_err(|e| format!("--dump-out: {e}"))?;
-        }
-        let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
-        vm.set_now(now);
-        let err = |e: djs_core::heap::HeapError| Stop::Crash(format!("{e:?}"));
-        for (id, name) in [(OUTPUT, "output"), (DONE, "done"), (LATER, "later")] {
-            let f = if id == LATER {
-                vm.new_async_host_function(id, name)
-            } else {
-                vm.new_host_function(id, name)
-            }
-            .map_err(err)?;
-            vm.define_global(name, f).map_err(err)?;
-        }
-        // The dump runtime's helpers, with the hooks added (D2903).
-        let hooks = vm
-            .dump_runtime_for(&text)
-            .map_err(Stop::Crash)?
-            .as_object()
-            .ok_or_else(|| Stop::Crash("the dump runtime is not an object".into()))?;
-        let seed = vm.new_host_function(SEED, "seed").map_err(err)?;
-        vm.define(hooks, "seed", seed).map_err(err)?;
-        let resume = vm.new_host_function(RESUME, "resume").map_err(err)?;
-        vm.define(hooks, "resume", resume).map_err(err)?;
-        let source = vm.new_host_function(SOURCE, "source").map_err(err)?;
-        vm.define(hooks, "source", source).map_err(err)?;
-        let host = vm.new_host_function(HOST, "host").map_err(err)?;
-        vm.define(hooks, "host", host).map_err(err)?;
-        vm.define_global("$djs", Value::object(hooks))
-            .map_err(err)?;
-        // The case's function, made again by its wrapper (which runs none of its code),
-        // for `$djs.source` (D2882).
-        let mut source_fn = None;
-        if let Some((src, copts)) = &self.case {
-            let f = vm
-                .compile(src.as_bytes(), copts)
-                .map_err(|e| format!("source: {}", e.message))?;
-            let global = Value::object(vm.global());
-            vm.call(f, global, &[])
-                .map_err(|e| format!("source: {e:?}"))?;
-            if let Status::Done(v) = vm.run(self.slice) {
-                source_fn = Some(vm.heap_mut().new_handle(v).map_err(err)?);
-            }
-        }
-        let old = std::mem::replace(&mut self.vm, vm);
-        self.source_fn = source_fn;
-        let api = match self.load_plain(&text) {
-            Ok(api) => api,
-            Err(e) => {
-                self.vm = old;
-                let msg = match e {
-                    Stop::Crash(m) => m,
-                    Stop::Timeout => "timeout".into(),
-                };
-                return Err(Stop::Crash(format!(
-                    "plain load at idle point {}: {msg}\n{text}",
-                    self.idle_points + 1
-                )));
-            }
-        };
-        let api = self.vm.heap_mut().new_handle(api).map_err(err)?;
-        self.api = Some(api);
-        Ok(())
-    }
-
-    /// Runs a plain dump to its first idle point: its completion value.
-    #[cfg(feature = "dump")]
-    fn load_plain(&mut self, text: &str) -> Result<Value, Stop> {
-        let f = self
-            .vm
-            .compile(
-                text.as_bytes(),
-                &CompileOptions {
-                    typescript: text.starts_with("\"djs-dump typescript\""),
-                    ..CompileOptions::script("dump.js")
-                },
-            )
-            .map_err(|e| format!("compile: {} at {}:{}", e.message, e.line, e.col))?;
-        let global = Value::object(self.vm.global());
-        self.vm
-            .call(f, global, &[])
-            .map_err(|e| format!("Vm::call: {e:?}"))?;
-        self.plain_ids = (None, 0);
-        loop {
-            let st = self.vm.run(self.slice);
-            // (Without `$djs.seed`'s `next`: one past the highest reopened call, D2837.)
-            if matches!(st, Status::Done(_) | Status::Idle) {
-                let (next, last) = self.plain_ids;
-                self.vm.set_next_call_id(next.unwrap_or(0).max(last + 1));
-            }
-            // The load is over: the host deletes `$djs` and `$dump` (D2916).
-            if matches!(st, Status::Done(_) | Status::Idle) {
-                self.vm
-                    .end_dump_load()
-                    .map_err(|e| format!("end_dump_load: {e:?}"))?;
-            }
-            match st {
-                Status::Done(v) => return Ok(v),
-                Status::Idle => {
-                    return match self.vm.outcome() {
-                        Some(Ok(v)) => Ok(v),
-                        Some(Err(e)) => Err(Stop::Crash(format!("threw: {}", self.vm.display(e)))),
-                        None => Err("idle without an outcome".into()),
-                    };
-                }
-                Status::Threw(e) => {
-                    return Err(Stop::Crash(format!("threw: {}", self.vm.display(e))));
-                }
-                Status::HostOutOfMemory => return Err("out of host memory".into()),
-                Status::OutOfFuel => return Err(Stop::Timeout),
-                Status::HostCall { call_id, fn_id } => self.host_call(call_id, fn_id)?,
-            }
-        }
-    }
-
     /// Calls `f` and runs until the call and every job it queued are done; the call's
     /// result. Host calls are the prelude's `host.output` and `host.done`.
     fn call(&mut self, f: Value, this: Value, args: &[Value], what: &str) -> Result<Value, Stop> {
@@ -544,10 +300,6 @@ impl Session {
                 Status::Idle => {
                     // An idle point: no job, no frame, only `host.later` calls pending.
                     // The oldest gets its argument back (D2590).
-                    #[cfg(feature = "dump")]
-                    if self.dump.is_some() {
-                        self.dump_and_load()?;
-                    }
                     let pending = self.vm.pending_host_calls();
                     let &call_id = pending
                         .iter()
@@ -583,7 +335,7 @@ impl Session {
         }
     }
 
-    /// A sync host call: `host.output`, `host.done`, a plain dump's `$djs.seed`.
+    /// A sync host call: `host.output`, `host.done`.
     fn host_call(&mut self, call_id: u32, fn_id: u32) -> Result<(), Stop> {
         let info = self.vm.host_call(call_id).ok_or("host call vanished")?;
         let arg = |i: usize| info.args.get(i).copied().unwrap_or(Value::UNDEFINED);
@@ -607,74 +359,11 @@ impl Session {
                     k => return Err(Stop::Crash(format!("host.done: kind {k}"))),
                 });
             }
-            // `$djs.seed(lo, hi[, next])`, or `$djs.seed(next)` (D2837).
-            SEED if arg(1).is_undefined() => {
-                self.plain_ids.0 = arg(0).as_int().map(|n| n as u32);
-            }
-            SEED => {
-                let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
-                let seed = (half(arg(1)) << 32) | half(arg(0));
-                self.vm.restore_math_random(seed);
-                self.plain_ids.0 = arg(2).as_int().map(|n| n as u32);
-            }
-            SOURCE => {
-                let hash = text(self, arg(1))?;
-                let ok = self.case.as_ref().is_some_and(|(src, copts)| {
-                    djs_core::vm::script_hash(src, "", copts.bits()) == hash
-                });
-                let r = match (ok, self.source_fn) {
-                    (true, Some(h)) => Ok(self.vm.heap().get_handle(h)),
-                    _ => Err(Stop::Crash(format!(
-                        "$djs.source: not the case's script ({hash})"
-                    ))),
-                };
-                let v = r?;
-                self.vm
-                    .resolve_host_call(call_id, Ok(v))
-                    .map_err(|e| Stop::Crash(format!("{e:?}")))?;
-                return Ok(());
-            }
-            RESUME => {
-                // Only `later` is async; the call returns the reopened call's promise.
-                let name = text(self, arg(1))?;
-                if name != "later" {
-                    return Err(Stop::Crash(format!("$djs.resume of `{name}`")));
-                }
-                let id = arg(0).as_int().unwrap_or(0) as u32;
-                self.plain_ids.1 = self.plain_ids.1.max(id);
-                return self
-                    .vm
-                    .open_host_call(call_id, LATER)
-                    .map_err(|e| Stop::Crash(format!("open_host_call: {e}")));
-            }
-            HOST => {
-                // The prelude's host functions are the globals of their names.
-                let name = text(self, arg(0))?;
-                let v = self
-                    .vm
-                    .global_path(&name)
-                    .ok_or_else(|| Stop::Crash(format!("$djs.host of `{name}`")))?;
-                return self
-                    .vm
-                    .resolve_host_call(call_id, Ok(v))
-                    .map_err(|e| Stop::Crash(format!("resolve_host_call: {e:?}")));
-            }
             id => return Err(Stop::Crash(format!("unknown host function {id}"))),
         }
         self.vm
             .resolve_host_call(call_id, Ok(Value::UNDEFINED))
             .map_err(|e| format!("resolve_host_call: {e:?}"))?;
         Ok(())
-    }
-}
-
-/// The host's names of its functions, for dumps (0172).
-#[cfg(feature = "dump")]
-fn host_fn_name(id: u32) -> Option<String> {
-    match id {
-        OUTPUT => Some("output".into()),
-        DONE => Some("done".into()),
-        LATER => Some("later".into()),
-        _ => None,
     }
 }

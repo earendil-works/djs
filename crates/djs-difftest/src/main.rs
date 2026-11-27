@@ -25,15 +25,6 @@ options:
                       heap images; its output must equal the plain run (hard failure)
   --gc-stress         djs only: also run every case collecting at every safepoint;
                       its output must equal the plain run (hard failure)
-  --dumps             djs only: also run every case writing a dump (a plain Script,
-                      D2830) at each of its first 50 idle points and continuing in a
-                      fresh VM that runs it as a Script (hard failure; a refused
-                      dump ends the dumps, and the run goes on); with frozen builtins
-                      (D2836), compared only for cases with idle points
-  --dump-out DIR      --dumps, writing each dump to DIR/<case>/<link>.js and the
-                      output before it to <link>.pre (scripts/dump-node.mjs runs them)
-  --dump-from K       with --dumps: the chain starts at idle point K (the
-                      earlier ones are not dumped)
   --determinism       djs only: also run every case suspending every 1009 fuel (and 97
                       without --suspend-every) through heap images, and require the
                       suspended runs to leave the same heap image as the plain run, raw
@@ -83,8 +74,6 @@ struct Args {
     suspend_every: Option<u64>,
     gc_stress: bool,
     lazy: bool,
-    dumps: bool,
-    dump_from: u32,
     determinism: bool,
     clusters: bool,
     idle_points: bool,
@@ -127,8 +116,6 @@ fn parse_args() -> Result<Args, String> {
         suspend_every: None,
         gc_stress: false,
         lazy: false,
-        dumps: false,
-        dump_from: 0,
         determinism: false,
         clusters: false,
         idle_points: false,
@@ -187,17 +174,6 @@ fn parse_args() -> Result<Args, String> {
             }
             "--gc-stress" => args.gc_stress = true,
             "--lazy" if cfg!(feature = "lazy") => args.lazy = true,
-            "--dumps" => args.dumps = true,
-            "--dump-out" => {
-                args.dumps = true;
-                let _ = djs_difftest::djs::PLAIN_OUT.set(value(&a)?.into());
-            }
-            "--dump-from" => {
-                let v = value(&a)?;
-                args.dump_from = v
-                    .parse()
-                    .map_err(|_| format!("--dump-from: bad number `{v}`"))?;
-            }
             "--determinism" => args.determinism = true,
             "--clusters" => args.clusters = true,
             "--idle-points" => args.idle_points = true,
@@ -217,12 +193,10 @@ fn parse_args() -> Result<Args, String> {
     if args.update_ratchet && args.ratchet.is_none() {
         args.ratchet = Some(args.corpus.join("expected-failures.txt"));
     }
-    if (args.suspend_every.is_some() || args.gc_stress || args.determinism || args.dumps)
+    if (args.suspend_every.is_some() || args.gc_stress || args.determinism)
         && args.engine != "djs"
     {
-        return Err(
-            "--suspend-every, --gc-stress, --determinism and --dumps need --engine djs".into(),
-        );
+        return Err("--suspend-every, --gc-stress and --determinism need --engine djs".into());
     }
     if args.update && args.engine != "qjs" {
         return Err("--update records the oracle; it only works with --engine qjs".into());
@@ -416,28 +390,6 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             }
         }
     }
-    // Known plain-dump bugs (D2941): counted, and stale marks named (with --dump-out,
-    // dump-node.mjs decides, since node may still differ).
-    let xfail: Vec<(&Case, bool)> = cases
-        .iter()
-        .zip(&outcomes)
-        .filter_map(|(c, o)| Some((c, o.dump_xfail?)))
-        .collect();
-    if !xfail.is_empty() {
-        let differ = xfail.iter().filter(|x| x.1).count();
-        println!(
-            "\ndump-xfail: {differ} of {} marked cases differ as expected",
-            xfail.len()
-        );
-        if djs_difftest::djs::PLAIN_OUT.get().is_none() {
-            for (c, _) in xfail.iter().filter(|x| !x.1) {
-                println!(
-                    "  stale: {} (its plain dumps continue identically now)",
-                    c.name
-                );
-            }
-        }
-    }
     let stress_failed = !mismatches.is_empty();
 
     let Some(ratchet_file) = &args.ratchet else {
@@ -621,8 +573,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: Some(n),
             gc_stress: false,
             image: args.determinism,
-            dump_every_idle: false,
-            dump_from: 0,
             lazy: args.lazy,
         };
         v.push((e.label(), Box::new(e)));
@@ -632,18 +582,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: None,
             gc_stress: true,
             image: false,
-            dump_every_idle: false,
-            dump_from: 0,
             lazy: args.lazy,
-        };
-        v.push((e.label(), Box::new(e)));
-    }
-    if args.dumps {
-        let e = Djs {
-            dump_every_idle: true,
-            dump_from: args.dump_from,
-            lazy: args.lazy,
-            ..Djs::default()
         };
         v.push((e.label(), Box::new(e)));
     }
