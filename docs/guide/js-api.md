@@ -2,14 +2,14 @@
 
 A host uses djs through the `@earendil-works/djs` package: one class, `Sandbox`, over the
 djs-wasm module. This page covers all of it, from running one script to runs that are
-suspended into a dump and continued in another process. Each sandbox is its own wasm instance with
+suspended into a snapshot and continued in another process. Each sandbox is its own wasm instance with
 one VM, so sandboxes share nothing and a fault in one cannot touch another.
 
 > **In short.** `Sandbox.create(options)` makes a sandbox; `run` and `runAsync` run a
 > script as a codemode body with parameters and return its result as a plain host value.
 > Host functions are given by name and bound as globals or parameters. Errors are
 > `SandboxError`s with a `kind`. For runs that wait on tools, `start` returns a task that
-> can be suspended into a [continuation dump](dumps.md) and resumed with
+> can be suspended into a [snapshot](persistence.md) and resumed with
 > `Sandbox.resume`; `begin` hands every call to the host instead.
 
 ## Installing
@@ -20,13 +20,11 @@ npm install @earendil-works/djs
 
 The package has no dependencies and carries the wasm module itself: one module,
 <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip, which every host uses, the
-ones that persist runs and the ones that never do, because it has the
-[dumper](dumps.md#what-a-dump-needs). It runs in node 20 or newer, Bun, Deno, browsers and web
+ones that persist runs and the ones that never do, because it has
+[snapshots](persistence.md). It runs in node 20 or newer, Bun, Deno, browsers and web
 workers: the module has no imports, so it runs in any wasm runtime. The package has one
-entry point, `@earendil-works/djs`, which exports the whole API and the dump runtime's
-`helpers`, `script` and `scriptFor`, for a host that continues a
-[dump](dumps.md#djs-what-the-loading-host-provides) in its own JavaScript engine. The
-wire encoder and the heap reader the `Sandbox` uses are internal and not exported.
+entry point, `@earendil-works/djs`, which exports the whole API. The wire encoder and the
+heap reader the `Sandbox` uses are internal and not exported.
 
 ## Loading the module
 
@@ -67,7 +65,7 @@ All options are optional:
 | `functions`, `asyncFunctions` | the host functions, by name ([below](#host-functions)) |
 | `globals`, `bindings` | where scripts find them: as globals, or as parameters of every body |
 | `modules` | the host modules bodies import, resolved by specifier ([below](#host-modules)) |
-| `values` | host data bound as frozen globals, which dumps name instead of writing ([below](#host-data)) |
+| `values` | host data bound as frozen globals, which snapshots name instead of writing ([below](#host-data)) |
 | `jsonBoundary` | convert what crosses to the host as JSON would, for all host functions or all but some ([below](#the-json-boundary)) |
 | `missingMember` | the error a read of a member a namespace lacks throws ([below](#namespaces)) |
 | `aliases` | more member names of a namespace's functions ([below](#namespaces)) |
@@ -80,9 +78,9 @@ All options are optional:
 | `randomSeed` | the seed of `Math.random`; default from `crypto.getRandomValues` |
 | `deterministic` | `{ startedAt, seed }`: repeatable runs ([below](#deterministic-runs-and-journals)) |
 | `unhandledRejections` | `"warn"` (default), `"throw"` or `"collect"` |
-| `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)); dumps need it |
+| `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)) |
 | `typescript`, `experimentalDecorators`, `emitDecoratorMetadata` | compile scripts as TypeScript ([TypeScript](typescript.md)) |
-| `sources`, `inlineSources`, `debugger` | for [snapshots](#snapshots) and dumps |
+| `sources`, `debugger` | for [snapshots](#snapshots): the scripts a loaded snapshot names by hash, and `debugger;` pauses |
 
 ## Running code
 
@@ -112,7 +110,7 @@ throws on every use.
 ## Host functions
 
 A host function has a **name**, chosen by the host: `tools.read`, `log`,
-`@sdk/our-stuff#myTool`. The name identifies it in calls, journals and dumps; where a
+`@sdk/our-stuff#myTool`. The name identifies it in calls, journals and snapshots; where a
 script finds the function is a separate choice.
 
 ```ts
@@ -185,14 +183,14 @@ await sandbox.runAsync(`return tools.Read("a.txt")`);  // threw: TypeError: tool
 - `aliases` gives a member more names, which must not be identifiers: a tool named
   `my-tool` that scripts also reach as `tools.my_tool`. Each alias follows its member
   among the namespace's keys and holds the same function, which keeps its one identity:
-  calls, journals and dumps name it `tools.my_tool`.
+  calls, journals and snapshots name it `tools.my_tool`.
 - `missingMember(namespace, member)` answers a read of a member the namespace does not
   have: the read throws a `TypeError` with the returned message, where otherwise the
   script would get `undefined` and fail later with `not a function`. Returning
   `undefined` lets the read give `undefined`. Symbols, the names of `Object.prototype`'s
   members, `then` and `toJSON` are never asked about (and read `undefined`), so `await`,
   `JSON.stringify` and `in` behave as usual. The namespaces are then proxies over their frozen member objects, made by
-  the sandbox; a dump still names each by its identity, and a loading sandbox with the
+  the sandbox; a snapshot still names each by its identity, and a loading sandbox with the
   option gives its own. It applies to the namespaces of dotted names, `console`
   included, not to `values` or the namespaces of host modules.
 
@@ -227,7 +225,7 @@ const sandbox = await Sandbox.create({
 });
 await sandbox.runAsync(`
   import { search_issues } from "@mcp/github";
-  return (await search_issues({ q: "dumps" })).length;
+  return (await search_issues({ q: "snapshots" })).length;
 `);
 ```
 
@@ -245,9 +243,9 @@ name and their position: `SyntaxError: Cannot find module '@mcp/nope' at 1:19`. 
 imported names are the body's parameters after `params` and `bindings`, so a name taken
 twice is one too. A namespace import (`import * as linear from "@mcp/linear"`) gives one
 frozen object per specifier in the sandbox, with every export as a member, named by the
-specifier in dumps; a specifier that is also the name of a namespace such as `tools`
-cannot be imported as a namespace. A sandbox that loads a dump makes the module's values
-the dump names before it runs it, through the same `modules`.
+specifier in snapshots; a specifier that is also the name of a namespace such as `tools`
+cannot be imported as a namespace. A sandbox that loads a snapshot makes the module's
+values the snapshot names before it loads it, through the same `modules`.
 
 The resolver's descriptor can serve the scripts' documentation too. A host that lets the
 model read a virtual `.d.ts` file per module writes it from the same table, so what the
@@ -283,7 +281,7 @@ may call is the typical one:
 const sandbox = await Sandbox.create({ values: { ALL_TOOLS: tools.map(({ name, description }) => ({ name, description })) } });
 ```
 
-A snapshot (or a dump) does not write such data: it refers to it by name, so the sandbox
+A snapshot does not write such data: it refers to it by name, so the sandbox
 that loads it must be given the same values again; an object the script took out of them
 (`ALL_TOOLS[0]`) is named by its path and is the loading sandbox's own after the load. A name that is also a host function's or
 namespace's, or a global the sandbox binds, is a `misuse` error.
@@ -373,9 +371,9 @@ for an exception, the thrown `value`:
 | `aborted` | a step's `signal` was aborted ([host-driven runs](#host-driven-runs)) | usable |
 | `memory` | the host could not provide memory below the cap, or a host-side allocation failed | usable |
 | `trap` | the engine trapped: a bug, never something a script can cause | unusable |
-| `misuse` | the API was used wrongly: a run already in progress, a dump without frozen builtins, a module without a needed export | depends |
+| `misuse` | the API was used wrongly: a run already in progress, a snapshot of a run that holds what snapshots refuse, a module without a needed export | depends |
 | `diverged` | a replay did not match its journal | usable |
-| `suspended` | a task's result, after the task was suspended into a dump | (the task is over) |
+| `suspended` | a task's result, after the task was suspended into a snapshot | (the task is over) |
 
 Running out of the heap cap is not a `memory` error: the script gets a catchable
 `InternalError: out of memory` and may recover, and only if it does not is the run
@@ -548,10 +546,9 @@ again. What the options and methods do:
   `Promise.all` and the like, in the script the run started with, also after any number
   of loads. It returns `undefined` when nothing waits on the call.
 
-A snapshot is trusted input: load only snapshots you wrote. The other form of persistence,
-[continuation dumps](dumps.md) (`run.dump()`, `sandbox.loadRun(dump)`, `sandbox.dump()`,
-`sandbox.load(dump)`), writes a run as JavaScript instead; it needs `frozenBuiltins:
-true`, and `inlineSources: true` writes the script into a dump.
+A snapshot is trusted input: load only snapshots you wrote. [Snapshots: keeping a waiting
+run](persistence.md) explains what a snapshot holds, what a later build of djs can load,
+and why.
 
 ## Deterministic runs and journals
 

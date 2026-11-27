@@ -12,7 +12,8 @@ the one image every VM starts from, and how to look inside one.
 > made it: its roots carry that build's **build hash**. Every VM starts as a copy of the **base
 > snapshot**, an image of the initialized realm made at build time, which is why creating
 > a VM takes microseconds. Images stay inside a process; a run that must outlive it is
-> written as a [continuation dump](dumps.md) instead.
+> written as a [snapshot of the run](persistence.md) instead, which names what an image
+> numbers.
 
 ## An image is the arena
 
@@ -102,7 +103,8 @@ access.
 > the middle of a builtin, which is what the base snapshot, the stress tests and a stop
 > between fuel slices need. Keyed on the build, they need no rule for which engine change
 > alters what an image means. A run that has to outlive the process needs something that
-> states its meaning instead, which is what a dump is ([below](#continuation-dumps)).
+> names what the image numbers, which is what a snapshot of the run is
+> ([below](#beyond-the-process)).
 
 ## The base snapshot
 
@@ -180,17 +182,17 @@ Images are the engine's in-process mechanism:
   restore it from its image and compare images byte for byte
   ([determinism](determinism.md)).
 
-## Continuation dumps
+## Beyond the process
 
 An image restores only into a djs whose layouts, opcodes, intrinsics and internal ids
 number everything as the image does, and those change often as the engine develops. A run
 that waits minutes for a tool or a person must survive a restart of the host
-([persistence](goals.md#persistence)). So runs are persisted as **continuation dumps**: a
-JavaScript program that recreates the run, taken while it waits for its tools. A dump
-says what the run *means* rather than how one build laid it out. [Continuation dumps](dumps.md) shows what a dump contains and how a host uses one;
-[how continuation dumps are written](continuations.md) explains how the writer gets there
-from the heap. Inside a process, the writer itself works on an image: the host copies the
-VM's image into the module that has the dumper.
+([persistence](goals.md#persistence)). So runs are persisted as
+[snapshots](persistence.md), taken while they wait for their tools: the heap written as
+records by kind and field names, builtins by their paths, code by its place in the
+script and its bytecode hash, compiled again on load. A snapshot is made from the same
+heap an image is, and the loaded VM is again an ordinary heap, from which images are
+taken as before.
 
 ## Inspecting a heap
 

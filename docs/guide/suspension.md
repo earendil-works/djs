@@ -263,25 +263,25 @@ beyond it: it holds the engine's own numbering (cell layouts, opcodes, internal 
 so it restores only into a djs that numbers everything the same way, and that numbering
 changes between builds ([images](snapshots.md#what-an-image-depends-on)). A run that
 waits minutes for a tool or a person must survive restarts. That is
-[persistence](goals.md#persistence), and it uses a different form: a **continuation
-dump**, the run written out as an ordinary JavaScript program that recreates it, in
-which every suspended function is a continuation, the rest of its code from where it
-waits. Another VM or process, or node, runs it.
+[persistence](goals.md#persistence), and it uses a different form: a
+[**snapshot**](persistence.md), the run's state as records with named fields, the
+builtins by name and the functions by their place in the script, checked by their
+bytecode hash when the loading engine compiles the script again.
 
-A dump is taken only at an **idle point**: `run` returned `Idle`, no job is queued and
-no frame is on the stack. There, every suspended piece of the run is an async function or
-generator stopped at an `await` or `yield`, which the compiler can describe by name.
-A run in the middle of a computation has no such description; [idle
-points](dumps.md#idle-points) says what a host does about that, and [how continuation
-dumps are written](continuations.md) how the description is made.
+A snapshot is taken only at an **idle point**: `run` returned `Idle`, no job is queued
+and no frame is on the stack. There, every suspended piece of the run is an async
+function or generator stopped at an `await` or `yield`, whose frame is a record in the
+heap, as this chapter showed, and whose code the loading engine finds again by its span
+of source text. A run in the middle of a computation has frames on the stack, which a
+snapshot does not hold; [idle points](persistence.md#idle-points) says what a host does
+about that.
 
 On the docs site, a `debugger;` statement in a live example makes such an idle point:
 the page binds an async host function `debugger` that the statement awaits, so the run
-stops there and waits for it. The page then writes the run out, shows a pause line that
-gives the line and column where it stopped, with the dump under it, and on Continue
-resumes the run from the dump in a fresh sandbox. After a Continue, later pause lines
-give their position in the dump that part continued from ([continuation
-dumps](dumps.md) has more):
+stops there and waits for it. The page then writes the run out as a snapshot, shows a
+pause line that gives the line and column where it stopped, with the snapshot's
+description under it, and on Continue loads the snapshot into a fresh sandbox, which
+goes on from there:
 
 ```js live
 let total = 0;
@@ -300,12 +300,11 @@ arena 15
 ```
 <!-- /gen -->
 
-The dump at the first pause is a Script that resumes the example's code from the loop:
-the `debugger` call it was waiting on comes first, as an `await` the loading host
-answers, then the rest of the loop, with the values of the bindings and the iterator's
-remaining state passed in as arguments:
+The snapshot at the first pause holds the body's suspended frame, with `total` and the
+array iterator of the loop in its registers, the open call of the pause, and the body
+named by its span and bytecode hash:
 
-<!-- gen:dump -->
+<!-- gen:snapshot -->
 <!-- /gen -->
 
 ## Where to look
@@ -325,6 +324,5 @@ remaining state passed in as arguments:
   the regex matcher's suspension in the middle of a match.
 - [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): the
   embedder's API (`run`, `resolve_host_call`, images);
-  [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs) and
-  [`crates/djs-core/src/vm/dump_cont.rs`](../../crates/djs-core/src/vm/dump_cont.rs):
-  writing continuation dumps (loading one is running it).
+  [`crates/djs-core/src/vm/snapshot/`](../../crates/djs-core/src/vm/snapshot/):
+  writing and loading snapshots.
