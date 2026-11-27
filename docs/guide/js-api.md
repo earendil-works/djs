@@ -82,7 +82,7 @@ All options are optional:
 | `unhandledRejections` | `"warn"` (default), `"throw"` or `"collect"` |
 | `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)); dumps need it |
 | `typescript`, `experimentalDecorators`, `emitDecoratorMetadata` | compile scripts as TypeScript ([TypeScript](typescript.md)) |
-| `sources`, `inlineSources`, `debugger` | for [continuation dumps](#continuation-dumps) |
+| `sources`, `inlineSources`, `debugger` | for [snapshots](#snapshots) and dumps |
 
 ## Running code
 
@@ -283,8 +283,9 @@ may call is the typical one:
 const sandbox = await Sandbox.create({ values: { ALL_TOOLS: tools.map(({ name, description }) => ({ name, description })) } });
 ```
 
-A dump does not write such data: it refers to it by name, so the sandbox that loads the
-dump must be given the same values again. A name that is also a host function's or
+A snapshot (or a dump) does not write such data: it refers to it by name, so the sandbox
+that loads it must be given the same values again; an object the script took out of them
+(`ALL_TOOLS[0]`) is named by its path and is the loading sandbox's own after the load. A name that is also a host function's or
 namespace's, or a global the sandbox binds, is a `misuse` error.
 
 ### The JSON boundary
@@ -305,9 +306,9 @@ see `NaN` or a function as what it is, where JSON would make it `null` or leave 
 
 The conversion is done by functions the sandbox makes in the VM, one per host function,
 which scripts see in its place. They count as host values of the functions' names, so a
-dump refers to them by name and a loading sandbox with the boundary supplies its own: a
-function the script holds is still `===` to `tools.read` after a load, and the
-conversion's code is never in a dump. They take the builtins they use when the sandbox is
+snapshot refers to them by name and a loading sandbox with the boundary supplies its own:
+a function the script holds is still `===` to `tools.read` after a load, and the
+conversion's code is never in a snapshot. They take the builtins they use when the sandbox is
 made, so a script that replaces `JSON.stringify` does not change what the host receives.
 
 ## Values in and out
@@ -403,28 +404,28 @@ try {
 ## Tasks: suspend and resume
 
 A **task** is a run the sandbox drives, like `runAsync`, that can be suspended while it
-waits on host calls and continued later from the dump:
+waits on host calls and continued later from a snapshot:
 
 ```ts
 const task = sandbox.start(code, params, { filename: "job.js" });
 // ... the run calls async host functions and waits ...
-const dump = await task.suspend();         // at the next idle point; the task stops
-const resumed = await Sandbox.resume(dump, options);
+const snapshot = await task.suspend();     // a Uint8Array, at the next idle point; the task stops
+const resumed = await Sandbox.resume(snapshot, options);
 const result = await resumed.result;
 ```
 
 - `start(code, params, { filename })` runs the body to its first stop; a compile error
   throws. `task.result` is a promise of the outcome; `task.calls` lists the open host
   calls.
-- `task.suspend()` waits for the next idle point, writes the dump and stops the run:
+- `task.suspend()` waits for the next idle point, writes the snapshot and stops the run:
   `task.result` rejects with kind `suspended`, and the open calls' abort signals fire.
-  If the run cannot be dumped there, `suspend()` rejects and the task goes on.
-- `task.checkpoint()` writes a dump at the next idle point and lets the task go on.
-- `Sandbox.resume(dump, options)` makes a new sandbox with the same host functions (by
-  name) and continues the run in it; `sandbox.resume(dump)` does the same in a fresh
-  sandbox the host made itself.
+  If the run cannot be snapshotted there, `suspend()` rejects and the task goes on.
+- `task.checkpoint()` writes a snapshot at the next idle point and lets the task go on.
+- `Sandbox.resume(snapshot, options)` makes a new sandbox with the same options and
+  continues the run in it; `sandbox.resume(snapshot)` does the same in a fresh sandbox
+  the host made itself.
 
-An async host function that should survive a dump is an object with hooks, an
+An async host function that should survive a suspension is an object with hooks, an
 `AsyncHostFunction`:
 
 ```ts
@@ -433,7 +434,7 @@ const sleep: AsyncHostFunction<{ due: number }> = {
     this.state = { due: Date.now() + Number(ms) };
     await until(this.state.due, this.signal);
   },
-  save(call) { return call.state; },       // optional: the state a dump keeps (the default)
+  save(call) { return call.state; },       // optional: the state a snapshot keeps (the default)
   async resume({ due }, call) {            // after a load, with that state
     await until(due, call.signal);
   },
@@ -441,10 +442,10 @@ const sleep: AsyncHostFunction<{ due: number }> = {
 ```
 
 `call` starts the call; `this` is a `HostCall`, with the call's `id`, `fn`, `args`,
-`startedAt`, its `state` (JSON data a dump keeps) and a `signal` that aborts when the
+`startedAt`, its `state` (JSON data a snapshot keeps) and a `signal` that aborts when the
 sandbox stops waiting for it. After a load, `resume(state, call)` continues each open
 call; a function without `resume` is called again, and a plain function's open call is
-rejected. [Continuation dumps](dumps.md) shows the whole cycle.
+rejected, since the sandbox cannot know whether calling it again is safe.
 
 ## Host-driven runs
 
@@ -467,11 +468,11 @@ else throw run.error;
 `run.calls` lists them, oldest first. `settle(id, { ok, value })` delivers an outcome;
 `advance()` applies the settled results in order and runs to the next idle point or the
 end. Sync host functions are still called as the script calls them. While the run is
-idle, `run.dump(states)` writes it as a dump, with the host's state of each open call by
-id, and `sandbox.loadRun(dump)` loads one into a fresh sandbox and returns the run with
-its open calls and their states, for the host to settle, issue again or reject. Settling
-a call with `{ ok: false, value: new RunExit() }` ends the run as a host function's
-`RunExit` does.
+idle, `run.snapshot({ states })` writes it as a snapshot, with the host's state of each
+open call by id, and `sandbox.loadSnapshot(snapshot)` loads one into a fresh sandbox and
+returns the run with its open calls (same ids) and their states, for the host to settle,
+issue again or reject. Settling a call with `{ ok: false, value: new RunExit() }` ends
+the run as a host function's `RunExit` does.
 
 The run is `done` (or `threw`) as soon as the body's result settles, also while calls
 are open: `run.dropped` lists those, for the host to cancel, and settling one of them
@@ -484,9 +485,8 @@ for (const call of run.dropped) cancel(call.id);
 ```
 
 `maxFuel` bounds the run over all its steps, and `run.fuelUsed` says how much it has
-used. A dump does not carry the count: a host that keeps the budget across a dump and a
-load stores `fuelUsed` with the dump and passes it back, `sandbox.loadRun(dump, {
-fuelUsed })`; without it the loaded run starts with a fresh budget.
+used. A snapshot carries the count: the loaded run goes on counting from it, so the
+budget holds across any number of snapshots and loads.
 
 **Bounded steps.** A step can be bounded, so that a script that computes for long does
 not hold the host:
@@ -506,34 +506,52 @@ await run.advance({ signal, fuel: 50_000_000, yieldMs: 10 });
   `while (true) i++` runs. A small `fuelSlice` makes the yields more frequent.
 
 A step stopped by a bound ends the run: `advance` rejects with the error, the run's state
-is `threw`, and the sandbox can run again. A run can only be dumped at an idle point, so
-a host that persists runs goes on from the last dump it kept. `begin` takes `signal` and
-`fuel` for its first step too, but it returns synchronously and cannot yield; with
-`start: false` it only compiles and starts the body, and the first `advance` runs it.
+is `threw`, and the sandbox can run again. A run can only be snapshotted at an idle
+point, so a host that persists runs goes on from the last snapshot it kept. `begin` takes
+`signal` and `fuel` for its first step too, but it returns synchronously and cannot
+yield; with `start: false` it only compiles and starts the body, and the first `advance`
+runs it.
 
-## Continuation dumps
+## Snapshots
 
-Dumps are the subject of [their own page](dumps.md). What the options do:
+A snapshot is a waiting run as data: every object and internal record the run can reach
+beyond what a fresh sandbox has, written by kind and field names, the functions it
+stopped in named by their place in the script and checked by their bytecode, the
+builtins by their names. Code is not in it: the loading sandbox compiles the scripts
+again. What the options and methods do:
 
-- `frozenBuiltins: true` is required to write dumps.
-- Writing a dump needs a module with the dumper, as the package's is; a build of
-  djs-wasm without it throws a `misuse` error that says so. Loading needs neither the
-  dumper nor frozen builtins.
-- `sources(name)` returns the code of the script a dump refers to by name, for a dump
-  from another process; `inlineSources: true` writes the script into the dump instead.
+- The sandbox's own values are named, not written: its host functions by identity, its
+  namespaces (with their aliases and `missingMember` guards), `values`, module namespaces
+  and the JSON boundary's converting functions by name. The sandbox that loads a
+  snapshot must be made with options that give the same names; it loads into its own
+  setup, so a script's `tools` is the loading sandbox's `tools`. A name it lacks is a
+  `misuse` error before anything is loaded.
+- `run.snapshot({ sources: false })` (and the same option of `suspend` and `checkpoint`)
+  writes each script's hash instead of its text: smaller, and the loading sandbox finds
+  the script among the ones this process ran, or asks the `sources(name)` option for it.
+  The default stores the text, and the snapshot loads anywhere.
+- Loading checks every waiting function's bytecode against the loading build's: a djs
+  that compiles one of them differently refuses the snapshot, naming the function, and
+  so does one without a builtin, record field or named constant the snapshot uses. A
+  refused load leaves the sandbox unusable; dispose it.
+- A snapshot cannot hold a `WeakRef` or a `FinalizationRegistry`, nor a run whose script
+  changed a builtin object: snapshotting such a run throws a `misuse` error that names
+  what it met, and a task's `suspend` rejects and the task goes on.
+- `sandbox.describeSnapshot(snapshot)` describes one for people: its sections and their
+  sizes, the scripts, the host values it names, the host's data (the open calls' states
+  and the fuel used), the functions it holds frames of, and its records by kind.
 - `debugger`, a host function, makes `debugger;` in an async function a pause: the
-  statement awaits a call of this function, so the run is idle there and can be dumped.
-  It needs a module with the dumper. Without the option, `debugger;` does nothing.
+  statement awaits a call of this function, so the run is idle there and can be
+  snapshotted. Without the option, `debugger;` does nothing.
 - `sandbox.callSite(id)` says where the run waits on open call `id`: `{ file, line,
   column }` of the `await` of the innermost activation waiting on it, directly or through
-  `Promise.all` and the like. The file is the name the code was compiled as: the run's
-  `filename` for the code it started with, `dump.js` for code a dump carried, because a
-  run continued from a dump runs the dump's text. It returns `undefined` when nothing
-  waits on the call.
+  `Promise.all` and the like, in the script the run started with, also after any number
+  of loads. It returns `undefined` when nothing waits on the call.
 
-`sandbox.dump(names?)` writes the sandbox's globals (or the named ones) as a dump of
-data and functions, without a run; `sandbox.load(dump)` runs such a dump in a fresh
-sandbox and returns the open calls it recreated.
+A snapshot is trusted input: load only snapshots you wrote. The other form of persistence,
+[continuation dumps](dumps.md) (`run.dump()`, `sandbox.loadRun(dump)`, `sandbox.dump()`,
+`sandbox.load(dump)`), writes a run as JavaScript instead; it needs `frozenBuiltins:
+true`, and `inlineSources: true` writes the script into a dump.
 
 ## Deterministic runs and journals
 
@@ -571,5 +589,5 @@ examples do).
   [`scripts/npm-test.sh`](../../scripts/npm-test.sh): how the package is built, and how
   the packed package is tested in node, Bun, Deno and a browser, bundled and not.
 - [`js/test/`](../../js/test/): the package's tests, which use every part of it.
-- [`examples/sleep-dump/`](../../examples/sleep-dump/): a complete host that suspends
-  and resumes a run.
+- [`examples/sleep-snapshot/`](../../examples/sleep-snapshot/): a complete host that
+  suspends a run into a snapshot and resumes it in another process.

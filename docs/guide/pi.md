@@ -52,7 +52,12 @@ of pi's sits in the VM, so none is in a dump.
   on. Nothing is replayed, and no journal is kept: the latest dump is the script's
   state. [Dumps and later builds](dumps.md#dumps-and-later-builds) says what a dump
   relies on; until the dump format is declared stable, a waiting dump may not load
-  after an upgrade of djs.
+  after an upgrade of djs. The same setup persists through
+  [snapshots](js-api.md#snapshots) (`run.snapshot()`, `loadSnapshot` with the same
+  scope): its namespaces with their aliases and hints, `ALL_TOOLS`, the converting
+  functions and the imported modules are named in the snapshot and are the resuming
+  sandbox's own, the fuel used travels with it, and djs's tests move every harvested
+  script of pi's through a snapshot at each of its idle points in this setup.
 - **Steps.** pi runs code mode on its own thread, so each `advance` is bounded:
   `yieldMs` keeps pi responsive while a script computes, and pi's abort signal stops
   the step.
@@ -109,9 +114,10 @@ An agent host that wants djs for its codemode builds on the `Sandbox`:
 4. **Frozen builtins** instead of a lockdown in a prelude, which also makes dumps
    possible.
 5. **Persistence.** Start each script as a task; when the agent must wait long (a person,
-   a slow job), suspend the task into a dump, store it compressed with the open calls'
-   state, and resume it later with `Sandbox.resume` ([dumps](dumps.md)). Or, as pi's
-   durable code mode does, drive the run yourself and keep its latest dump.
+   a slow job), suspend the task into a snapshot, store it with the open calls' state,
+   and resume it later with `Sandbox.resume` ([snapshots](js-api.md#snapshots)). Or, as
+   pi's durable code mode does, drive the run yourself and keep its latest snapshot (or
+   dump).
 6. **Values at the boundary.** `jsonBoundary` gives tools JSON, as a prelude that
    stringifies arguments would, without a prelude ([the JSON
    boundary](js-api.md#the-json-boundary)).

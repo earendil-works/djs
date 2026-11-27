@@ -6,17 +6,17 @@ the result. This chapter is about the boundary between the two at the level of t
 module's operations: how a VM is made and driven, how host calls are reported and answered,
 how values cross in each direction, how the base snapshot gets into the module, and which
 builds of the module exist. Most hosts never see this level: the `Sandbox` of [the
-JavaScript interface](js-api.md) wraps it, and [continuation dumps](dumps.md) shows how
-it persists runs.
+JavaScript interface](js-api.md) wraps it, and persists runs as
+[snapshots](js-api.md#snapshots) or [continuation dumps](dumps.md).
 
 > **In short.** djs-wasm is a WebAssembly module with no imports and an ABI of integer
 > operations behind one exported function. Data crosses through a staging buffer (in) and
 > an out buffer, and values the host keeps are handles. The host drives a run by calling `vm_run` with a fuel slice and
 > acting on the status it returns; host calls are records the host reads and answers by
 > id. Values go in through a compact binary *wire format* that the VM decodes in one
-> pass, and come out through the *reader*, which reads the VM's arena in place. The
-> dumper lives in a second build of the module, because only hosts that persist runs
-> need it.
+> pass, and come out through the *reader*, which reads the VM's arena in place. A
+> waiting run leaves the VM as a snapshot, bytes the host keeps, and comes back into a
+> fresh VM of the same host.
 
 ## A module that needs nothing
 
@@ -139,7 +139,14 @@ The shipped module has <!--n wasm/ops-->74<!--/n--> operations. By area:
 | running | `vm_call`, `vm_run`, `vm_fuel_used`, `vm_abort`, `vm_result`, `vm_outcome`, `vm_take_unhandled_rejections` |
 | host functions and calls | `vm_new_host_function`, `vm_new_async_host_function`, `vm_host_call`, `vm_host_call_info`, `vm_new_host_calls`, `vm_resolve_host_call`, `vm_resolve_host_call_at` |
 | the environment | `vm_set_now`, `vm_set_time_zone_offset`, `vm_set_random_seed`, `vm_set_weak_refs`, `vm_canonical_hash` ([determinism](determinism.md)) |
+| snapshots | `vm_snapshot`, `vm_load_snapshot`, `djs_snapshot_needs`, `djs_snapshot_describe` ([below](#snapshots)); `vm_call_site` |
 | loading a dump | `vm_dump_runtime`, `vm_open_call`, `vm_restore_math_random`, `vm_set_next_call_id` |
+
+`vm_call_site` says where the run waits on open call `id`: `line:col:file` in the out
+buffer, the position of the `await` of the innermost activation waiting on it, directly
+or through `Promise.all` and the like; 0 when nothing waits on it at a known position.
+The `Sandbox` offers it as `callSite(id)`, and the live examples of this site use it to
+say where a run paused.
 
 The dump build adds the dumper and what serves it:
 
@@ -147,13 +154,29 @@ The dump build adds the dumper and what serves it:
 | --- | --- |
 | `vm_dump` | writes the idle VM as a dump into the out buffer, or the reasons it refuses, one per line. Staging names the host's globals, its function names by id, the values it wants back, its namespace objects and its state of each open call |
 | `vm_set_dump_source_refs` | whether a dump names the script the run started with by reference (the default) or carries its text |
-| `vm_call_site` | where the run waits on open call `id`: `line:col:file` in the out buffer, the position of the `await` of the innermost activation waiting on it, directly or through `Promise.all` and the like; 0 when nothing waits on it at a known position. The `Sandbox` offers it as `callSite(id)`, and the live examples of this site use it to say where a run paused |
 
 Loading a dump needs no operation of its own: it is running a Script with `$djs` defined.
 The four "loading a dump" operations serve the hooks while it runs: `vm_dump_runtime`
 evaluates the runtime's helpers from text the host passes, `vm_open_call` reopens an open
 call under its old id from inside the `$djs.resume` hook, and the other two restore
 `Math.random`'s state and the next call id.
+
+### Snapshots
+
+A snapshot names what belongs to the host instead of writing it, so the operations take
+the host's names along with the bytes. All their tables are little-endian words and
+length-prefixed UTF-8 strings in the staging buffer:
+
+| operation | does |
+| --- | --- |
+| `vm_snapshot(vm, len)` | writes the idle VM as a snapshot into the out buffer (its length), or the reasons it refuses (-1). Staging holds the flags (store the scripts' text; a host's run), the host functions by id and identity, the host values by handle and name, the handles the host wants back by name, and the host's data, a string |
+| `vm_load_snapshot(vm, len)` | loads a snapshot into `vm`, a fresh VM the host set up as it set up the one that wrote it: staging holds the snapshot, the candidate scripts' texts, the host functions (id, handle, identity) and the host values (handle, name). The out buffer then holds the handles by name, the open calls' ids and the host's data; on a refusal, the reasons, and the VM is to be freed |
+| `djs_snapshot_needs(len)` | what loading a snapshot needs: the names of the scripts it stores by hash only, and the host values and functions it names, so the host can find the texts and make what it makes lazily before the load |
+| `djs_snapshot_describe(len)` | a snapshot described for people, as text |
+
+A snapshot names builtins by their paths in the base. The instance works them out from
+the base at its first snapshot operation, and since its first VM took the base as its
+arena, the host hands the base over again before that operation, as for a second VM.
 
 ## Driving a run
 
@@ -351,17 +374,16 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
-| docs module | the shipped features and `docs` | this site's live examples: the shipped module plus `djs_disasm`, the bytecode listing an edited example shows |
+| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `snapshot` (snapshots), `dump` (the dumper) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.9 MB<!--/n-->, <!--n wasm/gzip kb-->768 KB<!--/n--> with gzip |
+| docs module | `docs` and `snapshot` | this site's live examples: `djs_disasm`, the bytecode listing an edited example shows, and snapshots for their `debugger;` pauses |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording
 in the compiler, the table of the base's builtin names, and lazy compilation of functions
-at their first call. The Sandbox needs it; djs-wasm builds without it only to measure
-what the dumper costs.
+at their first call. The `snapshot` feature brings snapshots, which need none of that.
 
-A host that persists runs calls `vm_dump` on the idle VM itself, in the module it runs
-in; a dump leaves the VM as it was, so the run goes on there or in whichever sandbox
-loads the dump.
+A host that persists runs calls `vm_snapshot` (or `vm_dump`) on the idle VM itself, in
+the module it runs in; either leaves the VM as it was, so the run goes on there or in
+whichever sandbox loads it.
 
 > **Trade-off.** One module with the dumper. The dumper and what serves it nearly double
 > the module (<!--n dump/extra-gzip kb-->335 KB<!--/n--> more with gzip), and hosts that never persist a

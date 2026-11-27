@@ -387,7 +387,7 @@ fn short_name(id: &str) -> &str {
 }
 
 /// A JSON string literal.
-fn json_str(s: &str) -> String {
+pub fn json_str(s: &str) -> String {
     J::Str(s.to_string()).render().trim_end().to_string()
 }
 

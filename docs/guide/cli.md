@@ -72,10 +72,56 @@ keys in any order), and such an entry answers every matching call. Otherwise it 
 next entry without `args`, in order, and the last one repeats. Entries with `args` give
 the same answers however the calls are ordered or split across runs.
 
-## Dumps on the command line
+## Snapshots on the command line
 
 Idle points are numbered from 1: every stop where the run has only host calls open,
-before an answer is given.
+before an answer is given. At any of them the CLI can write the run as a
+[snapshot](js-api.md#snapshots): its state as data, the CLI's own `tools`, `console` and
+host functions named, not written.
+
+- `djs run --snapshot-after K OUT file.js` writes the run as a snapshot to `OUT` at idle
+  point K and stops. `djs resume OUT`, with the same `--tools`, prints the rest, so the
+  two together print what the uninterrupted run prints. A run that cannot be snapshotted
+  is exit code 1, with the reason.
+- `djs run --snapshot-every-idle file.js` snapshots at every idle point and continues in
+  a fresh VM that loaded the snapshot: the run's output must be the same as without it.
+- `djs resume file.snapshot` loads a snapshot into a fresh VM, with frozen builtins if
+  the run had them, and goes on to the end, like `run`. Its open calls keep their ids and
+  are answered the same way; the tools the run made and the answers it used travel with
+  it, so a resumed run gets the answers the uninterrupted run gets. `resume` takes the
+  flags of `run`.
+- `djs describe file.snapshot` says what a snapshot holds: its sections and their sizes,
+  the scripts, the host values it names, the host's data, the functions it holds frames
+  of, and its records by kind.
+
+### `debugger;` pauses
+
+With `--debugger OUT`, a `debugger;` statement in an async function, or at the top level
+of a `--body`, is a pause: the run waits there as on a tool call. At the first pause the
+run is written as a snapshot to `OUT` and stops, with exit code 0, what it printed so far
+on stdout, and where it paused on stderr. `djs resume OUT` goes on to the end; `djs
+resume --debugger OUT OUT` goes on to the next pause and writes it to `OUT` again, so a
+run can be stepped pause by pause:
+
+```text
+$ djs run --debugger p.snapshot loop.js
+step 1 1
+djs: paused at loop.js:6:5, wrote p.snapshot
+$ djs resume --debugger p.snapshot p.snapshot
+step 2 3
+djs: paused at loop.js:6:5, wrote p.snapshot
+$ djs resume p.snapshot
+step 3 6
+total 6
+```
+
+A resumed run is in the same script, so its pauses are at the script's lines. Without
+`--debugger`, `debugger;` does nothing.
+
+## Dumps on the command line
+
+A run can also be written as a [continuation dump](dumps.md), JavaScript that recreates
+it, with the same numbering of idle points:
 
 - `djs run --dump-after K OUT file.js` writes the run as a [continuation
   dump](dumps.md) to `OUT` at idle point K and stops. `djs resume OUT`, with the same
@@ -102,33 +148,9 @@ reads.dump.js: 1 open call, 1 suspended activation; handles: run
     a = undefined, b = undefined
 ```
 
-Dumps need frozen builtins, so any of these flags, and every `resume`, make the VM with
-them. The dumps the CLI writes give each open call a state of its own (which tool
+Dumps need frozen builtins, so any of these flags, and every `resume` of a dump, make the
+VM with them. The dumps the CLI writes give each open call a state of its own (which tool
 answers it has used), so a resumed run gets the answers the uninterrupted run gets.
-
-### `debugger;` pauses
-
-With `--debugger OUT`, a `debugger;` statement in an async function, or at the top level
-of a `--body`, is a pause: the run waits there as on a tool call. At the first pause the
-run is written as a dump to `OUT` and stops, with exit code 0, what it printed so far on
-stdout, and where it paused on stderr. `djs resume OUT` goes on to the end; `djs resume
---debugger OUT OUT` goes on to the next pause and writes it to `OUT` again, so a run can
-be stepped pause by pause:
-
-```text
-$ djs run --debugger p.js loop.js
-step 1 1
-djs: paused at loop.js:6:5, wrote p.js
-$ djs resume --debugger p.js p.js
-step 2 3
-djs: paused at p.js:17:5, wrote p.js
-$ djs resume p.js
-step 3 6
-total 6
-```
-
-The positions of a resumed run are in the dump, which holds the continuation of the
-loop. Without `--debugger`, `debugger;` does nothing.
 
 ## `djs disasm` and `djs strip-types`
 
@@ -191,8 +213,9 @@ and prints only results.
 | `.bt [id\|all]` | the suspended functions waiting on call `#id`, or all of them (the default), with the source line and their bindings |
 | `.continue [id]`, `.c [id]` | continue a `debugger;` pause in place: the oldest, or `#id` |
 | `.abort` | drop the paused input and everything else in flight; the globals stay |
+| `.snapshot [file]` | write the session as a snapshot (default `session.snapshot`) |
 | `.dump [file\|-] [names]` | write the session as a continuation dump, or print it without a file (needs `--frozen`) |
-| `.restore <file>` | replace the VM with a fresh one that ran a dump |
+| `.restore <file>` | replace the VM with a fresh one that loaded a snapshot, or ran a dump |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that ran the dump |
 | `.clear` | a fresh VM |
 
@@ -218,9 +241,25 @@ Call ids count every host call, including the ones that make a tool's function o
 first use and `console.log`. Answers are applied one at a time, in the order they are
 given, as a host delivers results.
 
-### Dumps and `debugger;` in the REPL
+### Snapshots, dumps and `debugger;` in the REPL
 
-Started with `--frozen`, the REPL can write the session as a [continuation
+`.snapshot s.snapshot` writes the session as a [snapshot](js-api.md#snapshots): its
+globals and everything in flight (open calls, suspended functions, waiting inputs), and
+`.restore s.snapshot` replaces the VM with a fresh one that loaded it, with the open calls
+under their ids and the waiting inputs back under their labels:
+
+```text
+> let out = []; tools.read({ path: 'a' }).then(v => out.push(v)); 0
+[waiting] #2 tools.read({"path":"a"})
+0
+> .snapshot s.snapshot
+wrote 2535 bytes to s.snapshot (1 open call, 0 waiting inputs)
+> .restore s.snapshot
+loaded s.snapshot into a fresh VM
+waiting: #2 tools.read({"path":"a"})
+```
+
+Started with `--frozen`, the REPL can also write the session as a [continuation
 dump](dumps.md): `.dump s.js` writes its globals and everything in flight (open calls,
 suspended functions, waiting inputs), and `.restore s.js` replaces the VM with a fresh
 one that ran the dump, from any build of djs, with the waiting inputs back under their
@@ -258,9 +297,9 @@ While an input is paused, the prompt works as usual: other inputs run, `.pending
 the pause, `.bt` shows the paused code's bindings, and `.dump` prints the continuation,
 which starts at the pause and holds the rest of the input, its later `debugger;`
 statements included. `.c` continues the pause in place, and a loop pauses again at its
-next iteration. To continue from the dump instead: `.dump p.js`, `.restore p.js` (a
-fresh VM, paused again, at its line in `p.js`) and `.c`; the resumed run pauses at the
-next `debugger;` and can be dumped again. `.abort`, or Ctrl-C at an empty prompt while
+next iteration. To continue in a fresh VM instead: `.snapshot p.snapshot`, `.restore
+p.snapshot` (paused again, at the same place of the input) and `.c`; or the same with a
+dump, `.dump p.js` and `.restore p.js`, whose positions are in `p.js`. `.abort`, or Ctrl-C at an empty prompt while
 an input is paused, drops it with everything else in flight and reports what it
 dropped. Without `--frozen`, `debugger;` does nothing.
 

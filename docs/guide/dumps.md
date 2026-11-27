@@ -19,12 +19,11 @@ how a host writes and resumes one, and what cannot be dumped.
 
 On this site, a `debugger;` statement in a live example makes the run wait: the page
 gives the sandbox a host function that the statement awaits, so the run is idle there,
-exactly as if it waited for a tool. The page then writes the run out as a dump and
-throws its sandbox away. **Continue** loads the dump into a fresh sandbox, which runs on
-to the next `debugger;` or the end. The output of all the parts reads as one run, with a
-line at each pause that says where it stopped: a line and column of the example in the
-first part, and of the dump a later part continued from, since that part runs the dump's
-text (the link shows that dump with the statement marked):
+exactly as if it waited for a tool. The page then writes the run out, as a
+[snapshot](js-api.md#snapshots), the other form a waiting run can take, and throws its
+sandbox away. **Continue** loads it into a fresh sandbox, which runs on to the next
+`debugger;` or the end. The dumps on this page are what the same pauses write as dumps,
+generated when the guide is built:
 
 ```js live
 async function fetchPage(n) {
@@ -390,59 +389,40 @@ export function loadDump(text, { tools, reopen }) {
 
 `reopen` decides what an open call becomes: it can wait for the rest of a timer whose
 due time the state holds, poll a request by an id the state names, or call the tool
-again. [`examples/sleep-dump/`](../../examples/sleep-dump/) continues a dump this way.
+again.
 A few helpers call recent builtins (`Iterator.concat`, `Uint8Array.fromBase64`, the
 iterator helpers); an engine without them still loads every dump that does not name
 those helpers.
 
 ## Writing and resuming a dump
 
-The [JavaScript interface](js-api.md#tasks-suspend-and-resume) has two ways to persist a
-run. The simple one is a **task**: the sandbox drives the run and calls the host
-functions, and `suspend()` writes the dump at the next idle point.
+A host writes a dump of a run it drives itself
+([host-driven runs](js-api.md#host-driven-runs)): `begin` runs the script to its first
+idle point and lists the open calls, `Run.dump(states)` writes the dump with the host's
+state of each open call, and `loadRun` loads one into a fresh sandbox and returns the run
+with its open calls and their states:
 
 ```ts
-import { Sandbox, type AsyncHostFunction } from "@earendil-works/djs";
+import { Sandbox } from "@earendil-works/djs";
 
-const sleep: AsyncHostFunction<{ due: number }> = {
-  async call(ms) {                         // the script called it
-    const due = Date.now() + Number(ms);
-    this.state = { due };                  // the call's state: a dump keeps it
-    await until(due, this.signal);
-    return "slept";
-  },
-  async resume({ due }, call) {            // after a load, with that state
-    await until(due, call.signal);
-    return "slept";
-  },
-};
-const options = { frozenBuiltins: true, asyncFunctions: { "tools.sleep": sleep } };
-
+const options = { frozenBuiltins: true, asyncFunctions: { "tools.sleep": () => {} } };
 const sandbox = await Sandbox.create(options);
-const task = sandbox.start(code, params, { filename: "job.js" });
-const dump = await task.suspend();         // at the next idle point; the run stops
+const run = sandbox.begin(code, params, { filename: "job.js" });
+const [call] = run.calls;                  // tools.sleep(1000)
+const dump = run.dump({ [call.id]: { due: Date.now() + 1000 } });
 sandbox.dispose();
 
 // Any time later, in any process:
-const resumed = await Sandbox.resume(dump, { ...options, sources: (name) => load(name) });
-console.log(await resumed.result);
+const again = (await Sandbox.create({ ...options, sources: (name) => load(name) })).loadRun(dump);
+const [open] = again.calls;                // the same id, with its state
+await until(open.state.due);
+again.settle(open.id, { ok: true, value: "slept" });
+await again.advance();
 ```
 
-`suspend()` waits for the next idle point, asks every open call for its state, writes
-the dump and stops the run; the calls' abort signals tell the host to stop waiting for
-them. `Sandbox.resume` loads the dump into a new sandbox and continues each open call:
-
-- through its function's `resume` hook, with the state it was dumped with;
-- by calling the function again, if it has no `resume` hook, which suits calls without
-  side effects;
-- not at all, if the function is a plain function without hooks: the sandbox cannot
-  know whether calling it twice is safe, so the call rejects.
-
-A host that wants to decide every call itself drives the run instead: `begin` runs the
-script to its first idle point and lists the open calls, `Run.dump(states)` writes the
-dump with the states the host gives, and `loadRun` loads one and returns the run with
-its open calls and their states. For each, the host delivers a result it recorded,
-issues the call again, or rejects it ([host-driven runs](js-api.md#host-driven-runs)).
+For each open call the host delivers a result it recorded, issues the call again, or
+rejects it. (A task, the run the sandbox drives, suspends into a
+[snapshot](js-api.md#tasks-suspend-and-resume) instead.)
 
 The command line does the same with files: `djs run --dump-after K out.js` writes a
 dump at the Kth idle point, `djs resume out.js` continues it, and `djs resume --explain`
@@ -530,8 +510,7 @@ breaks them writes them again.
 changing between the moment the run read a value and the load: it writes a builtin the
 run looked up as the expression that finds it again, and a method a half-done call had
 already read (`pages.push` above) as a second read of it. Without frozen builtins,
-writing a dump throws a `misuse` error that says so. The live examples with `debugger;`
-run with frozen builtins for this reason.
+writing a dump throws a `misuse` error that says so.
 
 **The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->335 KB<!--/n--> more
 with gzip). djs ships one module all the same, with the dumper in it, so that every host
@@ -573,18 +552,16 @@ after: started
 ```
 <!-- /gen -->
 
-On this site, the run then continues in the same sandbox. A host that gets the
-refusal from `suspend()` decides what to do: keep the run in memory, or let it reach a
-later idle point where the value is gone.
+A snapshot holds a weak collection, so on this site this run pauses and continues as any
+other. A host whose dump is refused decides what to do: keep the run in memory, or let it
+reach a later idle point where the value is gone.
 
 ## Where to look
 
-- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): tasks (`start`, `suspend`,
-  `Sandbox.resume`), `begin`, `Run.dump` and `loadRun`.
+- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `begin`, `Run.dump` and `loadRun`
+  (tasks suspend into snapshots, see [the JavaScript interface](js-api.md)).
 - [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js): the helpers a dump calls,
   for hosts without djs.
-- [`examples/sleep-dump/`](../../examples/sleep-dump/): a host with a tool that sleeps,
-  suspended in one process and continued in another, or in node.
 - [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the writer;
   [how continuation dumps are written](continuations.md) explains how it reads frames
   and writes continuations.

@@ -59,24 +59,21 @@ pub fn snapshot(
         .iter()
         .filter_map(|&n| Some((n.to_string(), vm.global_path(n)?)))
         .collect();
+    // Compact JSON: the tools' state as `call_state` writes it, and the origins.
     let state = tools
         .call_state(None)
-        .and_then(|s| J::parse(&s).ok())
-        .unwrap_or(J::Null);
-    let origins = vm
+        .unwrap_or_else(|| String::from("null"));
+    let origins: Vec<String> = vm
         .pending_host_calls()
         .into_iter()
-        .filter_map(|id| Some(J::Arr(vec![J::Num(f64::from(id)), J::Str(origin(id)?)])))
+        .filter_map(|id| Some(format!("[{id},{}]", crate::tools::json_str(&origin(id)?))))
         .collect();
-    let data = J::Obj(vec![
-        (String::from("tools"), state),
-        (String::from("origins"), J::Arr(origins)),
-    ]);
+    let data = format!("{{\"tools\":{state},\"origins\":[{}]}}", origins.join(","));
     let host = HostNames {
         functions,
         values,
         handles: handles.iter().map(|&(n, v)| (n.to_string(), v)).collect(),
-        data: data.render(),
+        data,
     };
     let opts = SnapshotOptions {
         sources: true,

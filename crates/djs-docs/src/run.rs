@@ -136,8 +136,8 @@ pub fn snapshot(src: &str, nth: usize, ts: bool) -> String {
                         .expect("an open call");
                     continue;
                 }
-                let base = BaseInfo::new(djs_prelude::BASE, VmOptions::default())
-                    .expect("the base loads");
+                let base =
+                    BaseInfo::new(djs_prelude::BASE, VmOptions::default()).expect("the base loads");
                 let host = HostNames {
                     functions: vec![
                         (CONSOLE_LOG, "console.log".to_string()),
