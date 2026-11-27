@@ -46,13 +46,13 @@ pub(crate) const GENERATOR: i32 = 0;
 pub(crate) const ASYNC: i32 = 1;
 pub(crate) const ASYNC_GENERATOR: i32 = 2;
 
-const STATE: u32 = 0;
-const FRAME: u32 = 1;
-const PC: u32 = 2;
-const HP: u32 = 3;
-const PROMISE: u32 = 4;
-const KIND: u32 = 5;
-pub(crate) const QUEUE: u32 = 6;
+const STATE: u32 = crate::heap::ObjectClass::Generator.slot("state");
+const FRAME: u32 = crate::heap::ObjectClass::Generator.slot("frame");
+const PC: u32 = crate::heap::ObjectClass::Generator.slot("pc");
+const HP: u32 = crate::heap::ObjectClass::Generator.slot("hp");
+const PROMISE: u32 = crate::heap::ObjectClass::Generator.slot("promise");
+const KIND: u32 = crate::heap::ObjectClass::Generator.slot("kind");
+pub(crate) const QUEUE: u32 = crate::heap::ObjectClass::Generator.slot("queue");
 
 const ASYNC_AWAIT: u16 = intrinsics::id("AsyncAwait");
 const ASYNC_FUNCTION_RETURN: u16 = intrinsics::id("AsyncFunctionReturn");

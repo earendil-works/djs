@@ -31,10 +31,10 @@ use super::object::ObjectClass;
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Obj, Value};
 
-const TARGETS: u32 = 1;
-const TOKENS: u32 = 2;
-const HELD: u32 = 3;
-const FLAGS: u32 = 4;
+const TARGETS: u32 = crate::heap::ObjectClass::FinalizationRegistry.slot("targets");
+const TOKENS: u32 = crate::heap::ObjectClass::FinalizationRegistry.slot("tokens");
+const HELD: u32 = crate::heap::ObjectClass::FinalizationRegistry.slot("held");
+const FLAGS: u32 = crate::heap::ObjectClass::FinalizationRegistry.slot("flags");
 
 impl Heap {
     /// An EphemeronArray with room for `pairs` pairs, LEN 0.

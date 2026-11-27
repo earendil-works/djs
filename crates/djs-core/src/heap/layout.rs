@@ -753,6 +753,30 @@ pub fn layout_json() -> alloc::string::String {
         let _ = write!(o, "\"{c:?}\": {}{sep}", *c as u32);
     }
     o.push_str(" },\n");
+    // The slot table (D3700): each class's fixed slots by name, and its variable rest.
+    o.push_str("  \"objectSlots\": {\n");
+    for (i, c) in super::CLASSES.iter().enumerate() {
+        let names: alloc::vec::Vec<alloc::string::String> = c
+            .slots
+            .iter()
+            .map(|(n, _)| alloc::format!("\"{n}\""))
+            .collect();
+        let rest = c.rest.map_or(alloc::string::String::from("null"), |r| {
+            alloc::format!("\"{r}\"")
+        });
+        let sep = if i + 1 < super::CLASSES.len() {
+            ","
+        } else {
+            ""
+        };
+        let _ = writeln!(
+            o,
+            "    \"{}\": {{ \"slots\": [{}], \"rest\": {rest} }}{sep}",
+            c.name,
+            names.join(", ")
+        );
+    }
+    o.push_str("  },\n");
     {
         use super::PropFlags;
         let _ = writeln!(

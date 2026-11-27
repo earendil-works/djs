@@ -553,7 +553,7 @@ impl<'a> Exporter<'a> {
             f.push((String::from("elements"), String::from("values")));
         }
         for (n, t) in spec.slots {
-            f.push((n.to_string(), t.name().to_string()));
+            f.push((n.to_string(), schema::slot_ty_name(*t).to_string()));
         }
         if let Some(r) = spec.rest {
             f.push((r.to_string(), String::from("values")));

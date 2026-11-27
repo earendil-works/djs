@@ -64,196 +64,238 @@ pub(crate) const STORE_ACCESSOR: u32 = 8;
 /// drops the bit. Only the base image's build sets it.
 pub(crate) const STORE_WATCHED: u32 = 16;
 
-/// The object class, stored in [`Object::CLASS`]. Issue 0006 adds more.
+/// What an internal slot holds, beyond being a [`Value`]: what a reader that does not
+/// know the class (the logical snapshot, D3700) must do with it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u32)]
-pub enum ObjectClass {
-    Ordinary = 0,
-    /// An Array exotic object: dense elements and a `length` in slot 0.
-    Array = 1,
+pub enum SlotKind {
+    /// A value like any other: an immediate or a reference.
+    Value,
+    /// An int32 intrinsic id (a builtin closure's kind): meaningful by its name only.
+    Intrinsic,
+    /// A Map/Set hash index (an internal U32Array): derived from the entries.
+    Buckets,
+    /// A RegExp's compiled program (an internal U32Array): derived from source and flags.
+    Program,
+}
+
+/// One object class's internal slots: the fixed ones by name, then, for classes whose
+/// slot count varies, the name of the rest.
+#[derive(Clone, Copy, Debug)]
+pub struct ClassSlots {
+    pub class: ObjectClass,
+    pub name: &'static str,
+    pub slots: &'static [(&'static str, SlotKind)],
+    pub rest: Option<&'static str>,
+}
+
+impl ClassSlots {
+    /// The index of the fixed slot `name`. Const: modules define their slot constants by
+    /// it (a missing name fails the build).
+    pub const fn index(&self, name: &str) -> u32 {
+        let mut i = 0;
+        while i < self.slots.len() {
+            if str_eq(self.slots[i].0, name) {
+                return i as u32;
+            }
+            i += 1;
+        }
+        panic!("no such slot");
+    }
+}
+
+const fn str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+macro_rules! object_classes {
+    ($(
+        $(#[$doc:meta])*
+        $id:literal $class:ident [$($slot:literal $(: $kind:ident)?),* $(,)?] $(rest $rest:literal)? $(alloc $alloc:literal)?;
+    )*) => {
+        /// The object class, stored in [`Object::CLASS`], with its internal slots: the one
+        /// table of what each slot holds ([`CLASSES`], D3700).
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        #[repr(u32)]
+        pub enum ObjectClass {
+            $($(#[$doc])* $class = $id,)*
+        }
+
+        /// Every class's slots, in class id order.
+        pub const CLASSES: &[ClassSlots] = &[$(ClassSlots {
+            class: ObjectClass::$class,
+            name: stringify!($class),
+            slots: &[$(($slot, object_classes!(@kind $($kind)?))),*],
+            rest: object_classes!(@rest $($rest)?),
+        }),*];
+
+        impl ObjectClass {
+            pub const fn from_u32(c: u32) -> Option<ObjectClass> {
+                match c {
+                    $($id => Some(ObjectClass::$class),)*
+                    _ => None,
+                }
+            }
+
+            /// Number of internal slots the class is allocated with: its fixed slots (a
+            /// class with a variable rest gets it on top, as its maker decides).
+            pub const fn slots(self) -> u32 {
+                match self {
+                    $(ObjectClass::$class => object_classes!(@count [$($slot)*] $($alloc)?),)*
+                }
+            }
+
+            /// The class's slot table.
+            pub const fn slot_table(self) -> &'static ClassSlots {
+                let mut i = 0;
+                while i < CLASSES.len() {
+                    if CLASSES[i].class as u32 == self as u32 {
+                        return &CLASSES[i];
+                    }
+                    i += 1;
+                }
+                panic!("class without a slot table");
+            }
+
+            /// The index of fixed slot `name` (see [`ClassSlots::index`]).
+            pub const fn slot(self, name: &str) -> u32 {
+                self.slot_table().index(name)
+            }
+        }
+    };
+    (@kind) => { SlotKind::Value };
+    (@kind $k:ident) => { SlotKind::$k };
+    (@rest) => { None };
+    (@rest $r:literal) => { Some($r) };
+    (@count [$($slot:literal)*]) => { { let s: &[&str] = &[$($slot),*]; s.len() as u32 } };
+    (@count [$($slot:literal)*] $alloc:literal) => { $alloc };
+}
+
+object_classes! {
+    0 Ordinary [];
+    /// An Array exotic object: dense elements, and its `length` (a Number).
+    1 Array ["length"];
     /// A JS closure: its `FuncTemplate` is in the object's `ELEMENTS` field (D2448: a
-    /// closure has no dense elements), its slots are the internal references to its
+    /// closure has no dense elements); its slots are the internal references to its
     /// captured Boxes, then the home object if the template has `HOME`.
-    Function = 2,
-    /// A function implemented by the embedder: slot 0 is its host function id (int32).
-    HostFunction = 3,
-    /// An Error instance (`[[ErrorData]]`).
-    Error = 4,
+    2 Function [] rest "captures";
+    /// A function implemented by the embedder: its host function id (int32).
+    3 HostFunction ["id"];
+    /// An Error instance (`[[ErrorData]]`): its stack trace (D1971), a string or a pending
+    /// record; a DOMException has two more slots (D1840).
+    4 Error ["stack"] rest "more";
     /// An unmapped (strict) arguments object: ordinary storage, its own class for
     /// `Object.prototype.toString`.
-    Arguments = 5,
-    /// An Array Iterator: slot 0 the target (undefined once exhausted), slot 1 the next
-    /// index, slot 2 the kind (0 keys, 1 values, 2 entries).
-    ArrayIterator = 6,
-    /// A bound function exotic object: slot 0 the target function, slot 1 the bound
-    /// `this`, slot 2 an Array of the bound arguments.
-    BoundFunction = 7,
-    /// Primitive wrapper objects (`[[BooleanData]]`, `[[NumberData]]`,
-    /// `[[StringData]]`, `[[SymbolData]]`): slot 0 is the primitive. A String object's
-    /// `length` and index properties are ordinary own properties defined at creation.
-    Boolean = 8,
-    Number = 9,
-    String = 10,
-    Symbol = 11,
-    /// Map, Set, WeakMap, WeakSet (0038, `heap/collection.rs`): slot 0 the entries (a
-    /// ValueArray, or an EphemeronArray for the weak ones), slot 1 the hash index (a
-    /// U32Array), slot 2 the number of live entries.
-    Map = 12,
-    Set = 13,
-    WeakMap = 14,
-    WeakSet = 15,
-    /// A Map or Set Iterator: slot 0 the entries it walks (undefined once done), slot 1
-    /// the next entry number, slot 2 the kind (0 keys, 1 values, 2 entries), slot 3 0
-    /// for a Map, 1 for a Set, slots 4 and 5 the key and value of the last step.
-    CollectionIterator = 16,
-    /// A Promise (`[[PromiseState]]` ...): slot 0 the state (int32: 0 pending, 1
-    /// fulfilled, 2 rejected), slot 1 the result, slot 2 the pending reactions (an
-    /// internal `ValueArray` of `[capability, onFulfilled, onRejected]` triples, or
-    /// undefined), slot 3 flags (int32, `interp::run::promise`). D1371.
-    Promise = 17,
-    /// A builtin closure (D1372): calling it calls the installed intrinsic builtin whose
-    /// id is slot 0 (int32) with `this` = slot 1 (its data) and the call's arguments.
-    /// Promise resolving functions, `Promise.all` element functions, ...
-    BuiltinClosure = 18,
+    5 Arguments [];
+    /// An Array Iterator: the target (undefined once exhausted), the next index, the kind
+    /// (0 keys, 1 values, 2 entries, 3 a String Iterator).
+    6 ArrayIterator ["target", "index", "kind"];
+    /// A bound function exotic object: the target function, the bound `this`, an Array of
+    /// the bound arguments.
+    7 BoundFunction ["target", "this", "args"];
+    /// Primitive wrapper objects (`[[BooleanData]]`, `[[NumberData]]`, `[[StringData]]`,
+    /// `[[SymbolData]]`): the primitive. A String object's `length` and index properties
+    /// are ordinary own properties defined at creation.
+    8 Boolean ["primitive"];
+    9 Number ["primitive"];
+    10 String ["primitive"];
+    11 Symbol ["primitive"];
+    /// Map, Set, WeakMap, WeakSet (0038, `heap/collection.rs`): the entries (a ValueArray,
+    /// an EphemeronArray for the weak ones), the hash index (a U32Array), the number of
+    /// live entries.
+    12 Map ["entries", "index": Buckets, "live"];
+    13 Set ["entries", "index": Buckets, "live"];
+    14 WeakMap ["entries", "index": Buckets, "live"];
+    15 WeakSet ["entries", "index": Buckets, "live"];
+    /// A Map or Set Iterator: the entries it walks (undefined once done), the next entry
+    /// number, the kind (0 keys, 1 values, 2 entries), 0 for a Map and 1 for a Set, the
+    /// key and value of the last step.
+    16 CollectionIterator ["entries", "next", "kind", "isSet", "key", "value"];
+    /// A Promise (`[[PromiseState]]` ...): the state (int32: 0 pending, 1 fulfilled, 2
+    /// rejected), the result, the pending reactions (an internal `ValueArray` of
+    /// `[capability, onFulfilled, onRejected]` triples, or undefined), flags (int32,
+    /// `interp::run::promise`). D1371.
+    17 Promise ["state", "result", "reactions", "flags"];
+    /// A builtin closure (D1372): calling it calls the installed intrinsic builtin whose id
+    /// is `builtin` (int32) with `this` = its `data` and the call's arguments; its
+    /// `length` (D3155). Promise resolving functions, `Promise.all` element functions, ...
+    18 BuiltinClosure ["builtin": Intrinsic, "data", "length"];
     /// An internal record (D1372): a prototype-less object with only internal slots,
     /// never handed to user code; the builtins read it with `%RecordGet`/`%RecordSet`.
-    Record = 19,
-    /// A Date: slot 0 the time value (a Number, NaN for an invalid date).
-    Date = 20,
+    19 Record [] rest "fields";
+    /// A Date: the time value (a Number, NaN for an invalid date).
+    20 Date ["time"];
     /// A suspendable function activation (D1375): a generator object, or the internal
-    /// state of an async function call. Slot 0 the state (`interp::run::suspend`), slot
-    /// 1 the saved frame (an internal ValueArray) while suspended, slot 2 the pc to
-    /// resume at, slot 3 the frame's `hp - bp`, slot 4 the result promise (async), slot
-    /// 5 the kind (0 generator, 1 async function, 2 async generator), slot 6 an async
-    /// generator's request queue (D1421).
-    Generator = 21,
-    /// An ArrayBuffer, a typed array, a DataView (0039, `heap/typed.rs`).
-    ArrayBuffer = 22,
-    TypedArray = 23,
-    DataView = 24,
-    /// A RegExp (0033, `builtins/regexp.rs`): slot 0 the compiled program (an internal
-    /// U32Array), slot 1 the source string, slot 2 the flag bits (int32).
-    RegExp = 25,
-    /// A RegExp String Iterator (matchAll): slot 0 the regexp, slot 1 the string, slot
-    /// 2 flags (int32: 1 global, 2 unicode, 4 done).
-    RegExpStringIterator = 26,
-    /// A Proxy exotic object (0045, `heap/proxy.rs`): slot 0 the target, slot 1 the
-    /// handler (both null once revoked), slot 2 flags (int32: 1 callable, 2
-    /// constructor, fixed at creation from the target). No prototype, no own
-    /// properties, not extensible as far as the heap is concerned: the interpreter and
-    /// the builtins send every internal method to the traps (builtins/proxy.ts).
-    Proxy = 27,
+    /// state of an async function call (`interp::run::suspend`): the state, the saved
+    /// frame (an internal ValueArray) while suspended, the pc to resume at, the frame's
+    /// `hp - bp`, the result promise (async), the kind (0 generator, 1 async function, 2
+    /// async generator), an async generator's request queue (D1421).
+    21 Generator ["state", "frame", "pc", "hp", "promise", "kind", "queue"];
+    /// An ArrayBuffer (0039, `heap/typed.rs`): its bytes (an internal reference to a
+    /// `Bytes` cell; undefined once detached), its maximum byte length (undefined for a
+    /// fixed-length buffer, `true` for an immutable one).
+    22 ArrayBuffer ["bytes", "max"];
+    /// A typed array: its buffer, its element kind, its byte offset, its length
+    /// (negative: tracks a resizable buffer).
+    23 TypedArray ["buffer", "kind", "offset", "length"];
+    /// A DataView: its buffer, byte offset and byte length.
+    24 DataView ["buffer", "offset", "length"];
+    /// A RegExp (0033, `builtins/regexp.rs`): the compiled program (an internal
+    /// U32Array), the source string, the flag bits (int32).
+    25 RegExp ["program": Program, "source", "flags"];
+    /// A RegExp String Iterator (matchAll): the regexp, the string, flags (int32: 1
+    /// global, 2 unicode, 4 done).
+    26 RegExpStringIterator ["regexp", "string", "flags"];
+    /// A Proxy exotic object (0045, `heap/proxy.rs`): the target, the handler (both null
+    /// once revoked), flags (int32: 1 callable, 2 constructor, fixed at creation from the
+    /// target). No prototype, no own properties, not extensible as far as the heap is
+    /// concerned: the interpreter and the builtins send every internal method to the traps
+    /// (builtins/proxy.ts).
+    27 Proxy ["target", "handler", "flags"];
     /// An iterator helper object (0051, builtins/iterator.ts): the objects of
     /// `Iterator.prototype.map` and friends, `Iterator.concat` and `Iterator.from`'s
-    /// wrapper, told apart by slot 0 (the kind). The builtins keep their state in slots
-    /// 0..8 with `%RecordGet`/`%RecordSet`.
-    IteratorHelper = 28,
-    /// A WeakRef and a FinalizationRegistry (0051, `heap/weakref.rs`, D1513).
-    WeakRef = 31,
-    FinalizationRegistry = 32,
-    /// A DisposableStack or AsyncDisposableStack (0051, builtins/disposable.ts): slot 0
-    /// true for an AsyncDisposableStack, slot 1 the state (0 pending, 1 disposed), slot 2
-    /// the resources (an internal Array of [value, method, kind] triples).
-    DisposableStack = 33,
-    /// A BigInt wrapper (`[[BigIntData]]`, 0046): slot 0 is the BigInt, like the other
-    /// primitive wrappers.
-    BigInt = 30,
+    /// wrapper, told apart by field 0 (the kind). The builtins keep their state in its
+    /// fields with `%RecordGet`/`%RecordSet`.
+    28 IteratorHelper [] rest "fields" alloc 8;
     /// A raw JSON object (`[[IsRawJSON]]`, JSON.rawJSON, D1611): frozen, null prototype,
     /// one own `rawJSON` string property, no slots.
-    RawJSON = 29,
-    /// A stack frame given to `Error.prepareStackTrace` (qjs's CallSite, 0106, D2050):
-    /// slot 0 the function (null for a parse error position), 1 its name (a string or
-    /// null), 2 the file name (a string, null for a native frame), 3 the line and 4 the
-    /// column (int32, line 0 without a position), 5 whether it is native and 6 whether
-    /// it was called as a constructor (booleans).
-    CallSite = 34,
-    /// A TextEncoder or TextDecoder (0244, `builtins/encoding.rs`): slot 0 the flags,
-    /// slot 1 a decoder's stream state (both int32).
-    TextCodec = 35,
+    29 RawJSON [];
+    /// A BigInt wrapper (`[[BigIntData]]`, 0046): the BigInt, like the other primitive
+    /// wrappers.
+    30 BigInt ["primitive"];
+    /// A WeakRef (0051, `heap/weakref.rs`, D1513): its target.
+    31 WeakRef ["target"];
+    /// A FinalizationRegistry: the cleanup callback, the targets (an EphemeronArray of
+    /// `[target, true]`), the unregister tokens (an EphemeronArray of `[token, true]`, a
+    /// HOLE pair for none), the held values (a ValueArray; HOLE marks a free cell), an int:
+    /// 1 while a cleanup job is queued.
+    32 FinalizationRegistry ["cleanup", "targets", "tokens", "held", "flags"];
+    /// A DisposableStack or AsyncDisposableStack (0051, builtins/disposable.ts): true for
+    /// an AsyncDisposableStack, the state (0 pending, 1 disposed), the resources (an
+    /// internal Array of [value, method, kind] triples).
+    33 DisposableStack ["async", "state", "resources"];
+    /// A stack frame given to `Error.prepareStackTrace` (qjs's CallSite, 0106, D2050): the
+    /// function (null for a parse error position), its name (a string or null), the file
+    /// name (a string, null for a native frame), the line and the column (int32, line 0
+    /// without a position), whether it is native and whether it was called as a
+    /// constructor (booleans).
+    34 CallSite ["function", "name", "file", "line", "column", "native", "construct"];
+    /// A TextEncoder or TextDecoder (0244, `builtins/encoding.rs`): the flags, a decoder's
+    /// stream state (both int32).
+    35 TextCodec ["flags", "state"];
 }
 
 impl ObjectClass {
-    pub const fn from_u32(c: u32) -> Option<ObjectClass> {
-        match c {
-            0 => Some(ObjectClass::Ordinary),
-            1 => Some(ObjectClass::Array),
-            2 => Some(ObjectClass::Function),
-            3 => Some(ObjectClass::HostFunction),
-            4 => Some(ObjectClass::Error),
-            5 => Some(ObjectClass::Arguments),
-            6 => Some(ObjectClass::ArrayIterator),
-            7 => Some(ObjectClass::BoundFunction),
-            8 => Some(ObjectClass::Boolean),
-            9 => Some(ObjectClass::Number),
-            10 => Some(ObjectClass::String),
-            11 => Some(ObjectClass::Symbol),
-            12 => Some(ObjectClass::Map),
-            13 => Some(ObjectClass::Set),
-            14 => Some(ObjectClass::WeakMap),
-            15 => Some(ObjectClass::WeakSet),
-            16 => Some(ObjectClass::CollectionIterator),
-            17 => Some(ObjectClass::Promise),
-            18 => Some(ObjectClass::BuiltinClosure),
-            19 => Some(ObjectClass::Record),
-            20 => Some(ObjectClass::Date),
-            21 => Some(ObjectClass::Generator),
-            22 => Some(ObjectClass::ArrayBuffer),
-            23 => Some(ObjectClass::TypedArray),
-            24 => Some(ObjectClass::DataView),
-            25 => Some(ObjectClass::RegExp),
-            26 => Some(ObjectClass::RegExpStringIterator),
-            27 => Some(ObjectClass::Proxy),
-            28 => Some(ObjectClass::IteratorHelper),
-            31 => Some(ObjectClass::WeakRef),
-            32 => Some(ObjectClass::FinalizationRegistry),
-            33 => Some(ObjectClass::DisposableStack),
-            30 => Some(ObjectClass::BigInt),
-            29 => Some(ObjectClass::RawJSON),
-            34 => Some(ObjectClass::CallSite),
-            35 => Some(ObjectClass::TextCodec),
-            _ => None,
-        }
-    }
-
-    /// Number of internal slots the class needs.
-    pub const fn slots(self) -> u32 {
-        match self {
-            ObjectClass::Ordinary
-            | ObjectClass::Arguments
-            | ObjectClass::Record
-            | ObjectClass::RawJSON => 0,
-            ObjectClass::Promise => 4,
-            // The builtin, its data and its `length` (D3155).
-            ObjectClass::BuiltinClosure => 3,
-            ObjectClass::Function => 0,
-            ObjectClass::Array | ObjectClass::HostFunction => 1,
-            // The stack trace (D1971); a DOMException has two more (D1840).
-            ObjectClass::Error => 1,
-            ObjectClass::ArrayIterator => 3,
-            ObjectClass::BoundFunction => 3,
-            ObjectClass::Boolean
-            | ObjectClass::Number
-            | ObjectClass::String
-            | ObjectClass::Symbol
-            | ObjectClass::BigInt => 1,
-            ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
-            ObjectClass::CollectionIterator => 6,
-            ObjectClass::Date => 1,
-            ObjectClass::Generator => 7,
-            ObjectClass::ArrayBuffer => 2,
-            ObjectClass::TypedArray => 4,
-            ObjectClass::DataView => 3,
-            ObjectClass::RegExp | ObjectClass::RegExpStringIterator => 3,
-            ObjectClass::Proxy => 3,
-            ObjectClass::IteratorHelper => 8,
-            ObjectClass::DisposableStack => 3,
-            ObjectClass::WeakRef => 1,
-            ObjectClass::FinalizationRegistry => 5,
-            ObjectClass::CallSite => 7,
-            ObjectClass::TextCodec => 2,
-        }
-    }
-
     /// Callable objects of this class. A Proxy is callable when its target is: see
     /// [`Heap::is_callable`].
     pub const fn is_callable(self) -> bool {

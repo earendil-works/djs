@@ -62,7 +62,9 @@ pub use cells::CellKind;
 pub use gc::GcStats;
 pub use handle::Handle;
 pub use layout::Ref;
-pub use object::{Lookup, ObjectClass, PropFlags, Property, PropertyDescriptor};
+pub use object::{
+    CLASSES, ClassSlots, Lookup, ObjectClass, PropFlags, Property, PropertyDescriptor, SlotKind,
+};
 pub use string::StrView;
 
 use cells::{Header, Roots};

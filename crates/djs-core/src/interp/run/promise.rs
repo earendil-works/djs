@@ -40,10 +40,10 @@ pub(crate) const FLAG_HANDLED: i32 = 1;
 /// `[[AlreadyResolved]]` of an internal capability.
 pub(crate) const FLAG_RESOLVED: i32 = 2;
 
-const STATE: u32 = 0;
-const RESULT: u32 = 1;
-const REACTIONS: u32 = 2;
-const FLAGS: u32 = 3;
+const STATE: u32 = crate::heap::ObjectClass::Promise.slot("state");
+const RESULT: u32 = crate::heap::ObjectClass::Promise.slot("result");
+const REACTIONS: u32 = crate::heap::ObjectClass::Promise.slot("reactions");
+const FLAGS: u32 = crate::heap::ObjectClass::Promise.slot("flags");
 
 /// Values per job entry: the function and four arguments.
 pub(crate) const JOB_SIZE: u32 = 5;

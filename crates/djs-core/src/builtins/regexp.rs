@@ -18,14 +18,14 @@ use crate::interp::{ErrorKind, Intrinsic, realm};
 use crate::regexp::{self, Caps, Flags, Prog, Program};
 use crate::value::{Obj, Str, Value};
 
-pub(crate) const SLOT_PROGRAM: u32 = 0;
-pub(crate) const SLOT_SOURCE: u32 = 1;
-pub(crate) const SLOT_FLAGS: u32 = 2;
+pub(crate) const SLOT_PROGRAM: u32 = crate::heap::ObjectClass::RegExp.slot("program");
+pub(crate) const SLOT_SOURCE: u32 = crate::heap::ObjectClass::RegExp.slot("source");
+pub(crate) const SLOT_FLAGS: u32 = crate::heap::ObjectClass::RegExp.slot("flags");
 
 /// RegExp String Iterator slots and flag bits.
-pub(crate) const IT_REGEXP: u32 = 0;
-pub(crate) const IT_STRING: u32 = 1;
-pub(crate) const IT_FLAGS: u32 = 2;
+pub(crate) const IT_REGEXP: u32 = crate::heap::ObjectClass::RegExpStringIterator.slot("regexp");
+pub(crate) const IT_STRING: u32 = crate::heap::ObjectClass::RegExpStringIterator.slot("string");
+pub(crate) const IT_FLAGS: u32 = crate::heap::ObjectClass::RegExpStringIterator.slot("flags");
 pub(crate) const IT_GLOBAL: i32 = 1;
 pub(crate) const IT_UNICODE: i32 = 2;
 pub(crate) const IT_DONE: i32 = 4;

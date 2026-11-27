@@ -27,9 +27,9 @@ use super::{CellKind, Heap, HeapError, ObjectClass};
 use crate::value::{Obj, Value};
 
 /// Slots of a collection object.
-const ENTRIES: u32 = 0;
-const INDEX: u32 = 1;
-const LIVE: u32 = 2;
+const ENTRIES: u32 = ObjectClass::Map.slot("entries");
+const INDEX: u32 = ObjectClass::Map.slot("index");
+const LIVE: u32 = ObjectClass::Map.slot("live");
 
 /// The first entry slot of a Map/Set entries array (after forward and removed).
 const MAP_BASE: u32 = 2;
