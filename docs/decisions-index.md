@@ -121,6 +121,12 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1433: Prelude closures carry no `length`, `name` or `prototype`
 - D1495: pi adapter: reuse the VM image taken after the prelude
 - D1890: pi adapter: snapshot() and the prelude image collect first
+- D3700: Logical snapshots are djs's persistence format (with D3701-D3723)
+- D3730: Continuation dumps are removed; snapshots are djs's only persistence format
+- D3731: The REPL's `--debugger` makes `debugger;` a pause; `--frozen` only freezes the builtins
+- D3732: The shipped module compiles eagerly
+- D3733: Modules with snapshots keep the 128 KiB stack
+- D3734: A Sandbox run's result is the entry call's outcome; states only for open calls
 
 ## Numbers, Unicode and text tables
 
@@ -376,6 +382,8 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
   and insert2/3; `put_elem` appends): both are the same decision.
 - D2520 (`unsafe-heap` optional, not shipped) is amended by D3100 (the shipped and slim
   wasm modules build with it; native, dump and test builds keep the checks).
+- Every continuation-dump decision (D2352-D3660, listed in D3730) is superseded by D3730:
+  dumps are removed and runs persist as snapshots (D3700).
 
 ## Not yet sorted by topic
 
