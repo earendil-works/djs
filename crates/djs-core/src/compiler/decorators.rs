@@ -45,13 +45,15 @@ pub(super) const DEC_FIELD: u8 = 5;
 const DEC_STATIC: u8 = 8;
 const DEC_PRIVATE: u8 = 16;
 
-/// Slots of the decoration state and of an element Record.
-const STATE_STATIC_EXTRAS: i8 = 1;
-const STATE_INSTANCE_EXTRAS: i8 = 2;
-const STATE_CLASS_EXTRAS: i8 = 3;
-const REC_EXTRAS: i8 = 1;
-const REC_GET: i8 = 2;
-const REC_SET: i8 = 3;
+/// Fields of the decoration state and of an element record (builtins/decorators.ts
+/// `DecoratorState`, `DecoratorElement`, D3710).
+use crate::builtins::r#gen::records::{decorator_element, decorator_state};
+const STATE_STATIC_EXTRAS: i8 = decorator_state::STATIC_EXTRAS as i8;
+const STATE_INSTANCE_EXTRAS: i8 = decorator_state::INSTANCE_EXTRAS as i8;
+const STATE_CLASS_EXTRAS: i8 = decorator_state::CLASS_EXTRAS as i8;
+const REC_EXTRAS: i8 = decorator_element::EXTRAS as i8;
+const REC_GET: i8 = decorator_element::GETTER as i8;
+const REC_SET: i8 = decorator_element::SETTER as i8;
 
 /// The key of a decorated element.
 #[derive(Clone, Copy)]

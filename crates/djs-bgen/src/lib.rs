@@ -11,6 +11,7 @@ pub mod emit_rust;
 pub mod lexer;
 pub mod parser;
 pub mod qjs_order;
+pub mod records;
 
 use std::fs;
 use std::path::Path;
@@ -30,6 +31,9 @@ pub struct Output {
     pub natives: String,
     /// `crates/djs-core/src/builtins/gen/leaves.rs`: the leaf backend (D3260).
     pub leaves: String,
+    /// `crates/djs-core/src/builtins/gen/records.rs`: the record schemas and named
+    /// constants (D3710).
+    pub records: String,
     /// The prelude with the bodies of the builtins that have generated Rust too: what
     /// the behavior test runs in qjs (not written out).
     pub prelude_bodies: String,
@@ -44,6 +48,7 @@ pub const REPORT_PATH: &str = "gen/resume-points.txt";
 /// Relative to the builtins directory.
 pub const NATIVES_PATH: &str = "../crates/djs-core/src/builtins/gen/natives.rs";
 pub const LEAVES_PATH: &str = "../crates/djs-core/src/builtins/gen/leaves.rs";
+pub const RECORDS_PATH: &str = "../crates/djs-core/src/builtins/gen/records.rs";
 
 /// Compiles in-memory sources: `intrinsics` is intrinsics.d.ts, `modules` are
 /// (name, text) pairs of builtin files in output order. Errors are rendered.
@@ -98,6 +103,7 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
         report: analysis::report(&program, &analysis, &sources),
         natives,
         leaves: emit_leaf::emit(&program)?,
+        records: records::emit(&program.enums, &sources),
     })
 }
 

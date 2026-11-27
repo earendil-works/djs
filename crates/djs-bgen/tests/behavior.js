@@ -243,9 +243,10 @@ const I = {
   },
   ArrayIteratorKind: (it) => arrayIterators.get(it).kind,
   CreateIterResultObject: (value, done) => ({ value, done }),
-  CreateIteratorHelper: (kind, iterator, next) => {
+  // The record schemas' field counts are bgen's (D3710): room for the largest.
+  CreateIteratorHelper: (schema, kind) => {
     const o = Object.create(helperProto(kind === 0));
-    helperSlots.set(o, [kind, 0, iterator, next, undefined, undefined, undefined, undefined]);
+    helperSlots.set(o, [kind, 0, ...new Array(30).fill(undefined)]);
     return o;
   },
   ThisIteratorHelper: (v, wrap) => {
@@ -255,9 +256,9 @@ const I = {
     }
     return v;
   },
-  NewRecord: (n) => {
+  NewRecord: (schema) => {
     const r = Object.create(null);
-    helperSlots.set(r, new Array(n).fill(undefined));
+    helperSlots.set(r, new Array(32).fill(undefined));
     return r;
   },
   RecordGet: (r, i) => {

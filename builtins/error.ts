@@ -23,9 +23,20 @@ function ErrorPrototypeGetStack(this: Value): Value {
 }
 
 /**
+ * A stack recorded while Error.prepareStackTrace was set (interp/run/stack.rs makes it):
+ * the CallSites, the default string, the function and the Error constructor.
+ * @record
+ */
+enum PendingStack {
+  sites,
+  defaultString,
+  prepare,
+  ctor,
+}
+
+/**
  * Error.prepareStackTrace (V8, qjs; D2050): a stack recorded while it was set is
- * pending, a record of the CallSites, the default string, the function and the Error
- * constructor. This calls the function with (error, callsites) and `this` the Error
+ * pending, a PendingStack record. This calls the function with (error, callsites) and `this` the Error
  * constructor; its result, whatever it is, becomes the stack, and the default string if
  * it throws.
  */
@@ -35,9 +46,9 @@ function FinishStack(err: Obj, v: Value): Value {
   }
   const r: Obj = AsObj(v);
   try {
-    return CallPrepareStackTrace(RecordGet(r, 2), RecordGet(r, 3), err, RecordGet(r, 0));
+    return CallPrepareStackTrace(RecordGet(r, PendingStack.prepare), RecordGet(r, PendingStack.ctor), err, RecordGet(r, PendingStack.sites));
   } catch (e) {
-    return RecordGet(r, 1);
+    return RecordGet(r, PendingStack.defaultString);
   }
 }
 

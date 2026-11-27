@@ -24,6 +24,11 @@ type Fn = Obj & { readonly __callable: true };
 type Str = string;
 /** A symbol. */
 type Sym = symbol;
+/**
+ * A record schema: an `@record` enum named as a value, as in `NewRecord(Capability)`
+ * (builtins/README.md "Records and named constants", D3710).
+ */
+type Schema = object;
 /** Numbers whose kind bgen tracks; the Rust backend keeps them unboxed. */
 type i32 = number & { readonly __num?: "i32" };
 type u32 = number & { readonly __num?: "u32" };
@@ -818,7 +823,22 @@ declare function CreateArrayFromPair(a: Value, b: Value): Obj;
 // ---- Promises, records, builtin closures (0037, D1371/D1372) ----------------------------
 //
 // A promise capability is undefined (no result promise), a Promise (an internal
-// capability of %Promise%, resolved directly), or a Record [promise, resolve, reject].
+// capability of %Promise%, resolved directly), or a Capability record (promise.ts).
+
+/** [[PromiseState]], a Promise's `state` slot. @constants */
+declare enum PromiseStates {
+  pending = 0,
+  fulfilled = 1,
+  rejected = 2,
+}
+
+/** A Promise's `flags` slot (interp/run/promise.rs). @flags */
+declare enum PromiseFlags {
+  /** [[PromiseIsHandled]]. */
+  handled = 1,
+  /** [[AlreadyResolved]] of an internal capability. */
+  resolved = 2,
+}
 
 /** A new pending Promise with prototype proto. @leaf */
 declare function PromiseCreate(proto: Obj): Obj;
@@ -826,7 +846,7 @@ declare function PromiseCreate(proto: Obj): Obj;
 declare function IsPromise(v: Value): boolean;
 /** The realm's %Promise% constructor. @leaf */
 declare function IntrinsicPromise(): Obj;
-/** [[PromiseState]]: 0 pending, 1 fulfilled, 2 rejected. @leaf */
+/** [[PromiseState]]: a `PromiseStates` member. @leaf */
 declare function PromiseState(p: Obj): i32;
 /** [[PromiseResult]]. @leaf */
 declare function PromiseResult(p: Obj): Value;
@@ -850,19 +870,25 @@ declare function PerformPromiseThen(p: Obj, onFulfilled: Value, onRejected: Valu
  * The elements of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race
  * 3) that an Array values iterator gives without user code (as `IteratorFastValue` would),
  * one after another while their steps run no user code either (D3131): `fixed` is the
- * Record [C, promiseResolve, capability, values, remaining, resolveFn, rejectFn], C
+ * CombinatorRecord (promise.ts), C
  * %Promise% with the original `resolve`, and the element a Promise of %Promise% or a value
  * that fulfills one without a `then` call, whose `then`, `constructor` and
  * %Promise%[@@species] are the original ones. Each is done as the loop body would (values
- * slot, element Record, functions, `then`); returns the next index.
+ * slot, ElementRecord, functions, `then`); returns the next index.
  * @leaf
  */
 declare function PromiseCombinatorRun(fixed: Obj, kind: i32, index: f64, iterator: Obj, next: Value): f64;
 /** Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. @leaf */
 declare function EnqueuePromiseResolveThenableJob(p: Obj, thenable: Obj, then: Value): void;
-/** A new internal Record with n slots, all undefined. @leaf */
-declare function NewRecord(n: i32): Obj;
-/** Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper, 0051). @leaf */
+/**
+ * A new internal record of `schema` (an `@record` enum), its fields undefined. Its kind is
+ * in its header, so snapshots write it by name (D3710). @leaf
+ */
+declare function NewRecord(schema: Schema): Obj;
+/**
+ * Field i (`Schema.field`) of a record, or a slot of an object that keeps its state in
+ * slots (`@slots` enums: DisposableStack, FinalizationRegistry). @leaf
+ */
 declare function RecordGet(r: Obj, i: i32): Value;
 /** @leaf */
 declare function RecordSet(r: Obj, i: i32, v: Value): void;
@@ -885,19 +911,48 @@ declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;
 // ---- Generators and async functions (0037, D1375) ---------------------------------------
 //
 // A Generator object is a suspendable activation: a generator, or an async function's
-// state. States: 0 suspended at the start, 1 suspended at a yield, 2 executing, 4 at an await,
-// 3 completed, 6 suspended at a yield_star (sync generators), D1421.
+// state (D1421).
 
-/** The state of a generator object (not an async state), or -1 for anything else. @leaf */
+/** A Generator object's `state` slot (interp/run/suspend.rs). @constants */
+declare enum GeneratorStates {
+  /** Suspended at the start. */
+  start = 0,
+  /** Suspended at a yield. */
+  suspendedYield = 1,
+  executing = 2,
+  completed = 3,
+  /** At an await (async functions and async generators). */
+  awaiting = 4,
+  /** An async generator awaiting a return() value (spec "draining-queue"/"awaiting-return"). */
+  awaitingReturn = 5,
+  /** A sync generator suspended at a yield_star: the resumer passes the value on unwrapped. */
+  suspendedRaw = 6,
+}
+
+/** A Generator object's `kind` slot. @constants */
+declare enum GeneratorKinds {
+  generator = 0,
+  asyncFunction = 1,
+  asyncGenerator = 2,
+}
+
+/** GeneratorResume's mode, and an async generator request's type. @constants */
+declare enum ResumeMode {
+  next = 0,
+  throw = 1,
+  return = 2,
+}
+
+/** The state of a generator object (not an async state, a `GeneratorStates` member), or -1 for anything else. @leaf */
 declare function GeneratorState(v: Value): i32;
 /** @leaf */
 declare function GeneratorSetState(g: Obj, state: i32): void;
 /**
- * Resumes a suspended generator or async function (state 0 or 1) in a frame of its own:
- * mode 0 continues with value (a generator at a yield gets `value false`, an async
- * function the value), 1 throws value at the suspension point, 2 (generators at a
- * yield) returns value from there (`value true`). The result is what the activation
- * hands back when it next suspends or completes.
+ * Resumes a suspended generator or async function (start or suspendedYield) in a frame
+ * of its own: mode `ResumeMode.next` continues with value (a generator at a yield gets
+ * `value false`, an async function the value), `throw` throws value at the suspension
+ * point, `return` (generators at a yield) returns value from there (`value true`). The
+ * result is what the activation hands back when it next suspends or completes.
  * @reentrant
  */
 declare function GeneratorResume(g: Obj, value: Value, mode: i32): Value;
@@ -908,9 +963,8 @@ declare function AsyncFunctionPromise(a: Obj): Obj;
 
 // ---- Async generators and async iteration (0042, D1421) ---------------------------------
 //
-// Async generator states: GeneratorState's 0-3, 4 awaiting (inside an await), 5 awaiting
-// a return() value (spec "draining-queue"/"awaiting-return"). A request is a Record
-// [type (0 next, 1 throw, 2 return), value, promise].
+// Async generator states: `GeneratorStates` (awaiting inside an await, awaitingReturn
+// awaiting a return() value). A request is an AsyncGeneratorRequest record (asyncgen.ts).
 
 /** The state of an async generator, or -1 for anything else. @leaf */
 declare function AsyncGeneratorState(v: Value): i32;
@@ -921,20 +975,27 @@ declare function AsyncGeneratorFirstRequest(g: Obj): Value;
 /** Removes and returns the oldest request (undefined if none). @leaf */
 declare function AsyncGeneratorDequeue(g: Obj): Value;
 /**
- * CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: a Record [iterator,
- * next] with %AsyncFromSyncIteratorPrototype%.
+ * CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: an AsyncFromSyncIterator
+ * record with %AsyncFromSyncIteratorPrototype%.
  * @leaf
  */
 declare function CreateAsyncFromSyncIterator(iterator: Obj, next: Value): Obj;
 
+/** The record CreateAsyncFromSyncIterator makes (with a prototype). @record */
+declare enum AsyncFromSyncIterator {
+  iterator,
+  next,
+}
+
 // ---- Iterator helpers (0051, builtins/iterator.ts, D1510) -------------------------------
 
 /**
- * A new IteratorHelper object of `kind` (0: Iterator.from's wrapper, with
- * %WrapForValidIteratorPrototype%; else a helper, with %IteratorHelperPrototype%):
- * slot 0 kind, 1 state 0, 2 iterator, 3 next, the others undefined. @leaf
+ * A new IteratorHelper object of record `schema` (iterator.ts) and `kind` (a HelperKinds
+ * member; `wrap`: Iterator.from's wrapper, with %WrapForValidIteratorPrototype%, else a
+ * helper, with %IteratorHelperPrototype%): its state `start`, the other fields undefined.
+ * @leaf
  */
-declare function CreateIteratorHelper(kind: i32, iterator: Value, next: Value): Obj;
+declare function CreateIteratorHelper(schema: Schema, kind: i32): Obj;
 /**
  * v if it is an iterator helper (wrap false) or Iterator.from's wrapper (wrap true),
  * else TypeError "Iterator Helper object expected" / "Iterator Wrap object expected". @leaf

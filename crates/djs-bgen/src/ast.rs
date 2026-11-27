@@ -19,6 +19,8 @@ pub enum Type {
     Never,
     Undefined,
     Null,
+    /// A record schema (an `@record` enum named as a value): `NewRecord(Element)`.
+    Schema,
     IntLit(f64),
     NumLit,
     /// The type of an expression that already has an error: compatible with
@@ -41,6 +43,7 @@ impl Type {
             "f64" => Type::F64,
             "void" => Type::Void,
             "never" => Type::Never,
+            "Schema" => Type::Schema,
             _ => return None,
         })
     }
@@ -60,6 +63,7 @@ impl Type {
             Type::Never => "never",
             Type::Undefined => "undefined",
             Type::Null => "null",
+            Type::Schema => "Schema",
             Type::IntLit(_) => "integer literal",
             Type::NumLit => "number literal",
             Type::Error => "<error>",
@@ -357,6 +361,14 @@ pub enum ExprKind {
     Paren(Box<Expr>),
     /// `new.target` (only in `@constructor` builtins).
     NewTarget,
+    /// `Enum.member`: a field of a record schema (its slot index) or a named constant.
+    /// The checker resolves it to [`ExprKind::Num`].
+    Member {
+        object: String,
+        member: String,
+    },
+    /// A record schema named as a value, resolved by the checker: its record kind id.
+    Schema(String, u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -370,10 +382,34 @@ pub struct Expr {
 pub struct Module {
     pub file: u32,
     pub functions: Vec<Function>,
+    pub enums: Vec<EnumDecl>,
+}
+
+/// An `enum` (in a builtin file) or `declare enum` (in intrinsics.d.ts): a record schema
+/// (`@record`), a view of an object class's slots (`@slots Class`) or a set of named
+/// constants (`@constants`, `@flags`), D3710.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDecl {
+    pub name: String,
+    pub members: Vec<EnumMember>,
+    pub tags: Vec<Tag>,
+    pub span: Span,
+    /// The file it is declared in, for the generated table's comments.
+    pub file: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumMember {
+    pub name: String,
+    /// An explicit `= value`.
+    pub value: Option<i64>,
+    pub tags: Vec<Tag>,
+    pub span: Span,
 }
 
 /// Parsed intrinsics.d.ts.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Declarations {
     pub intrinsics: Vec<IntrinsicDecl>,
+    pub enums: Vec<EnumDecl>,
 }

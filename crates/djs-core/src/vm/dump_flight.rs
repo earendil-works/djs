@@ -36,19 +36,19 @@ mod helpers;
 #[path = "dump_flight_runtime.rs"]
 mod runtime;
 
-/// The resource Record of `using` declarations (builtins/disposable.ts `UsingCreate`):
-/// its slot count, and its slots by name (slot 2 is the resources, an Array of `[value,
-/// method, kind]` triples).
-const USING_SLOTS: u32 = 11;
+/// The resource record of `using` declarations (builtins/disposable.ts `UsingRecord`):
+/// its fields by the dump's names (`resources` is an Array of `[value, method, kind]`
+/// triples).
+use crate::builtins::r#gen::records::using_record as using;
 const USING_FIELDS: [(&str, u32); 8] = [
-    ("error", 3),
-    ("hasError", 4),
-    ("needsAwait", 5),
-    ("hasAwaited", 6),
-    ("next", 7),
-    ("value", 8),
-    ("pending", 9),
-    ("hasPending", 10),
+    ("error", using::ERROR),
+    ("hasError", using::HAS_ERROR),
+    ("needsAwait", using::NEEDS_AWAIT),
+    ("hasAwaited", using::HAS_AWAITED),
+    ("next", using::NEXT),
+    ("value", using::VALUE),
+    ("pending", using::PENDING_ERROR),
+    ("hasPending", using::HAS_PENDING),
 ];
 
 /// The prototype an iterator helper is made with: %WrapForValidIteratorPrototype% for
@@ -718,9 +718,7 @@ impl Dumper<'_> {
                     && let Some(e) = e
                 {
                     let ok = v.as_object().is_some_and(|o| {
-                        h.object_class(o) == ObjectClass::Record
-                            && h.get_prototype_of(o).is_none()
-                            && h.object_slot_count(o) == USING_SLOTS
+                        h.record_kind(o) == using::RECORD_KIND && h.get_prototype_of(o).is_none()
                     });
                     if ok {
                         self.nodes[e].using_record = true;
@@ -1459,7 +1457,7 @@ impl Dumper<'_> {
         }
         // Plain dumps: no object; the continuation adds the resources again
         // (`Act::usings`). The text names what it needs.
-        let Some(items) = super::origin::elements(h, h.object_slot(o, 2)) else {
+        let Some(items) = super::origin::elements(h, h.object_slot(o, using::RESOURCES)) else {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "a using declaration's record of another shape");
             return String::from("undefined");

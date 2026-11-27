@@ -106,6 +106,10 @@ pub mod flags {
     /// Function: likewise an own `name`, the string of the template's `NAME` atom (the
     /// empty string for none), after the lazy `length`.
     pub const OBJ_LAZY_NAME: u16 = 512;
+    /// Record, IteratorHelper: the record kind (D3710) in the top six bits, the schema of
+    /// its slots (`heap::record_schema`); 0 for none.
+    pub const OBJ_RECORD_KIND: u16 = 0xFC00;
+    pub const OBJ_RECORD_KIND_SHIFT: u16 = 10;
     /// BigInt: the value is negative.
     pub const BIGINT_NEG: u16 = 1;
     /// Symbol: a private name (`#x`, D1400). Never an own key of [[OwnPropertyKeys]],

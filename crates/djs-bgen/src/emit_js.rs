@@ -571,6 +571,8 @@ impl<'a> Emitter<'a> {
             ExprKind::Null => "null".into(),
             ExprKind::Bool(b) => b.to_string(),
             ExprKind::Num(_, text) => text.clone(),
+            ExprKind::Schema(_, id) => id.to_string(),
+            ExprKind::Member { .. } => unreachable!("resolved by the checker"),
             ExprKind::Str(v) => js_string(v),
             ExprKind::Paren(x) => format!("({})", self.expr(x)),
             // `- -x` must not become `--x`.

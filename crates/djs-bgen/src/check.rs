@@ -128,6 +128,8 @@ pub struct Builtin {
 /// A checked program: every name resolved and every function type-correct.
 pub struct Program {
     pub decls: Declarations,
+    /// The record schemas and named constants (D3710).
+    pub enums: crate::records::Enums,
     pub modules: Vec<Module>,
     pub builtins: Vec<Builtin>,
     pub callees: HashMap<String, (Callee, Sig)>,
@@ -156,8 +158,10 @@ const BUILTIN_TAGS: &[&str] = &[
     "rust",
 ];
 
-pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
+pub fn check(decls: Declarations, mut modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
     let mut errors = Vec::new();
+    let enums = crate::records::collect(&decls.enums, &modules, &mut errors);
+    crate::records::resolve(&enums, &mut modules, &mut errors);
     let mut callees: HashMap<String, (Callee, Sig)> = HashMap::new();
     let mut spans: HashMap<String, Span> = HashMap::new();
 
@@ -261,6 +265,7 @@ pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<D
     if errors.is_empty() {
         Ok(Program {
             decls,
+            enums,
             modules,
             builtins,
             callees,
@@ -489,6 +494,8 @@ pub fn assignable(from: Type, to: Type) -> bool {
     }
     match (from, to) {
         (Type::Void, _) => false,
+        // A record kind id is only ever a record kind (D3710).
+        (Type::Schema, _) => false,
         (_, Type::Value) => true,
         (Type::Fn, Type::Obj) => true,
         (Type::IntLit(v), Type::I32) => v >= i32::MIN as f64 && v <= i32::MAX as f64,
@@ -840,6 +847,9 @@ impl<'a> FnChecker<'a> {
             ExprKind::Null => Type::Null,
             ExprKind::Bool(_) => Type::Bool,
             ExprKind::Num(v, _) => literal_type(*v),
+            ExprKind::Schema(..) => Type::Schema,
+            // Left by a resolution error (reported).
+            ExprKind::Member { .. } => Type::Error,
             ExprKind::Str(_) => Type::Str,
             ExprKind::Paren(inner) => self.expr(inner),
             ExprKind::Unary(op, inner) => {

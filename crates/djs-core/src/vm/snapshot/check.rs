@@ -46,6 +46,20 @@ pub(super) fn object(h: &Heap, o: Obj) -> Check {
     if n < c.slots() {
         return Err(format!("{} slots, the class has {}", n, c.slots()));
     }
+    // A record has its kind's fields, and the rest only if the kind has one (D3710);
+    // nothing else has a kind.
+    let kind = h.record_kind(o);
+    if super::schema::is_kinded(c) {
+        let r = crate::heap::record_schema(kind)
+            .filter(|r| r.class == c)
+            .ok_or_else(|| format!("a {c:?} of record kind {kind}"))?;
+        let fields = r.fields.len() as u32;
+        if n < fields || (r.rest.is_none() && n != fields) {
+            return Err(format!("{n} slots, record {} has {fields}", r.name));
+        }
+    } else if kind != 0 {
+        return Err(format!("a {c:?} with record kind {kind}"));
+    }
     let s = |name: &str| h.object_slot(o, c.slot(name));
     // Header flags only where they mean something: the lazy `length` and `name` are a
     // closure's or a builtin closure's (read from their template or kind), `hostAsync` a

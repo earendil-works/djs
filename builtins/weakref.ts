@@ -89,6 +89,11 @@ function FinalizationRegistryPrototypeToStringTag(): Str {
   return "FinalizationRegistry";
 }
 
+/** A FinalizationRegistry's slots (heap/object.rs) that builtins read. @slots FinalizationRegistry */
+enum FinalizationRegistrySlots {
+  cleanup,
+}
+
 /**
  * The job of HostEnqueueFinalizationRegistryCleanupJob: CleanupFinalizationRegistry
  * ( finalizationRegistry ), 9.13. A callback's exception ends the job; the spec leaves
@@ -98,7 +103,7 @@ function FinalizationRegistryPrototypeToStringTag(): Str {
  */
 function FinalizationRegistryCleanupJob(r: Obj): void {
   FinalizationRegistrySetQueued(r, false);
-  const callback: Value = RecordGet(r, 0);
+  const callback: Value = RecordGet(r, FinalizationRegistrySlots.cleanup);
   while (true) {
     const i: i32 = FinalizationRegistryNextDead(r);
     if (i < 0) {

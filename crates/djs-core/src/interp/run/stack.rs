@@ -45,18 +45,16 @@ enum Name {
     Eval,
 }
 
-/// Slots of a pending stack record.
-const PENDING_SITES: u32 = 0;
-const PENDING_DEFAULT: u32 = 1;
-const PENDING_PREPARE: u32 = 2;
-const PENDING_CTOR: u32 = 3;
-const PENDING_SLOTS: u32 = 4;
+/// The fields of a pending stack record (builtins/error.ts `PendingStack`, D3710).
+use crate::builtins::r#gen::records::pending_stack as pending;
+const PENDING_SITES: u32 = pending::SITES;
+const PENDING_DEFAULT: u32 = pending::DEFAULT_STRING;
+const PENDING_PREPARE: u32 = pending::PREPARE;
+const PENDING_CTOR: u32 = pending::CTOR;
 
-/// Whether `v` is a pending stack record (a stack slot holds nothing else of class Record).
+/// Whether `v` is a pending stack record.
 pub(crate) fn is_pending_stack(heap: &Heap, v: Value) -> bool {
-    v.as_object().is_some_and(|o| {
-        heap.object_class(o) == ObjectClass::Record && heap.object_slot_count(o) == PENDING_SLOTS
-    })
+    heap.as_record(v, pending::RECORD_KIND).is_some()
 }
 
 /// A stack value as Rust readers show it: the default string of a pending record.
@@ -414,9 +412,7 @@ impl Exec<'_> {
         }
         let array_proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
         let sites = self.heap.new_array_from_values(Some(array_proto), &sites)?;
-        let r = self
-            .heap
-            .alloc_object(ObjectClass::Record, None, PENDING_SLOTS)?;
+        let r = self.heap.alloc_record(pending::RECORD_KIND, None, 0)?;
         self.heap
             .set_object_slot(r, PENDING_SITES, Value::object(sites));
         self.heap.set_object_slot(r, PENDING_DEFAULT, default);

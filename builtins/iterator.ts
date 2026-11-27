@@ -1,29 +1,202 @@
 // Iterator helpers (ECMA-262 27.1.3 and 27.1.2.1, ES2025) and Iterator.concat
 // (iterator-sequencing). D1510: a helper object is an IteratorHelper object (heap
-// class 28) whose generator-like state lives in slots, and each `next` runs one step of
-// a hand-written state machine instead of a generator closure:
-//
-//   0 kind: 0 Iterator.from's wrapper, 1 map, 2 filter, 3 take, 4 drop, 5 flatMap,
-//     6 concat, 7 chunks, 8 windows, 9 zip and zipKeyed
-//   1 state: 0 suspended-start, 1 suspended-yield, 2 executing, 3 completed
-//   2 the underlying iterator (concat: the current one), 3 its `next` method
-//   4 the function (map, filter, flatMap), the remaining count (take, drop), the
-//     iterables (concat: an array of [method, iterable] pairs), the size (chunks,
-//     windows)
-//   5 the counter (concat: the index of the next iterable; windows: allow-partial)
-//   6 flatMap's inner iterator, 7 its `next` method; chunks and windows: 6 is true
-//     once the underlying iterator is done (a last partial array was yielded), 7 the
-//     window
-//   zip: 2 the iterators (null once done in longest mode), 3 their `next` methods,
-//   4 the padding, 5 the mode (0 shortest, 1 longest, 2 strict), 6 which iterators
-//   are open (booleans), 7 zipKeyed's keys (undefined for zip)
-//
-// A step either yields (sets state 1 and returns the value) or returns with the state
-// still executing, which completes the helper.
+// class 28) whose generator-like state lives in its fields, and each `next` runs one
+// step of a hand-written state machine instead of a generator closure. Every helper
+// starts with its kind and its state; its record schema (below, D3710) names the rest.
+// A step either yields (sets the state to suspendedYield and returns the value) or
+// returns with the state still executing, which completes the helper.
 
-/** The first slot of the per-kind state. */
+/** What a helper does (`HelperHeader.kind`). @constants */
+enum HelperKinds {
+  /** Iterator.from's wrapper. */
+  wrap = 0,
+  map = 1,
+  filter = 2,
+  take = 3,
+  drop = 4,
+  flatMap = 5,
+  concat = 6,
+  chunks = 7,
+  windows = 8,
+  /** zip and zipKeyed. */
+  zip = 9,
+}
+
+/** A helper's state (`HelperHeader.state`). @constants */
+enum HelperStates {
+  start = 0,
+  suspendedYield = 1,
+  executing = 2,
+  completed = 3,
+}
+
+/** Iterator.zip's modes. @constants */
+enum ZipModes {
+  shortest = 0,
+  longest = 1,
+  strict = 2,
+}
+
+/**
+ * The fields every helper starts with (CreateIteratorHelper sets them).
+ * @record
+ * @class IteratorHelper
+ */
+enum HelperHeader {
+  /** @enum HelperKinds */
+  kind,
+  /** @enum HelperStates */
+  state,
+}
+
+/**
+ * A helper over one underlying iterator and its `next` method; with these fields only,
+ * Iterator.from's wrapper.
+ * @record
+ * @class IteratorHelper
+ * @extends HelperHeader
+ */
+enum IteratorHelper {
+  kind,
+  state,
+  iterator,
+  next,
+}
+
+/**
+ * map and filter: the function and the counter it gets.
+ * @record
+ * @class IteratorHelper
+ * @extends IteratorHelper
+ */
+enum CallbackHelper {
+  kind,
+  state,
+  iterator,
+  next,
+  fn,
+  counter,
+}
+
+/**
+ * flatMap: also the inner iterator and its `next` method (undefined between them).
+ * @record
+ * @class IteratorHelper
+ * @extends CallbackHelper
+ */
+enum FlatMapHelper {
+  kind,
+  state,
+  iterator,
+  next,
+  fn,
+  counter,
+  inner,
+  innerNext,
+}
+
+/**
+ * take and drop: the remaining count.
+ * @record
+ * @class IteratorHelper
+ * @extends IteratorHelper
+ */
+enum LimitHelper {
+  kind,
+  state,
+  iterator,
+  next,
+  remaining,
+}
+
+/**
+ * chunks: the size, and true once the underlying iterator is done (a last partial chunk
+ * was yielded).
+ * @record
+ * @class IteratorHelper
+ * @extends IteratorHelper
+ */
+enum ChunksHelper {
+  kind,
+  state,
+  iterator,
+  next,
+  size,
+  done,
+}
+
+/**
+ * windows: the size, allow-partial, done (as for chunks), the window (an Array).
+ * @record
+ * @class IteratorHelper
+ * @extends IteratorHelper
+ */
+enum WindowsHelper {
+  kind,
+  state,
+  iterator,
+  next,
+  size,
+  allowPartial,
+  done,
+  window,
+}
+
+/**
+ * Iterator.concat: the current iterator and its `next` (undefined between items), the
+ * iterables (an Array of [method, iterable] pairs), the index of the next one.
+ * @record
+ * @class IteratorHelper
+ * @extends IteratorHelper
+ */
+enum ConcatHelper {
+  kind,
+  state,
+  iterator,
+  next,
+  iterables,
+  index,
+}
+
+/**
+ * zip and zipKeyed: the iterators (an Array; an entry is null once done in longest
+ * mode), their `next` methods, the padding, the mode, which iterators are open
+ * (booleans), zipKeyed's keys (undefined for zip).
+ * @record
+ * @class IteratorHelper
+ * @extends HelperHeader
+ */
+enum ZipHelper {
+  kind,
+  state,
+  iterators,
+  nexts,
+  padding,
+  /** @enum ZipModes */
+  mode,
+  open,
+  keys,
+}
+
+/**
+ * Iterator.zip's and zipKeyed's options, as ZipOptions reads them: the mode and the
+ * padding option.
+ * @record
+ */
+enum ZipSettings {
+  /** @enum ZipModes */
+  mode,
+  padding,
+}
+
+/** The helper's state. */
 function HelperState(o: Obj): i32 {
-  return F64ToI32(AsNumber(RecordGet(o, 1)));
+  return F64ToI32(AsNumber(RecordGet(o, HelperHeader.state)));
+}
+
+/** The helper's kind. */
+function HelperKind(o: Obj): i32 {
+  return F64ToI32(AsNumber(RecordGet(o, HelperHeader.kind)));
 }
 
 /** GetIteratorDirect ( obj ), 27.1.3.1.1 (ES2025 7.4.4): the `next` method. */
@@ -111,18 +284,26 @@ function HelperLimit(o: Obj, limit: Value): f64 {
   return integerLimit;
 }
 
-/** A new helper of `kind` over iterator o (GetIteratorDirect) with slot 4 = data. */
-function NewIteratorHelper(kind: i32, o: Obj, data: Value): Obj {
+/** A new helper of `schema` and `kind` over iterator o (GetIteratorDirect). */
+function NewIteratorHelper(schema: Schema, kind: i32, o: Obj): Obj {
   const next: Value = GetIteratorDirectNext(o);
-  const helper: Obj = CreateIteratorHelper(kind, o, next);
-  RecordSet(helper, 4, data);
-  RecordSet(helper, 5, 0);
+  const helper: Obj = CreateIteratorHelper(schema, kind);
+  RecordSet(helper, IteratorHelper.iterator, o);
+  RecordSet(helper, IteratorHelper.next, next);
+  return helper;
+}
+
+/** A new map, filter or flatMap helper over o with function f. */
+function NewCallbackHelper(schema: Schema, kind: i32, o: Obj, f: Value): Obj {
+  const helper: Obj = NewIteratorHelper(schema, kind, o);
+  RecordSet(helper, CallbackHelper.fn, f);
+  RecordSet(helper, CallbackHelper.counter, 0);
   return helper;
 }
 
 /** Yield ( value ) of a step: suspends the helper at a yield. */
 function HelperYield(o: Obj, value: Value): Value {
-  RecordSet(o, 1, 1);
+  RecordSet(o, HelperHeader.state, HelperStates.suspendedYield);
   return value;
 }
 
@@ -131,30 +312,30 @@ function HelperYield(o: Obj, value: Value): Value {
  * exception closes the underlying iterator (IfAbruptCloseIterator).
  */
 function HelperCallFunction(o: Obj, iterator: Obj, value: Value): Value {
-  const counter: f64 = AsNumber(RecordGet(o, 5));
+  const counter: f64 = AsNumber(RecordGet(o, CallbackHelper.counter));
   let result: Value = undefined;
   try {
-    result = Call(RecordGet(o, 4), undefined, value, counter);
+    result = Call(RecordGet(o, CallbackHelper.fn), undefined, value, counter);
   } catch (e) {
     IteratorCloseThrow(iterator);
     throw e;
   }
-  RecordSet(o, 5, counter + 1);
+  RecordSet(o, CallbackHelper.counter, counter + 1);
   return result;
 }
 
 /** One step of a helper (state executing): yields a value or completes. */
 function IteratorHelperStep(o: Obj): Value {
-  const kind: i32 = F64ToI32(AsNumber(RecordGet(o, 0)));
-  if (kind === 6) {
+  const kind: i32 = HelperKind(o);
+  if (kind === HelperKinds.concat) {
     return ConcatStep(o);
   }
-  if (kind === 9) {
+  if (kind === HelperKinds.zip) {
     return ZipStep(o);
   }
-  const iterator: Obj = AsObj(RecordGet(o, 2));
-  const next: Value = RecordGet(o, 3);
-  if (kind === 1) {
+  const iterator: Obj = AsObj(RecordGet(o, IteratorHelper.iterator));
+  const next: Value = RecordGet(o, IteratorHelper.next);
+  if (kind === HelperKinds.map) {
     const result: Value = IteratorStepResult(iterator, next);
     if (result === undefined) {
       return undefined;
@@ -162,7 +343,7 @@ function IteratorHelperStep(o: Obj): Value {
     const value: Value = Get(AsObj(result), "value");
     return HelperYield(o, HelperCallFunction(o, iterator, value));
   }
-  if (kind === 2) {
+  if (kind === HelperKinds.filter) {
     while (true) {
       const result: Value = IteratorStepResult(iterator, next);
       if (result === undefined) {
@@ -174,14 +355,14 @@ function IteratorHelperStep(o: Obj): Value {
       }
     }
   }
-  if (kind === 3) {
-    const remaining: f64 = AsNumber(RecordGet(o, 4));
+  if (kind === HelperKinds.take) {
+    const remaining: f64 = AsNumber(RecordGet(o, LimitHelper.remaining));
     if (remaining === 0) {
       IteratorClose(iterator);
       return undefined;
     }
     if (remaining !== 1 / 0) {
-      RecordSet(o, 4, remaining - 1);
+      RecordSet(o, LimitHelper.remaining, remaining - 1);
     }
     const result: Value = IteratorStepResult(iterator, next);
     if (result === undefined) {
@@ -189,12 +370,12 @@ function IteratorHelperStep(o: Obj): Value {
     }
     return HelperYield(o, Get(AsObj(result), "value"));
   }
-  if (kind === 4) {
-    let remaining: f64 = AsNumber(RecordGet(o, 4));
+  if (kind === HelperKinds.drop) {
+    let remaining: f64 = AsNumber(RecordGet(o, LimitHelper.remaining));
     while (remaining > 0) {
       if (remaining !== 1 / 0) {
         remaining = remaining - 1;
-        RecordSet(o, 4, remaining);
+        RecordSet(o, LimitHelper.remaining, remaining);
       }
       if (IteratorStepResult(iterator, next) === undefined) {
         return undefined;
@@ -206,10 +387,10 @@ function IteratorHelperStep(o: Obj): Value {
     }
     return HelperYield(o, Get(AsObj(result), "value"));
   }
-  if (kind === 5) {
+  if (kind === HelperKinds.flatMap) {
     return FlatMapStep(o, iterator, next);
   }
-  if (kind === 7) {
+  if (kind === HelperKinds.chunks) {
     return ChunksStep(o, iterator, next);
   }
   return WindowsStep(o, iterator, next);
@@ -226,17 +407,17 @@ function ArrayPrefixCopy(a: Obj, from: f64, n: f64): Obj {
 
 /** A step of chunks (iterator-chunking): the next full chunk, or the partial last one. */
 function ChunksStep(o: Obj, iterator: Obj, next: Value): Value {
-  if (RecordGet(o, 6) === true) {
+  if (RecordGet(o, ChunksHelper.done) === true) {
     return undefined;
   }
-  const size: f64 = AsNumber(RecordGet(o, 4));
+  const size: f64 = AsNumber(RecordGet(o, ChunksHelper.size));
   const buffer: Obj = ArrayCreate(0);
   let n: f64 = 0;
   while (true) {
     const result: Value = IteratorStepResult(iterator, next);
     if (result === undefined) {
       if (n > 0) {
-        RecordSet(o, 6, true);
+        RecordSet(o, ChunksHelper.done, true);
         return HelperYield(o, buffer);
       }
       return undefined;
@@ -254,22 +435,22 @@ function ChunksStep(o: Obj, iterator: Obj, next: Value): Value {
  * short last one if the iterator ended before the first window filled.
  */
 function WindowsStep(o: Obj, iterator: Obj, next: Value): Value {
-  if (RecordGet(o, 6) === true) {
+  if (RecordGet(o, WindowsHelper.done) === true) {
     return undefined;
   }
-  const size: f64 = AsNumber(RecordGet(o, 4));
-  let window: Value = RecordGet(o, 7);
+  const size: f64 = AsNumber(RecordGet(o, WindowsHelper.size));
+  let window: Value = RecordGet(o, WindowsHelper.window);
   if (window === undefined) {
     window = ArrayCreate(0);
-    RecordSet(o, 7, window);
+    RecordSet(o, WindowsHelper.window, window);
   }
   const w: Obj = AsObj(window);
   while (true) {
     let n: f64 = LengthOfArrayLike(w);
     const result: Value = IteratorStepResult(iterator, next);
     if (result === undefined) {
-      if (RecordGet(o, 5) === true && n > 0 && n < size) {
-        RecordSet(o, 6, true);
+      if (RecordGet(o, WindowsHelper.allowPartial) === true && n > 0 && n < size) {
+        RecordSet(o, WindowsHelper.done, true);
         return HelperYield(o, ArrayPrefixCopy(w, 0, n));
       }
       return undefined;
@@ -320,11 +501,11 @@ function IteratorCloseAll(iters: Obj, open: Obj, error: Value, isThrow: boolean)
 
 /** A step of IteratorZip (joint-iteration): the next results array or object. */
 function ZipStep(o: Obj): Value {
-  const iters: Obj = AsObj(RecordGet(o, 2));
-  const nexts: Obj = AsObj(RecordGet(o, 3));
-  const padding: Obj = AsObj(RecordGet(o, 4));
-  const mode: i32 = F64ToI32(AsNumber(RecordGet(o, 5)));
-  const open: Obj = AsObj(RecordGet(o, 6));
+  const iters: Obj = AsObj(RecordGet(o, ZipHelper.iterators));
+  const nexts: Obj = AsObj(RecordGet(o, ZipHelper.nexts));
+  const padding: Obj = AsObj(RecordGet(o, ZipHelper.padding));
+  const mode: i32 = F64ToI32(AsNumber(RecordGet(o, ZipHelper.mode)));
+  const open: Obj = AsObj(RecordGet(o, ZipHelper.open));
   const n: f64 = LengthOfArrayLike(iters);
   if (n === 0) {
     return undefined;
@@ -348,11 +529,11 @@ function ZipStep(o: Obj): Value {
       }
       if (result === undefined) {
         CreateDataPropertyOrThrow(open, i, false);
-        if (mode === 0) {
+        if (mode === ZipModes.shortest) {
           IteratorCloseAll(iters, open, undefined, false);
           return undefined;
         }
-        if (mode === 2) {
+        if (mode === ZipModes.strict) {
           if (i !== 0) {
             IteratorCloseAll(iters, open, NewTypeError("iterators have different lengths"), true);
           }
@@ -380,7 +561,7 @@ function ZipStep(o: Obj): Value {
     }
     CreateDataPropertyOrThrow(results, i, value);
   }
-  const keys: Value = RecordGet(o, 7);
+  const keys: Value = RecordGet(o, ZipHelper.keys);
   if (keys === undefined) {
     return HelperYield(o, results);
   }
@@ -404,12 +585,12 @@ function ZipAnyOpen(open: Obj, n: f64): boolean {
 /** A step of flatMap, 27.1.4.7: the inner iterator's next value, or the next mapping. */
 function FlatMapStep(o: Obj, iterator: Obj, next: Value): Value {
   while (true) {
-    const inner: Value = RecordGet(o, 6);
+    const inner: Value = RecordGet(o, FlatMapHelper.inner);
     if (inner !== undefined) {
       let result: Value = undefined;
       let value: Value = undefined;
       try {
-        result = IteratorStepResult(AsObj(inner), RecordGet(o, 7));
+        result = IteratorStepResult(AsObj(inner), RecordGet(o, FlatMapHelper.innerNext));
         if (result !== undefined) {
           value = Get(AsObj(result), "value");
         }
@@ -420,8 +601,8 @@ function FlatMapStep(o: Obj, iterator: Obj, next: Value): Value {
       if (result !== undefined) {
         return HelperYield(o, value);
       }
-      RecordSet(o, 6, undefined);
-      RecordSet(o, 7, undefined);
+      RecordSet(o, FlatMapHelper.inner, undefined);
+      RecordSet(o, FlatMapHelper.innerNext, undefined);
     }
     const outer: Value = IteratorStepResult(iterator, next);
     if (outer === undefined) {
@@ -431,8 +612,8 @@ function FlatMapStep(o: Obj, iterator: Obj, next: Value): Value {
     try {
       const innerIterator: Obj = GetIteratorFlattenable(mapped, false);
       const innerNext: Value = GetIteratorDirectNext(innerIterator);
-      RecordSet(o, 6, innerIterator);
-      RecordSet(o, 7, innerNext);
+      RecordSet(o, FlatMapHelper.inner, innerIterator);
+      RecordSet(o, FlatMapHelper.innerNext, innerNext);
     } catch (e) {
       IteratorCloseThrow(iterator);
       throw e;
@@ -443,29 +624,29 @@ function FlatMapStep(o: Obj, iterator: Obj, next: Value): Value {
 /** A step of Iterator.concat's closure, 27.1.3.2.3 (iterator-sequencing). */
 function ConcatStep(o: Obj): Value {
   while (true) {
-    const current: Value = RecordGet(o, 2);
+    const current: Value = RecordGet(o, ConcatHelper.iterator);
     if (current !== undefined) {
-      const result: Value = IteratorStepResult(AsObj(current), RecordGet(o, 3));
+      const result: Value = IteratorStepResult(AsObj(current), RecordGet(o, ConcatHelper.next));
       if (result !== undefined) {
         return HelperYield(o, Get(AsObj(result), "value"));
       }
-      RecordSet(o, 2, undefined);
-      RecordSet(o, 3, undefined);
+      RecordSet(o, ConcatHelper.iterator, undefined);
+      RecordSet(o, ConcatHelper.next, undefined);
     }
-    const iterables: Obj = AsObj(RecordGet(o, 4));
-    const index: f64 = AsNumber(RecordGet(o, 5));
+    const iterables: Obj = AsObj(RecordGet(o, ConcatHelper.iterables));
+    const index: f64 = AsNumber(RecordGet(o, ConcatHelper.index));
     if (index >= LengthOfArrayLike(iterables)) {
       return undefined;
     }
-    RecordSet(o, 5, index + 1);
+    RecordSet(o, ConcatHelper.index, index + 1);
     const pair: Obj = AsObj(Get(iterables, index));
     const iter: Value = Call(Get(pair, 0), Get(pair, 1));
     if (!IsObject(iter)) {
       throw NewTypeError("not an object");
     }
     const next: Value = GetIteratorDirectNext(AsObj(iter));
-    RecordSet(o, 2, iter);
-    RecordSet(o, 3, next);
+    RecordSet(o, ConcatHelper.iterator, iter);
+    RecordSet(o, ConcatHelper.next, next);
   }
 }
 
@@ -475,27 +656,35 @@ function ConcatStep(o: Obj): Value {
  * 5.b.viii.4.b).
  */
 function IteratorHelperReturnAtYield(o: Obj): void {
-  const kind: i32 = F64ToI32(AsNumber(RecordGet(o, 0)));
-  if (kind === 9) {
-    IteratorCloseAll(AsObj(RecordGet(o, 2)), AsObj(RecordGet(o, 6)), undefined, false);
+  const kind: i32 = HelperKind(o);
+  if (kind === HelperKinds.zip) {
+    ZipCloseAll(o);
     return;
   }
   // The yield of a last partial chunk or window ignores the completion.
-  if ((kind === 7 || kind === 8) && RecordGet(o, 6) === true) {
+  if (kind === HelperKinds.chunks && RecordGet(o, ChunksHelper.done) === true) {
     return;
   }
-  if (kind === 5) {
-    const inner: Value = RecordGet(o, 6);
+  if (kind === HelperKinds.windows && RecordGet(o, WindowsHelper.done) === true) {
+    return;
+  }
+  if (kind === HelperKinds.flatMap) {
+    const inner: Value = RecordGet(o, FlatMapHelper.inner);
     if (inner !== undefined) {
       try {
         IteratorClose(AsObj(inner));
       } catch (e) {
-        IteratorCloseThrow(AsObj(RecordGet(o, 2)));
+        IteratorCloseThrow(AsObj(RecordGet(o, IteratorHelper.iterator)));
         throw e;
       }
     }
   }
-  IteratorClose(AsObj(RecordGet(o, 2)));
+  IteratorClose(AsObj(RecordGet(o, IteratorHelper.iterator)));
+}
+
+/** Closes a zip helper's open iterators (a return completion). */
+function ZipCloseAll(o: Obj): void {
+  IteratorCloseAll(AsObj(RecordGet(o, ZipHelper.iterators)), AsObj(RecordGet(o, ZipHelper.open)), undefined, false);
 }
 
 /**
@@ -505,24 +694,24 @@ function IteratorHelperReturnAtYield(o: Obj): void {
 function IteratorHelperPrototypeNext(this: Value): Obj {
   const o: Obj = ThisIteratorHelper(this, false);
   const state: i32 = HelperState(o);
-  if (state === 2) {
+  if (state === HelperStates.executing) {
     throw NewTypeError("cannot invoke a running iterator");
   }
-  if (state === 3) {
+  if (state === HelperStates.completed) {
     return CreateIterResultObject(undefined, true);
   }
-  RecordSet(o, 1, 2);
+  RecordSet(o, HelperHeader.state, HelperStates.executing);
   let value: Value = undefined;
   try {
     value = IteratorHelperStep(o);
   } catch (e) {
-    RecordSet(o, 1, 3);
+    RecordSet(o, HelperHeader.state, HelperStates.completed);
     throw e;
   }
-  if (HelperState(o) === 1) {
+  if (HelperState(o) === HelperStates.suspendedYield) {
     return CreateIterResultObject(value, false);
   }
-  RecordSet(o, 1, 3);
+  RecordSet(o, HelperHeader.state, HelperStates.completed);
   return CreateIterResultObject(undefined, true);
 }
 
@@ -533,30 +722,30 @@ function IteratorHelperPrototypeNext(this: Value): Obj {
 function IteratorHelperPrototypeReturn(this: Value): Obj {
   const o: Obj = ThisIteratorHelper(this, false);
   const state: i32 = HelperState(o);
-  if (state === 2) {
+  if (state === HelperStates.executing) {
     throw NewTypeError("cannot invoke a running iterator");
   }
-  if (state === 3) {
+  if (state === HelperStates.completed) {
     return CreateIterResultObject(undefined, true);
   }
-  if (state === 0) {
-    RecordSet(o, 1, 3);
-    if (F64ToI32(AsNumber(RecordGet(o, 0))) === 9) {
-      IteratorCloseAll(AsObj(RecordGet(o, 2)), AsObj(RecordGet(o, 6)), undefined, false);
+  if (state === HelperStates.start) {
+    RecordSet(o, HelperHeader.state, HelperStates.completed);
+    if (HelperKind(o) === HelperKinds.zip) {
+      ZipCloseAll(o);
       return CreateIterResultObject(undefined, true);
     }
     // concat has no underlying iterator before it starts.
-    const iterator: Value = RecordGet(o, 2);
+    const iterator: Value = RecordGet(o, IteratorHelper.iterator);
     if (iterator !== undefined) {
       IteratorClose(AsObj(iterator));
     }
     return CreateIterResultObject(undefined, true);
   }
-  RecordSet(o, 1, 2);
+  RecordSet(o, HelperHeader.state, HelperStates.executing);
   try {
     IteratorHelperReturnAtYield(o);
   } finally {
-    RecordSet(o, 1, 3);
+    RecordSet(o, HelperHeader.state, HelperStates.completed);
   }
   return CreateIterResultObject(undefined, true);
 }
@@ -594,7 +783,10 @@ function IteratorFrom(o: Value): Obj {
   if (OrdinaryHasInstance(RealmConstructor("Iterator"), iterator)) {
     return iterator;
   }
-  return CreateIteratorHelper(0, iterator, next);
+  const wrapper: Obj = CreateIteratorHelper(IteratorHelper, HelperKinds.wrap);
+  RecordSet(wrapper, IteratorHelper.iterator, iterator);
+  RecordSet(wrapper, IteratorHelper.next, next);
+  return wrapper;
 }
 
 /**
@@ -603,7 +795,7 @@ function IteratorFrom(o: Value): Obj {
  */
 function WrapForValidIteratorPrototypeNext(this: Value): Value {
   const o: Obj = ThisIteratorHelper(this, true);
-  return Call(RecordGet(o, 3), RecordGet(o, 2));
+  return Call(RecordGet(o, IteratorHelper.next), RecordGet(o, IteratorHelper.iterator));
 }
 
 /**
@@ -612,7 +804,7 @@ function WrapForValidIteratorPrototypeNext(this: Value): Value {
  */
 function WrapForValidIteratorPrototypeReturn(this: Value): Value {
   const o: Obj = ThisIteratorHelper(this, true);
-  const iterator: Obj = AsObj(RecordGet(o, 2));
+  const iterator: Obj = AsObj(RecordGet(o, IteratorHelper.iterator));
   const method: Value = GetMethod(iterator, "return");
   if (method === undefined) {
     return CreateIterResultObject(undefined, true);
@@ -638,9 +830,9 @@ function IteratorConcat(...items: Value[]): Obj {
     }
     CreateDataPropertyOrThrow(iterables, i, CreateArrayFromPair(method, item));
   }
-  const helper: Obj = CreateIteratorHelper(6, undefined, undefined);
-  RecordSet(helper, 4, iterables);
-  RecordSet(helper, 5, 0);
+  const helper: Obj = CreateIteratorHelper(ConcatHelper, HelperKinds.concat);
+  RecordSet(helper, ConcatHelper.iterables, iterables);
+  RecordSet(helper, ConcatHelper.index, 0);
   return helper;
 }
 
@@ -651,7 +843,7 @@ function IteratorConcat(...items: Value[]): Obj {
 function IteratorPrototypeMap(this: Value, mapper: Value): Obj {
   const o: Obj = ThisIteratorObject(this);
   HelperCallable(o, mapper);
-  return NewIteratorHelper(1, o, mapper);
+  return NewCallbackHelper(CallbackHelper, HelperKinds.map, o, mapper);
 }
 
 /**
@@ -661,7 +853,7 @@ function IteratorPrototypeMap(this: Value, mapper: Value): Obj {
 function IteratorPrototypeFilter(this: Value, predicate: Value): Obj {
   const o: Obj = ThisIteratorObject(this);
   HelperCallable(o, predicate);
-  return NewIteratorHelper(2, o, predicate);
+  return NewCallbackHelper(CallbackHelper, HelperKinds.filter, o, predicate);
 }
 
 /**
@@ -670,7 +862,10 @@ function IteratorPrototypeFilter(this: Value, predicate: Value): Obj {
  */
 function IteratorPrototypeTake(this: Value, limit: Value): Obj {
   const o: Obj = ThisIteratorObject(this);
-  return NewIteratorHelper(3, o, HelperLimit(o, limit));
+  const remaining: f64 = HelperLimit(o, limit);
+  const helper: Obj = NewIteratorHelper(LimitHelper, HelperKinds.take, o);
+  RecordSet(helper, LimitHelper.remaining, remaining);
+  return helper;
 }
 
 /**
@@ -679,7 +874,10 @@ function IteratorPrototypeTake(this: Value, limit: Value): Obj {
  */
 function IteratorPrototypeDrop(this: Value, limit: Value): Obj {
   const o: Obj = ThisIteratorObject(this);
-  return NewIteratorHelper(4, o, HelperLimit(o, limit));
+  const remaining: f64 = HelperLimit(o, limit);
+  const helper: Obj = NewIteratorHelper(LimitHelper, HelperKinds.drop, o);
+  RecordSet(helper, LimitHelper.remaining, remaining);
+  return helper;
 }
 
 /**
@@ -689,7 +887,7 @@ function IteratorPrototypeDrop(this: Value, limit: Value): Obj {
 function IteratorPrototypeFlatMap(this: Value, mapper: Value): Obj {
   const o: Obj = ThisIteratorObject(this);
   HelperCallable(o, mapper);
-  return NewIteratorHelper(5, o, mapper);
+  return NewCallbackHelper(FlatMapHelper, HelperKinds.flatMap, o, mapper);
 }
 
 /**
@@ -898,7 +1096,10 @@ function ChunkingSize(o: Obj, size: Value, name: Str): f64 {
  */
 function IteratorPrototypeChunks(this: Value, chunkSize: Value): Obj {
   const o: Obj = ThisIteratorObject(this);
-  return NewIteratorHelper(7, o, ChunkingSize(o, chunkSize, "chunkSize"));
+  const size: f64 = ChunkingSize(o, chunkSize, "chunkSize");
+  const helper: Obj = NewIteratorHelper(ChunksHelper, HelperKinds.chunks, o);
+  RecordSet(helper, ChunksHelper.size, size);
+  return helper;
 }
 
 /**
@@ -914,8 +1115,9 @@ function IteratorPrototypeWindows(this: Value, windowSize: Value, undersized?: V
     IteratorCloseThrow(o);
     throw error;
   }
-  const helper: Obj = NewIteratorHelper(8, o, size);
-  RecordSet(helper, 5, undersized === "allow-partial");
+  const helper: Obj = NewIteratorHelper(WindowsHelper, HelperKinds.windows, o);
+  RecordSet(helper, WindowsHelper.size, size);
+  RecordSet(helper, WindowsHelper.allowPartial, undersized === "allow-partial");
   return helper;
 }
 
@@ -1000,10 +1202,7 @@ function IteratorPrototypeJoin(this: Value, separator: Value): Str {
   }
 }
 
-/**
- * The options of Iterator.zip and zipKeyed (joint-iteration): a Record [mode (0
- * shortest, 1 longest, 2 strict), padding option].
- */
+/** The options of Iterator.zip and zipKeyed (joint-iteration): a ZipSettings record. */
 function ZipOptions(options: Value): Obj {
   let opts: Obj = ObjectCreate(null);
   if (options !== undefined) {
@@ -1013,24 +1212,24 @@ function ZipOptions(options: Value): Obj {
     opts = AsObj(options);
   }
   const mode: Value = Get(opts, "mode");
-  let m: i32 = 0;
+  let m: i32 = ZipModes.shortest;
   if (mode === "longest") {
-    m = 1;
+    m = ZipModes.longest;
   } else if (mode === "strict") {
-    m = 2;
+    m = ZipModes.strict;
   } else if (mode !== undefined && mode !== "shortest") {
     throw NewTypeError("invalid mode");
   }
   let padding: Value = undefined;
-  if (m === 1) {
+  if (m === ZipModes.longest) {
     padding = Get(opts, "padding");
     if (padding !== undefined && !IsObject(padding)) {
       throw NewTypeError("padding must be an object");
     }
   }
-  const r: Obj = NewRecord(2);
-  RecordSet(r, 0, m);
-  RecordSet(r, 1, padding);
+  const r: Obj = NewRecord(ZipSettings);
+  RecordSet(r, ZipSettings.mode, m);
+  RecordSet(r, ZipSettings.padding, padding);
   return r;
 }
 
@@ -1061,11 +1260,13 @@ function ZipAddIterator(iters: Obj, nexts: Obj, open: Obj, value: Value, outer: 
 
 /** The helper of IteratorZip ( iters, mode, padding, finishResults ). */
 function ZipCreate(iters: Obj, nexts: Obj, open: Obj, padding: Obj, mode: i32, keys: Value): Obj {
-  const helper: Obj = CreateIteratorHelper(9, iters, nexts);
-  RecordSet(helper, 4, padding);
-  RecordSet(helper, 5, mode);
-  RecordSet(helper, 6, open);
-  RecordSet(helper, 7, keys);
+  const helper: Obj = CreateIteratorHelper(ZipHelper, HelperKinds.zip);
+  RecordSet(helper, ZipHelper.iterators, iters);
+  RecordSet(helper, ZipHelper.nexts, nexts);
+  RecordSet(helper, ZipHelper.padding, padding);
+  RecordSet(helper, ZipHelper.mode, mode);
+  RecordSet(helper, ZipHelper.open, open);
+  RecordSet(helper, ZipHelper.keys, keys);
   return helper;
 }
 
@@ -1079,8 +1280,8 @@ function IteratorZip(iterables: Value, options?: Value): Obj {
     throw NewTypeError("not an object");
   }
   const opts: Obj = ZipOptions(options);
-  const mode: i32 = F64ToI32(AsNumber(RecordGet(opts, 0)));
-  const paddingOption: Value = RecordGet(opts, 1);
+  const mode: i32 = F64ToI32(AsNumber(RecordGet(opts, ZipSettings.mode)));
+  const paddingOption: Value = RecordGet(opts, ZipSettings.padding);
   const iters: Obj = ArrayCreate(0);
   const nexts: Obj = ArrayCreate(0);
   const open: Obj = ArrayCreate(0);
@@ -1104,7 +1305,7 @@ function IteratorZip(iterables: Value, options?: Value): Obj {
   }
   const n: f64 = LengthOfArrayLike(iters);
   const padding: Obj = ArrayCreate(0);
-  if (mode === 1) {
+  if (mode === ZipModes.longest) {
     if (paddingOption === undefined) {
       for (let i: f64 = 0; i < n; i++) {
         CreateDataPropertyOrThrow(padding, i, undefined);
@@ -1158,8 +1359,8 @@ function IteratorZipKeyed(iterables: Value, options?: Value): Obj {
   }
   const source: Obj = AsObj(iterables);
   const opts: Obj = ZipOptions(options);
-  const mode: i32 = F64ToI32(AsNumber(RecordGet(opts, 0)));
-  const paddingOption: Value = RecordGet(opts, 1);
+  const mode: i32 = F64ToI32(AsNumber(RecordGet(opts, ZipSettings.mode)));
+  const paddingOption: Value = RecordGet(opts, ZipSettings.padding);
   const iters: Obj = ArrayCreate(0);
   const nexts: Obj = ArrayCreate(0);
   const open: Obj = ArrayCreate(0);
@@ -1184,7 +1385,7 @@ function IteratorZipKeyed(iterables: Value, options?: Value): Obj {
   }
   const n: f64 = LengthOfArrayLike(iters);
   const padding: Obj = ArrayCreate(0);
-  if (mode === 1) {
+  if (mode === ZipModes.longest) {
     for (let i: f64 = 0; i < n; i++) {
       let value: Value = undefined;
       if (paddingOption !== undefined) {

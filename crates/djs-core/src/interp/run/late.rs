@@ -67,9 +67,12 @@ pub(crate) fn schedule_finalization_cleanup(heap: &mut Heap) -> Result<usize, He
 }
 const THIS_DISPOSABLE_STACK: u16 = id("ThisDisposableStack");
 
-/// The kind (slot 0) of `Iterator.from`'s wrapper; the other kinds are helpers
-/// (builtins/iterator.ts).
-const KIND_WRAP: i32 = 0;
+/// The fields every iterator helper starts with, and its kinds and states
+/// (builtins/iterator.ts, D3710).
+use crate::builtins::r#gen::records::{
+    disposable_stack_slots as stack_slot, disposable_states, helper_header as helper,
+    helper_kinds, helper_states,
+};
 
 impl Exec<'_> {
     /// `call_intrinsic` for the leaves of 0051; the end of the fallback chain.
@@ -84,32 +87,34 @@ impl Exec<'_> {
         let a0 = arg(self, 0);
         let v = match id {
             CREATE_ITERATOR_HELPER => {
-                let Some(kind) = a0.as_int() else {
+                // `%CreateIteratorHelper(schema, kind)`: a helper schema (one that starts
+                // with HelperHeader's fields).
+                let schema = a0.as_int().and_then(|k| u16::try_from(k).ok());
+                let ok = schema
+                    .and_then(crate::heap::record_schema)
+                    .is_some_and(|s| s.class == ObjectClass::IteratorHelper);
+                let (Some(schema), true, Some(kind)) = (schema, ok, arg(self, 1).as_int()) else {
                     return bad_argument(id);
                 };
-                let proto = if kind == KIND_WRAP {
+                let proto = if kind == helper_kinds::WRAP {
                     Intrinsic::WrapForValidIteratorProto
                 } else {
                     Intrinsic::IteratorHelperProto
                 };
                 let proto = intrinsic_obj(self.heap, proto);
-                let slots = ObjectClass::IteratorHelper.slots();
-                let o = self
-                    .heap
-                    .alloc_object(ObjectClass::IteratorHelper, Some(proto), slots)?;
-                // kind, state (suspended-start), iterator, next method, the rest unset.
-                let init = [a0, Value::int(0), arg(self, 1), arg(self, 2)];
-                for i in 0..slots {
-                    let v = init.get(i as usize).copied().unwrap_or(Value::UNDEFINED);
-                    self.heap.set_object_slot(o, i, v);
-                }
+                let o = self.heap.alloc_record(schema, Some(proto), 0)?;
+                self.heap.set_object_slot(o, helper::KIND, Value::int(kind));
+                self.heap
+                    .set_object_slot(o, helper::STATE, Value::int(helper_states::START));
                 Value::object(o)
             }
             THIS_ITERATOR_HELPER => {
                 let wrap = arg(self, 1) == Value::TRUE;
                 let ok = a0.as_object().is_some_and(|o| {
                     self.heap.object_class(o) == ObjectClass::IteratorHelper
-                        && (self.heap.object_slot(o, 0) == Value::int(KIND_WRAP)) == wrap
+                        && (self.heap.object_slot(o, helper::KIND)
+                            == Value::int(helper_kinds::WRAP))
+                            == wrap
                 });
                 if !ok {
                     let msg = if wrap {
@@ -125,16 +130,17 @@ impl Exec<'_> {
                 let Some(proto) = a0.as_object() else {
                     return bad_argument(id);
                 };
-                let o = self
-                    .heap
-                    .alloc_object(ObjectClass::DisposableStack, Some(proto), 3)?;
+                let class = ObjectClass::DisposableStack;
+                let o = self.heap.alloc_object(class, Some(proto), class.slots())?;
                 let resources = self
                     .heap
                     .new_array(Some(intrinsic_obj(self.heap, Intrinsic::ArrayProto)), 0)?;
+                let is_async = Value::bool(arg(self, 1) == Value::TRUE);
+                self.heap.set_object_slot(o, stack_slot::ASYNC, is_async);
+                let pending = Value::int(disposable_states::PENDING);
+                self.heap.set_object_slot(o, stack_slot::STATE, pending);
                 self.heap
-                    .set_object_slot(o, 0, Value::bool(arg(self, 1) == Value::TRUE));
-                self.heap.set_object_slot(o, 1, Value::int(0));
-                self.heap.set_object_slot(o, 2, Value::object(resources));
+                    .set_object_slot(o, stack_slot::RESOURCES, Value::object(resources));
                 Value::object(o)
             }
             WEAK_REF_CREATE => {
@@ -227,7 +233,7 @@ impl Exec<'_> {
                 let is_async = arg(self, 1) == Value::TRUE;
                 let ok = a0.as_object().is_some_and(|o| {
                     self.heap.object_class(o) == ObjectClass::DisposableStack
-                        && self.heap.object_slot(o, 0) == Value::bool(is_async)
+                        && self.heap.object_slot(o, stack_slot::ASYNC) == Value::bool(is_async)
                 });
                 if !ok {
                     let msg = if is_async {

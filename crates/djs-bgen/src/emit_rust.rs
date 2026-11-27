@@ -45,7 +45,7 @@ enum Rep {
 fn rep(t: Type) -> Rep {
     match t {
         Type::Bool => Rep::Bool,
-        Type::I32 => Rep::I32,
+        Type::I32 | Type::Schema => Rep::I32,
         Type::U32 => Rep::U32,
         Type::F64 | Type::NumLit | Type::IntLit(_) => Rep::F64,
         _ => Rep::Val,
@@ -483,6 +483,8 @@ impl Env<'_> {
             ExprKind::Null => Type::Null,
             ExprKind::Bool(_) => Type::Bool,
             ExprKind::Num(v, _) => literal_type(*v),
+            ExprKind::Schema(..) => Type::Schema,
+            ExprKind::Member { .. } => unreachable!("resolved by the checker"),
             ExprKind::Str(_) => Type::Str,
             ExprKind::Paren(x) => self.ty(cx, x),
             ExprKind::Unary(op, x) => match (op, self.ty(cx, x)) {
@@ -613,6 +615,8 @@ trait Pure<'a> {
             ExprKind::Null => Code::pure("Value::NULL"),
             ExprKind::Bool(b) => Code::pure(coerce(b.to_string(), Rep::Bool, want)),
             ExprKind::Num(v, _) => Code::pure(literal(*v, want)),
+            ExprKind::Schema(_, id) => Code::pure(literal(f64::from(*id), want)),
+            ExprKind::Member { .. } => unreachable!("resolved by the checker"),
             ExprKind::Str(units) => match rust_str(units) {
                 Some(s) => Code::effect(format!("ex.n_str({s})?")),
                 None => {

@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 
 use super::export::*;
 use super::schema::{self, SlotTy};
+use super::export::Slots;
 use super::wire::{Reader, Short};
 use super::*;
 use crate::bytecode::template;
@@ -61,6 +62,8 @@ enum F {
     Intr(u32),
     Buckets(u64),
     Flags(u64),
+    /// A named constant field's member index (an enum) or members' bits (D3710).
+    Const(u64),
     None,
 }
 
@@ -78,6 +81,9 @@ enum Ty {
     Buckets,
     Program,
     Flags(Vec<String>),
+    /// A field of named constants (D3710): the set and its member names by index.
+    Enum(String, Vec<String>),
+    Bits(String, Vec<String>),
     Tail(Vec<(String, Ty)>),
 }
 
@@ -102,6 +108,12 @@ fn parse_ty(s: &str, sets: &BTreeMap<String, Vec<String>>) -> Option<Ty> {
         _ => {
             if let Some(f) = s.strip_prefix("flags:") {
                 return Some(Ty::Flags(sets.get(f)?.clone()));
+            }
+            if let Some(f) = s.strip_prefix("enum:") {
+                return Some(Ty::Enum(f.to_string(), sets.get(f)?.clone()));
+            }
+            if let Some(f) = s.strip_prefix("bits:") {
+                return Some(Ty::Bits(f.to_string(), sets.get(f)?.clone()));
             }
             let inner = s.strip_prefix("tail(")?.strip_suffix(')')?;
             if let Some(r) = inner
@@ -336,6 +348,10 @@ fn field(r: &mut Reader<'_>, t: &Ty) -> Result<F, Short> {
         Ty::Buckets => F::Buckets(r.u()?),
         Ty::Program => F::None,
         Ty::Flags(_) => F::Flags(r.u()?),
+        Ty::Enum(..) | Ty::Bits(..) => match r.u()? {
+            0 => F::V(value(r)?),
+            k => F::Const(k - 1),
+        },
         Ty::Tail(elem) => {
             let n = r.u()? as usize;
             let mut out = Vec::with_capacity(n.min(r.buf.len()));
@@ -366,7 +382,7 @@ fn is_zero(f: &F) -> bool {
 /// What a record became.
 #[derive(Clone, Copy)]
 enum Kind {
-    Object(&'static schema::ClassSpec),
+    Object(Slots),
     Generic(&'static schema::KindSpec),
     Patch,
 }
@@ -576,8 +592,22 @@ impl Loader<'_> {
         for (i, (t, fs)) in snap.records.iter().enumerate() {
             let ty = &snap.types[*t as usize];
             let (cell, kind) = if let Some(c) = ty.name.strip_prefix("Object.") {
-                let spec = schema::class_by_name(c)
+                let (c, record) = match c.split_once('.') {
+                    Some((c, r)) => (c, Some(r)),
+                    None => (c, None),
+                };
+                let class = schema::class_by_name(c)
                     .ok_or_else(|| refusal(format!("no object class {c} in this build")))?;
+                // A record's slots are its kind's schema's (D3710).
+                let spec = match (record, schema::is_kinded(class.class)) {
+                    (None, false) => Slots::class(class),
+                    (Some(r), true) => Slots::record(
+                        schema::record_by_name(class.class, r).ok_or_else(|| {
+                            refusal(format!("no {c} record kind {r} in this build"))
+                        })?,
+                    ),
+                    _ => return Err(refusal(format!("{}: not a record type", ty.name))),
+                };
                 let mut slots = spec.slots.len() as u32;
                 let mut template = 0;
                 for ((n, _), f) in ty.fields.iter().zip(fs) {
@@ -600,6 +630,10 @@ impl Loader<'_> {
                 let h = self.vm.heap_mut();
                 let o = if spec.class == ObjectClass::Function {
                     h.alloc_closure(None, template, slots).map_err(oom)?
+                } else if let Some(r) = spec.record {
+                    let kind = schema::record_by_name(spec.class, r).map_or(0, |r| r.kind);
+                    let rest = slots - spec.slots.len() as u32;
+                    h.alloc_record(kind, None, rest).map_err(oom)?
                 } else {
                     h.alloc_object(spec.class, None, slots).map_err(oom)?
                 };
@@ -812,12 +846,15 @@ impl Loader<'_> {
     fn fill_object(
         &mut self,
         off: u32,
-        spec: &'static schema::ClassSpec,
+        spec: Slots,
         ty: &TypeInfo,
         fs: &[F],
     ) -> Result<(), Refusal> {
         let o = Obj(off);
         let mut slot_vals: Vec<(u32, Value)> = Vec::new();
+        // A record has every field of its schema (D3710): a field the snapshot lacks
+        // refuses it.
+        let mut seen = 0u64;
         let mut header = None;
         let mut buckets = None;
         for ((name, t), f) in ty.fields.iter().zip(fs) {
@@ -850,9 +887,25 @@ impl Loader<'_> {
                 ("template", F::Fn(_)) => {}
                 (n, f) => {
                     let fixed = spec.slots.iter().position(|(s, _)| *s == n);
+                    if let Some(k) = fixed {
+                        seen |= 1 << k.min(63);
+                        constants_agree(&ty.name, n, t, spec.slots[k].1)?;
+                    }
                     match (fixed, f) {
+                        (Some(k), F::Const(i)) => {
+                            let v = constant(&ty.name, n, t, spec.slots[k].1, *i)?;
+                            slot_vals.push((k as u32, Value::int(v)));
+                        }
                         (Some(k), F::V(v)) => {
                             let v = self.val(*v)?;
+                            if v.as_int().is_some()
+                                && matches!(spec.slots[k].1, SlotTy::Enum(_) | SlotTy::Bits(_))
+                            {
+                                return Err(refusal(format!(
+                                    "{}.{n}: a number that is no named constant",
+                                    ty.name
+                                )));
+                            }
                             slot_vals.push((k as u32, v));
                         }
                         (Some(k), F::Intr(i)) => {
@@ -873,13 +926,28 @@ impl Loader<'_> {
                         }
                         _ => {
                             return Err(refusal(format!(
-                                "{}: no slot {n} in this build's {} objects",
-                                ty.name, spec.name
+                                "{}: no slot {n} in this build's {}",
+                                ty.name,
+                                spec.what()
                             )));
                         }
                     }
                 }
             }
+        }
+        if spec.record.is_some()
+            && let Some((n, _)) = spec
+                .slots
+                .iter()
+                .enumerate()
+                .find(|(k, _)| seen & (1 << (*k).min(63)) == 0)
+                .map(|(_, f)| f)
+        {
+            return Err(refusal(format!(
+                "{}: the snapshot has no field {n} of this build's {}",
+                ty.name,
+                spec.what()
+            )));
         }
         if let Some((names, bits)) = header {
             self.set_flags(o, names, bits)?;
@@ -1385,4 +1453,57 @@ extern crate std;
 std::thread_local! {
     /// The negative control: the gate must see a broken importer (tests.rs).
     pub(super) static BROKEN: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
+/// The field types of a named-constant field agree: the snapshot's and this build's are
+/// the same set, or neither is one (D3710).
+fn constants_agree(ty: &str, n: &str, t: &Ty, here: SlotTy) -> Result<(), Refusal> {
+    let ok = match (t, here) {
+        (Ty::Enum(s, _), SlotTy::Enum(c)) | (Ty::Bits(s, _), SlotTy::Bits(c)) => *s == c.name,
+        (Ty::Enum(..) | Ty::Bits(..), _) | (_, SlotTy::Enum(_) | SlotTy::Bits(_)) => false,
+        _ => true,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(refusal(format!(
+            "{ty}.{n}: the snapshot's field holds other constants than this build's"
+        )))
+    }
+}
+
+/// This build's value of the named constant(s) `i` (a member index or members' bits) of
+/// field `n`.
+fn constant(ty: &str, n: &str, t: &Ty, here: SlotTy, i: u64) -> Result<i32, Refusal> {
+    let missing = |m: &str, set: &str| {
+        refusal(format!("{ty}.{n}: no {set} member {m} in this build"))
+    };
+    match (t, here) {
+        (Ty::Enum(set, names), SlotTy::Enum(c)) => {
+            let m = names.get(i as usize).ok_or_else(|| short(Short))?;
+            c.members
+                .iter()
+                .find(|(k, _)| k == m)
+                .map(|(_, v)| *v)
+                .ok_or_else(|| missing(m, set))
+        }
+        (Ty::Bits(set, names), SlotTy::Bits(c)) => {
+            if i >> names.len().min(63) != 0 {
+                return Err(short(Short));
+            }
+            let mut v = 0;
+            for (k, m) in names.iter().enumerate() {
+                if i & (1 << k) != 0 {
+                    v |= c
+                        .members
+                        .iter()
+                        .find(|(x, _)| x == m)
+                        .map(|(_, b)| *b)
+                        .ok_or_else(|| missing(m, set))?;
+                }
+            }
+            Ok(v)
+        }
+        _ => Err(short(Short)),
+    }
 }

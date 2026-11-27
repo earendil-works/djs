@@ -1,6 +1,6 @@
 //! ES module records, linking and namespace objects (D3171, docs/compiler.md 5.11).
 //!
-//! A module record is an internal [`ObjectClass::Record`] (slots in [`slot`]) in the
+//! A module record is an internal record (`ModuleRecord`, fields in [`slot`]) in the
 //! realm's registry (`Intrinsic::Modules`), so collections and images carry linked and
 //! evaluated graphs like any other heap state. Its environment is its body closure: the
 //! module template's captures are its top-level bindings in Boxes (compiler/module.rs),
@@ -21,69 +21,14 @@ use crate::heap::cells::{BoxCell, CellKind};
 use crate::heap::{Atom, Heap, HeapError, ObjectClass, PropFlags, PropertyDescriptor, Ref, atoms};
 use crate::value::{Obj, Value};
 
-/// The slots of a module record (builtins/module.ts uses the same numbers).
-#[allow(dead_code)]
-pub(crate) mod slot {
-    /// The module's key, a string.
-    pub const KEY: u32 = 0;
-    /// [`super::status`], an int.
-    pub const STATUS: u32 = 1;
-    /// The module closure: its template is the body, its captures the environment.
-    pub const BODY: u32 = 2;
-    /// A Record of the requested module records (by request index), once loaded.
-    pub const REQUESTED: u32 = 3;
-    /// The number of requests, an int.
-    pub const COUNT: u32 = 4;
-    /// The evaluation error of an `ERRORED` module.
-    pub const ERROR: u32 = 5;
-    /// [[DFSIndex]] and [[DFSAncestorIndex]] while it evaluates (module.ts).
-    pub const DFS: u32 = 6;
-    pub const ANCESTOR: u32 = 7;
-    /// The namespace object, once made.
-    pub const NAMESPACE: u32 = 8;
-    /// The metadata (compiler/module_meta.rs), an internal U32Array.
-    pub const META: u32 = 9;
-    /// The record under it on the evaluation stack (module.ts), or null.
-    pub const STACK: u32 = 10;
-    /// A Box holding the namespace (what `import * as` and `export * as` bind), once made.
-    pub const NS_BOX: u32 = 11;
-    /// [`super::flags`], an int.
-    pub const FLAGS: u32 = 12;
-    /// [[CycleRoot]] (module.ts): the root of its strongly connected component once that
-    /// is done, or null.
-    pub const CYCLE_ROOT: u32 = 13;
-    /// [[AsyncEvaluationOrder]]: 0 unset, -1 done, else the order (an int).
-    pub const ASYNC_ORDER: u32 = 14;
-    /// [[PendingAsyncDependencies]], an int.
-    pub const PENDING: u32 = 15;
-    /// [[AsyncParentModules]]: an Array of records, or null.
-    pub const PARENTS: u32 = 16;
-    /// [[TopLevelCapability]]: the promise of an Evaluate of it, or undefined.
-    pub const CAPABILITY: u32 = 17;
-    pub const COUNT_SLOTS: u32 = 18;
-}
-
-/// `slot::FLAGS` of a module record.
-pub(crate) mod flags {
-    /// A JSON module (a synthetic module with the parsed text as its default export).
-    pub const JSON: i32 = 1;
-    /// [[HasTLA]]: the body is an async function (top-level await).
-    pub const TLA: i32 = 2;
-}
-
-/// [[Status]] of a module record (module.ts tests these numbers).
-#[allow(dead_code)]
-pub(crate) mod status {
-    pub const NEW: i32 = 0;
-    pub const LINKING: i32 = 1;
-    pub const LINKED: i32 = 2;
-    pub const EVALUATING: i32 = 3;
-    pub const EVALUATED: i32 = 4;
-    /// Evaluated with an error ([[EvaluationError]] in `slot::ERROR`).
-    pub const ERRORED: i32 = 5;
-    /// evaluating-async: its SCC is done, an async module in it (or below) is not.
-    pub const EVALUATING_ASYNC: i32 = 6;
-}
+/// The fields of a module record, its flags and statuses (builtins/module.ts
+/// `ModuleRecord`, `ModuleFlags`, `ModuleStatus`, D3710).
+pub(crate) use crate::builtins::r#gen::records::{
+    module_flags as flags, module_record as slot, module_status as status,
+};
+use crate::builtins::r#gen::records::{
+    module_registry as modules_slot, requested_modules, synthetic_body,
+};
 
 /// Slots of a namespace's proxy target (an ordinary object with internal slots).
 mod ns {
@@ -98,27 +43,12 @@ mod ns {
     pub const COUNT: u32 = 4;
 }
 
-/// The slots of the `Intrinsic::Modules` Record.
-mod modules_slot {
-    /// The registry: a null-prototype object from key atom to module record.
-    pub const REGISTRY: u32 = 0;
-    /// The handler of every namespace proxy.
-    pub const TRAPS: u32 = 1;
-    /// The async host function `import()` calls (fn id `vm::IMPORT_FN_ID`), or undefined:
-    /// then `import()` rejects as without modules (builtins/import.ts).
-    pub const IMPORT: u32 = 2;
-    /// The last [[AsyncEvaluationOrder]] given (IncrementModuleAsyncEvaluationCount), an
-    /// int.
-    pub const ASYNC_COUNT: u32 = 3;
-    pub const COUNT: u32 = 4;
-}
-
-/// `Intrinsic::Modules`: the Record of [`modules_slot`], made on first use.
+/// `Intrinsic::Modules`: the ModuleRegistry record, made on first use.
 fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
     if let Some(m) = realm::intrinsic(heap, Intrinsic::Modules).as_object() {
         return Ok(m);
     }
-    let r = heap.alloc_object(ObjectClass::Record, None, modules_slot::COUNT)?;
+    let r = heap.alloc_record(modules_slot::RECORD_KIND, None, 0)?;
     let registry = heap.new_object(None)?;
     // The handler of every namespace: builtin closures of `%ModuleOp` with the internal
     // method's number (builtins/module.ts).
@@ -202,10 +132,7 @@ pub(crate) fn new_record(
         .object_slot(mods, modules_slot::REGISTRY)
         .as_object()
         .expect("module registry");
-    let r = heap.alloc_object(ObjectClass::Record, None, slot::COUNT_SLOTS)?;
-    for i in 0..slot::COUNT_SLOTS {
-        heap.set_object_slot(r, i, Value::UNDEFINED);
-    }
+    let r = heap.alloc_record(slot::RECORD_KIND, None, 0)?;
     let k = heap.alloc_str(key)?;
     heap.set_object_slot(r, slot::KEY, Value::string(k));
     heap.set_object_slot(r, slot::STATUS, Value::int(status::NEW));
@@ -256,11 +183,8 @@ pub(crate) fn new_synthetic(
     for (i, &w) in words.iter().enumerate() {
         heap.u32_array_set(arr, i as u32, w);
     }
-    let r = heap.alloc_object(ObjectClass::Record, None, slot::COUNT_SLOTS)?;
-    for i in 0..slot::COUNT_SLOTS {
-        heap.set_object_slot(r, i, Value::UNDEFINED);
-    }
-    let body = heap.alloc_object(ObjectClass::Record, None, names.len() as u32)?;
+    let r = heap.alloc_record(slot::RECORD_KIND, None, 0)?;
+    let body = heap.alloc_record(synthetic_body::RECORD_KIND, None, names.len() as u32)?;
     for (i, &v) in values.iter().enumerate() {
         let b = new_box(heap, v)?;
         heap.set_object_slot(body, i as u32, b);
@@ -296,7 +220,7 @@ pub(crate) fn set_synthetic_export(
     v: Value,
 ) -> Result<bool, HeapError> {
     let body = heap.object_slot(m, slot::BODY).as_object();
-    if body.is_none_or(|b| heap.object_class(b) != ObjectClass::Record) {
+    if body.is_none_or(|b| heap.record_kind(b) != synthetic_body::RECORD_KIND) {
         return Ok(false);
     }
     let name = heap.atom_str(name)?;
@@ -357,7 +281,7 @@ fn requested(heap: &Heap, m: Obj, i: u32) -> Obj {
 
 /// Sets the requested records of `m` (by request index).
 pub(crate) fn set_requested(heap: &mut Heap, m: Obj, records: &[Obj]) -> Result<(), HeapError> {
-    let r = heap.alloc_object(ObjectClass::Record, None, records.len() as u32)?;
+    let r = heap.alloc_record(requested_modules::RECORD_KIND, None, records.len() as u32)?;
     for (i, &x) in records.iter().enumerate() {
         heap.set_object_slot(r, i as u32, Value::object(x));
     }

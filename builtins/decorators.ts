@@ -1,14 +1,53 @@
 // Decorators (TC39 2023-11, 0065, D1650): the runtime of the code compiler/decorators.rs
 // emits, after qjs's js_apply_decorators.
 //
-// The decoration state of a class is a Record: 0 the metadata object, 1 the extra
-// initializers of the static methods and accessors, 2 those of the instance ones, 3
-// those of the class (Arrays). A decorated field or auto-accessor has a Record of its
-// own: 0 its initializers (Array, in application order: the last decorator's first),
-// 1 its extra initializers, 2 and 3 an auto-accessor's getter and setter.
+// The decoration state of a class is a DecoratorState record, a decorated field or
+// auto-accessor has a DecoratorElement record of its own (compiler/decorators.rs reads
+// both by these names).
 //
 // Flags (the compiler's DEC_*): the kind in bits 0-2 (0 class, 1 method, 2 getter, 3
 // setter, 4 accessor, 5 field), 8 static, 16 private.
+
+/**
+ * The decoration state of a class: the metadata object, the extra initializers of the
+ * static methods and accessors, those of the instance ones, those of the class (Arrays).
+ * @record
+ */
+enum DecoratorState {
+  metadata,
+  staticExtras,
+  instanceExtras,
+  classExtras,
+}
+
+/**
+ * A decorated field or auto-accessor: its initializers (an Array, in application order:
+ * the last decorator's first), its extra initializers, an auto-accessor's getter and
+ * setter.
+ * @record
+ */
+enum DecoratorElement {
+  inits,
+  extras,
+  getter,
+  setter,
+}
+
+/**
+ * The `this` of context.addInitializer: the extra initializers it appends to, and
+ * whether the decoration is finished.
+ * @record
+ */
+enum DecoratorAdder {
+  extras,
+  done,
+}
+
+/** The `this` of DecoratorParamCall: the parameter decorator and the index. @record */
+enum DecoratorParamData {
+  dec,
+  index,
+}
 
 /** The `kind` of a context object, also in qjs's messages. */
 function DecoratorKindName(kind: i32): Str {
@@ -53,11 +92,11 @@ function DecoratorStart(cls: Value, heritage: boolean): Value {
       }
     }
   }
-  const state: Obj = NewRecord(4);
-  RecordSet(state, 0, ObjectCreate(parent));
-  RecordSet(state, 1, ArrayCreate(0));
-  RecordSet(state, 2, ArrayCreate(0));
-  RecordSet(state, 3, ArrayCreate(0));
+  const state: Obj = NewRecord(DecoratorState);
+  RecordSet(state, DecoratorState.metadata, ObjectCreate(parent));
+  RecordSet(state, DecoratorState.staticExtras, ArrayCreate(0));
+  RecordSet(state, DecoratorState.instanceExtras, ArrayCreate(0));
+  RecordSet(state, DecoratorState.classExtras, ArrayCreate(0));
   return state;
 }
 
@@ -168,21 +207,21 @@ function ApplyDecorators(target: Value, key: Value, value: Value, decs: Value, s
       }
     }
   }
-  const metadata: Value = RecordGet(state, 0);
+  const metadata: Value = RecordGet(state, DecoratorState.metadata);
   let rec: Value = undefined;
   let extras: Value = undefined;
   if (kind === 4 || kind === 5) {
-    const r: Obj = NewRecord(4);
-    RecordSet(r, 0, ArrayCreate(0));
-    RecordSet(r, 1, ArrayCreate(0));
+    const r: Obj = NewRecord(DecoratorElement);
+    RecordSet(r, DecoratorElement.inits, ArrayCreate(0));
+    RecordSet(r, DecoratorElement.extras, ArrayCreate(0));
     rec = r;
-    extras = RecordGet(r, 1);
+    extras = RecordGet(r, DecoratorElement.extras);
   } else if (kind === 0) {
-    extras = RecordGet(state, 3);
+    extras = RecordGet(state, DecoratorState.classExtras);
   } else if ((flags & 8) !== 0) {
-    extras = RecordGet(state, 1);
+    extras = RecordGet(state, DecoratorState.staticExtras);
   } else {
-    extras = RecordGet(state, 2);
+    extras = RecordGet(state, DecoratorState.instanceExtras);
   }
   let i: f64 = 0;
   if (decs !== undefined) {
@@ -192,9 +231,9 @@ function ApplyDecorators(target: Value, key: Value, value: Value, decs: Value, s
     i -= 1;
     const dec: Value = Get(AsObj(decs), 2 * i);
     const recv: Value = Get(AsObj(decs), 2 * i + 1);
-    const adder: Obj = NewRecord(2);
-    RecordSet(adder, 0, extras);
-    RecordSet(adder, 1, false);
+    const adder: Obj = NewRecord(DecoratorAdder);
+    RecordSet(adder, DecoratorAdder.extras, extras);
+    RecordSet(adder, DecoratorAdder.done, false);
     const ctx: Obj = DecoratorNewContext(flags, name, access, metadata, adder);
     let arg: Value = cur;
     if (kind === 4) {
@@ -208,12 +247,12 @@ function ApplyDecorators(target: Value, key: Value, value: Value, decs: Value, s
       ret = Call(dec, recv, arg, ctx);
     } finally {
       // The decoration is finished: addInitializer() is no longer allowed.
-      RecordSet(adder, 1, true);
+      RecordSet(adder, DecoratorAdder.done, true);
     }
     if (kind === 5) {
       DecoratorCheckResult(ret, kind);
       if (ret !== undefined) {
-        DecoratorPush(AsObj(RecordGet(AsObj(rec), 0)), ret);
+        DecoratorPush(AsObj(RecordGet(AsObj(rec), DecoratorElement.inits)), ret);
       }
     } else if (kind === 4) {
       if (IsObject(ret)) {
@@ -227,7 +266,7 @@ function ApplyDecorators(target: Value, key: Value, value: Value, decs: Value, s
           curSet = s;
         }
         if (init !== undefined) {
-          DecoratorPush(AsObj(RecordGet(AsObj(rec), 0)), init);
+          DecoratorPush(AsObj(RecordGet(AsObj(rec), DecoratorElement.inits)), init);
         }
       } else if (ret !== undefined) {
         throw NewTypeError("accessor decorator must return an object or undefined");
@@ -253,8 +292,8 @@ function ApplyDecorators(target: Value, key: Value, value: Value, decs: Value, s
       CreateDataPropertyOrThrow(d, "set", curSet);
       DecoratorDefine(AsObj(target), key, d);
     }
-    RecordSet(AsObj(rec), 2, cur);
-    RecordSet(AsObj(rec), 3, curSet);
+    RecordSet(AsObj(rec), DecoratorElement.getter, cur);
+    RecordSet(AsObj(rec), DecoratorElement.setter, curSet);
     return rec;
   }
   if (isPrivate) {
@@ -285,7 +324,7 @@ function DecoratorDefine(o: Obj, key: Value, desc: Obj): void {
  * @intrinsic
  */
 function DecoratorRunInits(value: Value, rec: Value, thisValue: Value): Value {
-  const inits: Obj = AsObj(RecordGet(AsObj(rec), 0));
+  const inits: Obj = AsObj(RecordGet(AsObj(rec), DecoratorElement.inits));
   let v: Value = value;
   let i: f64 = LengthOfArrayLike(inits);
   while (i > 0) {
@@ -296,7 +335,8 @@ function DecoratorRunInits(value: Value, rec: Value, thisValue: Value): Value {
 }
 
 /**
- * Calls the extra initializers in slot i of Record r (a state or an element record)
+ * Calls the extra initializers in field i of record r (a DecoratorState or a
+ * DecoratorElement, i one of their `*Extras`/`extras` fields, as the compiler emits it)
  * with `this` = thisValue, in the order they were added.
  * @intrinsic
  */
@@ -309,18 +349,18 @@ function DecoratorRunExtras(r: Value, i: i32, thisValue: Value): void {
 }
 
 /**
- * context.addInitializer ( initializer ): `this` is the Record [extras, done].
+ * context.addInitializer ( initializer ): `this` is the DecoratorAdder.
  * @intrinsic
  */
 function DecoratorAddInitializer(this: Value, initializer: Value): void {
   const adder: Obj = AsObj(this);
-  if (AsBool(RecordGet(adder, 1))) {
+  if (AsBool(RecordGet(adder, DecoratorAdder.done))) {
     throw NewTypeError("addInitializer() called after the decoration");
   }
   if (!IsCallable(initializer)) {
     throw NewTypeError("initializer must be a function");
   }
-  DecoratorPush(AsObj(RecordGet(adder, 0)), initializer);
+  DecoratorPush(AsObj(RecordGet(adder, DecoratorAdder.extras)), initializer);
 }
 
 /**
@@ -419,20 +459,20 @@ function ApplyLegacyDecorators(target: Value, key: Value, decs: Value, kind: i32
  * @intrinsic
  */
 function DecoratorParam(dec: Value, index: Value): Value {
-  const data: Obj = NewRecord(2);
-  RecordSet(data, 0, dec);
-  RecordSet(data, 1, index);
+  const data: Obj = NewRecord(DecoratorParamData);
+  RecordSet(data, DecoratorParamData.dec, dec);
+  RecordSet(data, DecoratorParamData.index, index);
   return NewBuiltinClosure(24, data, 2);
 }
 
 /**
  * The function of DecoratorParam: calls the parameter decorator with (target, key,
- * index); `this` is the Record [dec, index].
+ * index); `this` is the DecoratorParamData.
  * @intrinsic
  */
 function DecoratorParamCall(this: Value, target: Value, key: Value): void {
   const data: Obj = AsObj(this);
-  Call(RecordGet(data, 0), undefined, target, key, RecordGet(data, 1));
+  Call(RecordGet(data, DecoratorParamData.dec), undefined, target, key, RecordGet(data, DecoratorParamData.index));
 }
 
 /**

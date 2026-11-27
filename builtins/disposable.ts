@@ -3,13 +3,54 @@
 // %IteratorPrototype% and %AsyncIteratorPrototype%. The `using` syntax is a compiler
 // issue of its own.
 //
-// A stack is a DisposableStack object (heap class 33, slots in disposable.ts's leaves):
-// slot 0 async, 1 the state (0 pending, 1 disposed), 2 the resources, an internal
-// Array of [value, method, kind] triples, oldest first. Kinds (D1512): 0 calls
-// method with `this` = value, 1 calls method(value) (adopt's closure), 2 is an
-// AsyncDisposableStack resource with only a Symbol.dispose method (GetDisposeMethod's
-// closure: the call's outcome is awaited), 3 is an AsyncDisposableStack resource of
-// null or undefined (no method; only forces an await).
+// A stack is a DisposableStack object (heap class 33; its slots below): whether it is
+// an AsyncDisposableStack, its state, the resources, an internal Array of [value,
+// method, kind] triples, oldest first (kinds: ResourceKinds, D1512).
+
+/** A DisposableStack's or AsyncDisposableStack's slots (heap/object.rs). @slots DisposableStack */
+enum DisposableStackSlots {
+  async,
+  /** @enum DisposableStates */
+  state,
+  resources,
+}
+
+/** A DisposableStack's `state`. @constants */
+enum DisposableStates {
+  pending = 0,
+  disposed = 1,
+}
+
+/**
+ * How a resource triple is disposed (D1512). The kinds are stored in the resource
+ * Arrays (plain elements, not named in a snapshot).
+ * @constants
+ */
+enum ResourceKinds {
+  /** Calls method with `this` = value. */
+  method = 0,
+  /** Calls method(value) (adopt's closure). */
+  adopted = 1,
+  /**
+   * An AsyncDisposableStack resource with only a Symbol.dispose method (GetDisposeMethod's
+   * closure: the call's outcome is awaited).
+   */
+  syncInAsync = 2,
+  /** An AsyncDisposableStack resource of null or undefined (no method; only forces an await). */
+  none = 3,
+  /** An `await using` resource with a Symbol.asyncDispose method, whose result is awaited. */
+  awaited = 4,
+}
+
+/**
+ * The errors of a disposal: the one to throw (or reject with) and whether there is one.
+ * AsyncDisposeState and UsingRecord start with them.
+ * @record
+ */
+enum DisposeErrors {
+  error,
+  hasError,
+}
 
 /** The SuppressedError DisposeResources throws when a disposal throws after another. */
 function NewSuppressedError(error: Value, suppressed: Value): Obj {
@@ -23,15 +64,14 @@ function NewSuppressedError(error: Value, suppressed: Value): Obj {
 /** The stack `this` of a method, still pending (qjs's ReferenceError otherwise). */
 function PendingDisposableStack(v: Value, isAsync: boolean): Obj {
   const stack: Obj = ThisDisposableStack(v, isAsync);
-  if (F64ToI32(AsNumber(RecordGet(stack, 1))) !== 0) {
+  if (F64ToI32(AsNumber(RecordGet(stack, DisposableStackSlots.state))) !== DisposableStates.pending) {
     throw NewReferenceError(isAsync ? "AsyncDisposableStack is disposed" : "DisposableStack is disposed");
   }
   return stack;
 }
 
-/** Appends a resource triple to a stack. */
-function AddResource(stack: Obj, value: Value, method: Value, kind: i32): void {
-  const resources: Obj = AsObj(RecordGet(stack, 2));
+/** Appends a resource triple to a stack's (or a `using` scope's) resources. */
+function AddResource(resources: Obj, value: Value, method: Value, kind: i32): void {
   const n: f64 = LengthOfArrayLike(resources);
   CreateDataPropertyOrThrow(resources, n, value);
   CreateDataPropertyOrThrow(resources, n + 1, method);
@@ -42,17 +82,17 @@ function AddResource(stack: Obj, value: Value, method: Value, kind: i32): void {
  * AddDisposableResource ( disposeCapability, V, hint ), 27.3.3.1 (without a method):
  * CreateDisposableResource and GetDisposeMethod for `use`.
  */
-function AddDisposableValue(stack: Obj, v: Value, isAsync: boolean): void {
+function AddDisposableValue(resources: Obj, v: Value, isAsync: boolean): void {
   if (v === undefined || v === null) {
     if (isAsync) {
-      AddResource(stack, undefined, undefined, 3);
+      AddResource(resources, undefined, undefined, ResourceKinds.none);
     }
     return;
   }
   if (!IsObject(v)) {
     throw NewTypeError("using: value is not an object");
   }
-  let kind: i32 = 0;
+  let kind: i32 = ResourceKinds.method;
   let method: Value = undefined;
   if (isAsync) {
     method = GetV(v, WellKnownSymbol("asyncDispose"));
@@ -60,7 +100,7 @@ function AddDisposableValue(stack: Obj, v: Value, isAsync: boolean): void {
   if (method === undefined || method === null) {
     method = GetV(v, WellKnownSymbol("dispose"));
     if (isAsync) {
-      kind = 2;
+      kind = ResourceKinds.syncInAsync;
     }
     if (method === undefined || method === null) {
       throw NewTypeError(isAsync ? "using: value has no Symbol.asyncDispose or Symbol.dispose method" : "using: value has no Symbol.dispose method");
@@ -69,14 +109,19 @@ function AddDisposableValue(stack: Obj, v: Value, isAsync: boolean): void {
   if (!IsCallable(method)) {
     throw NewTypeError("using: dispose method is not a function");
   }
-  AddResource(stack, v, method, kind);
+  AddResource(resources, v, method, kind);
 }
 
-/** Calls the disposal of resource triple i (kinds 0-2). */
+/** The resources of a pending stack. */
+function StackResources(stack: Obj): Obj {
+  return AsObj(RecordGet(stack, DisposableStackSlots.resources));
+}
+
+/** Calls the disposal of resource triple i (kinds method, adopted, syncInAsync). */
 function CallDisposeMethod(resources: Obj, i: f64): Value {
   const value: Value = Get(resources, i);
   const method: Value = Get(resources, i + 1);
-  if (F64ToI32(AsNumber(Get(resources, i + 2))) === 1) {
+  if (F64ToI32(AsNumber(Get(resources, i + 2))) === ResourceKinds.adopted) {
     return Call(method, undefined, value);
   }
   return Call(method, value);
@@ -98,7 +143,7 @@ function DisposableStackConstructor(): Obj {
  * @getter DisposableStack.prototype.disposed
  */
 function DisposableStackPrototypeDisposed(this: Value): boolean {
-  return F64ToI32(AsNumber(RecordGet(ThisDisposableStack(this, false), 1))) === 1;
+  return F64ToI32(AsNumber(RecordGet(ThisDisposableStack(this, false), DisposableStackSlots.state))) === DisposableStates.disposed;
 }
 
 /**
@@ -109,12 +154,12 @@ function DisposableStackPrototypeDisposed(this: Value): boolean {
  */
 function DisposableStackPrototypeDispose(this: Value): void {
   const stack: Obj = ThisDisposableStack(this, false);
-  if (F64ToI32(AsNumber(RecordGet(stack, 1))) === 1) {
+  if (F64ToI32(AsNumber(RecordGet(stack, DisposableStackSlots.state))) === DisposableStates.disposed) {
     return;
   }
-  RecordSet(stack, 1, 1);
-  const resources: Obj = AsObj(RecordGet(stack, 2));
-  RecordSet(stack, 2, ArrayCreate(0));
+  RecordSet(stack, DisposableStackSlots.state, DisposableStates.disposed);
+  const resources: Obj = AsObj(RecordGet(stack, DisposableStackSlots.resources));
+  RecordSet(stack, DisposableStackSlots.resources, ArrayCreate(0));
   let hasError: boolean = false;
   let error: Value = undefined;
   for (let i: f64 = LengthOfArrayLike(resources) - 3; i >= 0; i = i - 3) {
@@ -135,7 +180,7 @@ function DisposableStackPrototypeDispose(this: Value): void {
  * @builtin DisposableStack.prototype.use
  */
 function DisposableStackPrototypeUse(this: Value, value: Value): Value {
-  AddDisposableValue(PendingDisposableStack(this, false), value, false);
+  AddDisposableValue(StackResources(PendingDisposableStack(this, false)), value, false);
   return value;
 }
 
@@ -148,7 +193,7 @@ function DisposableStackPrototypeAdopt(this: Value, value: Value, onDispose: Val
   if (!IsCallable(onDispose)) {
     throw NewTypeError("not a function");
   }
-  AddResource(stack, value, onDispose, 1);
+  AddResource(StackResources(stack), value, onDispose, ResourceKinds.adopted);
   return value;
 }
 
@@ -161,7 +206,7 @@ function DisposableStackPrototypeDefer(this: Value, onDispose: Value): void {
   if (!IsCallable(onDispose)) {
     throw NewTypeError("not a function");
   }
-  AddResource(stack, undefined, onDispose, 0);
+  AddResource(StackResources(stack), undefined, onDispose, ResourceKinds.method);
 }
 
 /** move ( ) of both stacks: a new stack takes the resources; this one is disposed. */
@@ -169,9 +214,9 @@ function DisposableStackMove(thisValue: Value, isAsync: boolean): Obj {
   const stack: Obj = PendingDisposableStack(thisValue, isAsync);
   const proto: Obj = RealmIntrinsic(isAsync ? "AsyncDisposableStackPrototype" : "DisposableStackPrototype");
   const newStack: Obj = DisposableStackCreate(proto, isAsync);
-  RecordSet(newStack, 2, RecordGet(stack, 2));
-  RecordSet(stack, 2, ArrayCreate(0));
-  RecordSet(stack, 1, 1);
+  RecordSet(newStack, DisposableStackSlots.resources, RecordGet(stack, DisposableStackSlots.resources));
+  RecordSet(stack, DisposableStackSlots.resources, ArrayCreate(0));
+  RecordSet(stack, DisposableStackSlots.state, DisposableStates.disposed);
   return newStack;
 }
 
@@ -208,7 +253,7 @@ function AsyncDisposableStackConstructor(): Obj {
  * @getter AsyncDisposableStack.prototype.disposed
  */
 function AsyncDisposableStackPrototypeDisposed(this: Value): boolean {
-  return F64ToI32(AsNumber(RecordGet(ThisDisposableStack(this, true), 1))) === 1;
+  return F64ToI32(AsNumber(RecordGet(ThisDisposableStack(this, true), DisposableStackSlots.state))) === DisposableStates.disposed;
 }
 
 /**
@@ -216,7 +261,7 @@ function AsyncDisposableStackPrototypeDisposed(this: Value): boolean {
  * @builtin AsyncDisposableStack.prototype.use
  */
 function AsyncDisposableStackPrototypeUse(this: Value, value: Value): Value {
-  AddDisposableValue(PendingDisposableStack(this, true), value, true);
+  AddDisposableValue(StackResources(PendingDisposableStack(this, true)), value, true);
   return value;
 }
 
@@ -229,7 +274,7 @@ function AsyncDisposableStackPrototypeAdopt(this: Value, value: Value, onDispose
   if (!IsCallable(onDisposeAsync)) {
     throw NewTypeError("not a function");
   }
-  AddResource(stack, value, onDisposeAsync, 1);
+  AddResource(StackResources(stack), value, onDisposeAsync, ResourceKinds.adopted);
   return value;
 }
 
@@ -242,7 +287,7 @@ function AsyncDisposableStackPrototypeDefer(this: Value, onDisposeAsync: Value):
   if (!IsCallable(onDisposeAsync)) {
     throw NewTypeError("not a function");
   }
-  AddResource(stack, undefined, onDisposeAsync, 0);
+  AddResource(StackResources(stack), undefined, onDisposeAsync, ResourceKinds.method);
 }
 
 /**
@@ -264,10 +309,26 @@ function AsyncDisposableStackPrototypeToStringTag(): Str {
 
 // ---- AsyncDisposableStack.prototype.disposeAsync: DisposeResources with awaits ----------
 //
-// Like Array.fromAsync (D1511), a Record state machine resumed by builtin closures 18
-// and 19: 0 the result promise, 1 the resources, 2 the index of the next triple to
-// dispose (counting down), 3 the error, 4 whether there is one, 5 needsAwait, 6
-// hasAwaited, 7 a kind-2 call's exception, to throw once the await is over.
+// Like Array.fromAsync (D1511), a record state machine resumed by builtin closures 18
+// and 19.
+
+/**
+ * disposeAsync's state: the errors, the result promise, the resources, the index of the
+ * next triple to dispose (counting down), needsAwait, hasAwaited, a syncInAsync call's
+ * exception, to throw once the await is over.
+ * @record
+ * @extends DisposeErrors
+ */
+enum AsyncDisposeState {
+  error,
+  hasError,
+  promise,
+  resources,
+  index,
+  needsAwait,
+  hasAwaited,
+  pending,
+}
 
 /**
  * AsyncDisposableStack.prototype.disposeAsync ( ), 27.4.3.3; also
@@ -284,32 +345,35 @@ function AsyncDisposableStackPrototypeDisposeAsync(this: Value): Obj {
     RejectPromise(promise, e);
     return promise;
   }
-  if (F64ToI32(AsNumber(RecordGet(stack, 1))) === 1) {
+  if (F64ToI32(AsNumber(RecordGet(stack, DisposableStackSlots.state))) === DisposableStates.disposed) {
     ResolvePromise(promise, undefined);
     return promise;
   }
-  RecordSet(stack, 1, 1);
-  const s: Obj = NewRecord(8);
-  RecordSet(s, 0, promise);
-  const resources: Obj = AsObj(RecordGet(stack, 2));
-  RecordSet(stack, 2, ArrayCreate(0));
-  RecordSet(s, 1, resources);
-  RecordSet(s, 2, LengthOfArrayLike(resources) - 3);
-  RecordSet(s, 4, false);
-  RecordSet(s, 5, false);
-  RecordSet(s, 6, false);
-  RecordSet(s, 7, undefined);
+  RecordSet(stack, DisposableStackSlots.state, DisposableStates.disposed);
+  const s: Obj = NewRecord(AsyncDisposeState);
+  RecordSet(s, AsyncDisposeState.promise, promise);
+  const resources: Obj = AsObj(RecordGet(stack, DisposableStackSlots.resources));
+  RecordSet(stack, DisposableStackSlots.resources, ArrayCreate(0));
+  RecordSet(s, AsyncDisposeState.resources, resources);
+  RecordSet(s, AsyncDisposeState.index, LengthOfArrayLike(resources) - 3);
+  RecordSet(s, AsyncDisposeState.hasError, false);
+  RecordSet(s, AsyncDisposeState.needsAwait, false);
+  RecordSet(s, AsyncDisposeState.hasAwaited, false);
+  RecordSet(s, AsyncDisposeState.pending, undefined);
   AsyncDisposeContinue(s);
   return promise;
 }
 
-/** Records a disposal error (step 2.c.iii: a SuppressedError over an earlier one). */
+/**
+ * Records a disposal error in `s` (DisposeErrors; step 2.c.iii: a SuppressedError over an
+ * earlier one).
+ */
 function AsyncDisposeError(s: Obj, e: Value): void {
-  if (RecordGet(s, 4) === true) {
-    RecordSet(s, 3, NewSuppressedError(e, RecordGet(s, 3)));
+  if (RecordGet(s, DisposeErrors.hasError) === true) {
+    RecordSet(s, DisposeErrors.error, NewSuppressedError(e, RecordGet(s, DisposeErrors.error)));
   } else {
-    RecordSet(s, 3, e);
-    RecordSet(s, 4, true);
+    RecordSet(s, DisposeErrors.error, e);
+    RecordSet(s, DisposeErrors.hasError, true);
   }
 }
 
@@ -324,32 +388,32 @@ function AsyncDisposeAwait(s: Obj, v: Value): void {
  * resources until one needs an await, then the final await (step 3) and the result.
  */
 function AsyncDisposeContinue(s: Obj): void {
-  const resources: Obj = AsObj(RecordGet(s, 1));
+  const resources: Obj = AsObj(RecordGet(s, AsyncDisposeState.resources));
   while (true) {
-    const i: f64 = AsNumber(RecordGet(s, 2));
+    const i: f64 = AsNumber(RecordGet(s, AsyncDisposeState.index));
     if (i < 0) {
       break;
     }
-    RecordSet(s, 2, i - 3);
+    RecordSet(s, AsyncDisposeState.index, i - 3);
     const kind: i32 = F64ToI32(AsNumber(Get(resources, i + 2)));
-    if (kind === 3) {
-      RecordSet(s, 5, true);
+    if (kind === ResourceKinds.none) {
+      RecordSet(s, AsyncDisposeState.needsAwait, true);
       continue;
     }
     let result: Value = undefined;
     try {
       result = CallDisposeMethod(resources, i);
     } catch (e) {
-      if (kind !== 2) {
+      if (kind !== ResourceKinds.syncInAsync) {
         AsyncDisposeError(s, e);
         continue;
       }
       // GetDisposeMethod's closure returns a rejected promise: awaited, then thrown.
-      RecordSet(s, 7, e);
+      RecordSet(s, AsyncDisposeState.pending, e);
       result = undefined;
     }
-    RecordSet(s, 6, true);
-    if (kind === 2) {
+    RecordSet(s, AsyncDisposeState.hasAwaited, true);
+    if (kind === ResourceKinds.syncInAsync) {
       result = undefined;
     }
     try {
@@ -360,35 +424,35 @@ function AsyncDisposeContinue(s: Obj): void {
     }
     return;
   }
-  if (RecordGet(s, 5) === true && RecordGet(s, 6) !== true) {
-    RecordSet(s, 6, true);
+  if (RecordGet(s, AsyncDisposeState.needsAwait) === true && RecordGet(s, AsyncDisposeState.hasAwaited) !== true) {
+    RecordSet(s, AsyncDisposeState.hasAwaited, true);
     AsyncDisposeAwait(s, undefined);
     return;
   }
-  const promise: Obj = AsObj(RecordGet(s, 0));
-  if (RecordGet(s, 4) === true) {
-    RejectPromise(promise, RecordGet(s, 3));
+  const promise: Obj = AsObj(RecordGet(s, AsyncDisposeState.promise));
+  if (RecordGet(s, AsyncDisposeState.hasError) === true) {
+    RejectPromise(promise, RecordGet(s, AsyncDisposeState.error));
   } else {
     ResolvePromise(promise, undefined);
   }
 }
 
 /**
- * Resumes disposeAsync after a fulfilled await: `this` is its Record.
+ * Resumes disposeAsync after a fulfilled await: `this` is its AsyncDisposeState.
  * @intrinsic
  */
 function AsyncDisposeFulfilled(this: Value, value: Value): void {
   const s: Obj = AsObj(this);
-  const pending: Value = RecordGet(s, 7);
+  const pending: Value = RecordGet(s, AsyncDisposeState.pending);
   if (pending !== undefined) {
-    RecordSet(s, 7, undefined);
+    RecordSet(s, AsyncDisposeState.pending, undefined);
     AsyncDisposeError(s, pending);
   }
   AsyncDisposeContinue(s);
 }
 
 /**
- * Resumes disposeAsync after a rejected await: `this` is its Record.
+ * Resumes disposeAsync after a rejected await: `this` is its AsyncDisposeState.
  * @intrinsic
  */
 function AsyncDisposeRejected(this: Value, reason: Value): void {
@@ -398,22 +462,35 @@ function AsyncDisposeRejected(this: Value, reason: Value): void {
 }
 
 // ---- `using` and `await using` declarations (0058, docs/compiler.md 7.10) ---------------
-//
-// A scope with `using` declarations keeps a Record on the operand stack: 2 the resources
-// (triples as in a DisposableStack, kinds 0, 2 and 3, plus kind 4: an `await using`
-// resource with a Symbol.asyncDispose method, whose result is awaited), 3 the error, 4
-// whether there is one, 5 needsAwait, 6 hasAwaited, 7 the index of the next triple to
-// dispose (undefined before the first step), 8 the value to await, 9 a kind-2 call's
-// exception to merge once the await is over, 10 whether there is one. Slots 0 and 1 are
-// unused, so AddDisposableValue and AsyncDisposeError work on it unchanged.
 
 /**
- * The resource Record of a scope's `using` declarations.
+ * A scope with `using` declarations keeps one on the operand stack: the errors, the
+ * resources (triples as in a DisposableStack, kinds method, syncInAsync, none and
+ * awaited), needsAwait, hasAwaited, the index of the next triple to dispose (undefined
+ * before the first step), the value to await, a syncInAsync call's exception to merge
+ * once the await is over, whether there is one.
+ * @record
+ * @extends DisposeErrors
+ */
+enum UsingRecord {
+  error,
+  hasError,
+  resources,
+  needsAwait,
+  hasAwaited,
+  next,
+  value,
+  pendingError,
+  hasPending,
+}
+
+/**
+ * The resource record of a scope's `using` declarations.
  * @intrinsic
  */
 function UsingCreate(): Obj {
-  const s: Obj = NewRecord(11);
-  RecordSet(s, 2, ArrayCreate(0));
+  const s: Obj = NewRecord(UsingRecord);
+  RecordSet(s, UsingRecord.resources, ArrayCreate(0));
   return s;
 }
 
@@ -422,7 +499,7 @@ function UsingCreate(): Obj {
  * @intrinsic
  */
 function UsingAdd(s: Obj, v: Value): Value {
-  AddDisposableValue(s, v, false);
+  AddDisposableValue(AsObj(RecordGet(s, UsingRecord.resources)), v, false);
   return v;
 }
 
@@ -431,13 +508,13 @@ function UsingAdd(s: Obj, v: Value): Value {
  * @intrinsic
  */
 function AwaitUsingAdd(s: Obj, v: Value): Value {
-  AddDisposableValue(s, v, true);
-  // An async add always appends one triple (kind 3 for null and undefined); kind 0
+  const resources: Obj = AsObj(RecordGet(s, UsingRecord.resources));
+  AddDisposableValue(resources, v, true);
+  // An async add always appends one triple (none for null and undefined); a method
   // there is a Symbol.asyncDispose method, awaited unlike a `using` resource's.
-  const resources: Obj = AsObj(RecordGet(s, 2));
   const k: f64 = LengthOfArrayLike(resources) - 1;
-  if (F64ToI32(AsNumber(Get(resources, k))) === 0) {
-    CreateDataPropertyOrThrow(resources, k, 4);
+  if (F64ToI32(AsNumber(Get(resources, k))) === ResourceKinds.method) {
+    CreateDataPropertyOrThrow(resources, k, ResourceKinds.awaited);
   }
   return v;
 }
@@ -457,7 +534,7 @@ function UsingDisposeError(s: Obj, e: Value): void {
  * @intrinsic
  */
 function UsingDispose(s: Obj): void {
-  const resources: Obj = AsObj(RecordGet(s, 2));
+  const resources: Obj = AsObj(RecordGet(s, UsingRecord.resources));
   for (let i: f64 = LengthOfArrayLike(resources) - 3; i >= 0; i = i - 3) {
     try {
       CallDisposeMethod(resources, i);
@@ -465,8 +542,8 @@ function UsingDispose(s: Obj): void {
       AsyncDisposeError(s, e);
     }
   }
-  if (RecordGet(s, 4) === true) {
-    throw RecordGet(s, 3);
+  if (RecordGet(s, UsingRecord.hasError) === true) {
+    throw RecordGet(s, UsingRecord.error);
   }
 }
 
@@ -477,30 +554,30 @@ function UsingDispose(s: Obj): void {
  * @intrinsic
  */
 function UsingDisposeStep(s: Obj): boolean {
-  if (RecordGet(s, 10) === true) {
-    RecordSet(s, 10, false);
-    AsyncDisposeError(s, RecordGet(s, 9));
+  if (RecordGet(s, UsingRecord.hasPending) === true) {
+    RecordSet(s, UsingRecord.hasPending, false);
+    AsyncDisposeError(s, RecordGet(s, UsingRecord.pendingError));
   }
-  const resources: Obj = AsObj(RecordGet(s, 2));
+  const resources: Obj = AsObj(RecordGet(s, UsingRecord.resources));
   let i: f64 = 0;
-  if (RecordGet(s, 7) === undefined) {
+  if (RecordGet(s, UsingRecord.next) === undefined) {
     i = LengthOfArrayLike(resources) - 3;
   } else {
-    i = AsNumber(RecordGet(s, 7));
+    i = AsNumber(RecordGet(s, UsingRecord.next));
   }
   while (i >= 0) {
     const kind: i32 = F64ToI32(AsNumber(Get(resources, i + 2)));
-    if (kind === 0 && RecordGet(s, 5) === true && RecordGet(s, 6) !== true) {
+    if (kind === ResourceKinds.method && RecordGet(s, UsingRecord.needsAwait) === true && RecordGet(s, UsingRecord.hasAwaited) !== true) {
       // A sync disposal after a null `await using`: the pending Await comes first.
-      RecordSet(s, 5, false);
-      RecordSet(s, 7, i);
-      RecordSet(s, 8, undefined);
+      RecordSet(s, UsingRecord.needsAwait, false);
+      RecordSet(s, UsingRecord.next, i);
+      RecordSet(s, UsingRecord.value, undefined);
       return true;
     }
-    RecordSet(s, 7, i - 3);
-    if (kind === 3) {
-      RecordSet(s, 5, true);
-    } else if (kind === 0) {
+    RecordSet(s, UsingRecord.next, i - 3);
+    if (kind === ResourceKinds.none) {
+      RecordSet(s, UsingRecord.needsAwait, true);
+    } else if (kind === ResourceKinds.method) {
       try {
         CallDisposeMethod(resources, i);
       } catch (e) {
@@ -513,29 +590,29 @@ function UsingDisposeStep(s: Obj): boolean {
         result = CallDisposeMethod(resources, i);
       } catch (e) {
         threw = true;
-        if (kind === 2) {
+        if (kind === ResourceKinds.syncInAsync) {
           // GetDisposeMethod's closure returns a rejected promise: awaited, then thrown.
-          RecordSet(s, 9, e);
-          RecordSet(s, 10, true);
+          RecordSet(s, UsingRecord.pendingError, e);
+          RecordSet(s, UsingRecord.hasPending, true);
         } else {
           AsyncDisposeError(s, e);
         }
       }
-      if (kind === 2 || !threw) {
-        RecordSet(s, 6, true);
-        RecordSet(s, 8, kind === 2 ? undefined : result);
+      if (kind === ResourceKinds.syncInAsync || !threw) {
+        RecordSet(s, UsingRecord.hasAwaited, true);
+        RecordSet(s, UsingRecord.value, kind === ResourceKinds.syncInAsync ? undefined : result);
         return true;
       }
     }
     i = i - 3;
   }
-  if (RecordGet(s, 5) === true && RecordGet(s, 6) !== true) {
-    RecordSet(s, 5, false);
-    RecordSet(s, 8, undefined);
+  if (RecordGet(s, UsingRecord.needsAwait) === true && RecordGet(s, UsingRecord.hasAwaited) !== true) {
+    RecordSet(s, UsingRecord.needsAwait, false);
+    RecordSet(s, UsingRecord.value, undefined);
     return true;
   }
-  if (RecordGet(s, 4) === true) {
-    throw RecordGet(s, 3);
+  if (RecordGet(s, UsingRecord.hasError) === true) {
+    throw RecordGet(s, UsingRecord.error);
   }
   return false;
 }
@@ -545,7 +622,7 @@ function UsingDisposeStep(s: Obj): boolean {
  * @intrinsic
  */
 function UsingAwaitValue(s: Obj): Value {
-  return RecordGet(s, 8);
+  return RecordGet(s, UsingRecord.value);
 }
 
 /**

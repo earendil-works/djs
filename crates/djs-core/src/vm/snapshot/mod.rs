@@ -232,9 +232,8 @@ fn container(
             ex.str_lit(&p)
         })
         .collect();
-    // Builtin closure kinds by name. Their records' slots are positional and mean what
-    // the builtins' code makes of them: not checked here (a hash of that code refused
-    // snapshots at every compiler change that touched the builtins, 0300).
+    // Builtin closure kinds by name; their data are records by kind and named fields
+    // (D3710).
     let intrinsics: Vec<u32> = ex
         .intrinsics
         .clone()
@@ -244,12 +243,12 @@ fn container(
     let mut w = Writer::default();
     w.buf.extend_from_slice(MAGIC);
     w.byte(FORMAT);
-    let sets = export::flagsets();
+    let sets = export::flagsets(&ex.const_sets);
     w.u(sets.len() as u64);
     for (n, f) in sets {
         w.str(n);
         w.u(f.len() as u64);
-        for (name, _) in f {
+        for name in f {
             w.str(name);
         }
     }

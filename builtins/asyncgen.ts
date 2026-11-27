@@ -3,14 +3,22 @@
 //
 // An async generator's body runs in frames resumed by AsyncGeneratorStep: by a request
 // (next/return/throw) when it is suspended at the start or at a yield, or by the job of
-// an awaited promise. When the frame hands control back, its state says why: 4 at an
-// await (a job resumes it later), 1 at a yield (the oldest request completes with the
-// value), 2 still executing (the body returned). An exception leaving the body rejects
-// the oldest request. Requests are Records [type, value, promise] (0 next, 1 throw,
-// 2 return), and their promises are internal capabilities.
+// an awaited promise. When the frame hands control back, its state says why: awaiting
+// (a job resumes it later), suspendedYield (the oldest request completes with the
+// value), still executing (the body returned). An exception leaving the body rejects
+// the oldest request. Requests are AsyncGeneratorRequest records, and their promises
+// are internal capabilities.
+
+/** A request of an async generator's queue (interp/run/suspend.rs keeps the queue). @record */
+enum AsyncGeneratorRequest {
+  /** @enum ResumeMode */
+  type,
+  value,
+  promise,
+}
 
 /** The promise of a request for an async generator method (qjs's messages). */
-function AsyncGeneratorRequest(g: Value, type: i32, value: Value): Obj {
+function AsyncGeneratorEnqueueRequest(g: Value, type: i32, value: Value): Obj {
   const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
   const state: i32 = AsyncGeneratorState(g);
   if (state < 0) {
@@ -18,24 +26,24 @@ function AsyncGeneratorRequest(g: Value, type: i32, value: Value): Obj {
     return promise;
   }
   const gen: Obj = AsObj(g);
-  if (type === 0 && state === 3) {
+  if (type === ResumeMode.next && state === GeneratorStates.completed) {
     ResolveWithData(promise, CreateIterResultObject(undefined, true));
     return promise;
   }
-  if (type === 1 && (state === 0 || state === 3)) {
-    GeneratorSetState(gen, 3);
+  if (type === ResumeMode.throw && (state === GeneratorStates.start || state === GeneratorStates.completed)) {
+    GeneratorSetState(gen, GeneratorStates.completed);
     RejectWithData(promise, value);
     return promise;
   }
-  const request: Obj = NewRecord(3);
-  RecordSet(request, 0, type);
-  RecordSet(request, 1, value);
-  RecordSet(request, 2, promise);
+  const request: Obj = NewRecord(AsyncGeneratorRequest);
+  RecordSet(request, AsyncGeneratorRequest.type, type);
+  RecordSet(request, AsyncGeneratorRequest.value, value);
+  RecordSet(request, AsyncGeneratorRequest.promise, promise);
   AsyncGeneratorEnqueue(gen, request);
-  if (type === 2 && (state === 0 || state === 3)) {
-    GeneratorSetState(gen, 5);
+  if (type === ResumeMode.return && (state === GeneratorStates.start || state === GeneratorStates.completed)) {
+    GeneratorSetState(gen, GeneratorStates.awaitingReturn);
     AsyncGeneratorAwaitReturn(gen);
-  } else if (state === 0 || state === 1) {
+  } else if (state === GeneratorStates.start || state === GeneratorStates.suspendedYield) {
     AsyncGeneratorStep(gen, value, type);
   }
   return promise;
@@ -46,7 +54,7 @@ function AsyncGeneratorRequest(g: Value, type: i32, value: Value): Obj {
  * @builtin %AsyncGeneratorPrototype%.next
  */
 function AsyncGeneratorPrototypeNext(this: Value, value: Value): Obj {
-  return AsyncGeneratorRequest(this, 0, value);
+  return AsyncGeneratorEnqueueRequest(this, ResumeMode.next, value);
 }
 
 /**
@@ -54,7 +62,7 @@ function AsyncGeneratorPrototypeNext(this: Value, value: Value): Obj {
  * @builtin %AsyncGeneratorPrototype%.return
  */
 function AsyncGeneratorPrototypeReturn(this: Value, value: Value): Obj {
-  return AsyncGeneratorRequest(this, 2, value);
+  return AsyncGeneratorEnqueueRequest(this, ResumeMode.return, value);
 }
 
 /**
@@ -62,7 +70,7 @@ function AsyncGeneratorPrototypeReturn(this: Value, value: Value): Obj {
  * @builtin %AsyncGeneratorPrototype%.throw
  */
 function AsyncGeneratorPrototypeThrow(this: Value, exception: Value): Obj {
-  return AsyncGeneratorRequest(this, 1, exception);
+  return AsyncGeneratorEnqueueRequest(this, ResumeMode.throw, exception);
 }
 
 /**
@@ -79,31 +87,31 @@ function AsyncGeneratorStep(g: Obj, value: Value, mode: i32): void {
     try {
       result = GeneratorResume(g, v, m);
     } catch (e) {
-      GeneratorSetState(g, 3);
-      AsyncGeneratorCompleteStep(g, 1, e, true);
+      GeneratorSetState(g, GeneratorStates.completed);
+      AsyncGeneratorCompleteStep(g, ResumeMode.throw, e, true);
       AsyncGeneratorDrainQueue(g);
       return;
     }
     const state: i32 = AsyncGeneratorState(g);
-    if (state === 4) {
+    if (state === GeneratorStates.awaiting) {
       return;
     }
-    if (state !== 1) {
-      GeneratorSetState(g, 3);
-      AsyncGeneratorCompleteStep(g, 0, result, true);
+    if (state !== GeneratorStates.suspendedYield) {
+      GeneratorSetState(g, GeneratorStates.completed);
+      AsyncGeneratorCompleteStep(g, ResumeMode.next, result, true);
       AsyncGeneratorDrainQueue(g);
       return;
     }
     // A yield: executing while the request settles (user code may enqueue more).
-    GeneratorSetState(g, 2);
-    AsyncGeneratorCompleteStep(g, 0, result, false);
-    GeneratorSetState(g, 1);
+    GeneratorSetState(g, GeneratorStates.executing);
+    AsyncGeneratorCompleteStep(g, ResumeMode.next, result, false);
+    GeneratorSetState(g, GeneratorStates.suspendedYield);
     const next: Value = AsyncGeneratorFirstRequest(g);
     if (next === undefined) {
       return;
     }
-    v = RecordGet(AsObj(next), 1);
-    m = F64ToI32(AsNumber(RecordGet(AsObj(next), 0)));
+    v = RecordGet(AsObj(next), AsyncGeneratorRequest.value);
+    m = F64ToI32(AsNumber(RecordGet(AsObj(next), AsyncGeneratorRequest.type)));
   }
 }
 
@@ -113,8 +121,8 @@ function AsyncGeneratorStep(g: Obj, value: Value, mode: i32): void {
  */
 function AsyncGeneratorCompleteStep(g: Obj, type: i32, value: Value, done: boolean): void {
   const request: Obj = AsObj(AsyncGeneratorDequeue(g));
-  const promise: Value = RecordGet(request, 2);
-  if (type === 1) {
+  const promise: Value = RecordGet(request, AsyncGeneratorRequest.promise);
+  if (type === ResumeMode.throw) {
     RejectWithData(promise, value);
   } else {
     ResolveWithData(promise, CreateIterResultObject(value, done));
@@ -128,16 +136,16 @@ function AsyncGeneratorDrainQueue(g: Obj): void {
     if (next === undefined) {
       return;
     }
-    const type: f64 = AsNumber(RecordGet(AsObj(next), 0));
-    if (type === 2) {
-      GeneratorSetState(g, 5);
+    const type: f64 = AsNumber(RecordGet(AsObj(next), AsyncGeneratorRequest.type));
+    if (type === ResumeMode.return) {
+      GeneratorSetState(g, GeneratorStates.awaitingReturn);
       AsyncGeneratorAwaitReturn(g);
       return;
     }
-    if (type === 1) {
-      AsyncGeneratorCompleteStep(g, 1, RecordGet(AsObj(next), 1), true);
+    if (type === ResumeMode.throw) {
+      AsyncGeneratorCompleteStep(g, ResumeMode.throw, RecordGet(AsObj(next), AsyncGeneratorRequest.value), true);
     } else {
-      AsyncGeneratorCompleteStep(g, 0, undefined, true);
+      AsyncGeneratorCompleteStep(g, ResumeMode.next, undefined, true);
     }
   }
 }
@@ -147,10 +155,10 @@ function AsyncGeneratorAwaitReturn(g: Obj): void {
   const next: Obj = AsObj(AsyncGeneratorFirstRequest(g));
   let promise: Value = undefined;
   try {
-    promise = PromiseResolve(IntrinsicPromise(), RecordGet(next, 1));
+    promise = PromiseResolve(IntrinsicPromise(), RecordGet(next, AsyncGeneratorRequest.value));
   } catch (e) {
-    GeneratorSetState(g, 3);
-    AsyncGeneratorCompleteStep(g, 1, e, true);
+    GeneratorSetState(g, GeneratorStates.completed);
+    AsyncGeneratorCompleteStep(g, ResumeMode.throw, e, true);
     AsyncGeneratorDrainQueue(g);
     return;
   }
@@ -163,8 +171,8 @@ function AsyncGeneratorAwaitReturn(g: Obj): void {
  */
 function AsyncGeneratorAwaitReturnFulfilled(this: Value, value: Value): void {
   const g: Obj = AsObj(this);
-  GeneratorSetState(g, 3);
-  AsyncGeneratorCompleteStep(g, 0, value, true);
+  GeneratorSetState(g, GeneratorStates.completed);
+  AsyncGeneratorCompleteStep(g, ResumeMode.next, value, true);
   AsyncGeneratorDrainQueue(g);
 }
 
@@ -174,8 +182,8 @@ function AsyncGeneratorAwaitReturnFulfilled(this: Value, value: Value): void {
  */
 function AsyncGeneratorAwaitReturnRejected(this: Value, reason: Value): void {
   const g: Obj = AsObj(this);
-  GeneratorSetState(g, 3);
-  AsyncGeneratorCompleteStep(g, 1, reason, true);
+  GeneratorSetState(g, GeneratorStates.completed);
+  AsyncGeneratorCompleteStep(g, ResumeMode.throw, reason, true);
   AsyncGeneratorDrainQueue(g);
 }
 
@@ -297,10 +305,10 @@ function AsyncFromSyncIteratorCloseThrow(this: Value, error: Value): Value {
  */
 function AsyncFromSyncIteratorNext(this: Value, ...args: Value[]): Obj {
   const o: Obj = AsObj(this);
-  const iterator: Obj = AsObj(RecordGet(o, 0));
+  const iterator: Obj = AsObj(RecordGet(o, AsyncFromSyncIterator.iterator));
   let result: Value = undefined;
   try {
-    result = CallWithArray(RecordGet(o, 1), iterator, args);
+    result = CallWithArray(RecordGet(o, AsyncFromSyncIterator.next), iterator, args);
     if (!IsObject(result)) {
       throw NewTypeError("iterator must return an object");
     }
@@ -318,7 +326,7 @@ function AsyncFromSyncIteratorNext(this: Value, ...args: Value[]): Obj {
  * @length 1
  */
 function AsyncFromSyncIteratorReturn(this: Value, ...args: Value[]): Obj {
-  const iterator: Obj = AsObj(RecordGet(AsObj(this), 0));
+  const iterator: Obj = AsObj(RecordGet(AsObj(this), AsyncFromSyncIterator.iterator));
   const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
   let result: Value = undefined;
   try {
@@ -345,7 +353,7 @@ function AsyncFromSyncIteratorReturn(this: Value, ...args: Value[]): Obj {
  * @length 1
  */
 function AsyncFromSyncIteratorThrow(this: Value, ...args: Value[]): Obj {
-  const iterator: Obj = AsObj(RecordGet(AsObj(this), 0));
+  const iterator: Obj = AsObj(RecordGet(AsObj(this), AsyncFromSyncIterator.iterator));
   const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
   let result: Value = undefined;
   try {

@@ -53,6 +53,7 @@ fn main() -> ExitCode {
         (djs_bgen::REPORT_PATH, &out.report),
         (djs_bgen::NATIVES_PATH, &out.natives),
         (djs_bgen::LEAVES_PATH, &out.leaves),
+        (djs_bgen::RECORDS_PATH, &out.records),
     ];
     if check {
         let stale: Vec<&str> = files

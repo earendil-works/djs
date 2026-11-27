@@ -1768,9 +1768,8 @@ impl Exec<'_> {
                 IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
                 PROMISE_COMBINATOR_RUN => {
                     let (kind, index) = (a1.as_int(), a2.as_number());
-                    let fixed = a0
-                        .as_object()
-                        .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
+                    use crate::builtins::r#gen::records::combinator_record as rec;
+                    let fixed = self.heap.as_record(a0, rec::RECORD_KIND);
                     let (Some(fixed), Some(kind), Some(index)) = (fixed, kind, index) else {
                         break 'bad;
                     };
@@ -1870,24 +1869,23 @@ impl Exec<'_> {
                     if a0.as_object().is_none() {
                         break 'bad;
                     }
+                    use crate::builtins::r#gen::records::async_from_sync_iterator as rec;
                     let proto = intrinsic_obj(self.heap, Intrinsic::AsyncFromSyncIteratorProto);
-                    let r = self
-                        .heap
-                        .alloc_object(ObjectClass::Record, Some(proto), 2)?;
-                    self.heap.set_object_slot(r, 0, a0);
-                    self.heap.set_object_slot(r, 1, a1);
+                    let r = self.heap.alloc_record(rec::RECORD_KIND, Some(proto), 0)?;
+                    self.heap.set_object_slot(r, rec::ITERATOR, a0);
+                    self.heap.set_object_slot(r, rec::NEXT, a1);
                     Value::object(r)
                 }
                 NEW_RECORD => {
-                    let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
-                    let Some(n) = n.filter(|&n| n <= 16) else {
+                    // `%NewRecord(kind)` (D3710): a record of a schema without a rest.
+                    let kind = a0.as_int().and_then(|k| u16::try_from(k).ok());
+                    let ok = kind
+                        .and_then(crate::heap::record_schema)
+                        .is_some_and(|s| s.class == ObjectClass::Record && s.rest.is_none());
+                    let (Some(kind), true) = (kind, ok) else {
                         break 'bad;
                     };
-                    let r = self.heap.alloc_object(ObjectClass::Record, None, n)?;
-                    for i in 0..n {
-                        self.heap.set_object_slot(r, i, Value::UNDEFINED);
-                    }
-                    Value::object(r)
+                    Value::object(self.heap.alloc_record(kind, None, 0)?)
                 }
                 // (Without modules, the intrinsic falls to the unknown ones.)
                 MODULE_NAMESPACE if crate::EMBED => {

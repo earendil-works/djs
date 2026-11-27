@@ -32,7 +32,7 @@ enum Rt {
 
 fn rt(t: Type) -> Rt {
     match t {
-        Type::F64 | Type::I32 | Type::U32 | Type::IntLit(_) | Type::NumLit => Rt::Num,
+        Type::F64 | Type::I32 | Type::U32 | Type::IntLit(_) | Type::NumLit | Type::Schema => Rt::Num,
         Type::Bool => Rt::Bool,
         _ => Rt::Val,
     }
@@ -371,6 +371,8 @@ impl<'a> E<'a> {
                 (format!("({lit} != 0.0)"), Rt::Bool)
             }
             ExprKind::Num(v, _) => (self.num_lit(format!("{v:?}")), Rt::Num),
+            ExprKind::Schema(_, id) => (self.num_lit(format!("{:?}", f64::from(*id))), Rt::Num),
+            ExprKind::Member { .. } => unreachable!("resolved by the checker"),
             ExprKind::Str(units) => {
                 let s = rust_str(units).ok_or("string literal")?;
                 (format!("ex.l_str({s})?"), Rt::Val)

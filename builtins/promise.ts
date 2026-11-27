@@ -4,11 +4,23 @@
 //
 // Capabilities (27.2.1.1) are undefined (nothing to resolve), a Promise (an internal
 // capability of %Promise%: its resolving functions are never visible, so the promise is
-// resolved directly, with PromiseClaimResolve as [[AlreadyResolved]]), or a Record
-// [promise, resolve, reject] for any other constructor. Resolving functions and the
-// other anonymous builtin functions are builtin closures (D1372) whose `this` is their
-// data: a Promise (the constructor's pair: [[AlreadyResolved]] on the promise), or a
-// Record.
+// resolved directly, with PromiseClaimResolve as [[AlreadyResolved]]), or a Capability
+// record for any other constructor. Resolving functions and the other anonymous builtin
+// functions are builtin closures (D1372) whose `this` is their data: a Promise (the
+// constructor's pair: [[AlreadyResolved]] on the promise), or a record.
+
+/** A PromiseCapability Record of a constructor other than %Promise%. @record */
+enum Capability {
+  promise,
+  resolve,
+  reject,
+}
+
+/** The data of a pair of resolving functions (a thenable job's). @record */
+enum ResolvingFunctions {
+  promise,
+  alreadyResolved,
+}
 
 // ---- Resolving and capabilities ---------------------------------------------------------
 
@@ -41,19 +53,19 @@ function ResolvePromise(promise: Obj, resolution: Value): void {
 }
 
 /**
- * The promise of a resolving function's data (a Promise, or a Record [promise,
- * alreadyResolved]) if it has not resolved yet (and marks it resolved), else undefined.
+ * The promise of a resolving function's data (a Promise, or ResolvingFunctions) if it
+ * has not resolved yet (and marks it resolved), else undefined.
  */
 function ClaimResolution(data: Value): Value {
   if (IsPromise(data)) {
     return PromiseClaimResolve(AsObj(data)) ? data : undefined;
   }
   const r: Obj = AsObj(data);
-  if (RecordGet(r, 1) === true) {
+  if (RecordGet(r, ResolvingFunctions.alreadyResolved) === true) {
     return undefined;
   }
-  RecordSet(r, 1, true);
-  return RecordGet(r, 0);
+  RecordSet(r, ResolvingFunctions.alreadyResolved, true);
+  return RecordGet(r, ResolvingFunctions.promise);
 }
 
 /**
@@ -101,7 +113,7 @@ function CapabilityPromise(capability: Value): Value {
   if (IsPromise(capability)) {
     return capability;
   }
-  return RecordGet(AsObj(capability), 0);
+  return RecordGet(AsObj(capability), Capability.promise);
 }
 
 /** Calls capability.[[Resolve]] with v. */
@@ -110,7 +122,7 @@ function ResolveCapability(capability: Value, v: Value): void {
     ResolveWithData(capability, v);
     return;
   }
-  Call(RecordGet(AsObj(capability), 1), undefined, v);
+  Call(RecordGet(AsObj(capability), Capability.resolve), undefined, v);
 }
 
 /** Calls capability.[[Reject]] with reason. */
@@ -119,7 +131,7 @@ function RejectCapability(capability: Value, reason: Value): void {
     RejectWithData(capability, reason);
     return;
   }
-  Call(RecordGet(AsObj(capability), 2), undefined, reason);
+  Call(RecordGet(AsObj(capability), Capability.reject), undefined, reason);
 }
 
 /** capability.[[Resolve]] as a function (made for an internal capability). */
@@ -127,7 +139,7 @@ function CapabilityResolveFunction(capability: Value): Value {
   if (IsPromise(capability)) {
     return NewBuiltinClosure(0, capability, 1);
   }
-  return RecordGet(AsObj(capability), 1);
+  return RecordGet(AsObj(capability), Capability.resolve);
 }
 
 /** capability.[[Reject]] as a function (made for an internal capability). */
@@ -135,20 +147,20 @@ function CapabilityRejectFunction(capability: Value): Value {
   if (IsPromise(capability)) {
     return NewBuiltinClosure(1, capability, 1);
   }
-  return RecordGet(AsObj(capability), 2);
+  return RecordGet(AsObj(capability), Capability.reject);
 }
 
 /**
- * GetCapabilitiesExecutor Functions, 27.2.1.5.1: `this` is the capability Record.
+ * GetCapabilitiesExecutor Functions, 27.2.1.5.1: `this` is the Capability.
  * @intrinsic
  */
 function GetCapabilitiesExecutor(this: Value, resolve: Value, reject: Value): void {
   const r: Obj = AsObj(this);
-  if (RecordGet(r, 1) !== undefined || RecordGet(r, 2) !== undefined) {
+  if (RecordGet(r, Capability.resolve) !== undefined || RecordGet(r, Capability.reject) !== undefined) {
     throw NewTypeError("resolving function already set");
   }
-  RecordSet(r, 1, resolve);
-  RecordSet(r, 2, reject);
+  RecordSet(r, Capability.resolve, resolve);
+  RecordSet(r, Capability.reject, reject);
 }
 
 /** NewPromiseCapability ( C ), 27.2.1.5. */
@@ -160,13 +172,13 @@ function NewPromiseCapability(c: Value): Value {
   if (!IsConstructor(c)) {
     throw NewTypeError("not a constructor");
   }
-  const r: Obj = NewRecord(3);
+  const r: Obj = NewRecord(Capability);
   const executor: Fn = NewBuiltinClosure(2, r, 2);
   const promise: Value = Construct(c, executor);
-  if (!IsCallable(RecordGet(r, 1)) || !IsCallable(RecordGet(r, 2))) {
+  if (!IsCallable(RecordGet(r, Capability.resolve)) || !IsCallable(RecordGet(r, Capability.reject))) {
     throw NewTypeError("not a function");
   }
-  RecordSet(r, 0, promise);
+  RecordSet(r, Capability.promise, promise);
   return r;
 }
 
@@ -251,9 +263,9 @@ function PromiseReactionJob(capability: Value, handler: Value, argument: Value, 
  * @intrinsic
  */
 function PromiseResolveThenableJob(promise: Obj, thenable: Obj, then: Value): void {
-  const r: Obj = NewRecord(2);
-  RecordSet(r, 0, promise);
-  RecordSet(r, 1, false);
+  const r: Obj = NewRecord(ResolvingFunctions);
+  RecordSet(r, ResolvingFunctions.promise, promise);
+  RecordSet(r, ResolvingFunctions.alreadyResolved, false);
   const resolve: Fn = NewBuiltinClosure(0, r, 1);
   const reject: Fn = NewBuiltinClosure(1, r, 1);
   try {
@@ -329,9 +341,49 @@ function PromiseStaticReject(this: Value, r: Value): Value {
 }
 
 // ---- The combinators --------------------------------------------------------------------
-//
-// Element functions get a Record [alreadyCalled, index, values, capability, remaining]
-// (allSettled's two functions share one); `remaining` is a Record [count].
+
+/**
+ * The data of an element function (allSettled's two functions share one; interp/run/
+ * promise.rs makes and reads them too): whether one of them ran, the index, the values,
+ * the capability, the remaining count, the keys of a keyed combinator (D1972) or
+ * undefined.
+ * @record
+ */
+enum ElementRecord {
+  called,
+  index,
+  values,
+  capability,
+  remaining,
+  keys,
+}
+
+/** remainingElementsCount. @record */
+enum RemainingCount {
+  count,
+}
+
+/**
+ * What PromiseCombinatorRun needs to do elements' steps itself (D3131): C, C.resolve,
+ * the capability, the values, the remaining count, the resolve and reject functions
+ * the elements get.
+ * @record
+ */
+enum CombinatorRecord {
+  constructor,
+  promiseResolve,
+  capability,
+  values,
+  remaining,
+  resolveFn,
+  rejectFn,
+}
+
+/** The data of Promise.prototype.finally's functions: onFinally and C. @record */
+enum FinallyData {
+  onFinally,
+  constructor,
+}
 
 /** GetPromiseResolve ( promiseConstructor ), 27.2.4.1.1. */
 function GetPromiseResolve(c: Value): Value {
@@ -344,22 +396,19 @@ function GetPromiseResolve(c: Value): Value {
 
 /** remainingElementsCount.[[Value]] - 1, stored; returns the new count. */
 function DecrementRemaining(remaining: Obj): f64 {
-  const n: f64 = AsNumber(RecordGet(remaining, 0)) - 1;
-  RecordSet(remaining, 0, n);
+  const n: f64 = AsNumber(RecordGet(remaining, RemainingCount.count)) - 1;
+  RecordSet(remaining, RemainingCount.count, n);
   return n;
 }
 
-/**
- * The Record of an element function: 0 called, 1 index, 2 values, 3 capability, 4 the
- * remaining count, 5 the keys of a keyed combinator (D1972) or undefined.
- */
+/** The ElementRecord of an element function. */
 function NewElementRecord(index: f64, values: Obj, capability: Value, remaining: Obj): Obj {
-  const r: Obj = NewRecord(6);
-  RecordSet(r, 0, false);
-  RecordSet(r, 1, index);
-  RecordSet(r, 2, values);
-  RecordSet(r, 3, capability);
-  RecordSet(r, 4, remaining);
+  const r: Obj = NewRecord(ElementRecord);
+  RecordSet(r, ElementRecord.called, false);
+  RecordSet(r, ElementRecord.index, index);
+  RecordSet(r, ElementRecord.values, values);
+  RecordSet(r, ElementRecord.capability, capability);
+  RecordSet(r, ElementRecord.remaining, remaining);
   return r;
 }
 
@@ -370,15 +419,15 @@ function NewElementRecord(index: f64, values: Obj, capability: Value, remaining:
  */
 function SettleElement(data: Value, x: Value, reject: boolean): void {
   const r: Obj = AsObj(data);
-  if (RecordGet(r, 0) === true) {
+  if (RecordGet(r, ElementRecord.called) === true) {
     return;
   }
-  RecordSet(r, 0, true);
-  const values: Obj = AsObj(RecordGet(r, 2));
-  CreateDataPropertyOrThrow(values, RecordGet(r, 1), x);
-  if (DecrementRemaining(AsObj(RecordGet(r, 4))) === 0) {
-    const capability: Value = RecordGet(r, 3);
-    const keys: Value = RecordGet(r, 5);
+  RecordSet(r, ElementRecord.called, true);
+  const values: Obj = AsObj(RecordGet(r, ElementRecord.values));
+  CreateDataPropertyOrThrow(values, RecordGet(r, ElementRecord.index), x);
+  if (DecrementRemaining(AsObj(RecordGet(r, ElementRecord.remaining))) === 0) {
+    const capability: Value = RecordGet(r, ElementRecord.capability);
+    const keys: Value = RecordGet(r, ElementRecord.keys);
     if (reject) {
       RejectCapability(capability, NewAggregateError(values));
     } else if (keys !== undefined) {
@@ -419,8 +468,8 @@ function PerformPromiseKeyed(thisValue: Value, promises: Value, kind: i32): Valu
     const count: f64 = LengthOfArrayLike(allKeys);
     const keys: Obj = ArrayCreate(0);
     const values: Obj = ArrayCreate(0);
-    const remaining: Obj = NewRecord(1);
-    RecordSet(remaining, 0, 1);
+    const remaining: Obj = NewRecord(RemainingCount);
+    RecordSet(remaining, RemainingCount.count, 1);
     const rejectFn: Value = kind === 0 ? CapabilityRejectFunction(capability) : undefined;
     let index: f64 = 0;
     for (let k: f64 = 0; k < count; k++) {
@@ -432,8 +481,8 @@ function PerformPromiseKeyed(thisValue: Value, promises: Value, kind: i32): Valu
         CreateDataPropertyOrThrow(values, index, undefined);
         const nextPromise: Value = Call(promiseResolve, c, value);
         const data: Obj = NewElementRecord(index, values, capability, remaining);
-        RecordSet(data, 5, keys);
-        RecordSet(remaining, 0, AsNumber(RecordGet(remaining, 0)) + 1);
+        RecordSet(data, ElementRecord.keys, keys);
+        RecordSet(remaining, RemainingCount.count, AsNumber(RecordGet(remaining, RemainingCount.count)) + 1);
         if (kind === 0) {
           InvokeThen(nextPromise, NewBuiltinClosure(3, data, 1), rejectFn);
         } else {
@@ -488,7 +537,7 @@ function SettledRecord(fulfilled: boolean, x: Value): Obj {
  * @intrinsic
  */
 function PromiseAllSettledResolveElement(this: Value, x: Value): void {
-  if (RecordGet(AsObj(this), 0) === true) {
+  if (RecordGet(AsObj(this), ElementRecord.called) === true) {
     return;
   }
   SettleElement(this, SettledRecord(true, x), false);
@@ -499,7 +548,7 @@ function PromiseAllSettledResolveElement(this: Value, x: Value): void {
  * @intrinsic
  */
 function PromiseAllSettledRejectElement(this: Value, x: Value): void {
-  if (RecordGet(AsObj(this), 0) === true) {
+  if (RecordGet(AsObj(this), ElementRecord.called) === true) {
     return;
   }
   SettleElement(this, SettledRecord(false, x), false);
@@ -557,8 +606,8 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
   let iteratorDone: boolean = false;
   try {
     const values: Obj = ArrayCreate(0);
-    const remaining: Obj = NewRecord(1);
-    RecordSet(remaining, 0, 1);
+    const remaining: Obj = NewRecord(RemainingCount);
+    RecordSet(remaining, RemainingCount.count, 1);
     let index: f64 = 0;
     // Race passes the capability's functions; the others pass reject (any: resolve).
     let resolveFn: Value = undefined;
@@ -570,14 +619,14 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
       rejectFn = CapabilityRejectFunction(capability);
     }
     // What PromiseCombinatorRun needs to do elements' steps itself (D3131).
-    const fixed: Obj = NewRecord(7);
-    RecordSet(fixed, 0, c);
-    RecordSet(fixed, 1, promiseResolve);
-    RecordSet(fixed, 2, capability);
-    RecordSet(fixed, 3, values);
-    RecordSet(fixed, 4, remaining);
-    RecordSet(fixed, 5, resolveFn);
-    RecordSet(fixed, 6, rejectFn);
+    const fixed: Obj = NewRecord(CombinatorRecord);
+    RecordSet(fixed, CombinatorRecord.constructor, c);
+    RecordSet(fixed, CombinatorRecord.promiseResolve, promiseResolve);
+    RecordSet(fixed, CombinatorRecord.capability, capability);
+    RecordSet(fixed, CombinatorRecord.values, values);
+    RecordSet(fixed, CombinatorRecord.remaining, remaining);
+    RecordSet(fixed, CombinatorRecord.resolveFn, resolveFn);
+    RecordSet(fixed, CombinatorRecord.rejectFn, rejectFn);
     while (true) {
       index = PromiseCombinatorRun(fixed, kind, index, it, next);
       iteratorDone = true;
@@ -608,7 +657,7 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
         InvokeThen(nextPromise, resolveFn, rejectFn);
       } else {
         const data: Obj = NewElementRecord(index, values, capability, remaining);
-        RecordSet(remaining, 0, AsNumber(RecordGet(remaining, 0)) + 1);
+        RecordSet(remaining, RemainingCount.count, AsNumber(RecordGet(remaining, RemainingCount.count)) + 1);
         if (kind === 0) {
           InvokeThen(nextPromise, NewBuiltinClosure(3, data, 1), rejectFn);
         } else if (kind === 1) {
@@ -730,20 +779,20 @@ function PromisePrototypeFinally(this: Value, onFinally: Value): Value {
   if (!IsCallable(onFinally)) {
     return InvokeThen(this, onFinally, onFinally);
   }
-  const data: Obj = NewRecord(2);
-  RecordSet(data, 0, onFinally);
-  RecordSet(data, 1, c);
+  const data: Obj = NewRecord(FinallyData);
+  RecordSet(data, FinallyData.onFinally, onFinally);
+  RecordSet(data, FinallyData.constructor, c);
   return InvokeThen(this, NewBuiltinClosure(7, data, 1), NewBuiltinClosure(8, data, 1));
 }
 
 /**
- * Then Finally Functions, 27.2.5.3.1: `this` is the Record [onFinally, C].
+ * Then Finally Functions, 27.2.5.3.1: `this` is the FinallyData.
  * @intrinsic
  */
 function PromiseThenFinally(this: Value, value: Value): Value {
   const data: Obj = AsObj(this);
-  const result: Value = Call(RecordGet(data, 0), undefined);
-  const p: Value = PromiseResolve(RecordGet(data, 1), result);
+  const result: Value = Call(RecordGet(data, FinallyData.onFinally), undefined);
+  const p: Value = PromiseResolve(RecordGet(data, FinallyData.constructor), result);
   return Call(GetV(p, "then"), p, NewBuiltinClosure(9, value, 0));
 }
 
@@ -753,8 +802,8 @@ function PromiseThenFinally(this: Value, value: Value): Value {
  */
 function PromiseCatchFinally(this: Value, reason: Value): Value {
   const data: Obj = AsObj(this);
-  const result: Value = Call(RecordGet(data, 0), undefined);
-  const p: Value = PromiseResolve(RecordGet(data, 1), result);
+  const result: Value = Call(RecordGet(data, FinallyData.onFinally), undefined);
+  const p: Value = PromiseResolve(RecordGet(data, FinallyData.constructor), result);
   return Call(GetV(p, "then"), p, NewBuiltinClosure(10, reason, 0));
 }
 

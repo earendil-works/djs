@@ -67,10 +67,19 @@ pub fn parse_module(file: u32, src: &str) -> PResult<Module> {
         pos: 0,
     };
     let mut functions = Vec::new();
+    let mut enums = Vec::new();
     while !p.at_eof() {
-        functions.push(p.function()?);
+        if p.is_ident("enum") {
+            enums.push(p.enum_decl(file)?);
+        } else {
+            functions.push(p.function()?);
+        }
     }
-    Ok(Module { file, functions })
+    Ok(Module {
+        file,
+        functions,
+        enums,
+    })
 }
 
 pub fn parse_declarations(file: u32, src: &str) -> PResult<Declarations> {
@@ -80,10 +89,21 @@ pub fn parse_declarations(file: u32, src: &str) -> PResult<Declarations> {
         pos: 0,
     };
     let mut intrinsics = Vec::new();
+    let mut enums = Vec::new();
     while !p.at_eof() {
         if p.is_ident("type") {
             // Type aliases are for tsc; bgen's types are fixed (ast::Type).
             p.skip_to_semicolon()?;
+            continue;
+        }
+        if p.is_ident("declare") && matches!(&p.peek_at(1).tok, Tok::Ident(n) if n == "enum") {
+            let doc = p.peek().doc.clone();
+            p.next();
+            let mut e = p.enum_decl(file)?;
+            if e.tags.is_empty() {
+                e.tags = parse_tags(doc.as_deref());
+            }
+            enums.push(e);
             continue;
         }
         let doc = p.peek().doc.clone();
@@ -103,7 +123,7 @@ pub fn parse_declarations(file: u32, src: &str) -> PResult<Declarations> {
             span: start.to(end),
         });
     }
-    Ok(Declarations { intrinsics })
+    Ok(Declarations { intrinsics, enums })
 }
 
 /// The `@tags` of a JSDoc comment. A tag starts with `@` at the start of a line or
@@ -393,6 +413,57 @@ impl Parser<'_> {
             tags: parse_tags(doc.as_deref()),
             span,
             name_span,
+        })
+    }
+
+    /// `enum Name { a, b = 2, ... }` with its JSDoc tags and each member's (D3710).
+    fn enum_decl(&mut self, file: u32) -> PResult<EnumDecl> {
+        let t = self.peek().clone();
+        self.expect_ident("enum")?;
+        let (name, _) = self.ident()?;
+        self.expect("{")?;
+        let mut members = Vec::new();
+        while !self.is("}") {
+            let m = self.peek().clone();
+            // Member names are property names: keywords are fine (`throw`, `return`).
+            let Tok::Ident(mname) = &m.tok else {
+                return self.err(
+                    m.span,
+                    format!("expected an enum member, found {}", Self::describe(&m.tok)),
+                );
+            };
+            let mname = mname.clone();
+            self.next();
+            let value = if self.eat("=") {
+                let neg = self.eat("-");
+                let v = self.peek().clone();
+                match v.tok {
+                    Tok::Num(x, _) if x.fract() == 0.0 && x.abs() < 2f64.powi(31) => {
+                        self.next();
+                        Some(if neg { -(x as i64) } else { x as i64 })
+                    }
+                    _ => return self.err(v.span, "an enum member's value is an integer literal"),
+                }
+            } else {
+                None
+            };
+            members.push(EnumMember {
+                name: mname,
+                value,
+                tags: parse_tags(m.doc.as_deref()),
+                span: m.span,
+            });
+            if !self.eat(",") {
+                break;
+            }
+        }
+        let end = self.expect("}")?;
+        Ok(EnumDecl {
+            name,
+            members,
+            tags: parse_tags(t.doc.as_deref()),
+            span: t.span.to(end),
+            file,
         })
     }
 
@@ -914,6 +985,24 @@ impl Parser<'_> {
                         && matches!(self.peek_at(2).tok, Tok::Punct(">"))
                     {
                         return self.err(self.peek().span, "type arguments are not in the subset");
+                    }
+                    if self.is(".") && name.starts_with(|c: char| c.is_ascii_uppercase()) {
+                        // `Enum.member` (resolved by the checker; enums are capitalized,
+                        // locals are not); no other property access.
+                        self.next();
+                        let m = self.peek().clone();
+                        let Tok::Ident(member) = &m.tok else {
+                            return self.err(m.span, "expected an enum member after `.`");
+                        };
+                        let member = member.clone();
+                        self.next();
+                        return Ok(Expr {
+                            kind: ExprKind::Member {
+                                object: name,
+                                member,
+                            },
+                            span: span.to(m.span),
+                        });
                     }
                     ExprKind::Ident(name)
                 }

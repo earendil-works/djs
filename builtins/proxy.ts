@@ -813,11 +813,24 @@ function ProxyTestIntegrityLevel(o: Obj, frozen: boolean): boolean {
 }
 
 /**
+ * The state of a for-in whose object has a proxy on its prototype chain (made by the
+ * interpreter, interp/run/proxy.rs): the object being walked (null when done), its
+ * enumerable string keys (undefined until read), the next index, the keys seen so far,
+ * the result, whether there is one.
+ * @record
+ */
+enum ForInState {
+  object,
+  keys,
+  index,
+  visited,
+  result,
+  hasResult,
+}
+
+/**
  * One step of a for-in whose object has a proxy on its prototype chain
- * (EnumerateObjectProperties, 14.7.5.9, lazily, as qjs does it): the Record `it` made by
- * the interpreter holds 0 the object being walked (null when done), 1 its enumerable
- * string keys (undefined until read), 2 the next index, 3 the keys seen so far, 4 the
- * result, 5 whether there is one. Each object's keys are read when the walk reaches it
+ * (EnumerateObjectProperties, 14.7.5.9, lazily, as qjs does it), on its ForInState. Each object's keys are read when the walk reaches it
  * ([[OwnPropertyKeys]], then [[GetOwnProperty]] for each), and each key is checked
  * again ([[GetOwnProperty]]) just before it is visited, so a key deleted on the way is
  * skipped. The result is the next key, or null at the end.
@@ -825,16 +838,16 @@ function ProxyTestIntegrityLevel(o: Obj, frozen: boolean): boolean {
  */
 function ForInStep(it: Obj): void {
   while (true) {
-    const cur: Value = RecordGet(it, 0);
+    const cur: Value = RecordGet(it, ForInState.object);
     if (cur === null) {
-      RecordSet(it, 4, null);
-      RecordSet(it, 5, true);
+      RecordSet(it, ForInState.result, null);
+      RecordSet(it, ForInState.hasResult, true);
       return;
     }
     const o: Obj = AsObj(cur);
-    const pending: Value = RecordGet(it, 1);
+    const pending: Value = RecordGet(it, ForInState.keys);
     if (pending === undefined) {
-      const visited: Obj = AsObj(RecordGet(it, 3));
+      const visited: Obj = AsObj(RecordGet(it, ForInState.visited));
       const own: Obj = OwnPropertyKeys(o, 0);
       const n: f64 = LengthOfArrayLike(own);
       const keys: Obj = ArrayCreate(0);
@@ -850,22 +863,22 @@ function ForInStep(it: Obj): void {
           }
         }
       }
-      RecordSet(it, 1, keys);
-      RecordSet(it, 2, 0);
+      RecordSet(it, ForInState.keys, keys);
+      RecordSet(it, ForInState.index, 0);
     } else {
       const keys: Obj = AsObj(pending);
-      const i: f64 = AsNumber(RecordGet(it, 2));
+      const i: f64 = AsNumber(RecordGet(it, ForInState.index));
       if (i < LengthOfArrayLike(keys)) {
-        RecordSet(it, 2, i + 1);
+        RecordSet(it, ForInState.index, i + 1);
         const key: Value = Get(keys, i);
         if (OwnPropertyAttributes(o, key) >= 0) {
-          RecordSet(it, 4, key);
-          RecordSet(it, 5, true);
+          RecordSet(it, ForInState.result, key);
+          RecordSet(it, ForInState.hasResult, true);
           return;
         }
       } else {
-        RecordSet(it, 0, GetPrototypeOf(o));
-        RecordSet(it, 1, undefined);
+        RecordSet(it, ForInState.object, GetPrototypeOf(o));
+        RecordSet(it, ForInState.keys, undefined);
       }
     }
   }

@@ -4,22 +4,21 @@
 // these builtins resume them and settle the result promises.
 
 /**
- * GeneratorValidate ( generator, brand ), 27.5.3.2: the state (qjs's messages). States:
- * 0 at the start, 1 at a yield, 2 executing, 3 completed, 6 at a yield_star.
+ * GeneratorValidate ( generator, brand ), 27.5.3.2: the state (qjs's messages).
  */
 function GeneratorValidate(generator: Value): i32 {
   const state: i32 = GeneratorState(generator);
   if (state < 0) {
     throw NewTypeError("not a generator");
   }
-  if (state === 2) {
+  if (state === GeneratorStates.executing) {
     throw NewTypeError("cannot invoke a running generator");
   }
   return state;
 }
 
 /**
- * Resumes generator g (suspended) with mode 0 next, 1 throw, 2 return, and makes the
+ * Resumes generator g (suspended) with a ResumeMode, and makes the
  * iterator result: a yield leaves it suspended (done false); a return or a throw
  * completes it.
  */
@@ -28,18 +27,18 @@ function GeneratorStep(g: Obj, value: Value, mode: i32): Obj {
   try {
     result = GeneratorResume(g, value, mode);
   } catch (e) {
-    GeneratorSetState(g, 3);
+    GeneratorSetState(g, GeneratorStates.completed);
     throw e;
   }
   const state: i32 = GeneratorState(g);
-  if (state === 1) {
+  if (state === GeneratorStates.suspendedYield) {
     return CreateIterResultObject(result, false);
   }
   // yield_star: the inner iterator's result object as it is.
-  if (state === 6) {
+  if (state === GeneratorStates.suspendedRaw) {
     return AsObj(result);
   }
-  GeneratorSetState(g, 3);
+  GeneratorSetState(g, GeneratorStates.completed);
   return CreateIterResultObject(result, true);
 }
 
@@ -49,10 +48,10 @@ function GeneratorStep(g: Obj, value: Value, mode: i32): Obj {
  */
 function GeneratorPrototypeNext(this: Value, value: Value): Obj {
   const state: i32 = GeneratorValidate(this);
-  if (state === 3) {
+  if (state === GeneratorStates.completed) {
     return CreateIterResultObject(undefined, true);
   }
-  return GeneratorStep(AsObj(this), value, 0);
+  return GeneratorStep(AsObj(this), value, ResumeMode.next);
 }
 
 /**
@@ -61,11 +60,11 @@ function GeneratorPrototypeNext(this: Value, value: Value): Obj {
  */
 function GeneratorPrototypeReturn(this: Value, value: Value): Obj {
   const state: i32 = GeneratorValidate(this);
-  if (state === 0 || state === 3) {
-    GeneratorSetState(AsObj(this), 3);
+  if (state === GeneratorStates.start || state === GeneratorStates.completed) {
+    GeneratorSetState(AsObj(this), GeneratorStates.completed);
     return CreateIterResultObject(value, true);
   }
-  return GeneratorStep(AsObj(this), value, 2);
+  return GeneratorStep(AsObj(this), value, ResumeMode.return);
 }
 
 /**
@@ -74,11 +73,11 @@ function GeneratorPrototypeReturn(this: Value, value: Value): Obj {
  */
 function GeneratorPrototypeThrow(this: Value, exception: Value): Obj {
   const state: i32 = GeneratorValidate(this);
-  if (state === 0 || state === 3) {
-    GeneratorSetState(AsObj(this), 3);
+  if (state === GeneratorStates.start || state === GeneratorStates.completed) {
+    GeneratorSetState(AsObj(this), GeneratorStates.completed);
     throw exception;
   }
-  return GeneratorStep(AsObj(this), exception, 1);
+  return GeneratorStep(AsObj(this), exception, ResumeMode.throw);
 }
 
 /**
@@ -103,7 +102,7 @@ function AsyncAwait(a: Obj, v: Value): Value {
   try {
     promise = PromiseResolve(IntrinsicPromise(), v);
   } catch (e) {
-    return GeneratorResume(a, e, 1);
+    return GeneratorResume(a, e, ResumeMode.throw);
   }
   PerformPromiseThen(AsObj(promise), a, a, undefined);
   // An async generator's resumer (AsyncGeneratorStep) only looks at its state.
@@ -120,7 +119,7 @@ function AsyncAwait(a: Obj, v: Value): Value {
  * @intrinsic
  */
 function AsyncFunctionReturn(a: Obj, v: Value): Value {
-  GeneratorSetState(a, 3);
+  GeneratorSetState(a, GeneratorStates.completed);
   const promise: Obj = AsyncFunctionPromise(a);
   ResolvePromise(promise, v);
   return promise;

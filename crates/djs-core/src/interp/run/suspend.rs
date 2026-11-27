@@ -33,18 +33,21 @@
 
 use super::*;
 
-pub(crate) const START: i32 = 0;
-pub(crate) const SUSPENDED: i32 = 1;
-pub(crate) const EXECUTING: i32 = 2;
-pub(crate) const COMPLETED: i32 = 3;
-pub(crate) const AWAITING: i32 = 4;
-/// Suspended at a `yield_star`: the resumer passes the value on unwrapped. (5 is an
-/// async generator's awaiting-return, kept by builtins/asyncgen.ts.)
-pub(crate) const SUSPENDED_RAW: i32 = 6;
+// The states and kinds (builtins/intrinsics.d.ts `GeneratorStates`, `GeneratorKinds`,
+// D3710).
+use crate::builtins::r#gen::records::{generator_kinds, generator_states};
+pub(crate) const START: i32 = generator_states::START;
+pub(crate) const SUSPENDED: i32 = generator_states::SUSPENDED_YIELD;
+pub(crate) const EXECUTING: i32 = generator_states::EXECUTING;
+pub(crate) const COMPLETED: i32 = generator_states::COMPLETED;
+pub(crate) const AWAITING: i32 = generator_states::AWAITING;
+/// Suspended at a `yield_star`: the resumer passes the value on unwrapped. (An async
+/// generator's awaiting-return is kept by builtins/asyncgen.ts.)
+pub(crate) const SUSPENDED_RAW: i32 = generator_states::SUSPENDED_RAW;
 
-pub(crate) const GENERATOR: i32 = 0;
-pub(crate) const ASYNC: i32 = 1;
-pub(crate) const ASYNC_GENERATOR: i32 = 2;
+pub(crate) const GENERATOR: i32 = generator_kinds::GENERATOR;
+pub(crate) const ASYNC: i32 = generator_kinds::ASYNC_FUNCTION;
+pub(crate) const ASYNC_GENERATOR: i32 = generator_kinds::ASYNC_GENERATOR;
 
 const STATE: u32 = crate::heap::ObjectClass::Generator.slot("state");
 const FRAME: u32 = crate::heap::ObjectClass::Generator.slot("frame");

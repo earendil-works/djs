@@ -2730,7 +2730,7 @@ impl<'h> Exec<'h> {
                     t0
                 };
                 let it = match v.as_object() {
-                    // Traps decide the keys: a Record that %ForInStep walks.
+                    // Traps decide the keys: a ForInState that %ForInStep walks.
                     Some(o) if self.chain_has_proxy(o) => self.for_in_proxy_start(o)?,
                     _ => self.for_in_start(v)?,
                 };
@@ -2739,7 +2739,8 @@ impl<'h> Exec<'h> {
             Op::ForInNext => {
                 // `it -> it key done`
                 let it = t0;
-                if let Some(rec) = it.as_object() {
+                let for_in = crate::builtins::r#gen::records::for_in_state::RECORD_KIND;
+                if let Some(rec) = self.heap.as_record(it, for_in) {
                     return self.for_in_proxy_next(rec, next);
                 }
                 let (key, done) = self.for_in_next(it);

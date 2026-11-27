@@ -7,6 +7,7 @@
 
 use super::intrinsics::id;
 use super::*;
+use crate::builtins::r#gen::records::for_in_state as for_in;
 use crate::heap::proxy::{PROXY_CALLABLE, PROXY_CONSTRUCTOR};
 
 pub(super) const PROXY_GET: u16 = id("ProxyGet");
@@ -228,33 +229,29 @@ impl Exec<'_> {
         self.construct_call(base, n, Some(nt), next)
     }
 
-    /// The for-in iterator of an object with a proxy on its prototype chain: the Record
-    /// that %ForInStep (builtins/proxy.ts) walks.
+    /// The for-in iterator of an object with a proxy on its prototype chain: the
+    /// ForInState record that %ForInStep (builtins/proxy.ts) walks.
     pub(super) fn for_in_proxy_start(&mut self, o: Obj) -> Result<Value, Fault> {
         let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
         let visited = self.heap.new_array(Some(proto), 0)?;
-        let rec = self.heap.alloc_object(ObjectClass::Record, None, 6)?;
-        let slots = [
-            Value::object(o),
-            Value::UNDEFINED,
-            Value::int(0),
-            Value::object(visited),
-            Value::UNDEFINED,
-            Value::FALSE,
-        ];
-        for (i, v) in slots.into_iter().enumerate() {
-            self.heap.set_object_slot(rec, i as u32, v);
-        }
+        let rec = self.heap.alloc_record(for_in::RECORD_KIND, None, 0)?;
+        self.heap.set_object_slot(rec, for_in::OBJECT, Value::object(o));
+        self.heap.set_object_slot(rec, for_in::INDEX, Value::int(0));
+        self.heap
+            .set_object_slot(rec, for_in::VISITED, Value::object(visited));
+        self.heap.set_object_slot(rec, for_in::HAS_RESULT, Value::FALSE);
         Ok(Value::object(rec))
     }
 
     /// `for_in_next` on such a Record: the step's result if %ForInStep left one, else
     /// a call of %ForInStep, after which this instruction runs again.
     pub(super) fn for_in_proxy_next(&mut self, rec: Obj, next: u32) -> Step {
-        if self.heap.object_slot(rec, 5) == Value::TRUE {
-            let key = self.heap.object_slot(rec, 4);
-            self.heap.set_object_slot(rec, 5, Value::FALSE);
-            self.heap.set_object_slot(rec, 4, Value::UNDEFINED);
+        if self.heap.object_slot(rec, for_in::HAS_RESULT) == Value::TRUE {
+            let key = self.heap.object_slot(rec, for_in::RESULT);
+            self.heap
+                .set_object_slot(rec, for_in::HAS_RESULT, Value::FALSE);
+            self.heap
+                .set_object_slot(rec, for_in::RESULT, Value::UNDEFINED);
             self.pc = next;
             if key.is_null() {
                 self.push(Value::UNDEFINED);

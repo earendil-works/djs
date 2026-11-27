@@ -11,7 +11,7 @@ use super::*;
 use crate::bytecode::template;
 use crate::heap::cells::{Interp, Object, Realm, Roots, Script};
 use crate::heap::layout::{FieldInfo, FieldTy};
-use crate::heap::{Atom, CellKind, Heap, ObjectClass, Property};
+use crate::heap::{Atom, CellKind, ConstSet, Heap, ObjectClass, Property, RecordSchema};
 use crate::interp::realm::{Intrinsic, intrinsic};
 use crate::interp::{RunState, state};
 use crate::value::{Kind, Obj, Str, Value, tag};
@@ -53,6 +53,8 @@ pub(super) struct Exporter<'a> {
     pub refusals: Vec<String>,
     /// The path to the cell being written, for refusals.
     path: Vec<String>,
+    /// The named-constant sets the types use (D3710), written with the flag sets.
+    pub const_sets: Vec<&'static ConstSet>,
 }
 
 const PATCH_NAMES: [&str; 3] = ["Patch.Global", "Patch.GlobalLex", "Patch.SymbolRegistry"];
@@ -114,6 +116,7 @@ impl<'a> Exporter<'a> {
             patched: [0; 3],
             refusals: Vec::new(),
             path: Vec::new(),
+            const_sets: Vec::new(),
         };
         // The per-VM objects come first, as patches.
         let objs = [
@@ -417,8 +420,22 @@ impl<'a> Exporter<'a> {
         if kind == CellKind::Object {
             let o = Obj(off);
             let class = h.object_class(o);
+            if schema::is_kinded(class) {
+                // A record: its kind's schema names the slots (D3710).
+                match crate::heap::record_schema(h.record_kind(o)) {
+                    Some(r) if r.class == class => self.object(w, o, &Slots::record(r)),
+                    _ => {
+                        self.path.push(format!("{class:?}"));
+                        self.refuse(format!("a {class:?} of no known record kind"));
+                        self.path.pop();
+                        let t = self.type_id("Refused", Vec::new);
+                        w.u(u64::from(t));
+                    }
+                }
+                return;
+            }
             match schema::class_spec(class) {
-                Some(spec) => self.object(w, o, spec),
+                Some(spec) => self.object(w, o, &Slots::class(spec)),
                 None => {
                     self.path.push(format!("{class:?}"));
                     self.refuse(format!("an object of class {class:?}"));
@@ -538,7 +555,7 @@ impl<'a> Exporter<'a> {
         }
     }
 
-    fn object_fields(spec: &ClassSpec) -> Vec<(String, String)> {
+    fn object_fields(spec: &Slots) -> Vec<(String, String)> {
         let mut f = alloc::vec![
             (String::from("proto"), String::from("ref")),
             (
@@ -553,7 +570,7 @@ impl<'a> Exporter<'a> {
             f.push((String::from("elements"), String::from("values")));
         }
         for (n, t) in spec.slots {
-            f.push((n.to_string(), schema::slot_ty_name(*t).to_string()));
+            f.push((n.to_string(), schema::slot_ty_name(*t)));
         }
         if let Some(r) = spec.rest {
             f.push((r.to_string(), String::from("values")));
@@ -561,9 +578,16 @@ impl<'a> Exporter<'a> {
         f
     }
 
-    fn object(&mut self, w: &mut Writer, o: Obj, spec: &ClassSpec) {
+    fn object(&mut self, w: &mut Writer, o: Obj, spec: &Slots) {
         let h = self.h;
-        let name = format!("Object.{}", spec.name);
+        let name = spec.type_name();
+        for (_, t) in spec.slots {
+            if let SlotTy::Enum(c) | SlotTy::Bits(c) = t
+                && !self.const_sets.iter().any(|s| s.name == c.name)
+            {
+                self.const_sets.push(c);
+            }
+        }
         let t = self.type_id(&name, || Self::object_fields(spec));
         w.u(u64::from(t));
         self.path.push(name);
@@ -624,6 +648,7 @@ impl<'a> Exporter<'a> {
                     w.u(u64::from(n));
                 }
                 SlotTy::Program => {}
+                SlotTy::Enum(c) | SlotTy::Bits(c) => self.constant(w, v, c),
             }
             self.path.pop();
         }
@@ -635,6 +660,40 @@ impl<'a> Exporter<'a> {
             }
         }
         self.path.pop();
+    }
+
+    /// A field of named constants (D3710): 0 and the value for anything but an int32 (a
+    /// field not set yet), else 1 + the member's index in the set (an enum) or 1 + the
+    /// members' bits by index (flags).
+    fn constant(&mut self, w: &mut Writer, v: Value, c: &'static ConstSet) {
+        let Some(n) = v.as_int() else {
+            w.u(0);
+            self.value(w, v);
+            return;
+        };
+        if c.flags {
+            let mut bits = 0u64;
+            let mut known = 0i32;
+            for (i, (_, b)) in c.members.iter().enumerate() {
+                known |= b;
+                if n & b != 0 {
+                    bits |= 1 << i;
+                }
+            }
+            if n & !known != 0 {
+                self.refuse(format!("{n:#x} has bits that are no {}", c.name));
+            }
+            w.u(bits + 1);
+        } else {
+            match c.members.iter().position(|(_, m)| *m == n) {
+                Some(i) => w.u(i as u64 + 1),
+                None => {
+                    self.refuse(format!("{n} is no {} member", c.name));
+                    w.u(0);
+                    self.value(w, v);
+                }
+            }
+        }
     }
 
     fn object_flags(&mut self, w: &mut Writer, o: Obj) {
@@ -981,16 +1040,71 @@ pub(super) fn flags_ty(set: &str, _f: &[(&str, u16)]) -> String {
     format!("flags:{set}")
 }
 
-/// The flag sets of the header flags fields, written once per snapshot.
-pub(super) fn flagsets() -> Vec<(&'static str, &'static [(&'static str, u16)])> {
-    let mut v: Vec<(&'static str, &'static [(&'static str, u16)])> =
-        alloc::vec![("Object", schema::OBJECT_FLAGS)];
+/// The flag sets of the header flags fields and the named-constant sets the types use
+/// (D3710), by member name in index order: written once per snapshot.
+pub(super) fn flagsets(consts: &[&'static ConstSet]) -> Vec<(&'static str, Vec<&'static str>)> {
+    let names = |f: &'static [(&'static str, u16)]| f.iter().map(|(n, _)| *n).collect();
+    let mut v: Vec<(&'static str, Vec<&'static str>)> =
+        alloc::vec![("Object", names(schema::OBJECT_FLAGS))];
     for k in schema::KINDS {
         if !k.flags.is_empty() {
-            v.push((k.kind.layout().name, k.flags));
+            v.push((k.kind.layout().name, names(k.flags)));
         }
     }
+    for c in consts {
+        v.push((c.name, c.members.iter().map(|(n, _)| *n).collect()));
+    }
     v
+}
+
+/// The slots of an object as a snapshot writes them: its class's, or for a record (or an
+/// iterator helper) its kind's schema (D3710).
+#[derive(Clone, Copy)]
+pub(super) struct Slots {
+    pub class: ObjectClass,
+    pub class_name: &'static str,
+    /// The record kind's schema name.
+    pub record: Option<&'static str>,
+    pub slots: &'static [(&'static str, SlotTy)],
+    pub rest: Option<&'static str>,
+}
+
+impl Slots {
+    pub fn class(c: &'static ClassSpec) -> Slots {
+        Slots {
+            class: c.class,
+            class_name: c.name,
+            record: None,
+            slots: c.slots,
+            rest: c.rest,
+        }
+    }
+
+    pub fn record(r: &'static RecordSchema) -> Slots {
+        Slots {
+            class: r.class,
+            class_name: r.class.slot_table().name,
+            record: Some(r.name),
+            slots: r.fields,
+            rest: r.rest,
+        }
+    }
+
+    /// What has these slots, for refusals: `Promise objects`, `Record ElementRecord`.
+    pub fn what(&self) -> String {
+        match self.record {
+            Some(r) => format!("{} {r}", self.class_name),
+            None => format!("{} objects", self.class_name),
+        }
+    }
+
+    /// `Object.Promise`, `Object.Record.ElementRecord`.
+    pub fn type_name(&self) -> String {
+        match self.record {
+            Some(r) => format!("Object.{}.{r}", self.class_name),
+            None => format!("Object.{}", self.class_name),
+        }
+    }
 }
 
 fn read_uint(a: &crate::heap::Arena, at: u32, t: FieldTy) -> u64 {

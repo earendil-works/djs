@@ -3,20 +3,37 @@
 //! are read. Everything here is the snapshot's *contract*: a name in these tables is what
 //! must keep its meaning for a snapshot to load into another build.
 
+use alloc::string::String;
+
 use crate::heap::cells::flags;
-use crate::heap::{CellKind, ObjectClass};
+use crate::heap::{CellKind, ObjectClass, RecordSchema};
 
 /// The object classes' slots: heap/object.rs's table (`CLASSES`, D3700).
 pub(super) use crate::heap::{ClassSlots as ClassSpec, SlotKind as SlotTy};
 
 /// A slot kind's name in a record type.
-pub(super) fn slot_ty_name(t: SlotTy) -> &'static str {
-    match t {
+pub(super) fn slot_ty_name(t: SlotTy) -> String {
+    String::from(match t {
         SlotTy::Value => "value",
         SlotTy::Intrinsic => "intrinsic",
         SlotTy::Buckets => "buckets",
         SlotTy::Program => "program",
-    }
+        SlotTy::Enum(c) => return alloc::format!("enum:{}", c.name),
+        SlotTy::Bits(c) => return alloc::format!("bits:{}", c.name),
+    })
+}
+
+/// Classes whose objects carry a record kind (D3710): their slots are the kind's
+/// schema's, not the class's.
+pub(super) fn is_kinded(c: ObjectClass) -> bool {
+    matches!(c, ObjectClass::Record | ObjectClass::IteratorHelper)
+}
+
+/// This build's record schema `name` (of class `class`).
+pub(super) fn record_by_name(class: ObjectClass, name: &str) -> Option<&'static RecordSchema> {
+    crate::builtins::r#gen::records::RECORDS
+        .iter()
+        .find(|r| r.name == name && r.class == class)
 }
 
 /// Classes a snapshot does not hold yet: weak references, whose targets the snapshot

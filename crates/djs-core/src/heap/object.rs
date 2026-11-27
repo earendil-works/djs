@@ -34,7 +34,7 @@ use super::cells::{
     AccessorPair, FuncTemplate, Object, PropEntry, PropTable, PropValues, Roots, ValueArray,
     flags::{
         OBJ_DICTIONARY, OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LAZY_LENGTH,
-        OBJ_LAZY_NAME, OBJ_LENGTH_READONLY,
+        OBJ_LAZY_NAME, OBJ_LENGTH_READONLY, OBJ_RECORD_KIND, OBJ_RECORD_KIND_SHIFT,
     },
 };
 use super::layout::Ref;
@@ -76,6 +76,57 @@ pub enum SlotKind {
     Buckets,
     /// A RegExp's compiled program (an internal U32Array): derived from source and flags.
     Program,
+    /// An int32 that is one of the set's named constants (or another value, which is
+    /// none of them).
+    Enum(&'static ConstSet),
+    /// An int32 made of the set's named bits (or another value).
+    Bits(&'static ConstSet),
+}
+
+impl SlotKind {
+    /// Whether two kinds are the same, in const contexts (the generated `@slots` checks).
+    pub const fn same(self, o: SlotKind) -> bool {
+        match (self, o) {
+            (SlotKind::Value, SlotKind::Value)
+            | (SlotKind::Intrinsic, SlotKind::Intrinsic)
+            | (SlotKind::Buckets, SlotKind::Buckets)
+            | (SlotKind::Program, SlotKind::Program) => true,
+            (SlotKind::Enum(a), SlotKind::Enum(b)) | (SlotKind::Bits(a), SlotKind::Bits(b)) => {
+                str_eq(a.name, b.name)
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Named constants a slot or a record field holds (D3710): promise states, generator
+/// states, flag bits. Declared in builtins/*.ts (`@constants`, `@flags`) and generated
+/// into `builtins::gen::records`; a snapshot writes the names, so a value may change
+/// between builds.
+#[derive(PartialEq, Eq, Debug)]
+pub struct ConstSet {
+    pub name: &'static str,
+    /// Bits (each member one) rather than alternatives.
+    pub flags: bool,
+    pub members: &'static [(&'static str, i32)],
+}
+
+/// The schema of a kind of internal record (D3710): an object of class Record (or
+/// IteratorHelper) whose header carries `kind`, with these fields as its slots, then a
+/// variable rest. Declared in builtins/*.ts (`@record`), generated into
+/// `builtins::gen::records::RECORDS` (index `kind - 1`).
+#[derive(Debug)]
+pub struct RecordSchema {
+    pub name: &'static str,
+    pub kind: u16,
+    pub class: ObjectClass,
+    pub fields: &'static [(&'static str, SlotKind)],
+    pub rest: Option<&'static str>,
+}
+
+/// The schema of record kind `kind`.
+pub fn record_schema(kind: u16) -> Option<&'static RecordSchema> {
+    crate::builtins::r#gen::records::RECORDS.get(usize::from(kind).checked_sub(1)?)
 }
 
 /// One object class's internal slots: the fixed ones by name, then, for classes whose
@@ -101,6 +152,11 @@ impl ClassSlots {
         }
         panic!("no such slot");
     }
+
+    /// The kind of fixed slot `name` (const, like [`ClassSlots::index`]).
+    pub const fn kind(&self, name: &str) -> SlotKind {
+        self.slots[self.index(name) as usize].1
+    }
 }
 
 const fn str_eq(a: &str, b: &str) -> bool {
@@ -121,7 +177,7 @@ const fn str_eq(a: &str, b: &str) -> bool {
 macro_rules! object_classes {
     ($(
         $(#[$doc:meta])*
-        $id:literal $class:ident [$($slot:literal $(: $kind:ident)?),* $(,)?] $(rest $rest:literal)? $(alloc $alloc:literal)?;
+        $id:literal $class:ident [$($slot:literal $(: $kind:ident $(($set:ident))?)?),* $(,)?] $(rest $rest:literal)?;
     )*) => {
         /// The object class, stored in [`Object::CLASS`], with its internal slots: the one
         /// table of what each slot holds ([`CLASSES`], D3700).
@@ -135,7 +191,7 @@ macro_rules! object_classes {
         pub const CLASSES: &[ClassSlots] = &[$(ClassSlots {
             class: ObjectClass::$class,
             name: stringify!($class),
-            slots: &[$(($slot, object_classes!(@kind $($kind)?))),*],
+            slots: &[$(($slot, object_classes!(@kind $($kind $(($set))?)?))),*],
             rest: object_classes!(@rest $($rest)?),
         }),*];
 
@@ -151,7 +207,7 @@ macro_rules! object_classes {
             /// class with a variable rest gets it on top, as its maker decides).
             pub const fn slots(self) -> u32 {
                 match self {
-                    $(ObjectClass::$class => object_classes!(@count [$($slot)*] $($alloc)?),)*
+                    $(ObjectClass::$class => object_classes!(@count [$($slot)*]),)*
                 }
             }
 
@@ -171,14 +227,19 @@ macro_rules! object_classes {
             pub const fn slot(self, name: &str) -> u32 {
                 self.slot_table().index(name)
             }
+
+            /// The kind of fixed slot `name`.
+            pub const fn slot_kind(self, name: &str) -> SlotKind {
+                self.slot_table().kind(name)
+            }
         }
     };
     (@kind) => { SlotKind::Value };
     (@kind $k:ident) => { SlotKind::$k };
+    (@kind $k:ident ($set:ident)) => { SlotKind::$k(&crate::builtins::r#gen::records::$set) };
     (@rest) => { None };
     (@rest $r:literal) => { Some($r) };
     (@count [$($slot:literal)*]) => { { let s: &[&str] = &[$($slot),*]; s.len() as u32 } };
-    (@count [$($slot:literal)*] $alloc:literal) => { $alloc };
 }
 
 object_classes! {
@@ -221,26 +282,26 @@ object_classes! {
     /// number, the kind (0 keys, 1 values, 2 entries), 0 for a Map and 1 for a Set, the
     /// key and value of the last step.
     16 CollectionIterator ["entries", "next", "kind", "isSet", "key", "value"];
-    /// A Promise (`[[PromiseState]]` ...): the state (int32: 0 pending, 1 fulfilled, 2
-    /// rejected), the result, the pending reactions (an internal `ValueArray` of
-    /// `[capability, onFulfilled, onRejected]` triples, or undefined), flags (int32,
-    /// `interp::run::promise`). D1371.
-    17 Promise ["state", "result", "reactions", "flags"];
+    /// A Promise (`[[PromiseState]]` ...): the state (`PromiseStates`), the result, the
+    /// pending reactions (an internal `ValueArray` of `[capability, onFulfilled,
+    /// onRejected]` triples, or undefined), its `PromiseFlags`. D1371.
+    17 Promise ["state": Enum(PROMISE_STATES), "result", "reactions", "flags": Bits(PROMISE_FLAGS)];
     /// A builtin closure (D1372): calling it calls the installed intrinsic builtin whose id
     /// is `builtin` (int32) with `this` = its `data` and the call's arguments; its
     /// `length` (D3155). Promise resolving functions, `Promise.all` element functions, ...
     18 BuiltinClosure ["builtin": Intrinsic, "data", "length"];
     /// An internal record (D1372): a prototype-less object with only internal slots,
     /// never handed to user code; the builtins read it with `%RecordGet`/`%RecordSet`.
+    /// Its header names its kind, whose schema (builtins/*.ts, D3710) names the slots.
     19 Record [] rest "fields";
     /// A Date: the time value (a Number, NaN for an invalid date).
     20 Date ["time"];
     /// A suspendable function activation (D1375): a generator object, or the internal
-    /// state of an async function call (`interp::run::suspend`): the state, the saved
-    /// frame (an internal ValueArray) while suspended, the pc to resume at, the frame's
-    /// `hp - bp`, the result promise (async), the kind (0 generator, 1 async function, 2
-    /// async generator), an async generator's request queue (D1421).
-    21 Generator ["state", "frame", "pc", "hp", "promise", "kind", "queue"];
+    /// state of an async function call (`interp::run::suspend`): the state
+    /// (`GeneratorStates`), the saved frame (an internal ValueArray) while suspended, the
+    /// pc to resume at, the frame's `hp - bp`, the result promise (async), the kind
+    /// (`GeneratorKinds`), an async generator's request queue (D1421).
+    21 Generator ["state": Enum(GENERATOR_STATES), "frame", "pc", "hp", "promise", "kind": Enum(GENERATOR_KINDS), "queue"];
     /// An ArrayBuffer (0039, `heap/typed.rs`): its bytes (an internal reference to a
     /// `Bytes` cell; undefined once detached), its maximum byte length (undefined for a
     /// fixed-length buffer, `true` for an immutable one).
@@ -265,8 +326,9 @@ object_classes! {
     /// An iterator helper object (0051, builtins/iterator.ts): the objects of
     /// `Iterator.prototype.map` and friends, `Iterator.concat` and `Iterator.from`'s
     /// wrapper, told apart by field 0 (the kind). The builtins keep their state in its
-    /// fields with `%RecordGet`/`%RecordSet`.
-    28 IteratorHelper [] rest "fields" alloc 8;
+    /// fields with `%RecordGet`/`%RecordSet`; like a Record's, its header names the
+    /// schema of its fields (D3710).
+    28 IteratorHelper [] rest "fields";
     /// A raw JSON object (`[[IsRawJSON]]`, JSON.rawJSON, D1611): frozen, null prototype,
     /// one own `rawJSON` string property, no slots.
     29 RawJSON [];
@@ -281,9 +343,9 @@ object_classes! {
     /// 1 while a cleanup job is queued.
     32 FinalizationRegistry ["cleanup", "targets", "tokens", "held", "flags"];
     /// A DisposableStack or AsyncDisposableStack (0051, builtins/disposable.ts): true for
-    /// an AsyncDisposableStack, the state (0 pending, 1 disposed), the resources (an
-    /// internal Array of [value, method, kind] triples).
-    33 DisposableStack ["async", "state", "resources"];
+    /// an AsyncDisposableStack, the state (`DisposableStates`), the resources (an internal
+    /// Array of [value, method, kind] triples).
+    33 DisposableStack ["async", "state": Enum(DISPOSABLE_STATES), "resources"];
     /// A stack frame given to `Error.prepareStackTrace` (qjs's CallSite, 0106, D2050): the
     /// function (null for a parse error position), its name (a string or null), the file
     /// name (a string, null for a native frame), the line and the column (int32, line 0
@@ -531,6 +593,40 @@ impl Heap {
         }
         self.set_cell_flags(o, OBJ_EXTENSIBLE);
         Ok(Obj(o))
+    }
+
+    /// A new internal record of kind `kind` (a generated `RECORD_KIND`, D3710): its
+    /// fields and `rest` more slots, all undefined, the kind in its header.
+    pub fn alloc_record(
+        &mut self,
+        kind: u16,
+        proto: Option<Obj>,
+        rest: u32,
+    ) -> Result<Obj, HeapError> {
+        let schema = record_schema(kind).expect("a record kind");
+        let n = schema.fields.len() as u32 + rest;
+        let o = self.alloc_object(schema.class, proto, n)?;
+        let f = self.cell_flags(o.0);
+        self.set_cell_flags(o.0, f | (schema.kind << OBJ_RECORD_KIND_SHIFT));
+        Ok(o)
+    }
+
+    /// The record kind of `o` (0: none, or not a record).
+    #[inline]
+    pub fn record_kind(&self, o: Obj) -> u16 {
+        (self.cell_flags(o.0) & OBJ_RECORD_KIND) >> OBJ_RECORD_KIND_SHIFT
+    }
+
+    /// Sets the record kind of `o` (the snapshot's import).
+    pub fn set_record_kind(&mut self, o: Obj, kind: u16) {
+        let f = self.cell_flags(o.0) & !OBJ_RECORD_KIND;
+        self.set_cell_flags(o.0, f | (kind << OBJ_RECORD_KIND_SHIFT));
+    }
+
+    /// `v` if it is a record of kind `kind` (whose slots its schema names).
+    #[inline]
+    pub fn as_record(&self, v: Value, kind: u16) -> Option<Obj> {
+        v.as_object().filter(|&o| self.record_kind(o) == kind)
     }
 
     /// A new ordinary object.

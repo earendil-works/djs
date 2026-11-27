@@ -31,14 +31,19 @@ use crate::interp::realm;
 use crate::interp::state;
 use crate::value::{Obj, Value};
 
-pub(crate) const PENDING: i32 = 0;
-pub(crate) const FULFILLED: i32 = 1;
-pub(crate) const REJECTED: i32 = 2;
+// The states and flags (builtins/intrinsics.d.ts `PromiseStates`, `PromiseFlags`, D3710).
+use crate::builtins::r#gen::records::{
+    combinator_record as combinator, element_record as element, promise_flags, promise_states,
+    remaining_count,
+};
+pub(crate) const PENDING: i32 = promise_states::PENDING;
+pub(crate) const FULFILLED: i32 = promise_states::FULFILLED;
+pub(crate) const REJECTED: i32 = promise_states::REJECTED;
 
 /// `[[PromiseIsHandled]]`.
-pub(crate) const FLAG_HANDLED: i32 = 1;
+pub(crate) const FLAG_HANDLED: i32 = promise_flags::HANDLED;
 /// `[[AlreadyResolved]]` of an internal capability.
-pub(crate) const FLAG_RESOLVED: i32 = 2;
+pub(crate) const FLAG_RESOLVED: i32 = promise_flags::RESOLVED;
 
 const STATE: u32 = crate::heap::ObjectClass::Promise.slot("state");
 const RESULT: u32 = crate::heap::ObjectClass::Promise.slot("result");
@@ -245,8 +250,14 @@ fn combinator_step(
     index: f64,
     x: Value,
 ) -> Result<bool, HeapError> {
-    let [c, resolve, cap, values, remaining, resolve_fn, reject_fn] =
-        core::array::from_fn(|i| heap.object_slot(fixed, i as u32));
+    let slot = |i| heap.object_slot(fixed, i);
+    let (c, resolve, cap) = (
+        slot(combinator::CONSTRUCTOR),
+        slot(combinator::PROMISE_RESOLVE),
+        slot(combinator::CAPABILITY),
+    );
+    let (values, remaining) = (slot(combinator::VALUES), slot(combinator::REMAINING));
+    let (resolve_fn, reject_fn) = (slot(combinator::RESOLVE_FN), slot(combinator::REJECT_FN));
     if c != realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR)
         || resolve != realm::installed_intrinsic(heap, PROMISE_STATIC_RESOLVE)
         || !(0..=3).contains(&kind)
@@ -260,7 +271,11 @@ fn combinator_step(
     {
         return Ok(false);
     }
-    let (Some(values), Some(remaining)) = (values.as_object(), remaining.as_object()) else {
+    let remaining = heap.as_record(remaining, remaining_count::RECORD_KIND);
+    let values = values
+        .as_object()
+        .filter(|&v| heap.object_class(v) == ObjectClass::Array);
+    let (Some(values), Some(remaining)) = (values, remaining) else {
         return Ok(false);
     };
     // CreateDataPropertyOrThrow(values, index, undefined): an append to the loop's own
@@ -285,20 +300,15 @@ fn combinator_step(
         (resolve_fn, reject_fn)
     } else {
         // NewElementRecord, and remainingElementsCount + 1.
-        let r = heap.alloc_object(ObjectClass::Record, None, 6)?;
-        let index = super::conv::number(index);
-        let slots = [
-            Value::FALSE,
-            index,
-            Value::object(values),
-            cap,
-            Value::object(remaining),
-        ];
-        for (i, v) in slots.into_iter().chain([Value::UNDEFINED]).enumerate() {
-            heap.set_object_slot(r, i as u32, v);
-        }
-        let n = heap.object_slot(remaining, 0).as_number().unwrap_or(0.0);
-        heap.set_object_slot(remaining, 0, super::conv::number(n + 1.0));
+        let r = heap.alloc_record(element::RECORD_KIND, None, 0)?;
+        heap.set_object_slot(r, element::CALLED, Value::FALSE);
+        heap.set_object_slot(r, element::INDEX, super::conv::number(index));
+        heap.set_object_slot(r, element::VALUES, Value::object(values));
+        heap.set_object_slot(r, element::CAPABILITY, cap);
+        heap.set_object_slot(r, element::REMAINING, Value::object(remaining));
+        let count = remaining_count::COUNT;
+        let n = heap.object_slot(remaining, count).as_number().unwrap_or(0.0);
+        heap.set_object_slot(remaining, count, super::conv::number(n + 1.0));
         let mut closure = |k| -> Result<Value, HeapError> {
             let f = new_builtin_closure(heap, k, Value::object(r), 1)?;
             Ok(Value::object(f.expect("a builtin closure kind")))
@@ -348,24 +358,36 @@ pub(super) fn all_element_job(
         Some(PROMISE_ANY_REJECT_ELEMENT) => (None, true),
         _ => return Ok(false),
     };
-    // The element Record (builtins/promise.ts NewElementRecord): 0 called, 1 index,
-    // 2 values, 3 capability, 4 remaining, 5 keys.
-    let r = heap
-        .object_slot(f, 1)
-        .as_object()
-        .expect("an element Record");
-    let [called, index, values, capability, remaining, keys] =
-        core::array::from_fn(|i| heap.object_slot(r, i as u32));
+    // The ElementRecord (builtins/promise.ts), which a snapshot may have made with
+    // anything in it: the builtin's slow path copes with that.
+    let Some(r) = heap.as_record(heap.object_slot(f, 1), element::RECORD_KIND) else {
+        return Ok(false);
+    };
+    let slot = |i| heap.object_slot(r, i);
+    let (called, index, values) = (
+        slot(element::CALLED),
+        slot(element::INDEX),
+        slot(element::VALUES),
+    );
+    let (capability, remaining, keys) = (
+        slot(element::CAPABILITY),
+        slot(element::REMAINING),
+        slot(element::KEYS),
+    );
     if called == Value::TRUE {
         // Nothing to store: only `cap` resolves.
         return resolve_derived(heap, cap).map(|()| true);
     }
-    let (Some(values), Some(remaining), Some(index)) =
-        (values.as_object(), remaining.as_object(), index.as_int())
+    let remaining = heap.as_record(remaining, remaining_count::RECORD_KIND);
+    let values = values
+        .as_object()
+        .filter(|&v| heap.object_class(v) == ObjectClass::Array);
+    let (Some(values), Some(remaining), Some(index)) = (values, remaining, index.as_int())
     else {
         return Ok(false);
     };
-    let left = heap.object_slot(remaining, 0).as_number().unwrap_or(0.0) - 1.0;
+    let count = remaining_count::COUNT;
+    let left = heap.object_slot(remaining, count).as_number().unwrap_or(0.0) - 1.0;
     let last = left == 0.0;
     let cap_promise = as_promise(heap, capability);
     if last
@@ -405,8 +427,8 @@ pub(super) fn all_element_job(
     if !heap.set_element_fast(values, index as u32, x)? {
         return Ok(false);
     }
-    heap.set_object_slot(r, 0, Value::TRUE);
-    heap.set_object_slot(remaining, 0, super::conv::number(left));
+    heap.set_object_slot(r, element::CALLED, Value::TRUE);
+    heap.set_object_slot(remaining, count, super::conv::number(left));
     if let Some(p) = cap_promise.filter(|_| last) {
         // ResolveCapability ( capability, values ) of an internal capability.
         let f = flags(heap, p);
