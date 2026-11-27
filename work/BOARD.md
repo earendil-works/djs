@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0300 | Heap snapshots revisited (2): logical snapshot of a waiting run keyed by bytecode, small (prototype) | psnap | .worktrees/psnap |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -55,6 +54,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | 0295 follow-ups: vm_define on a frozen object returns 0; DOMException run error message "Error" (2 vs 3 slots); tasks don't carry fuelUsed over a dump; pi's "stalled" case left to the host | ready |
 | - | 0294 follow-ups: bring the one module's size down (dumper ~335 KB gz: vm::dump ~720 KB raw code, smap/compile_cache +93 KB); re-record stale status.tsv rows (startup, heap, bounds, pi bench, dumps, engines, bridge) on a quiet machine; retire js/pi and the slim gate legs once pi is on host-driven runs; untrack scripts/__pycache__/*.pyc; v0.2.0 published 2026-11-23 (pi depends on it) | ready |
 | - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
+| - | Logical snapshots (0300) to ship, if the owner adopts them: slot table as a checked contract, named records for builtin closure kinds, gate pin of the corpus's waiting-function bytecode (0299 follow-up), golden snapshots, Sandbox API + pi adapter, pi prelude/namespaces through a snapshot; fallback for refusals | owner (decision) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
 | - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | dropped with image persistence (D2560); revisit for dumps |
@@ -63,6 +63,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0300 | Heap snapshots revisited (2): logical snapshot prototype keyed by named bytecode | 027e32ad (agent psnap; doc only, engine on branch issue/0300-logical-snapshots; 1,164/1,164 harvest idle points, 2.7 KB zstd vs dump 3.4 KB, export 50 µs vs 492 µs, 3.1k lines/+60 KB gz vs dumper 24.5k/270 KB; owner decision pending) |
 | 0299 | Heap snapshots revisited (1): psychoscript analysis; bytecode/schema stability over 196 merges | d258225a (agent psnapr; docs/heap-snapshots-revisited.md §1-2: awaiting functions' named bytecode changed at 6/195 merges (1/95 since 0200); psychoscript 3.6 KB zstd median vs plain dump 2.8 KB) |
 | 0298 | The dumper's size: same dumps, far less code | 4e9735f4..8636abd6 (agent pdiet; 4 merges; D3660 optimize(size) on dump code; dumper 334.6 -> ~270 KB gz, module 698,440 B gz; dump instructions +6% native; B items declined by the owner) |
 | 0297 | Remove everything that exists for backwards compatibility | b141172f..e22ce519 (agent pcompat; 8 merges; D3640-D3645: ABI 9, build-hash images, no slim build, no js/pi, dumps under D024 until declared stable, registry without tombstones, retired-design docs deleted; 767,573 -> 750,859 B gz before 0298) |

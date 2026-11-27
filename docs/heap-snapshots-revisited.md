@@ -13,6 +13,41 @@ never saved but compiled again on load and checked by a bytecode hash. Can a djs
 snapshot survive upgrades in more situations than "same build", without the dump
 machinery, and how small can it be?
 
+## Summary (coordinator)
+
+- **psychoscript is build-bound.** Its snapshot is a logical graph of named-field records,
+  code recompiled on load, builtins by name; its compat key is the build (version plus
+  opcode, compiler, prelude and codec hashes), so any release refuses older snapshots.
+  It is small in code (~1.9k lines TS, 2.6k Rust) and works on our corpus (286/286 idle
+  points, 3.6 KB zstd median vs 2.8 KB for plain dumps).
+- **The idea worth taking is a finer key.** Key the snapshot on the *named* bytecode of
+  the functions that can wait, the field names of the cell kinds it holds, and the paths
+  of the builtins it names. Over 196 merges (0102..0298) that key broke at 6 merges (1 since
+  0200); the build key breaks at ~75%, images at 70%, relocation images at 28% (0142).
+  Half of the bytecode churn there was made *for* continuation dumps.
+- **It works in djs, and it is simpler.** The prototype (branch
+  `issue/0300-logical-snapshots`, feature `snapshot`): 3.1k lines and +60 KB gz, against
+  the dumper's ~24.5k lines and 270 KB gz. Every harvest idle point (1,164) and every dump
+  program (197) round-trips and continues exactly, chains included, also cases dumps
+  refuse (private fields). Export 50 µs vs 492 µs for a dump (3.5-50x with large state: a
+  1e6-number array 3 ms vs 153 ms); import 189 µs, most of it recompiling. Size without
+  sources 2.7 KB zstd median (dump 3.4 KB); a delta against the previous snapshot of the
+  run ~260 B. It survives renumbered intrinsics, atoms and opcodes, a moved base, changed
+  cell layouts and changed code of every function that does not wait, and refuses with a
+  reason when a waiting function's bytecode, a builtin path or a field name changes.
+- **What dumps still do that snapshots cannot:** survive a lowering change in a waiting
+  function. That needs a fallback. Note for pi: its durable code mode (pi-mono-djs branch
+  `djs-durable`) has since dropped the journal and replay, so "fall back to replay" would
+  have to come back, or the fallback is keeping the previous engine for a deploy, or a
+  refusal surfaces as an interrupted call.
+- **Recommendation:** move persistence to logical snapshots and retire continuation dumps,
+  after three contracts that make the key real (section 5.1): a tested slot table for
+  object classes, named records for builtin closure kinds, and a gate pin of the corpus's
+  waiting-function bytecode. Within one build snapshots are already strictly better than
+  dumps (faster, smaller, more coverage); across builds they need those contracts and a
+  fallback for the rare refusal. Owner decisions: adopt or not, the fallback, and when the
+  format window opens.
+
 <!-- Sections 1-2: issue 0299. -->
 
 ## 1. psychoscript's snapshots
