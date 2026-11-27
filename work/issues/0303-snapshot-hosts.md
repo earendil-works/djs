@@ -60,6 +60,26 @@ leg "snapshots" runs both modes.
 
 ### Steps
 - WIP commit 76128a88: export/import host mode, `load_snapshot`, `needs`, host_tests.rs.
+- Host values named at every depth (dumps: two levels): `const t = ALL_TOOLS[0].schema.x`
+  keeps its identity.
+- Lazy functions (above); gate leg "snapshots" runs DJS_LAZY=1 too (scripts/gate.py, outside
+  touches: one line).
+- djs-wasm ABI 10: ops 65 `vm_snapshot(vm, len)` (flags + host names in staging), 66
+  `vm_load_snapshot(vm, len)`, 67 `djs_snapshot_needs`, 68 `djs_snapshot_describe`;
+  `vm_from_snapshot` gone (no users). `debugger_awaits`, `vm_call_site`, `Vm::call_site` no
+  longer need the `dump` feature.
+- BaseInfo in wasm: the instance's first VM took the base as its arena, so the sandbox hands
+  the base over again (`provideBase`) before its first snapshot operation, and
+  `BaseInfo::from_owned` keeps no copy (no image: host loads only).
+- sandbox.ts: `Run.snapshot({ sources?, states? })`, `sandbox.loadSnapshot(bytes)` -> Run
+  (fuelUsed and the deterministic clock travel in the host data), `resume(Uint8Array |
+  dump)`, `Task.suspend/checkpoint(opts)` -> Uint8Array, `describeSnapshot(bytes)`. A Rust
+  refusal leaves the sandbox dead; missing sources / host values are checked first (sandbox
+  stays usable).
+- Tests: task, debugger (callSite after a resume is in the body again: loop.js:6:3),
+  bindings (node part dropped: it ran the dump in node), new js/test/snapshot.test.ts (pi's
+  setup: aliases, missingMember, values identity, jsonBoundary, module imports, RunExit,
+  fuel across loads; pi-like snapshots 3.0-4.2 KB with the TS source inside).
 
 ## Follow-ups
 
