@@ -124,6 +124,13 @@ total 6
 A resumed run is in the same script, so its pauses are at the script's lines. Without
 `--debugger`, `debugger;` does nothing.
 
+A snapshot from a live example of this site works the same way: the examples' runs have
+the host values `console` and `debugger`, which the CLI gives too. Copy one as base64 at
+a pause, decode it with `base64 -d > pause.snapshot`, and `djs describe` and `djs resume
+[--debugger]` take it from there ([the same steps as host code](snapshots.md#the-same-steps-as-host-code)).
+The other way round, a snapshot of `djs run` names the CLI's `tools`, `print` and
+`later`, which the site does not have, and its restore box says so.
+
 ## `djs disasm` and `djs strip-types`
 
 `djs disasm [--body] file.js` prints the bytecode of a file and of every function in it,

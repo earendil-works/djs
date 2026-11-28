@@ -14907,3 +14907,27 @@ the build hash): compiled into the shipped module, though dead, its generic code
 with the loader (BTreeMap and BTreeSet instances) changed the loader's inlining and grew
 the module by 4.4 KB; for the same reason it keeps its sets and maps as lists. The
 shipped module grows by 181 bytes (102 gzipped): the parameter names and the string reuse.
+
+## D3761: The docs' Snapshot tab and restore box, on the inspection JSON
+date: 2026-11-28 · by: pview2 · issue: 0311
+Live examples have the tabs Output, Bytecode, Memory and, for examples with `debugger;`,
+Snapshot; the Suspend tab is gone, its fact (how many fuel slices the run took) is in the
+status line with a link to suspension.md. The Snapshot tab renders `inspectSnapshot`'s
+JSON (D3760) in three layers, by crates/djs-docs/assets/snapview.js: the run in
+JavaScript terms (sentences, source lines, variables as literals, a `?` per part with its
+note; a frame's title marks where it waits in the editor; a value is one `data-rec` per
+record, so hovering lights up every place one object is reached from and a click opens
+its record), then how djs stores it (the record list and a record's fields, size and
+holders), then the bytes (hex, sections labelled, the selected record marked). The
+Memory tab walks the sandbox before a pause disposes of it and says what of the arena the
+snapshot keeps. At each pause Copy gives plain base64 (what `base64 -d` reads), Download
+a `.snapshot` file, and Link the snapshots page with the snapshot URL-safe-base64 in the
+fragment (`#restore=`), which no server sees. A ```js live restore block is a live
+example with a box that loads pasted base64 (or the fragment): it shows the inspection
+whether or not the snapshot loads, puts the snapshot's script into the editor, then loads
+it into a sandbox of the docs' fixed setup (console, debugger) and Continue goes on; a
+refusal shows the engine's own reason. Built without JavaScript, the Snapshot tab holds
+the text description of the first pause. The test is js/test/docs-live.test.ts: live.js
+and snapview.js on a small stub DOM (js/test/stub-dom.ts) with the docs module, through
+`globalThis.djsLiveImports`, the one hook live.js has for it. Alternative considered: a
+headless browser in the gate; not every gate machine has one.

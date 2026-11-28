@@ -299,6 +299,10 @@ not:
 | the bytecode of a function the run waits in | no: "the bytecode of the function at 120..380 of script 0, which has a stored frame, differs in this build", with both hashes |
 | a builtin's path, an intrinsic's name, a field that still holds state | no, naming it |
 
+The [restore box](#restoring-a-snapshot-here) above loads snapshots with this page's
+build, so a snapshot copied from an older version of this site shows which case it is:
+it loads, or the box says why it does not.
+
 A field the snapshot lacks starts at zero in the loaded cell, the state every new cell
 starts in; a field the snapshot has and the loading build lacks is refused unless it
 holds that zero state. A refused load leaves the sandbox unusable, and the host disposes

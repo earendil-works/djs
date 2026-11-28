@@ -282,9 +282,9 @@ about that.
 On the docs site, a `debugger;` statement in a live example makes such an idle point:
 the page binds an async host function `debugger` that the statement awaits, so the run
 stops there and waits for it. The page then writes the run out as a snapshot, shows a
-pause line that gives the line and column where it stopped, with the snapshot's
-description under it, and on Continue loads the snapshot into a fresh sandbox, which
-goes on from there:
+pause line that gives the line and column where it stopped and the snapshot in the
+Snapshot tab ([what it shows](snapshots.md#a-run-that-waits)), and on Continue loads the
+snapshot into a fresh sandbox, which goes on from there:
 
 ```js live
 let total = 0;
@@ -303,9 +303,9 @@ arena 15
 ```
 <!-- /gen -->
 
-The snapshot at the first pause holds the body's suspended frame, with `total` and the
-array iterator of the loop in its registers, the open call of the pause, and the body
-named by its span and bytecode hash:
+The snapshot at the first pause holds the body's suspended frame, with `total` and
+`word`, and the loop's array iterator and its `next` on the operand stack, the open call
+of the pause, and the body named by its span and bytecode hash:
 
 <!-- gen:snapshot -->
 ```text
