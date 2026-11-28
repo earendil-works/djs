@@ -111,6 +111,7 @@ experiments deleted; lowering comments updated. Kept on purpose: the test-only f
 
 What pi must change: nothing in packages/codemode/src/run.ts (it uses the Sandbox only, and
 `frozenBuiltins` stays); it needs the new module and js package together (ABI 12: a module
-and a Sandbox of different ABIs refuse each other). Snapshots made by earlier builds whose
-waiting function is h164-like top-level code with many constants may refuse (no
-compatibility, D3640).
+and a Sandbox of different ABIs refuse each other). Snapshots of the shipped module stay
+loadable: its bytecode layout did not change (the pin entry that changed was the native
+lazy build's), and the snapshot code hash names opcodes, so the renumbered
+`super_call_frame`/`_forward` do not matter.
