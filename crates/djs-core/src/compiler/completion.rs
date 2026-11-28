@@ -15,8 +15,8 @@
 //!
 //! The block's end dispatches on the kind: falls through to the code after it, rethrows,
 //! or continues the exit, which may enter the next block out (the kind of a break stays
-//! the same all the way). So a suspended frame keeps its completion in named slots
-//! (D2720) and no return address: this replaced `gosub`/`ret` (D2627).
+//! the same all the way). So no return address is ever on the stack, and every function
+//! uses the same lowering, whether or not it can wait.
 //!
 //! The kind is written last, after the value, and only abrupt completions with a value
 //! write the value, and the rethrow clears it. (A for-of whose loop no jump

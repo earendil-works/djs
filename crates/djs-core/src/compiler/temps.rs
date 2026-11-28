@@ -1,7 +1,7 @@
 //! Construct temporaries (D2732): the state a construct keeps while its body runs (a
 //! loop's iterator record, a switch's discriminant, a destructuring pattern's source, a
 //! `using` list's resource Record) lives in a local of its own, not on the operand
-//! stack (D2720).
+//! stack: nothing stays on the operand stack across statements, in any function.
 //!
 //! Each is a binding of kind `VarKind::Temp` with an internal name (the integer atom of
 //! the temporary's number in its function, which no source name can be and which needs

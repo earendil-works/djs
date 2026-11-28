@@ -365,8 +365,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             p.module = super::module::ModuleSlot::new(super::module::ModuleBuild::new(p.heap)?);
         }
         if kind == FuncKind::AsyncBody {
-            // Before the parameters, as for an async function: a body's frame is laid out
-            // as an `async function (params) {...}`'s (D2617, D2620).
+            // Before the parameters, as for an async function: a body is compiled exactly
+            // as an `async function (params) {...}`, one lowering for both.
             p.start_flavor((true, false))?;
             for name in opts.params.iter() {
                 let atom = p.heap.atom_str(name)?;

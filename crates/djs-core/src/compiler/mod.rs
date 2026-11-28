@@ -58,7 +58,7 @@ pub enum Goal {
     /// A Script: top-level `var` creates global object properties, top-level
     /// `let`/`const` go into the realm's global lexical record, `return` is an error.
     Script,
-    /// A codemode body: pi runs `(async (tools, console) => { <code> })`, so top-level
+    /// A codemode body, run as `(async (params) => { <code> })`: top-level
     /// declarations are locals, the `params` are parameters, `return` ends the run.
     AsyncBody,
     /// Indirect eval code (strict, PerformEval): a sync body whose top-level
