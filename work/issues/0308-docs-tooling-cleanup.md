@@ -1,6 +1,6 @@
 # 0308: Docs and tooling cleanup after the dump removal
 
-status: open
+status: in-progress
 agent: pclean
 branch: issue/0308-docs-tooling-cleanup
 depends-on: 0307
