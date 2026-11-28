@@ -244,8 +244,7 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
 
 **One module (D3600, D3730).** djs ships one module, and it has snapshots (cargo feature
 `snapshot`): `scripts/build-wasm.sh` builds it, and every host, the ones that persist runs
-and the ones that never do, loads the same file. It compiles eagerly (no lazy functions,
-D3732) and links a 128 KiB stack, since snapshot loads compile the scripts inside one
+and the ones that never do, loads the same file. It links a 128 KiB stack, since snapshot loads compile the scripts inside one
 operation (D3733). The Sandbox needs that module.
 
 **Storing snapshots.** A snapshot is binary and self-describing; most of a small one is

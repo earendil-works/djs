@@ -1015,8 +1015,8 @@ impl Vm {
     }
 
     /// [`Vm::collect`], then everything live is old (`Heap::seal`, D2041): the
-    /// collections while scripts run leave it alone. For the end of the embedder's setup
-    /// (pi calls it after its prelude).
+    /// collections while scripts run leave it alone. For the end of a native embedder's
+    /// setup, whose image it then starts every script from.
     pub fn seal(&mut self) -> Result<(), HeapError> {
         let g = self.global();
         self.heap.move_to_end(g)?;
