@@ -171,7 +171,7 @@ keeps it. Here is `String.prototype.substr` as the prelude has it, with the help
 `RelativeIndex` called:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substr" "function StringPrototypeSubstr(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9760-L9767), lines 9760–9767:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9687-L9694), lines 9687–9694:
 
 ```js
 function StringPrototypeSubstr(start, length) {}

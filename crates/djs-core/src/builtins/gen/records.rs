@@ -115,14 +115,6 @@ pub mod decorator_adder {
     pub const DONE: u32 = 1;
 }
 
-/// `DecoratorParamData` (builtins/decorators.ts).
-pub mod decorator_param_data {
-    pub const RECORD_KIND: u16 = 6;
-    pub const FIELD_COUNT: u32 = 2;
-    pub const DEC: u32 = 0;
-    pub const INDEX: u32 = 1;
-}
-
 /// `DisposableStackSlots` (builtins/disposable.ts).
 pub mod disposable_stack_slots {
     pub const ASYNC: u32 = 0;
@@ -157,7 +149,7 @@ pub const RESOURCE_KINDS: ConstSet = ConstSet {
 
 /// `DisposeErrors` (builtins/disposable.ts).
 pub mod dispose_errors {
-    pub const RECORD_KIND: u16 = 7;
+    pub const RECORD_KIND: u16 = 6;
     pub const FIELD_COUNT: u32 = 2;
     pub const ERROR: u32 = 0;
     pub const HAS_ERROR: u32 = 1;
@@ -165,7 +157,7 @@ pub mod dispose_errors {
 
 /// `AsyncDisposeState` (builtins/disposable.ts).
 pub mod async_dispose_state {
-    pub const RECORD_KIND: u16 = 8;
+    pub const RECORD_KIND: u16 = 7;
     pub const FIELD_COUNT: u32 = 8;
     pub const ERROR: u32 = 0;
     pub const HAS_ERROR: u32 = 1;
@@ -179,7 +171,7 @@ pub mod async_dispose_state {
 
 /// `UsingRecord` (builtins/disposable.ts).
 pub mod using_record {
-    pub const RECORD_KIND: u16 = 9;
+    pub const RECORD_KIND: u16 = 8;
     pub const FIELD_COUNT: u32 = 9;
     pub const ERROR: u32 = 0;
     pub const HAS_ERROR: u32 = 1;
@@ -194,7 +186,7 @@ pub mod using_record {
 
 /// `PendingStack` (builtins/error.ts).
 pub mod pending_stack {
-    pub const RECORD_KIND: u16 = 10;
+    pub const RECORD_KIND: u16 = 9;
     pub const FIELD_COUNT: u32 = 4;
     pub const SITES: u32 = 0;
     pub const DEFAULT_STRING: u32 = 1;
@@ -218,7 +210,7 @@ pub const FROM_ASYNC_PHASES: ConstSet = ConstSet {
 
 /// `FromAsyncState` (builtins/fromasync.ts).
 pub mod from_async_state {
-    pub const RECORD_KIND: u16 = 11;
+    pub const RECORD_KIND: u16 = 10;
     pub const FIELD_COUNT: u32 = 11;
     pub const PROMISE: u32 = 0;
     pub const MAPFN: u32 = 1;
@@ -279,7 +271,7 @@ pub const ZIP_MODES: ConstSet = ConstSet {
 
 /// `HelperHeader` (builtins/iterator.ts).
 pub mod helper_header {
-    pub const RECORD_KIND: u16 = 12;
+    pub const RECORD_KIND: u16 = 11;
     pub const FIELD_COUNT: u32 = 2;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -287,7 +279,7 @@ pub mod helper_header {
 
 /// `IteratorHelper` (builtins/iterator.ts).
 pub mod iterator_helper {
-    pub const RECORD_KIND: u16 = 13;
+    pub const RECORD_KIND: u16 = 12;
     pub const FIELD_COUNT: u32 = 4;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -297,7 +289,7 @@ pub mod iterator_helper {
 
 /// `CallbackHelper` (builtins/iterator.ts).
 pub mod callback_helper {
-    pub const RECORD_KIND: u16 = 14;
+    pub const RECORD_KIND: u16 = 13;
     pub const FIELD_COUNT: u32 = 6;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -309,7 +301,7 @@ pub mod callback_helper {
 
 /// `FlatMapHelper` (builtins/iterator.ts).
 pub mod flat_map_helper {
-    pub const RECORD_KIND: u16 = 15;
+    pub const RECORD_KIND: u16 = 14;
     pub const FIELD_COUNT: u32 = 8;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -323,7 +315,7 @@ pub mod flat_map_helper {
 
 /// `LimitHelper` (builtins/iterator.ts).
 pub mod limit_helper {
-    pub const RECORD_KIND: u16 = 16;
+    pub const RECORD_KIND: u16 = 15;
     pub const FIELD_COUNT: u32 = 5;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -334,7 +326,7 @@ pub mod limit_helper {
 
 /// `ChunksHelper` (builtins/iterator.ts).
 pub mod chunks_helper {
-    pub const RECORD_KIND: u16 = 17;
+    pub const RECORD_KIND: u16 = 16;
     pub const FIELD_COUNT: u32 = 6;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -346,7 +338,7 @@ pub mod chunks_helper {
 
 /// `WindowsHelper` (builtins/iterator.ts).
 pub mod windows_helper {
-    pub const RECORD_KIND: u16 = 18;
+    pub const RECORD_KIND: u16 = 17;
     pub const FIELD_COUNT: u32 = 8;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -360,7 +352,7 @@ pub mod windows_helper {
 
 /// `ConcatHelper` (builtins/iterator.ts).
 pub mod concat_helper {
-    pub const RECORD_KIND: u16 = 19;
+    pub const RECORD_KIND: u16 = 18;
     pub const FIELD_COUNT: u32 = 6;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -372,7 +364,7 @@ pub mod concat_helper {
 
 /// `ZipHelper` (builtins/iterator.ts).
 pub mod zip_helper {
-    pub const RECORD_KIND: u16 = 20;
+    pub const RECORD_KIND: u16 = 19;
     pub const FIELD_COUNT: u32 = 8;
     pub const KIND: u32 = 0;
     pub const STATE: u32 = 1;
@@ -386,7 +378,7 @@ pub mod zip_helper {
 
 /// `ZipSettings` (builtins/iterator.ts).
 pub mod zip_settings {
-    pub const RECORD_KIND: u16 = 21;
+    pub const RECORD_KIND: u16 = 20;
     pub const FIELD_COUNT: u32 = 2;
     pub const MODE: u32 = 0;
     pub const PADDING: u32 = 1;
@@ -394,7 +386,7 @@ pub mod zip_settings {
 
 /// `ModuleRecord` (builtins/module.ts).
 pub mod module_record {
-    pub const RECORD_KIND: u16 = 22;
+    pub const RECORD_KIND: u16 = 21;
     pub const FIELD_COUNT: u32 = 18;
     pub const KEY: u32 = 0;
     pub const STATUS: u32 = 1;
@@ -445,19 +437,19 @@ pub const MODULE_FLAGS: ConstSet = ConstSet {
 
 /// `RequestedModules` (builtins/module.ts).
 pub mod requested_modules {
-    pub const RECORD_KIND: u16 = 23;
+    pub const RECORD_KIND: u16 = 22;
     pub const FIELD_COUNT: u32 = 0;
 }
 
 /// `SyntheticBody` (builtins/module.ts).
 pub mod synthetic_body {
-    pub const RECORD_KIND: u16 = 24;
+    pub const RECORD_KIND: u16 = 23;
     pub const FIELD_COUNT: u32 = 0;
 }
 
 /// `ModuleRegistry` (builtins/module.ts).
 pub mod module_registry {
-    pub const RECORD_KIND: u16 = 25;
+    pub const RECORD_KIND: u16 = 24;
     pub const FIELD_COUNT: u32 = 4;
     pub const REGISTRY: u32 = 0;
     pub const TRAPS: u32 = 1;
@@ -467,7 +459,7 @@ pub mod module_registry {
 
 /// `EvaluationState` (builtins/module.ts).
 pub mod evaluation_state {
-    pub const RECORD_KIND: u16 = 26;
+    pub const RECORD_KIND: u16 = 25;
     pub const FIELD_COUNT: u32 = 2;
     pub const TOP: u32 = 0;
     pub const INDEX: u32 = 1;
@@ -489,7 +481,7 @@ pub const MODULE_REACTIONS: ConstSet = ConstSet {
 
 /// `ModuleReaction` (builtins/module.ts).
 pub mod module_reaction {
-    pub const RECORD_KIND: u16 = 27;
+    pub const RECORD_KIND: u16 = 26;
     pub const FIELD_COUNT: u32 = 2;
     pub const OP: u32 = 0;
     pub const OPERAND: u32 = 1;
@@ -497,7 +489,7 @@ pub mod module_reaction {
 
 /// `Capability` (builtins/promise.ts).
 pub mod capability {
-    pub const RECORD_KIND: u16 = 28;
+    pub const RECORD_KIND: u16 = 27;
     pub const FIELD_COUNT: u32 = 3;
     pub const PROMISE: u32 = 0;
     pub const RESOLVE: u32 = 1;
@@ -506,7 +498,7 @@ pub mod capability {
 
 /// `ResolvingFunctions` (builtins/promise.ts).
 pub mod resolving_functions {
-    pub const RECORD_KIND: u16 = 29;
+    pub const RECORD_KIND: u16 = 28;
     pub const FIELD_COUNT: u32 = 2;
     pub const PROMISE: u32 = 0;
     pub const ALREADY_RESOLVED: u32 = 1;
@@ -514,7 +506,7 @@ pub mod resolving_functions {
 
 /// `ElementRecord` (builtins/promise.ts).
 pub mod element_record {
-    pub const RECORD_KIND: u16 = 30;
+    pub const RECORD_KIND: u16 = 29;
     pub const FIELD_COUNT: u32 = 6;
     pub const CALLED: u32 = 0;
     pub const INDEX: u32 = 1;
@@ -526,14 +518,14 @@ pub mod element_record {
 
 /// `RemainingCount` (builtins/promise.ts).
 pub mod remaining_count {
-    pub const RECORD_KIND: u16 = 31;
+    pub const RECORD_KIND: u16 = 30;
     pub const FIELD_COUNT: u32 = 1;
     pub const COUNT: u32 = 0;
 }
 
 /// `CombinatorRecord` (builtins/promise.ts).
 pub mod combinator_record {
-    pub const RECORD_KIND: u16 = 32;
+    pub const RECORD_KIND: u16 = 31;
     pub const FIELD_COUNT: u32 = 7;
     pub const CONSTRUCTOR: u32 = 0;
     pub const PROMISE_RESOLVE: u32 = 1;
@@ -546,7 +538,7 @@ pub mod combinator_record {
 
 /// `FinallyData` (builtins/promise.ts).
 pub mod finally_data {
-    pub const RECORD_KIND: u16 = 33;
+    pub const RECORD_KIND: u16 = 32;
     pub const FIELD_COUNT: u32 = 2;
     pub const ON_FINALLY: u32 = 0;
     pub const CONSTRUCTOR: u32 = 1;
@@ -554,7 +546,7 @@ pub mod finally_data {
 
 /// `ForInState` (builtins/proxy.ts).
 pub mod for_in_state {
-    pub const RECORD_KIND: u16 = 34;
+    pub const RECORD_KIND: u16 = 33;
     pub const FIELD_COUNT: u32 = 6;
     pub const OBJECT: u32 = 0;
     pub const KEYS: u32 = 1;
@@ -625,204 +617,197 @@ pub static RECORDS: &[RecordSchema] = &[
         rest: None,
     },
     RecordSchema {
-        name: "DecoratorParamData",
-        kind: 6,
-        class: ObjectClass::Record,
-        fields: &[("dec", SlotKind::Value), ("index", SlotKind::Value)],
-        rest: None,
-    },
-    RecordSchema {
         name: "DisposeErrors",
-        kind: 7,
+        kind: 6,
         class: ObjectClass::Record,
         fields: &[("error", SlotKind::Value), ("hasError", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "AsyncDisposeState",
-        kind: 8,
+        kind: 7,
         class: ObjectClass::Record,
         fields: &[("error", SlotKind::Value), ("hasError", SlotKind::Value), ("promise", SlotKind::Value), ("resources", SlotKind::Value), ("index", SlotKind::Value), ("needsAwait", SlotKind::Value), ("hasAwaited", SlotKind::Value), ("pending", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "UsingRecord",
-        kind: 9,
+        kind: 8,
         class: ObjectClass::Record,
         fields: &[("error", SlotKind::Value), ("hasError", SlotKind::Value), ("resources", SlotKind::Value), ("needsAwait", SlotKind::Value), ("hasAwaited", SlotKind::Value), ("next", SlotKind::Value), ("value", SlotKind::Value), ("pendingError", SlotKind::Value), ("hasPending", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "PendingStack",
-        kind: 10,
+        kind: 9,
         class: ObjectClass::Record,
         fields: &[("sites", SlotKind::Value), ("defaultString", SlotKind::Value), ("prepare", SlotKind::Value), ("ctor", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "FromAsyncState",
-        kind: 11,
+        kind: 10,
         class: ObjectClass::Record,
         fields: &[("promise", SlotKind::Value), ("mapfn", SlotKind::Value), ("thisArg", SlotKind::Value), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("array", SlotKind::Value), ("k", SlotKind::Value), ("phase", SlotKind::Enum(&FROM_ASYNC_PHASES)), ("arrayLike", SlotKind::Value), ("length", SlotKind::Value), ("error", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "HelperHeader",
-        kind: 12,
+        kind: 11,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES))],
         rest: None,
     },
     RecordSchema {
         name: "IteratorHelper",
-        kind: 13,
+        kind: 12,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "CallbackHelper",
-        kind: 14,
+        kind: 13,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("fn", SlotKind::Value), ("counter", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "FlatMapHelper",
-        kind: 15,
+        kind: 14,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("fn", SlotKind::Value), ("counter", SlotKind::Value), ("inner", SlotKind::Value), ("innerNext", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "LimitHelper",
-        kind: 16,
+        kind: 15,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("remaining", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ChunksHelper",
-        kind: 17,
+        kind: 16,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("size", SlotKind::Value), ("done", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "WindowsHelper",
-        kind: 18,
+        kind: 17,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("size", SlotKind::Value), ("allowPartial", SlotKind::Value), ("done", SlotKind::Value), ("window", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ConcatHelper",
-        kind: 19,
+        kind: 18,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterator", SlotKind::Value), ("next", SlotKind::Value), ("iterables", SlotKind::Value), ("index", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ZipHelper",
-        kind: 20,
+        kind: 19,
         class: ObjectClass::IteratorHelper,
         fields: &[("kind", SlotKind::Enum(&HELPER_KINDS)), ("state", SlotKind::Enum(&HELPER_STATES)), ("iterators", SlotKind::Value), ("nexts", SlotKind::Value), ("padding", SlotKind::Value), ("mode", SlotKind::Enum(&ZIP_MODES)), ("open", SlotKind::Value), ("keys", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ZipSettings",
-        kind: 21,
+        kind: 20,
         class: ObjectClass::Record,
         fields: &[("mode", SlotKind::Enum(&ZIP_MODES)), ("padding", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ModuleRecord",
-        kind: 22,
+        kind: 21,
         class: ObjectClass::Record,
         fields: &[("key", SlotKind::Value), ("status", SlotKind::Enum(&MODULE_STATUS)), ("body", SlotKind::Value), ("requested", SlotKind::Value), ("count", SlotKind::Value), ("error", SlotKind::Value), ("dfs", SlotKind::Value), ("ancestor", SlotKind::Value), ("namespace", SlotKind::Value), ("meta", SlotKind::Value), ("stack", SlotKind::Value), ("nsBox", SlotKind::Value), ("flags", SlotKind::Bits(&MODULE_FLAGS)), ("cycleRoot", SlotKind::Value), ("asyncOrder", SlotKind::Value), ("pending", SlotKind::Value), ("parents", SlotKind::Value), ("capability", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "RequestedModules",
-        kind: 23,
+        kind: 22,
         class: ObjectClass::Record,
         fields: &[],
         rest: Some("modules"),
     },
     RecordSchema {
         name: "SyntheticBody",
-        kind: 24,
+        kind: 23,
         class: ObjectClass::Record,
         fields: &[],
         rest: Some("boxes"),
     },
     RecordSchema {
         name: "ModuleRegistry",
-        kind: 25,
+        kind: 24,
         class: ObjectClass::Record,
         fields: &[("registry", SlotKind::Value), ("traps", SlotKind::Value), ("import", SlotKind::Value), ("asyncCount", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "EvaluationState",
-        kind: 26,
+        kind: 25,
         class: ObjectClass::Record,
         fields: &[("top", SlotKind::Value), ("index", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ModuleReaction",
-        kind: 27,
+        kind: 26,
         class: ObjectClass::Record,
         fields: &[("op", SlotKind::Enum(&MODULE_REACTIONS)), ("operand", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "Capability",
-        kind: 28,
+        kind: 27,
         class: ObjectClass::Record,
         fields: &[("promise", SlotKind::Value), ("resolve", SlotKind::Value), ("reject", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ResolvingFunctions",
-        kind: 29,
+        kind: 28,
         class: ObjectClass::Record,
         fields: &[("promise", SlotKind::Value), ("alreadyResolved", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ElementRecord",
-        kind: 30,
+        kind: 29,
         class: ObjectClass::Record,
         fields: &[("called", SlotKind::Value), ("index", SlotKind::Value), ("values", SlotKind::Value), ("capability", SlotKind::Value), ("remaining", SlotKind::Value), ("keys", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "RemainingCount",
-        kind: 31,
+        kind: 30,
         class: ObjectClass::Record,
         fields: &[("count", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "CombinatorRecord",
-        kind: 32,
+        kind: 31,
         class: ObjectClass::Record,
         fields: &[("constructor", SlotKind::Value), ("promiseResolve", SlotKind::Value), ("capability", SlotKind::Value), ("values", SlotKind::Value), ("remaining", SlotKind::Value), ("resolveFn", SlotKind::Value), ("rejectFn", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "FinallyData",
-        kind: 33,
+        kind: 32,
         class: ObjectClass::Record,
         fields: &[("onFinally", SlotKind::Value), ("constructor", SlotKind::Value)],
         rest: None,
     },
     RecordSchema {
         name: "ForInState",
-        kind: 34,
+        kind: 33,
         class: ObjectClass::Record,
         fields: &[("object", SlotKind::Value), ("keys", SlotKind::Value), ("index", SlotKind::Value), ("visited", SlotKind::Value), ("result", SlotKind::Value), ("hasResult", SlotKind::Value)],
         rest: None,

@@ -14780,3 +14780,18 @@ handles section; sources always stored), `vm_load_snapshot` takes no candidate s
 returns only the open calls and the data, and `djs_snapshot_needs` returns only the host
 names (a snapshot that stores a script by hash only is refused there). Native hosts keep
 `HostNames::handles` and hashed scripts through the Rust API (the CLI's REPL uses both).
+
+## D3750: TypeScript legacy decorators and emitDecoratorMetadata are removed
+date: 2026-11-28 · by: pclean · issue: 0307
+The owner: legacy decorators "can go for sure". pi compiles TypeScript with the standard
+decorators only, and TypeScript itself defaults to them. Gone: `CompileOptions`'
+`experimental_decorators`/`emit_decorator_metadata` (Script::OPTIONS renumbers: TypeScript
+bit 2, privileged 3, `debugger` awaits 4), compiler/ts_meta.rs and the thunk half of
+compiler/decorators.rs, the builtins `%ApplyLegacyDecorators`, `%DecoratorParam`,
+`%DecoratorParamCall` (builtin closure kind 24) and `%DecoratorMetadata`, the Sandbox
+options `experimentalDecorators`/`emitDecoratorMetadata`, `vm_compile_file`'s goal bits 4
+and 8 (`debugger` moves from 16 to 4; ABI 14), the CLI's `--experimental-decorators`,
+`--emit-decorator-metadata` and the REPL's `.decorators`, the difftest directives and the
+four corpus cases. A parameter decorator stays a syntax error with qjs's message ("only
+supported with experimentalDecorators"), for parity with the oracle; strip-types keeps
+parameter decorators unerased as ts-blank-space does. Supersedes D1651.

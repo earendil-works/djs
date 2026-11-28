@@ -39,8 +39,6 @@ const HELP: &str = "\
 .exit                 leave (or Ctrl-D)
 .load <file>          run a file as one input (a Script, or a top-level-await body)
 .ts [on|off]          parse inputs as TypeScript
-.decorators [tc39|legacy|metadata]  TypeScript decorators: the standard ones, or
-                      experimentalDecorators (with emitDecoratorMetadata)
 .disasm <code>        bytecode: of the function a code expression evaluates to, or of
                       the code itself (compiled, not run) when it is not an expression
 .fuel [n|off]         fuel used by the last input; with n, a fuel limit per input
@@ -225,9 +223,6 @@ struct Repl {
     suspend_every: Option<u64>,
     time: bool,
     term: Option<Terminal>,
-    /// `.decorators`: TypeScript's legacy decorators, and their metadata.
-    legacy_decorators: bool,
-    decorator_metadata: bool,
     /// `.step`: the slice after which a running input pauses at a `step>` prompt.
     step: Option<u64>,
     /// Line mode: the lines still to read (the `step>` prompt reads from them too).
@@ -265,8 +260,6 @@ impl Repl {
             suspend_every: None,
             time: false,
             term: None,
-            legacy_decorators: false,
-            decorator_metadata: false,
             step: None,
             source: None,
             tools: Tools::default(),
@@ -380,8 +373,6 @@ impl Repl {
         };
         CompileOptions {
             typescript: self.typescript,
-            experimental_decorators: self.legacy_decorators,
-            emit_decorator_metadata: self.decorator_metadata,
             debugger_awaits: self.debugger,
             ..o
         }
@@ -1051,38 +1042,6 @@ impl Repl {
                 Ok(()) => println!("TypeScript: {}", if self.typescript { "on" } else { "off" }),
                 Err(e) => println!("{e}"),
             },
-            ".decorators" => {
-                match arg {
-                    "" => {}
-                    "tc39" | "standard" => {
-                        self.legacy_decorators = false;
-                        self.decorator_metadata = false;
-                    }
-                    "legacy" => {
-                        self.legacy_decorators = true;
-                        self.decorator_metadata = false;
-                    }
-                    "metadata" => {
-                        self.legacy_decorators = true;
-                        self.decorator_metadata = true;
-                    }
-                    _ => {
-                        println!(".decorators takes tc39, legacy or metadata");
-                        return None;
-                    }
-                }
-                let which = match (self.legacy_decorators, self.decorator_metadata) {
-                    (false, _) => "tc39",
-                    (true, false) => "legacy (experimentalDecorators)",
-                    (true, true) => "legacy with emitDecoratorMetadata",
-                };
-                let note = if self.legacy_decorators && !self.typescript {
-                    " (applies in TypeScript mode: .ts on)"
-                } else {
-                    ""
-                };
-                println!("decorators: {which}{note}");
-            }
             ".step" => match number_or_off(arg) {
                 Ok(n) => {
                     self.step = if arg.is_empty() { Some(1000) } else { n };

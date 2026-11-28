@@ -2241,7 +2241,7 @@ function DatePrototypeToPrimitive(hint) {
   throw %NewTypeError("invalid hint");
 }
 
-// builtins/decorators.ts:53
+// builtins/decorators.ts:47
 function DecoratorKindName(kind) {
   if (kind === 0) {
     return "class";
@@ -2261,12 +2261,12 @@ function DecoratorKindName(kind) {
   return "field";
 }
 
-// builtins/decorators.ts:73
+// builtins/decorators.ts:67
 function DecoratorPush(list, v) {
   %CreateDataPropertyOrThrow(list, LengthOfArrayLike(list), v);
 }
 
-// builtins/decorators.ts:82 %DecoratorStart
+// builtins/decorators.ts:76 %DecoratorStart
 function DecoratorStart(cls, heritage) {
   let parent = null;
   if (heritage) {
@@ -2288,7 +2288,7 @@ function DecoratorStart(cls, heritage) {
   return state;
 }
 
-// builtins/decorators.ts:107
+// builtins/decorators.ts:101
 function DecoratorNewAccess(kind, key) {
   const access = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   if (kind !== 3) {
@@ -2301,7 +2301,7 @@ function DecoratorNewAccess(kind, key) {
   return access;
 }
 
-// builtins/decorators.ts:123
+// builtins/decorators.ts:117
 function DecoratorNewContext(flags, name, access, metadata, adder) {
   const kind = flags & 7;
   const ctx = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -2317,14 +2317,14 @@ function DecoratorNewContext(flags, name, access, metadata, adder) {
   return ctx;
 }
 
-// builtins/decorators.ts:139
+// builtins/decorators.ts:133
 function DecoratorCheckResult(v, kind) {
   if (v !== undefined && !%IsCallable(v)) {
     throw %NewTypeError(DecoratorKindName(kind) + " decorator must return a function or undefined");
   }
 }
 
-// builtins/decorators.ts:146
+// builtins/decorators.ts:140
 function DecoratorAccessorFn(o, name) {
   const f = %Get(o, name);
   if (f !== undefined && !%IsCallable(f)) {
@@ -2333,7 +2333,7 @@ function DecoratorAccessorFn(o, name) {
   return f;
 }
 
-// builtins/decorators.ts:165 %ApplyDecorators
+// builtins/decorators.ts:159 %ApplyDecorators
 function ApplyDecorators(target, key, value, decs, stateV, flags) {
   const kind = flags & 7;
   const isPrivate = (flags & 16) !== 0;
@@ -2482,14 +2482,14 @@ function ApplyDecorators(target, key, value, decs, stateV, flags) {
   return undefined;
 }
 
-// builtins/decorators.ts:315
+// builtins/decorators.ts:309
 function DecoratorDefine(o, key, desc) {
   if (!%DefineOwnPropertyFromRecord(o, key, desc)) {
     throw %NewTypeError("cannot redefine property");
   }
 }
 
-// builtins/decorators.ts:326 %DecoratorRunInits
+// builtins/decorators.ts:320 %DecoratorRunInits
 function DecoratorRunInits(value, rec, thisValue) {
   const inits = %AsObj(%RecordGet(%AsObj(rec), 0));
   let v = value;
@@ -2501,7 +2501,7 @@ function DecoratorRunInits(value, rec, thisValue) {
   return v;
 }
 
-// builtins/decorators.ts:343 %DecoratorRunExtras
+// builtins/decorators.ts:337 %DecoratorRunExtras
 function DecoratorRunExtras(r, i, thisValue) {
   const list = %AsObj(%RecordGet(%AsObj(r), i));
   const n = LengthOfArrayLike(list);
@@ -2510,7 +2510,7 @@ function DecoratorRunExtras(r, i, thisValue) {
   }
 }
 
-// builtins/decorators.ts:355 %DecoratorAddInitializer
+// builtins/decorators.ts:349 %DecoratorAddInitializer
 function DecoratorAddInitializer(initializer) {
   const adder = %AsObj(this);
   if (%AsBool(%RecordGet(adder, 1))) {
@@ -2522,7 +2522,7 @@ function DecoratorAddInitializer(initializer) {
   DecoratorPush(%AsObj(%RecordGet(adder, 0)), initializer);
 }
 
-// builtins/decorators.ts:370 %DecoratorAccessGet
+// builtins/decorators.ts:364 %DecoratorAccessGet
 function DecoratorAccessGet(o) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -2530,7 +2530,7 @@ function DecoratorAccessGet(o) {
   return %Get(%AsObj(o), this);
 }
 
-// builtins/decorators.ts:381 %DecoratorAccessSet
+// builtins/decorators.ts:375 %DecoratorAccessSet
 function DecoratorAccessSet(o, value) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -2538,7 +2538,7 @@ function DecoratorAccessSet(o, value) {
   %Set(%AsObj(o), this, value);
 }
 
-// builtins/decorators.ts:392 %DecoratorAccessHas
+// builtins/decorators.ts:386 %DecoratorAccessHas
 function DecoratorAccessHas(o) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -2546,80 +2546,7 @@ function DecoratorAccessHas(o) {
   return %HasProperty(%AsObj(o), this);
 }
 
-// builtins/decorators.ts:402
-function DecoratorReflectFn(reflect, name) {
-  if (!%IsObject(reflect)) {
-    return undefined;
-  }
-  const f = %Get(%AsObj(reflect), name);
-  return %IsCallable(f) ? f : undefined;
-}
-
-// builtins/decorators.ts:418 %ApplyLegacyDecorators
-function ApplyLegacyDecorators(target, key, decs, kind) {
-  let r = undefined;
-  if (kind === 0) {
-    r = target;
-  } else if (kind !== 5) {
-    r = ObjectGetOwnPropertyDescriptor(target, key);
-  }
-  const reflect = %Get(%GlobalObject(), "Reflect");
-  const decorate = DecoratorReflectFn(reflect, "decorate");
-  if (decorate !== undefined) {
-    if (kind === 0) {
-      r = %Call(decorate, reflect, decs, target);
-    } else {
-      r = %Call(decorate, reflect, decs, target, key, r);
-    }
-  } else {
-    const list = %AsObj(decs);
-    let i = LengthOfArrayLike(list);
-    while (i > 0) {
-      i -= 1;
-      const dec = %Get(list, i);
-      if (!%ToBoolean(dec)) {
-        continue;
-      }
-      const res = kind === 0 ? %Call(dec, undefined, r) : %Call(dec, undefined, target, key, r);
-      if (%ToBoolean(res)) {
-        r = res;
-      }
-    }
-  }
-  if (kind === 0) {
-    return r;
-  }
-  if (%ToBoolean(r)) {
-    ObjectDefineProperty(target, key, r);
-  }
-  return undefined;
-}
-
-// builtins/decorators.ts:461 %DecoratorParam
-function DecoratorParam(dec, index) {
-  const data = %NewRecord(6);
-  %RecordSet(data, 0, dec);
-  %RecordSet(data, 1, index);
-  return %NewBuiltinClosure(24, data, 2);
-}
-
-// builtins/decorators.ts:473 %DecoratorParamCall
-function DecoratorParamCall(target, key) {
-  const data = %AsObj(this);
-  %Call(%RecordGet(data, 0), undefined, target, key, %RecordGet(data, 1));
-}
-
-// builtins/decorators.ts:483 %DecoratorMetadata
-function DecoratorMetadata(key, value) {
-  const reflect = %Get(%GlobalObject(), "Reflect");
-  const f = DecoratorReflectFn(reflect, "metadata");
-  if (f === undefined) {
-    return undefined;
-  }
-  return %Call(f, reflect, key, value);
-}
-
-// builtins/decorators.ts:496 value Symbol.metadata
+// builtins/decorators.ts:397 value Symbol.metadata
 function SymbolMetadata() {
   return %WellKnownSymbol("metadata");
 }
@@ -2842,7 +2769,7 @@ function AsyncDisposableStackPrototypeDisposeAsync() {
     return promise;
   }
   %RecordSet(stack, 1, 1);
-  const s = %NewRecord(8);
+  const s = %NewRecord(7);
   %RecordSet(s, 2, promise);
   const resources = %AsObj(%RecordGet(stack, 2));
   %RecordSet(stack, 2, %ArrayCreate(0));
@@ -2942,7 +2869,7 @@ function AsyncDisposeRejected(reason) {
 
 // builtins/disposable.ts:491 %UsingCreate
 function UsingCreate() {
-  const s = %NewRecord(9);
+  const s = %NewRecord(8);
   %RecordSet(s, 2, %ArrayCreate(0));
   return s;
 }
@@ -3412,7 +3339,7 @@ function FromAsyncStart(c, promise, asyncItems, mapfn, thisArg) {
   if (mapfn !== undefined && !%IsCallable(mapfn)) {
     throw %NewTypeError("mapfn is not callable");
   }
-  const s = %NewRecord(11);
+  const s = %NewRecord(10);
   %RecordSet(s, 0, promise);
   %RecordSet(s, 1, mapfn);
   %RecordSet(s, 2, thisArg);
@@ -4730,7 +4657,7 @@ function IteratorFrom(o) {
   if (OrdinaryHasInstance(%RealmConstructor("Iterator"), iterator)) {
     return iterator;
   }
-  const wrapper = %CreateIteratorHelper(13, 0);
+  const wrapper = %CreateIteratorHelper(12, 0);
   %RecordSet(wrapper, 2, iterator);
   %RecordSet(wrapper, 3, next);
   return wrapper;
@@ -4768,7 +4695,7 @@ function IteratorConcat(...items) {
     }
     %CreateDataPropertyOrThrow(iterables, i, %CreateArrayFromPair(method, item));
   }
-  const helper = %CreateIteratorHelper(19, 6);
+  const helper = %CreateIteratorHelper(18, 6);
   %RecordSet(helper, 4, iterables);
   %RecordSet(helper, 5, 0);
   return helper;
@@ -4778,21 +4705,21 @@ function IteratorConcat(...items) {
 function IteratorPrototypeMap(mapper) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, mapper);
-  return NewCallbackHelper(14, 1, o, mapper);
+  return NewCallbackHelper(13, 1, o, mapper);
 }
 
 // builtins/iterator.ts:853 Iterator.prototype.filter
 function IteratorPrototypeFilter(predicate) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, predicate);
-  return NewCallbackHelper(14, 2, o, predicate);
+  return NewCallbackHelper(13, 2, o, predicate);
 }
 
 // builtins/iterator.ts:863 Iterator.prototype.take
 function IteratorPrototypeTake(limit) {
   const o = ThisIteratorObject(this);
   const remaining = HelperLimit(o, limit);
-  const helper = NewIteratorHelper(16, 3, o);
+  const helper = NewIteratorHelper(15, 3, o);
   %RecordSet(helper, 4, remaining);
   return helper;
 }
@@ -4801,7 +4728,7 @@ function IteratorPrototypeTake(limit) {
 function IteratorPrototypeDrop(limit) {
   const o = ThisIteratorObject(this);
   const remaining = HelperLimit(o, limit);
-  const helper = NewIteratorHelper(16, 4, o);
+  const helper = NewIteratorHelper(15, 4, o);
   %RecordSet(helper, 4, remaining);
   return helper;
 }
@@ -4810,7 +4737,7 @@ function IteratorPrototypeDrop(limit) {
 function IteratorPrototypeFlatMap(mapper) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, mapper);
-  return NewCallbackHelper(15, 5, o, mapper);
+  return NewCallbackHelper(14, 5, o, mapper);
 }
 
 // builtins/iterator.ts:898 Iterator.prototype.reduce
@@ -4976,7 +4903,7 @@ function ChunkingSize(o, size, name) {
 function IteratorPrototypeChunks(chunkSize) {
   const o = ThisIteratorObject(this);
   const size = ChunkingSize(o, chunkSize, "chunkSize");
-  const helper = NewIteratorHelper(17, 7, o);
+  const helper = NewIteratorHelper(16, 7, o);
   %RecordSet(helper, 4, size);
   return helper;
 }
@@ -4990,7 +4917,7 @@ function IteratorPrototypeWindows(windowSize, undersized) {
     IteratorCloseThrow(o);
     throw error;
   }
-  const helper = NewIteratorHelper(18, 8, o);
+  const helper = NewIteratorHelper(17, 8, o);
   %RecordSet(helper, 4, size);
   %RecordSet(helper, 5, undersized === "allow-partial");
   return helper;
@@ -5095,7 +5022,7 @@ function ZipOptions(options) {
       throw %NewTypeError("padding must be an object");
     }
   }
-  const r = %NewRecord(21);
+  const r = %NewRecord(20);
   %RecordSet(r, 0, m);
   %RecordSet(r, 1, padding);
   return r;
@@ -5123,7 +5050,7 @@ function ZipAddIterator(iters, nexts, open, value, outer) {
 
 // builtins/iterator.ts:1262
 function ZipCreate(iters, nexts, open, padding, mode, keys) {
-  const helper = %CreateIteratorHelper(20, 9);
+  const helper = %CreateIteratorHelper(19, 9);
   %RecordSet(helper, 2, iters);
   %RecordSet(helper, 3, nexts);
   %RecordSet(helper, 4, padding);
@@ -6573,7 +6500,7 @@ function NewPromiseCapability(c) {
   if (!%IsConstructor(c)) {
     throw %NewTypeError("not a constructor");
   }
-  const r = %NewRecord(28);
+  const r = %NewRecord(27);
   const executor = %NewBuiltinClosure(2, r, 2);
   const promise = %Construct(c, executor);
   if (!%IsCallable(%RecordGet(r, 1)) || !%IsCallable(%RecordGet(r, 2))) {
@@ -6653,7 +6580,7 @@ function PromiseReactionJob(capability, handler, argument, fulfilled) {
 
 // builtins/promise.ts:265 %PromiseResolveThenableJob
 function PromiseResolveThenableJob(promise, thenable, then) {
-  const r = %NewRecord(29);
+  const r = %NewRecord(28);
   %RecordSet(r, 0, promise);
   %RecordSet(r, 1, false);
   const resolve = %NewBuiltinClosure(0, r, 1);
@@ -6729,7 +6656,7 @@ function DecrementRemaining(remaining) {
 
 // builtins/promise.ts:405
 function NewElementRecord(index, values, capability, remaining) {
-  const r = %NewRecord(30);
+  const r = %NewRecord(29);
   %RecordSet(r, 0, false);
   %RecordSet(r, 1, index);
   %RecordSet(r, 2, values);
@@ -6784,7 +6711,7 @@ function PerformPromiseKeyed(thisValue, promises, kind) {
     const count = LengthOfArrayLike(allKeys);
     const keys = %ArrayCreate(0);
     const values = %ArrayCreate(0);
-    const remaining = %NewRecord(31);
+    const remaining = %NewRecord(30);
     %RecordSet(remaining, 0, 1);
     const rejectFn = kind === 0 ? CapabilityRejectFunction(capability) : undefined;
     let index = 0;
@@ -6897,7 +6824,7 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   let iteratorDone = false;
   try {
     const values = %ArrayCreate(0);
-    const remaining = %NewRecord(31);
+    const remaining = %NewRecord(30);
     %RecordSet(remaining, 0, 1);
     let index = 0;
     let resolveFn = undefined;
@@ -6908,7 +6835,7 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
     if (kind !== 2) {
       rejectFn = CapabilityRejectFunction(capability);
     }
-    const fixed = %NewRecord(32);
+    const fixed = %NewRecord(31);
     %RecordSet(fixed, 0, c);
     %RecordSet(fixed, 1, promiseResolve);
     %RecordSet(fixed, 2, capability);
@@ -7035,7 +6962,7 @@ function PromisePrototypeFinally(onFinally) {
   if (!%IsCallable(onFinally)) {
     return InvokeThen(this, onFinally, onFinally);
   }
-  const data = %NewRecord(33);
+  const data = %NewRecord(32);
   %RecordSet(data, 0, onFinally);
   %RecordSet(data, 1, c);
   return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
@@ -11848,10 +11775,6 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("DecoratorAccessGet", DecoratorAccessGet);
 %InstallIntrinsic("DecoratorAccessSet", DecoratorAccessSet);
 %InstallIntrinsic("DecoratorAccessHas", DecoratorAccessHas);
-%InstallIntrinsic("ApplyLegacyDecorators", ApplyLegacyDecorators);
-%InstallIntrinsic("DecoratorParam", DecoratorParam);
-%InstallIntrinsic("DecoratorParamCall", DecoratorParamCall);
-%InstallIntrinsic("DecoratorMetadata", DecoratorMetadata);
 %InstallIntrinsic("AsyncDisposeFulfilled", AsyncDisposeFulfilled);
 %InstallIntrinsic("AsyncDisposeRejected", AsyncDisposeRejected);
 %InstallIntrinsic("UsingCreate", UsingCreate);

@@ -292,7 +292,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_free(vm)` | drop the VM |
 | `vm_arena_ptr(vm)`, `vm_arena_len(vm)` | the arena (the image, and the reader's view) |
 | `vm_collect(vm) -> 0/-1` | run the GC |
-| `vm_compile_file(vm, goal, name_len, params_len, src_len) -> h` | compile staging: `name_len` bytes of the file name stack traces show (none: `sandbox.js`; 0049), `params_len` bytes of `\n`-separated parameter names (goal 1, async body), then the source; goal 0 is a Script; `goal \| 2` parses TypeScript (0048), `\| 4` with legacy `experimentalDecorators`, `\| 8` also with `emitDecoratorMetadata` (D1651) |
+| `vm_compile_file(vm, goal, name_len, params_len, src_len) -> h` | compile staging: `name_len` bytes of the file name stack traces show (none: `sandbox.js`; 0049), `params_len` bytes of `\n`-separated parameter names (goal 1, async body), then the source; goal 0 is a Script; `goal \| 2` parses TypeScript (0048), `\| 4` compiles `debugger;` in async functions as an await of the global `debugger` (D3050) |
 | `vm_global(vm) -> h`, `vm_new_object(vm) -> h` | objects |
 | `vm_new_host_function(vm, fn_id, name_len) -> h` | a function that parks the VM with `fn_id` |
 | `vm_new_async_host_function(vm, fn_id, name_len) -> h` | a function that returns a promise and adds a pending call (D1374) |

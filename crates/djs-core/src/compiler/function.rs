@@ -3,7 +3,6 @@
 use crate::PushOut;
 
 use super::PResult;
-use super::decorators::DecParams;
 use super::expr::Expr;
 use super::func::{BODY_SCOPE, FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{Parser, syntax};
@@ -87,19 +86,6 @@ impl Parser<'_, '_> {
         start: u32,
         flavor: (bool, bool),
     ) -> PResult<u32> {
-        self.parse_method_function_dp(kind, name, start, flavor, None)
-    }
-
-    /// [`Parser::parse_method_function`] of a class method with legacy decorators: its
-    /// parameter decorators and types go to `dp` (compiler/decorators.rs).
-    pub(super) fn parse_method_function_dp(
-        &mut self,
-        kind: FuncKind,
-        name: Atom,
-        start: u32,
-        flavor: (bool, bool),
-        mut dp: Option<&mut DecParams>,
-    ) -> PResult<u32> {
         self.enter()?;
         self.begin_function(kind)?;
         self.start_flavor(flavor)?;
@@ -107,7 +93,7 @@ impl Parser<'_, '_> {
         self.f.src_start = start;
         self.ts_fn_type_params()?;
         self.expect(TokenKind::LParen, "(")?;
-        self.parse_params_dp(dp.as_deref_mut())?;
+        self.parse_params()?;
         // qjs reports a wrong accessor arity at the `)`.
         let paren = self.prev_end - 1;
         let ok = match kind {
@@ -117,12 +103,6 @@ impl Parser<'_, '_> {
         };
         if !ok {
             return syntax(paren, "invalid number of arguments for getter or setter");
-        }
-        if let Some(dp) = dp
-            && dp.metadata
-            && self.is(TokenKind::Colon)
-        {
-            dp.ret = Some(self.ts_meta_annotation());
         }
         self.ts_return_annotation()?;
         self.parse_function_body()?;
@@ -174,33 +154,21 @@ impl Parser<'_, '_> {
     /// appears, every parameter becomes a local initialized in order, with TDZ between
     /// them (docs/compiler.md 5.5).
     pub(super) fn parse_params(&mut self) -> PResult<()> {
-        self.parse_params_dp(None)
-    }
-
-    /// [`Parser::parse_params`] with the legacy parameter decorators and types going to
-    /// `dp` (compiler/decorators.rs).
-    pub(super) fn parse_params_dp(&mut self, dp: Option<&mut DecParams>) -> PResult<()> {
         self.f.in_params = true;
-        self.parse_params_inner(dp)?;
+        self.parse_params_inner()?;
         self.f.in_params = false;
         Ok(())
     }
 
-    fn parse_params_inner(&mut self, mut dp: Option<&mut DecParams>) -> PResult<()> {
+    fn parse_params_inner(&mut self) -> PResult<()> {
         let close = TokenKind::RParen;
         let mut seen_default = false;
         while !self.is(close) {
-            if self.ts && self.ts_param_prefix(dp.as_deref_mut())? {
+            if self.ts && self.ts_param_prefix()? {
                 continue;
             }
             let rest = self.eat(TokenKind::Ellipsis)?;
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-                if let Some(dp) = dp.as_deref_mut()
-                    && dp.metadata
-                {
-                    let m = self.ts_meta_pattern_annotation();
-                    dp.types.push_out(if rest { m.rest_elem() } else { m });
-                }
                 self.parse_pattern_param(rest, &mut seen_default)?;
                 if rest {
                     break;
@@ -224,12 +192,6 @@ impl Parser<'_, '_> {
             // qjs reports duplicates at the token after the name.
             let v = self.declare_param(name, self.tok.start)?;
             self.ts_eat_marker(TokenKind::Question)?;
-            if let Some(dp) = dp.as_deref_mut()
-                && dp.metadata
-            {
-                let m = self.ts_meta_annotation();
-                dp.types.push_out(if rest { m.rest_elem() } else { m });
-            }
             self.ts_annotation()?;
             let index = self.f.vars[v as usize].param;
             let has_default = !rest && self.is(TokenKind::Assign);

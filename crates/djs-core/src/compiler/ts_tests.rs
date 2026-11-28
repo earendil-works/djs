@@ -6,7 +6,7 @@ extern crate std;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::tests::{run_body_opts, run_opts};
+use super::tests::run_body_opts;
 use super::*;
 use crate::heap::Heap;
 
@@ -381,143 +381,45 @@ fn ts_errors() {
     assert!(bad.is_empty(), "\n{}", bad.join("\n"));
 }
 
-fn legacy_opts(metadata: bool) -> CompileOptions<'static> {
-    CompileOptions {
-        experimental_decorators: true,
-        emit_decorator_metadata: metadata,
-        ..CompileOptions::async_body("t.ts", &["console"]).ts()
-    }
-}
-
-/// TypeScript legacy decorators (0065 part 2): the parts of dquickts'
-/// tests/test_decorators_legacy.ts that the difftest case cannot run, checked with
-/// qjs `--experimental-decorators`.
+/// Decorator errors of TypeScript, as qjs reports them (parameter decorators are a
+/// syntax error: djs has only the standard decorators).
 #[test]
-fn legacy_decorators() {
-    let cases: &[(&str, bool, &str)] = &[
-        // Without emitDecoratorMetadata: no metadata decorators.
-        (
-            "const log = []; const d = (t, k) => { log.push(k); }; Reflect.metadata = () => { log.push('meta'); return d; }; class C { @d x: string; @d m(a: number) {} } return log.join()",
-            false,
-            "=> x,m",
-        ),
-        // Reflect.metadata is only used if it exists.
-        (
-            "const d = (t, k) => {}; class Plain { @d x: string; } return Object.getOwnPropertyNames(Plain.prototype).join()",
-            true,
-            "=> constructor",
-        ),
-        (
-            "const log = []; Reflect.metadata = (k, v) => (t, key) => { log.push(key + ' ' + k + ' ' + v.name); }; const d = () => {}; class C { @d x: string; } return log.join()",
-            true,
-            "=> x design:type String",
-        ),
-        // Parameter decorators of a private method get its name as a string key.
-        (
-            "let r; const d = (t, k, i) => { r = typeof k + ' ' + k + ' ' + i; }; class C { #m(a, @d b) {} } return r",
-            false,
-            "=> string #m 1",
-        ),
-    ];
-    let mut bad = Vec::new();
-    for &(src, metadata, want) in cases {
-        let got = run_opts(src, &legacy_opts(metadata));
-        if got != want {
-            bad.push(alloc::format!("{src}\n  got:  {got:?}\n  want: {want:?}"));
-        }
-    }
-    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
-}
-
-/// `(source, legacy decorators, message, line, column)`, as qjs reports them (with
-/// `--experimental-decorators` for the legacy ones).
-#[test]
-fn legacy_decorator_errors() {
-    let cases: &[(&str, bool, &str, u32, u32)] = &[
-        (
-            "class C { @dec #m() {} }",
-            true,
-            "decorators are not valid here",
-            1,
-            18,
-        ),
-        (
-            "class C { @dec static #x = 1; }",
-            true,
-            "decorators are not valid here",
-            1,
-            26,
-        ),
-        (
-            "class C { @dec accessor #x = 1; }",
-            true,
-            "decorators are not valid here",
-            1,
-            28,
-        ),
-        (
-            "class C { @dec constructor() {} }",
-            true,
-            "decorators are not valid here",
-            1,
-            27,
-        ),
-        (
-            "class C { @dec static {} }",
-            true,
-            "decorators are not valid here",
-            1,
-            23,
-        ),
+fn decorator_errors() {
+    let cases: &[(&str, &str, u32, u32)] = &[
         (
             "@d function f() {}",
-            true,
             "decorators must be followed by a class",
             1,
             4,
         ),
         (
-            "class C { m(x, @d) {} }",
-            true,
-            "missing formal parameter",
-            1,
-            18,
-        ),
-        (
             "function f(@d x) {}",
-            true,
             "parameter decorators are only supported with experimentalDecorators",
             1,
             12,
         ),
         (
             "const o = { m(@d x) {} }",
-            true,
             "parameter decorators are only supported with experimentalDecorators",
             1,
             15,
         ),
         (
             "class C { m(@d x) {} }",
-            false,
             "parameter decorators are only supported with experimentalDecorators",
             1,
             13,
         ),
         (
             "class C { constructor(@d x) {} }",
-            false,
             "parameter decorators are only supported with experimentalDecorators",
             1,
             23,
         ),
     ];
     let mut bad = Vec::new();
-    for &(src, legacy, msg, line, col) in cases {
-        let opts = CompileOptions {
-            experimental_decorators: legacy,
-            ..CompileOptions::script("t.ts").ts()
-        };
+    for &(src, msg, line, col) in cases {
+        let opts = CompileOptions::script("t.ts").ts();
         let mut heap = Heap::new().unwrap();
         let e = match compile(&mut heap, src.as_bytes(), &opts) {
             Ok(_) => {

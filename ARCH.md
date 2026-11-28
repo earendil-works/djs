@@ -273,8 +273,8 @@ pathological input into a SyntaxError instead of a stack overflow.
 parameter and argument lists, `as`/`satisfies`, `!`, `interface`, `type`, `declare`,
 overload signatures, and `import type`. Constructs with runtime meaning (enums and
 namespaces as closures, const enums folded, parameter properties; D1482-D1484) compile
-directly to bytecode. Decorators follow qjs (D1650), and TypeScript's legacy decorators
-are behind a compile flag (D1651). Semantics follow tsc with `isolatedModules` and
+directly to bytecode. Decorators follow qjs (D1650); TypeScript's legacy decorators
+are not supported (D1651 removed by D3750). Semantics follow tsc with `isolatedModules` and
 `useDefineForClassFields`, matching dquickts. There is no separate TS mode in the core:
 the flag only enables the TS grammar (D1480), and `djs strip-types` shows the erasure,
 blanked like ts-blank-space (D1481).

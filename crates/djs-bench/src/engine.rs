@@ -77,8 +77,6 @@ pub fn run_once(
         file: &script.file,
         source: &script.source,
         ts: false,
-        legacy_decorators: false,
-        decorator_metadata: false,
         prelude_file,
         prelude,
         timeout: Duration::from_secs(60),

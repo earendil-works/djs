@@ -7,8 +7,6 @@
 //! ```text
 //! // difftest: skip-djs <reason>   do not run with djs (a non-goal such as direct eval)
 //! // difftest: ts                  parse a .js file as TypeScript
-//! // difftest: experimental-decorators  TypeScript legacy decorators
-//! // difftest: emit-decorator-metadata  legacy decorators with their metadata
 //! // difftest: fuel <n>            djs fuel limit for this case
 //! // difftest: timeout <secs>      wall-clock limit for this case
 //! // difftest: djs-expect <a> => <b>  an expected difference: with djs, `.expected` lines
@@ -29,9 +27,6 @@ use djs_test262::glob;
 pub struct Meta {
     pub skip_djs: Option<String>,
     pub ts: bool,
-    /// TypeScript `experimentalDecorators`, and `emitDecoratorMetadata`.
-    pub legacy_decorators: bool,
-    pub decorator_metadata: bool,
     pub fuel: Option<u64>,
     pub timeout: Option<Duration>,
     /// `djs-expect` directives: transcript lines that differ from the oracle on purpose.
@@ -87,11 +82,6 @@ pub fn parse_meta(source: &str, is_ts_file: bool) -> Result<Meta, String> {
             "no-stress" => return Err("`no-stress` needs a reason".into()),
             "ts" if rest.is_empty() => meta.ts = true,
             "stacks" if rest.is_empty() => meta.stacks = true,
-            "experimental-decorators" if rest.is_empty() => meta.legacy_decorators = true,
-            "emit-decorator-metadata" if rest.is_empty() => {
-                meta.legacy_decorators = true;
-                meta.decorator_metadata = true;
-            }
             "fuel" => meta.fuel = Some(rest.parse().map_err(|_| format!("bad fuel `{rest}`"))?),
             "timeout" => {
                 let secs: f64 = rest.parse().map_err(|_| format!("bad timeout `{rest}`"))?;

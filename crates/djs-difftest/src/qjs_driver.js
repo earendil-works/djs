@@ -1,7 +1,6 @@
 // Case driver for difftest with dquickts' qjs (`qjs -m -e <this> <spec>`).
 //
-// <spec> is JSON: {"prelude": path, "case": path, "ts": bool, "legacy": bool,
-// "metadata": bool} (the last two: TypeScript legacy decorators and their metadata).
+// <spec> is JSON: {"prelude": path, "case": path, "ts": bool}.
 // The prelude is evaluated as a strict Script; the case becomes the body of a strict
 // `async (tools, console) =>` arrow function (as in pi, D008) and is
 // run through the prelude's api.run(). Results are written as single lines:
@@ -62,8 +61,6 @@ try {
   // Same line as the case's first line, so line numbers match the case file.
   fn = evalScript('"use strict";(async (tools, console) => {' + read(spec.case) + "\n})", {
     typescript: spec.ts,
-    experimentalDecorators: spec.legacy,
-    emitDecoratorMetadata: spec.metadata,
   });
 } catch (e) {
   api.run(() => {

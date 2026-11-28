@@ -132,7 +132,7 @@ The shipped module has <!--n wasm/ops-->60<!--/n--> operations. By area:
 | buffers and build | `djs_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack`; the Unicode tables: `djs_tables_ptr`, `djs_tables_set`, `vm_tables_need` ([above](#a-module-that-needs-nothing)) |
 | the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
 | VMs | `vm_new` (a heap cap, flag 1: frozen builtins), `vm_free`; the arena: `vm_arena_ptr`, `vm_arena_len`, `vm_collect` |
-| code | `vm_compile_file` (a Script, or a codemode body with parameter names, under the file name stack traces show; option bits for TypeScript and decorators) |
+| code | `vm_compile_file` (a Script, or a codemode body with parameter names, under the file name stack traces show; option bits for TypeScript and `debugger;` pauses) |
 | values in | `vm_decode_wire`, `vm_string_reserve`, `vm_global`, `vm_new_object`, `vm_define`, `vm_new_error` |
 | values out | `vm_handle_bits` (a value's 64 bits, for the reader), `vm_display`, `vm_promise_state`, `vm_handle_free` |
 | running | `vm_call`, `vm_run`, `vm_fuel_used`, `vm_abort`, `vm_result`, `vm_outcome`, `vm_take_unhandled_rejections` |

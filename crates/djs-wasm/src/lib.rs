@@ -40,7 +40,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 13;
+pub const ABI_VERSION: u32 = 14;
 
 /// `vm_run` results.
 pub mod status {
@@ -799,10 +799,9 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
 /// `sandbox.js`; 0049: pi's codemode reports `codemode.js:2`), then the parameter names
 /// (`params_len` bytes, separated by `\n`), then the source (`src_len` bytes, UTF-8).
 /// `goal` 0 is a Script; 1 is a codemode async function body with those parameters.
-/// `goal | 2` parses TypeScript (0048), `| 4` with legacy `experimentalDecorators`, `| 8`
-/// also with `emitDecoratorMetadata` (0065), `| 16` compiles `debugger;` in async
-/// functions as an await of the global `debugger` (D3050). Returns a handle to the closure, or 0 with the error
-/// (`SyntaxError: ... at line:col`) in the out buffer.
+/// `goal | 2` parses TypeScript (0048), `| 4` compiles `debugger;` in async functions as
+/// an await of the global `debugger` (D3050). Returns a handle to the closure, or 0 with
+/// the error (`SyntaxError: ... at line:col`) in the out buffer.
 pub extern "C" fn vm_compile_file(
     vm: u32,
     goal: u32,
@@ -853,9 +852,7 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             params: &params,
             privileged: false,
             typescript: goal & 2 != 0,
-            experimental_decorators: goal & 12 != 0,
-            emit_decorator_metadata: goal & 8 != 0,
-            debugger_awaits: goal & 16 != 0,
+            debugger_awaits: goal & 4 != 0,
         };
         let result = elastic(&mut slot.vm, |vm| {
             allocator::with_zone(|| vm.compile(src, &opts))
@@ -905,9 +902,7 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
             params: &params,
             privileged: false,
             typescript: goal & 2 != 0,
-            experimental_decorators: goal & 12 != 0,
-            emit_decorator_metadata: goal & 8 != 0,
-            debugger_awaits: goal & 16 != 0,
+            debugger_awaits: goal & 4 != 0,
         };
         let listing = djs_core::heap::Heap::new()
             .map_err(|e| String::from(e.as_str()))

@@ -1,5 +1,5 @@
-//! `djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-//! [--gc-stress] [--suspend-every N] [--tools answers.json] <file.js>`: run
+//! `djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--tools answers.json]
+//! <file.js>`: run
 //! a script, serving `console.log` and `print` as sync host calls, `later(v)` and
 //! `tools.x()` as async host calls (0174, D2602): `later` is answered with its argument,
 //! tools from `--tools answers.json`, one call at every idle point. A codemode body's
@@ -20,18 +20,13 @@ use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
 use crate::tools::{MAKE_TOOL, Tools};
 
-const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\n\
-                [--emit-decorator-metadata] [--gc-stress] [--suspend-every N]\n\
+const USAGE: &str = "usage: djs run [--body] [--ts] [--gc-stress] [--suspend-every N]\n\
                 [--tools answers.json] [--bind NAME=IDENTITY] <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
   --bind NAME=ID     with --body: one more parameter NAME, the async host function\n\
                      ID (`--bind myTool=@sdk/our-stuff#myTool`), answered from\n\
                      --tools under ID like a tool (repeatable)\n\
   --ts               parse as TypeScript (the default for .ts files)\n\
-  --experimental-decorators\n\
-                     TypeScript legacy decorators (experimentalDecorators)\n\
-  --emit-decorator-metadata\n\
-                     legacy decorators with emitDecoratorMetadata\n\
   --gc-stress        collect garbage at every safepoint\n\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
                      restored from the heap image\n\
@@ -91,11 +86,6 @@ fn command(args: &[String], resume: bool) -> i32 {
                 }
             },
             "--ts" => opts.typescript = true,
-            "--experimental-decorators" => opts.experimental_decorators = true,
-            "--emit-decorator-metadata" => {
-                opts.experimental_decorators = true;
-                opts.emit_decorator_metadata = true;
-            }
             "--gc-stress" => opts.gc_stress = true,
             "--snapshot-after" => match (it.next().and_then(|k| k.parse().ok()), it.next()) {
                 (Some(k), Some(out)) if k > 0 => opts.snapshots.after = Some((k, out.clone())),
@@ -197,8 +187,6 @@ pub fn run_source(
     };
     let copts = CompileOptions {
         typescript: opts.typescript,
-        experimental_decorators: opts.experimental_decorators,
-        emit_decorator_metadata: opts.emit_decorator_metadata,
         debugger_awaits: opts.debugger.is_some(),
         ..copts
     };
@@ -289,9 +277,6 @@ pub struct RunOptions {
     pub suspend_every: Option<u64>,
     /// Parse as TypeScript.
     pub typescript: bool,
-    /// TypeScript legacy decorators, and their metadata.
-    pub experimental_decorators: bool,
-    pub emit_decorator_metadata: bool,
     /// Snapshots at idle points.
     pub snapshots: Snapshotting,
     /// `djs resume`: the run goes on from a snapshot.

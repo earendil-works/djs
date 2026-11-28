@@ -127,8 +127,6 @@ pub(super) struct Parser<'a, 'h> {
     /// Decorators were parsed for the next class (their array is on the stack): the
     /// offset of the first `@` (compiler/decorators.rs).
     pub class_decs: Option<u32>,
-    /// Legacy decorators were parsed for the next class: their thunk.
-    pub class_thunk: Option<super::decorators::Thunk>,
     /// Where the content of the innermost parentheses being parsed starts (`u32::MAX`:
     /// none), so an optional chain knows it is all of it (`(a?.b)()`).
     pub paren_inner: u32,
@@ -335,7 +333,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             last_anon_fn: None,
             named_fn: None,
             class_decs: None,
-            class_thunk: None,
             delete_operand: false,
             paren_inner: u32::MAX,
             pat_scan: Default::default(),

@@ -18,9 +18,7 @@ The command is built from the `djs-cli` crate: `cargo run -p djs-cli -- run file
 ## `djs run`
 
 ```text
-djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-        [--gc-stress] [--suspend-every N]
-        [--tools answers.json] [--bind NAME=IDENTITY]
+djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--tools answers.json] [--bind NAME=IDENTITY]
         [--snapshot-after K OUT] [--snapshot-every-idle] [--debugger OUT] file.js
 ```
 
@@ -28,8 +26,7 @@ djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
 there is no top-level `await`. With `--body` it runs as a codemode body, the way hosts
 run scripts: the body of an async function, with `await` and `return` at the top level
 and the parameters `tools` and `console`. `.ts` files are TypeScript; `--ts` makes any
-file TypeScript, and the decorator flags select TypeScript's legacy decorators
-([TypeScript](typescript.md#decorators)).
+file TypeScript ([TypeScript](typescript.md)).
 
 The run has three host globals besides `console`:
 
@@ -167,7 +164,6 @@ and prints only results.
 | `.help`, `.exit` | the list; leave (Ctrl-D on an empty line too) |
 | `.load <file>` | run a file as one input |
 | `.ts [on\|off]` | parse inputs as TypeScript |
-| `.decorators [tc39\|legacy\|metadata]` | which decorators TypeScript inputs get |
 | `.disasm <code>` | the bytecode of the function `code` evaluates to, or of `code` itself |
 | `.fuel [n\|off]` | the fuel the last input used; with `n`, stop inputs after `n` fuel |
 | `.time [on\|off]` | print wall time and fuel after each input |

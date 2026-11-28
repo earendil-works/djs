@@ -1384,14 +1384,11 @@ impl<'a> Parser<'a, '_> {
     }
 
     /// At the start of a formal parameter: a `this` parameter (type only: erased with
-    /// its comma, returns true) or parameter decorators (legacy, into `dp`) and
+    /// its comma, returns true) or parameter decorators (strip-types only) and
     /// accessibility / `readonly` / `override` modifiers (erased, but for `strip_types`
     /// not in a constructor; parameter properties are found by `ts_scan_param_props`
     /// beforehand).
-    pub(super) fn ts_param_prefix(
-        &mut self,
-        dp: Option<&mut super::decorators::DecParams>,
-    ) -> PResult<bool> {
+    pub(super) fn ts_param_prefix(&mut self) -> PResult<bool> {
         let start = self.tok.start;
         if self.is(TokenKind::This)
             && self.f.param_count == 0
@@ -1409,7 +1406,7 @@ impl<'a> Parser<'a, '_> {
             return Ok(true);
         }
         if self.is(TokenKind::At) {
-            self.parse_param_decorators(dp)?;
+            self.parse_param_decorators()?;
         }
         // (After the decorators: ts-blank-space keeps them.)
         let start = self.tok.start;

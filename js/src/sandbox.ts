@@ -183,17 +183,6 @@ export interface SandboxOptions {
    */
   deterministic?: { startedAt: number; seed: number | bigint };
   /**
-   * With `typescript`: TypeScript's legacy `experimentalDecorators` (tsc's decorator
-   * semantics and parameter decorators) instead of the standard decorators (0065).
-   * Default false.
-   */
-  experimentalDecorators?: boolean;
-  /**
-   * With `typescript`: `emitDecoratorMetadata` (`design:type` and friends through
-   * `Reflect.metadata`); implies `experimentalDecorators`. Default false.
-   */
-  emitDecoratorMetadata?: boolean;
-  /**
    * Makes `debugger;` a pause (D3050): in an async function, the statement awaits a call
    * of the async host function with the identity `"debugger"`, bound as the global
    * `debugger`: this function, which `run` and `runAsync` call, or with `true` one that
@@ -362,7 +351,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 13;
+const ABI_VERSION = 14;
 /** `vm_new`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
@@ -1797,11 +1786,7 @@ export class Sandbox {
       all.set(src, name.length + head.length);
       this.stage(all);
       const o = this.opts;
-      const goal = (o.debugger ? 16 : 0) |
-        1 |
-        (o.typescript ? 2 : 0) |
-        (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
-        (o.emitDecoratorMetadata ? 8 : 0);
+      const goal = 1 | (o.typescript ? 2 : 0) | (o.debugger ? 4 : 0);
       const f = x.vm_compile_file(vm, goal, name.length, head.length, src.length);
       if (f === 0) {
         const msg = outText(x);

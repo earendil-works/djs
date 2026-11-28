@@ -653,10 +653,6 @@ value	%intrinsic:DecoratorAddInitializer%
 value	%intrinsic:DecoratorAccessGet%
 value	%intrinsic:DecoratorAccessSet%
 value	%intrinsic:DecoratorAccessHas%
-value	%intrinsic:ApplyLegacyDecorators%
-value	%intrinsic:DecoratorParam%
-value	%intrinsic:DecoratorParamCall%
-value	%intrinsic:DecoratorMetadata%
 value	%intrinsic:AsyncDisposeFulfilled%
 value	%intrinsic:AsyncDisposeRejected%
 value	%intrinsic:UsingCreate%
@@ -1076,10 +1072,6 @@ intrinsic	DecoratorAddInitializer
 intrinsic	DecoratorAccessGet
 intrinsic	DecoratorAccessSet
 intrinsic	DecoratorAccessHas
-intrinsic	ApplyLegacyDecorators
-intrinsic	DecoratorParam
-intrinsic	DecoratorParamCall
-intrinsic	DecoratorMetadata
 intrinsic	AsyncDisposeFulfilled
 intrinsic	AsyncDisposeRejected
 intrinsic	UsingCreate
@@ -1389,7 +1381,6 @@ value	%prelude:IsDateObject%
 value	%prelude:DecoratorPush%
 value	%prelude:DecoratorCheckResult%
 value	%prelude:DecoratorDefine%
-value	%prelude:DecoratorReflectFn%
 value	%prelude:CallDisposeMethod%
 value	%prelude:TextCodecPrototype%
 value	%prelude:TextDictionary%

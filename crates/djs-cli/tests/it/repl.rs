@@ -262,24 +262,6 @@ fn completion() {
 }
 
 #[test]
-fn decorators_switch() {
-    let legacy = ".ts on\n.decorators legacy\n\
-        function d(t: any, k: string) { t.seen = k; }\n\
-        class C { @d m() {} }\n(C.prototype as any).seen\n\
-        .decorators tc39\n\
-        function e(v: any, ctx: any) { return v; }\n\
-        class D { @e m() {} }\nD.name\n";
-    assert_eq!(
-        repl(legacy),
-        "TypeScript: on\ndecorators: legacy (experimentalDecorators)\n'm'\ndecorators: tc39\n'D'\n"
-    );
-    check(
-        ".decorators metadata\n.decorators x\n",
-        "decorators: legacy with emitDecoratorMetadata (applies in TypeScript mode: .ts on)\n.decorators takes tc39, legacy or metadata\n",
-    );
-}
-
-#[test]
 fn stepping() {
     check(
         ".step 300\nfunction spin(n) { let s = 0; for (let i = 0; i < n; i++) s += i; return s }\n\

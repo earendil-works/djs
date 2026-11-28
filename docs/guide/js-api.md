@@ -80,7 +80,7 @@ All options are optional:
 | `deterministic` | `{ startedAt, seed }`: repeatable runs ([below](#deterministic-runs)) |
 | `unhandledRejections` | `"warn"` (default), `"throw"` or `"ignore"` |
 | `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)) |
-| `typescript`, `experimentalDecorators`, `emitDecoratorMetadata` | compile scripts as TypeScript ([TypeScript](typescript.md)) |
+| `typescript` | compile scripts as TypeScript ([TypeScript](typescript.md)) |
 | `debugger` | `debugger;` in an async function pauses the run ([below](#snapshots)) |
 
 ## Running code

@@ -1,8 +1,7 @@
 # djs-cli: the `djs` command
 
 ```sh
-cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-    [--gc-stress] [--suspend-every N] [--tools answers.json] [--bind NAME=IDENTITY]
+cargo run -p djs-cli -- run [--body] [--ts] [--gc-stress] [--suspend-every N] [--tools answers.json] [--bind NAME=IDENTITY]
     [--snapshot-after K OUT] [--snapshot-every-idle] [--debugger OUT] file.js
 cargo run -p djs-cli -- resume [--tools answers.json] [--gc-stress] [--suspend-every N]
     [--debugger OUT] file.snapshot
@@ -12,9 +11,7 @@ cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--frozen] [--debugger] [--tools answers.json]
 ```
 
-`run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`;
-`--experimental-decorators` and `--emit-decorator-metadata` (which implies it) select
-TypeScript's legacy decorators (D1651).
+`run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`.
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
 (TESTING.md). This file documents the REPL (with its heap report, `.heap`) and tools.
 
@@ -145,7 +142,6 @@ suspending every 300 fuel
 | `.help`, `.exit` | the list; leave (Ctrl-D on an empty line leaves too) |
 | `.load <file>` | runs a file as one input: a Script, or a top-level-await body. `.ts` files are TypeScript |
 | `.ts [on\|off]` | parse inputs as TypeScript (`--ts` at start) |
-| `.decorators [tc39\|legacy\|metadata]` | TypeScript decorators: the standard ones (the default), TypeScript's `experimentalDecorators`, or those with `emitDecoratorMetadata` (D1651). Legacy decorators need TypeScript mode |
 | `.disasm <code>` | if `code` is an expression that evaluates to a function (a bound one is followed to its target), that function's bytecode with its nested functions. Otherwise the bytecode of `code` itself, compiled and not run. The expression *is* evaluated |
 | `.fuel [n\|off]` | without an argument: the fuel the last input used, and the limit. With `n`: each input may use `n` fuel, then it is stopped (`vm.abort()`, the globals stay) |
 | `.suspend-every [n\|off]` | run inputs in slices of `n` fuel. At every stop, print the fuel so far and the innermost frame (`Vm::backtrace`), then continue in a new VM restored from the heap image, as `djs run --suspend-every` does |

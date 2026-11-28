@@ -9,9 +9,9 @@ run time compile straight to bytecode.
 
 > **In short.** Types are skipped by the parser, so TypeScript costs nothing at run time
 > and almost nothing at compile time. Enums, namespaces and parameter properties run as
-> `tsc` emits them; decorators follow the standard, with TypeScript's legacy
-> `experimentalDecorators` and `emitDecoratorMetadata` behind options. Modules are not
-> supported, in TypeScript as in JavaScript. `djs strip-types` shows the erasure.
+> `tsc` emits them; decorators follow the standard (TypeScript's legacy
+> `experimentalDecorators` are not supported). Modules are not supported, in TypeScript
+> as in JavaScript. `djs strip-types` shows the erasure.
 
 ## Types are erased while parsing
 
@@ -50,8 +50,7 @@ with QuickJS's wording. Semantics follow `tsc` with `isolatedModules` and
 > [without a syntax tree](goals.md#no-syntax-tree), it can skip types as it meets them,
 > and a TypeScript script compiles about as fast as the same script without its types.
 > The cost: no type information reaches the compiler, so there is no type checking and
-> nothing that needs types (`const enum` across files, `emitDecoratorMetadata` for
-> types it cannot see) works beyond what one file says.
+> nothing that needs types (`const enum` across files) works beyond what one file says.
 
 ## What runs
 
@@ -115,27 +114,11 @@ add(40, 2)
 ```
 <!-- /gen -->
 
-**Legacy decorators.** Code written for TypeScript's `experimentalDecorators` expects the
-older semantics: decorators get the prototype, the key and a property descriptor, and
-parameters can be decorated. The `experimentalDecorators` option (`--experimental-decorators`)
-selects them, and `emitDecoratorMetadata` (`--emit-decorator-metadata`, which implies
-the first) also calls `Reflect.metadata` with `design:type`, `design:paramtypes` and
-`design:returntype`, as far as the annotations in the file say. As in TypeScript, the
-script (or a library it includes) provides `Reflect.metadata`.
-
-```ts
-function log(target: object, key: string, desc: PropertyDescriptor) {
-  console.log("decorating", key);
-}
-function param(target: object, key: string, index: number) {
-  console.log("parameter", index, "of", key);
-}
-class Greeter {
-  @log greet(@param name: string) { return "hi " + name; }
-}
-// parameter 0 of greet
-// decorating greet
-```
+TypeScript's legacy `experimentalDecorators` (decorators that get the prototype, the key
+and a property descriptor, parameter decorators and `emitDecoratorMetadata`) are not
+supported: a parameter decorator is a syntax error, and other decorators get the standard
+semantics. Hosts run code written for the standard, which TypeScript itself uses by
+default.
 
 ## What is not supported
 
@@ -145,6 +128,8 @@ class Greeter {
   TypeScript [module](language.md#modules), which native hosts can load, has them, and
   its type-only imports and exports are erased.
 - **JSX and `.tsx`.** `<T>expr` is always a cast.
+- **Legacy decorators** (`experimentalDecorators`, `emitDecoratorMetadata`), see
+  [decorators](#decorators).
 - **Type checking**, and everything that needs types from another file.
 
 ## `djs strip-types`

@@ -364,7 +364,7 @@ pub(super) fn new_builtin_closure(
     Ok(Some(f))
 }
 
-const BUILTIN_CLOSURES: [u16; 25] = [
+const BUILTIN_CLOSURES: [u16; 24] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
     id("GetCapabilitiesExecutor"),
@@ -389,7 +389,6 @@ const BUILTIN_CLOSURES: [u16; 25] = [
     id("DecoratorAccessGet"),
     id("DecoratorAccessSet"),
     id("DecoratorAccessHas"),
-    id("DecoratorParamCall"),
 ];
 
 #[cfg(djs_prelude)]

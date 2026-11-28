@@ -4,8 +4,7 @@
 //! (0024), objects (0027), exceptions (0025), for-in/of (0029), destructuring and
 //! tagged templates (0036), async functions, generators and `for await` (0041), classes
 //! (0040), TypeScript (0048), `using` declarations, completion values, eval code and
-//! `import()` (0058), decorators and `accessor` fields, TypeScript's legacy decorators
-//! (0065).
+//! `import()` (0058), decorators and `accessor` fields (0065).
 //!
 //! ```ignore
 //! let template = compile(&mut heap, src, &CompileOptions::script("main.js"))?;
@@ -35,7 +34,6 @@ mod stmt;
 mod temps;
 mod ts;
 mod ts_decl;
-mod ts_meta;
 mod using;
 
 #[cfg(test)]
@@ -86,13 +84,6 @@ pub struct CompileOptions<'a> {
     /// TypeScript: the type skipper erases types while parsing, enums, namespaces and
     /// parameter properties compile to code (compiler/ts.rs).
     pub typescript: bool,
-    /// TypeScript's legacy `experimentalDecorators` instead of the standard decorators
-    /// (TypeScript only, compiler/decorators.rs): tsc's `__decorate` semantics and
-    /// parameter decorators.
-    pub experimental_decorators: bool,
-    /// With `experimental_decorators`: `emitDecoratorMetadata`, the `design:type`,
-    /// `design:paramtypes` and `design:returntype` metadata (compiler/ts_meta.rs).
-    pub emit_decorator_metadata: bool,
     /// `debugger;` in an async function awaits a call of the global `debugger` (D3050):
     /// a host that binds an async function there makes the statement a suspension point,
     /// where the run can be snapshotted. Outside async functions `debugger` does nothing.
@@ -107,8 +98,6 @@ impl<'a> CompileOptions<'a> {
             params: &[],
             privileged: false,
             typescript: false,
-            experimental_decorators: false,
-            emit_decorator_metadata: false,
             debugger_awaits: false,
         }
     }
@@ -136,14 +125,12 @@ impl<'a> CompileOptions<'a> {
             params,
             privileged: false,
             typescript: false,
-            experimental_decorators: false,
-            emit_decorator_metadata: false,
             debugger_awaits: false,
         }
     }
 
     /// The options that decide the code, as a Script cell keeps them (`Script::OPTIONS`):
-    /// the goal in the low two bits, then TypeScript, legacy decorators, metadata.
+    /// the goal in the low two bits, then TypeScript, privileged, `debugger` awaits.
     pub fn bits(&self) -> u32 {
         let goal = match self.goal {
             Goal::Script => 0,
@@ -152,10 +139,8 @@ impl<'a> CompileOptions<'a> {
             Goal::Module => 3,
         };
         goal | u32::from(self.typescript) << 2
-            | u32::from(self.experimental_decorators) << 3
-            | u32::from(self.emit_decorator_metadata) << 4
-            | u32::from(self.privileged) << 5
-            | u32::from(self.debugger_awaits) << 6
+            | u32::from(self.privileged) << 3
+            | u32::from(self.debugger_awaits) << 4
     }
 
     /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
@@ -171,11 +156,9 @@ impl<'a> CompileOptions<'a> {
             },
             filename,
             params,
-            privileged: bits & 1 << 5 != 0,
+            privileged: bits & 1 << 3 != 0,
             typescript: bits & 1 << 2 != 0,
-            experimental_decorators: bits & 1 << 3 != 0,
-            emit_decorator_metadata: bits & 1 << 4 != 0,
-            debugger_awaits: bits & 1 << 6 != 0,
+            debugger_awaits: bits & 1 << 4 != 0,
         }
     }
 

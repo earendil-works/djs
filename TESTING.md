@@ -247,8 +247,7 @@ frames (prelude, qjs driver) are dropped, so names and positions are compared
 directive comment, so the wrappers' different first-line prefixes do not show. Leading
 comment lines can carry directives:
 `// difftest: skip-djs <reason>` (a djs non-goal, such as direct eval), `// difftest: ts` (a
-`.js` file parsed as TypeScript), `// difftest: experimental-decorators` and
-`// difftest: emit-decorator-metadata` (TypeScript legacy decorators, D1651),
+`.js` file parsed as TypeScript),
 `// difftest: fuel <n>`, `// difftest: timeout <secs>`,
 `// difftest: djs-expect <oracle line> => <djs line>` (a deliberate difference from qjs, such
 as D013's RangeError for stack overflow: with djs, that `.expected` line must read the

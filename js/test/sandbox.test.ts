@@ -379,17 +379,8 @@ test("typescript", async () => {
   js.dispose();
 });
 
-test("legacy decorators", async () => {
-  const src =
-    "const log = []; const d = (t, k, i) => { log.push(typeof t + ' ' + k + ' ' + i); };" +
-    "Reflect.metadata = (k, v) => () => { log.push(k); };" +
-    "class C { m(@d a: number) {} } return log.join()";
-  const legacy = await Sandbox.create({ typescript: true, experimentalDecorators: true });
-  assert.equal(legacy.run(src), "object m 0");
-  legacy.dispose();
-  const meta = await Sandbox.create({ typescript: true, emitDecoratorMetadata: true });
-  assert.equal(meta.run(src), "design:returntype,design:paramtypes,design:type,object m 0");
-  meta.dispose();
+test("parameter decorators are a syntax error", async () => {
+  const src = "const d = () => {}; class C { m(@d a: number) {} }";
   const standard = await Sandbox.create({ typescript: true });
   assert.throws(() => standard.run(src), (e: unknown) => e instanceof SandboxError && e.kind === "syntax");
   standard.dispose();

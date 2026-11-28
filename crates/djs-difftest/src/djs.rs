@@ -228,8 +228,6 @@ impl Session {
         let name: &'static str = Box::leak(job.name.to_string().into_boxed_str());
         let copts = CompileOptions {
             typescript: job.ts,
-            experimental_decorators: job.legacy_decorators,
-            emit_decorator_metadata: job.decorator_metadata,
             ..CompileOptions::script(name)
         };
         match self.vm.compile(src.as_bytes(), &copts) {
