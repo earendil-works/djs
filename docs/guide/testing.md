@@ -182,9 +182,10 @@ stops happen everywhere:
   runs the same programs in a native build and in djs-wasm and compares their images and
   fuel stop for stop ([wasm32 first](goals.md#wasm32-first)).
 - **The unchecked heap**: the shipped modules' arena accessors skip their bounds checks,
-  so that build runs the stressed corpus in release, after its accessors' assertions
-  have run the end-to-end tests in debug, and a host's codemode tests run on the shipped
-  modules themselves.
+  so that build runs the corpus in release, after its accessors' assertions have run the
+  end-to-end tests in debug, and a host's codemode tests run on the shipped modules
+  themselves. The stress variants run on the checked build, whose accessors assert their
+  bounds.
 
 In every mode the transcript must equal the plain run's: a difference is a failure on
 its own, separate from the comparison with QuickJS, and a stressed run must pass the
