@@ -65,7 +65,7 @@ word:
 
 Try it. On the docs site this example runs in djs-wasm, right in the page; the output
 below was generated when the docs were built, by running it in a djs VM that was
-suspended and restored from a heap image every 50 units of fuel:
+stopped every 50 units of fuel and continued:
 
 ```js live
 const xs = [1, 2.5, -0, NaN, 2 ** 31, 10n ** 20n];

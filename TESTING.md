@@ -601,7 +601,7 @@ check`); the JS host package's tests on the dev modules; the npm package (below)
 codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
 GC stress and heap-image determinism; snapshots at every idle point; the unsafe-heap build, which the shipped module uses (D3100;
-verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet;
+verifier and e2e in debug, the corpus in release, without the stress variants, D3753); the test262 active group against its ratchet;
 the size budget (below);
 the merge drivers of derived files (below).
 The `test` and `test262` legs print the slowest tests. The always-run `targets` leg

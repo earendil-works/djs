@@ -19,8 +19,8 @@ where determinism ends.
 
 ## Why it matters
 
-A run can stop between any two instructions and continue, from an image of its memory or
-from a [snapshot](persistence.md), and the host hands it inputs and reads results
+A run can stop between any two instructions and continue, in the same VM or from a
+[snapshot](persistence.md), and the host hands it inputs and reads results
 without the VM doing any I/O ([the JavaScript interface](js-api.md)). Determinism is
 what makes that useful:
 

@@ -32,10 +32,13 @@ The host calls `run` with an amount of fuel. It returns one of:
 Whatever the status, the interpreter has written its registers to the `Interp` cell, and
 the arena is a complete description of the VM ([one arena](arena.md)). Copying it gives
 an image, and a fresh VM restored from that image in the same process continues exactly
-where the old one stopped. The examples in this guide rely on it: every output on these
-pages comes from a VM that was stopped every 50 units of fuel, copied into an image, and
-restored into a new VM before it went on. On the docs site, the *Suspend* tab of a live
-example shows the slices of a run in your browser.
+where the old one stopped. The stress tests rely on it: they stop runs every few
+instructions and continue each in a VM restored from its image ([how djs is
+tested](testing.md)). A host has no need to: a stopped run goes on in the same VM, and one
+that must outlive the process is written as a [snapshot](persistence.md). Every output
+on these pages comes from a VM that was stopped every 50 units of fuel and continued; on
+the docs site, the *Suspend* tab of a live example shows the slices of a run in your
+browser.
 
 ```js live
 const words = ["fuel", "frames", "arena", "image"];

@@ -1,10 +1,12 @@
 # Images and the base snapshot
 
-A host needs to capture a whole VM and bring it back: to stop a run between two fuel
-slices and continue it in a fresh VM, to start every script from a ready realm, to move a
-VM into a second wasm module. djs does all of this with one mechanism, the **image**: the
-arena's bytes, taken as they are. This chapter shows what an image is, what it depends on,
-the one image every VM starts from, and how to look inside one.
+The engine captures a whole VM and brings it back with one mechanism, the **image**: the
+arena's bytes, taken as they are. Every VM starts from one, the base snapshot of a ready
+realm; a native host keeps its own setup as one; and the engine's stress tests stop runs
+every few instructions and continue them from their images, to check that nothing outside
+the arena matters. A run that stops between two fuel slices simply goes on in the same
+VM. This chapter shows what an image is, what it depends on, the one image every VM starts
+from, and how to look inside one.
 
 > **In short.** An image is the arena from offset 0 to its end. Taking one is a copy;
 > restoring one is a check of the header and a copy, with no fixups, because every
@@ -98,13 +100,12 @@ inside that one instance: the shipped modules leave heap bounds checks to wasm, 
 confines every access to the instance's memory, and every other build checks each
 access.
 
-> **Trade-off.** Raw images over a serialization format, inside a process. Images cost no
-> code to write or read, restore in a copy, and capture everything, including frames in
-> the middle of a builtin, which is what the base snapshot, the stress tests and a stop
-> between fuel slices need. Keyed on the build, they need no rule for which engine change
-> alters what an image means. A run that has to outlive the process needs something that
-> names what the image numbers, which is what a snapshot of the run is
-> ([below](#beyond-the-process)).
+> **Trade-off.** Raw images over a serialization format, inside a process. Images cost
+> no code to write or read, restore in a copy, and capture everything, including frames
+> in the middle of a builtin, which is what the base snapshot and the stress tests need.
+> Keyed on the build, they need no rule for which engine change alters what an image
+> means. A run that has to outlive the process needs something that names what the image
+> numbers, which is what a snapshot of the run is ([below](#beyond-the-process)).
 
 ## The base snapshot
 

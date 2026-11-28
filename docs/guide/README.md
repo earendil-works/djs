@@ -109,7 +109,7 @@ figure that follows from the code (a constant, a cell size) may be written out.
 
 Examples (`js` blocks, and `ts` blocks, which compile as TypeScript) are codemode async
 function bodies: `await` and `return` work at the top level and `console.log` prints. `run` executes them in a VM from the base
-snapshot, suspended and restored from its heap image every 50 fuel units. `run` and
+snapshot, stopped every 50 fuel units and continued. `run` and
 `snapshot` regions are only rewritten by `regen --examples`: a changed output fails the
 gate, because it is a behavior change that someone should look at. Prose around a
 `snapshot` region describes what the snapshot holds, not its exact sizes.

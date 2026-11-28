@@ -321,10 +321,12 @@ def jobs():
           group="target/perturb", summary=r"^perturb:"),
         # 0161: the unchecked accessor build (D2520): the verifier against corrupt images
         # and e2e in debug (the accessors assert their bounds), then the corpus in release,
-        # where they really do not check, with suspension and GC stress.
+        # where they really do not check. Without the stress variants (D3753): the checked
+        # `difftest` leg runs them with bounds-asserting accessors; they cost this leg 37 of
+        # its 38 CPU-s.
         J("unsafe-heap tests", f"{tests} {G}/unsafe-tests.json", cls="rust", needs=["build:unsafe-tests"]),
-        J("unsafe-heap difftest", f"{G}/bin/release/djs-difftest --engine djs --ratchet --suspend-every 97"
-          f" --gc-stress --quiet --no-diff --times {G}/times/difftest-unsafe.tsv",
+        J("unsafe-heap difftest", f"{G}/bin/release/djs-difftest --engine djs --ratchet"
+          f" --quiet --no-diff --times {G}/times/difftest-unsafe.tsv",
           cls="rust", needs=["build:unsafe-release"], summary=r"^(stress|ratchet):"),
         # 0007: test262's active group against the ratchet.
         J("test262", f"./scripts/fetch-test262.sh > /dev/null; {G}/bin/djs-test262 run --engine djs"
