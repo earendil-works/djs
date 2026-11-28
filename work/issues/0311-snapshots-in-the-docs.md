@@ -29,6 +29,15 @@ Make the docs teach how snapshots work and how to use them, by doing:
   `djs describe`, `djs resume --debugger`), checked to work with the docs' setup.
 - A browser-level test of the new live.js parts (a stub-DOM node harness like 0306's at least).
 
+**Owner, on what the view shows:** much more human friendly, so a reader can interactively
+understand what is in the snapshot. Lead in JavaScript terms (functions stopped where, with
+their variables as JS values; what each waits for; the result still pending), explain each
+part in one plain sentence (what it is and why it is in the snapshot), show identity by
+highlighting the same object reached twice, and keep engine detail in layers one can open:
+the JS view first, then how djs stores it (records, named fields, sizes), then bytes. Sizes
+in plain words. The JSON carries per node a human label, a one-line explanation and the JS
+rendering, then the record and byte details.
+
 ## Acceptance criteria
 - [ ] The tabs, panel, copy/download/link, restore box, page rewrite as above; djs-docs check
       clean; the CLI round trip verified with a snapshot the docs module wrote.

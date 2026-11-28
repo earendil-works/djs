@@ -32,6 +32,15 @@ One Rust model, `snapshot::inspect`, with two outputs:
   `fetchPage(n = 1)`, not `arg 0`.
 - Small fix: the strings table stores host names twice ("console", "debugger").
 
+**Owner, on what the view shows:** much more human friendly, so a reader can interactively
+understand what is in the snapshot. Lead in JavaScript terms (functions stopped where, with
+their variables as JS values; what each waits for; the result still pending), explain each
+part in one plain sentence (what it is and why it is in the snapshot), show identity by
+highlighting the same object reached twice, and keep engine detail in layers one can open:
+the JS view first, then how djs stores it (records, named fields, sizes), then bytes. Sizes
+in plain words. The JSON carries per node a human label, a one-line explanation and the JS
+rendering, then the record and byte details.
+
 ## Acceptance criteria
 - [ ] The model, text and JSON, pinned for the guide's fetchPage example and a richer one (a
       Map, closures in boxes, Promise.all over two open calls); limits on large runs.
