@@ -3,7 +3,11 @@
 Status: research for the owner (issues 0299 and 0300), kept as written. Since then
 snapshots are djs's persistence format (0301–0303, D3700) and continuation dumps are gone
 (0304, D3730): the dumper, the suspension maps, the dump module and the dump tests this
-report measures against no longer exist; its figures for them are what main had then. Sections 1–2 (0299): what psychoscript's snapshots are, and how often djs's
+report measures against no longer exist; its figures for them are what main had then. The
+prototype's `snapshot` feature is merged into every build (D3744); the fallback chosen for
+a refused snapshot is a deterministic re-run from the run's recorded results (D3746), not a
+replay kept by the host, and "Reproducing" names a branch and scripts that are not on main.
+Sections 1–2 (0299): what psychoscript's snapshots are, and how often djs's
 history would have broken a snapshot keyed by bytecode hashes and names instead of the
 build. Sections 3–5 (0300): the prototype of such a snapshot for djs, its coverage, sizes
 and the portability experiment. The summary is the coordinator's.
