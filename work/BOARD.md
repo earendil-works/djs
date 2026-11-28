@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0306 | One way to drive a run; determinism kept as the fallback for refused snapshots (then 0307, 0308) | pclean | .worktrees/pclean |
+| 0308 | Docs and tooling cleanup after the dump removal | pclean | .worktrees/pclean |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -20,8 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0307 | Shipped-module trims; legacy decorators go | 0306 |
-| 0308 | Docs and tooling cleanup after the dump removal | 0307 |
 | - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
@@ -53,6 +51,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0307 | Shipped-module trims; legacy decorators gone | ca3fcd14 (agent pclean; D3750-D3752; ABI 14; 509,843 -> 498,108 B gz; describe/callSite docs-only; strip-types feature) |
+| 0306 | One run driver; determinism as the snapshot fallback (Run.deliveries, begin({deliveries}), diverged) | fedf4616 (agent pclean; D3745-D3747; ABI 13; re-run equivalence on 1,164 harvest idle points) |
 | 0305 | Lazy compilation and the dump removal's dead code removed | adbec3a1 (agent pclean; D3740-D3744; ABI 12; registry without ids; test262 leg 174 -> 89 CPU-s; the test-only fast_step tier stays (D3741: raw-image equality needs it)) |
 | 0304 | Continuation dumps removed; snapshots the only persistence format | 644b850c (agent psnap; D3730-D3734; -62.6k lines; shipped module 785,187 -> 510,652 B gz, ceiling 511,676; ABI 11; guide persistence.md) |
 | 0303 | Snapshots for hosts: Sandbox API, pi's setup, CLI/REPL, docs pauses, sleep-snapshot example | a87745f2 (agent psnap; D3720-D3723; ABI 10; host-mode snapshots name host values at any depth) |
