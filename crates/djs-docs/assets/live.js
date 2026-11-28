@@ -1,12 +1,15 @@
 // Live examples: every ```js live block of the guide is an editor whose code runs in
 // djs-wasm in the page (D2103). A `debugger;` in the code pauses the run there (D3050):
-// the page writes it out as a snapshot (D3720), describes it under the output, and
-// Continue resumes the run from it in a fresh sandbox. The editor is a textarea with transparent text over the
+// the page writes it out as a snapshot (D3720), shows it in the Snapshot tab (D3761,
+// snapview.js), and Continue resumes the run from it in a fresh sandbox. A ```js live
+// restore block also loads a snapshot pasted as base64 or given in the page's link
+// (`#restore=...`). The editor is a textarea with transparent text over the
 // highlighted `pre` the page already has (render.rs live_block): the textarea does the
 // editing (caret, selection, undo, input methods, screen readers) and highlight.js
 // repaints the `pre` under it on every input. Without JavaScript (or from file://) the
 // page shows the code and the output and bytecode generated at build time.
 import { esc, tokens } from "./highlight.js";
+import { fromBase64, panelHtml, toBase64Url, wirePanel, words } from "./snapview.js";
 
 const FUEL_SLICE = 50;
 // Stops a runaway loop (`while (true)` typed halfway) in well under a second.
@@ -22,12 +25,16 @@ const RUN_KEYS = MAC ? "⌘↵" : "Ctrl+↵";
 // fetches neither.
 let libPromise;
 function lib() {
-  libPromise ??= Promise.all([
-    import("./djs/sandbox.js"),
-    import("./djs/layout.generated.js"),
-    WebAssembly.compileStreaming(fetch(new URL("./djs/djs_wasm.wasm", import.meta.url))),
-    import("./djs/abi.js"),
-  ]).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => {
+  // (`djsLiveImports`: the same four from elsewhere, for the node tests' stub page.)
+  libPromise ??= (
+    globalThis.djsLiveImports?.() ??
+    Promise.all([
+      import("./djs/sandbox.js"),
+      import("./djs/layout.generated.js"),
+      WebAssembly.compileStreaming(fetch(new URL("./djs/djs_wasm.wasm", import.meta.url))),
+      import("./djs/abi.js"),
+    ])
+  ).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => {
     // The instance's operations by name (the module has one export, `djs`) serve the
     // Bytecode tab.
     disasmExports = djsExports(module);
@@ -115,7 +122,17 @@ function kb(n) {
   return n < 10240 ? `${n} B` : `${(n / 1024).toFixed(1)} KiB`;
 }
 
-function heapHtml(before, after) {
+/** The Memory tab at a pause: the arena, and what of it the snapshot keeps. */
+function memoryAtPause(before, after, i) {
+  return (
+    heapHtml(before, after, false) +
+    `<p>The snapshot of this pause keeps none of the arena's bytes: it holds the run's data as ${i.records.length} records ` +
+    `(${words(i.sizes.find((s) => s.part === "data")?.bytes ?? 0)} with their strings), names the builtins and the host's values instead of storing them, ` +
+    `and stores the script's text for a loading djs to compile again: ${words(i.bytes)} in all. The sandbox and its arena are gone once the snapshot is written.</p>`
+  );
+}
+
+function heapHtml(before, after, gc = true) {
   const own = after.own;
   const rows = [...own.kinds.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
   const max = rows[0]?.[1].bytes ?? 1;
@@ -127,7 +144,7 @@ function heapHtml(before, after) {
     }
     h += `</table>`;
   }
-  h += `<p class="muted">The base realm before it (the builtins, their code and names, which every VM starts with as a copy of the base image): ${before.cells} cells, ${kb(before.len)}. Arena in total: ${after.cells} cells, ${kb(after.len)}. Counted by walking the arena cell by cell, with the layout the engine exports. Garbage stays until the next collection, which slides the program's live cells together: <button class="live-gc">Collect now</button></p>`;
+  h += `<p class="muted">The base realm before it (the builtins, their code and names, which every VM starts with as a copy of the base image): ${before.cells} cells, ${kb(before.len)}. Arena in total: ${after.cells} cells, ${kb(after.len)}. Counted by walking the arena cell by cell, with the layout the engine exports.${gc ? ` Garbage stays until the next collection, which slides the program's live cells together: <button class="live-gc">Collect now</button>` : ""}</p>`;
   return h;
 }
 
@@ -327,18 +344,18 @@ async function gzipSize(bytes) {
  * idle at the statement and the page writes it out as a snapshot there (D3720). Run turns
  * into Continue, which loads that snapshot into a fresh sandbox, settles the pause and
  * runs on to the next pause or the end. The output of all of them is one transcript, with
- * a line at each pause; the current snapshot's description is one click away below it. A
- * run that cannot be snapshotted (a value the snapshot refuses) says why and continues in
- * the same sandbox.
+ * a line at each pause; its "snapshot N" links open that snapshot in the Snapshot tab
+ * (D3761). A run that cannot be snapshotted (a value the snapshot refuses) says why and
+ * continues in the same sandbox. `from`: a snapshot to start from instead of the code
+ * (the restore box), already checked to be one.
  *
  * Each pause line says where the run stopped (`Sandbox.callSite`, D3054): a line and
  * column of the example, in every part of the run (a loaded run is in the same script).
  */
-async function runPausing(ex, l, id) {
+async function runPausing(ex, l, id, from = null) {
   const { el } = ex;
   const pane = (n) => el.querySelector(`[data-pane="${n}"]`);
   const setStatus = (t) => (el.querySelector(".live-status").textContent = t);
-  const box = el.querySelector(".live-snap-box");
   const { Sandbox, module } = l;
   const src = ex.ta.value;
   const lines = [];
@@ -346,25 +363,17 @@ async function runPausing(ex, l, id) {
   // `html` is markup: escaped text and snapshot links.
   const marker = (html) => lines.push(`<span class="live-pause">${html}</span>`);
   const showOut = () => (pane("out").innerHTML = lines.join("\n") || `<span class="muted">(no output)</span>`);
-  // The snapshots of this run, in order: their descriptions and sizes, shown by the
-  // transcript's links.
+  // The snapshots of this run, in order, shown by the transcript's links.
   const snaps = [];
-  const showSnap = (i) => {
-    const d = snaps[i];
-    box.hidden = false;
-    box.querySelector("summary").textContent = `Snapshot ${i + 1} of this run (${d.size}), described`;
-    box.querySelector("code").textContent = d.text;
-  };
+  const showSnap = (k) => showSnapshot(ex, snaps[k], `Snapshot ${k + 1} of this run`);
   pane("out").onclick = (ev) => {
     const a = ev.target.closest?.("a.live-snap-link");
     if (!a) return;
     ev.preventDefault();
     showSnap(Number(a.dataset.snap));
-    box.open = true;
-    box.querySelector("pre").scrollTop = 0;
-    box.scrollIntoView({ block: "nearest" });
+    select(ex, "snapshot");
   };
-  const snapLink = (i) => `<a href="#" class="live-snap-link" data-snap="${i}">snapshot ${i + 1}</a>`;
+  const snapLink = (k) => `<a href="#" class="live-snap-link" data-snap="${k}">snapshot ${k + 1}</a>`;
   const pausesOf = (run) => run.calls.filter((c) => c.fn === "debugger");
   /** Where the run waits at its open pauses, as text: lines and columns of the example. */
   const where = (sb, run) => {
@@ -381,49 +390,41 @@ async function runPausing(ex, l, id) {
     for (const c of pausesOf(run)) run.settle(c.id, { ok: true, value: undefined });
     await run.advance();
   };
-  const opts = {
-    module,
-    typescript: ex.ts,
-    console: { log: out, info: out, warn: out, error: out },
-    fuelSlice: FUEL_SLICE,
-    maxFuel: MAX_FUEL,
-    now: 0,
-    // The pause: the run is idle while this call is open, so it can be snapshotted.
-    debugger: true,
-  };
+  const opts = sandboxOptions(ex, module, out);
   let pauses = 0;
   let resumes = 0;
   const done = () => {
     ex.cont = null;
     setRunLabel(ex, false);
   };
-  // `run` is idle or ended in sandbox `sb`; `from`: the index of the snapshot this part
-  // continued from, -1 for the example.
-  const step = async (sb, run, from) => {
+  // `run` is idle or ended in sandbox `sb`; `before`: the fresh sandbox's arena, for the
+  // Memory tab; `last`: the index of the snapshot this part continued from, -1 for none.
+  const step = async (sb, run, before, last) => {
     if (id !== ex.runs) return sb.dispose();
     if (run.state !== "idle" || pausesOf(run).length === 0) {
+      pane("memory").innerHTML = heapHtml(before, walk(sb, l, before.len), false);
       sb.dispose();
       const failure = run.state === "threw" ? describe(run.error, src, false) : null;
       if (failure) lines.push(`<span class="live-error">${esc(failure.text)}</span>`);
       showOut();
       setStatus(failure ? "threw" : resumes ? `ran to the end, continued ${resumes}× from a snapshot` : "ran to the end");
-      if (resumes) showSnap(from);
+      if (last >= 0) showSnap(last);
       done();
       return;
     }
     pauses++;
     const at = where(sb, run);
     let snap;
-    let text;
+    let inspection;
     try {
       snap = run.snapshot();
-      text = sb.describeSnapshot(snap);
+      inspection = sb.inspectSnapshot(snap);
     } catch (e) {
       // Not snapshottable here: say why, and let Continue go on in this sandbox.
       marker(`⏸ paused at ${esc(at)}, but the run cannot be snapshotted here:`);
       lines.push(`<span class="live-error">${esc(String(e?.message ?? e).replace(/^cannot snapshot the run:\s*/, "").trimEnd())}</span>`);
       showOut();
-      box.hidden = true;
+      pane("snapshot").innerHTML = `<p class="muted">No snapshot at this pause: the run holds something a snapshot cannot (see the Output tab).</p>`;
       setStatus(`paused at ${at} (pause ${pauses}), not snapshottable`);
       ex.cont = async () => {
         ex.cont = null;
@@ -431,15 +432,17 @@ async function runPausing(ex, l, id) {
         showOut();
         setRunLabel(ex, false);
         await goOn(run).catch(() => {});
-        step(sb, run, from);
+        step(sb, run, before, last);
       };
       setRunLabel(ex, true);
       return;
     }
+    // The arena at the pause, before the sandbox goes.
+    pane("memory").innerHTML = memoryAtPause(before, walk(sb, l, before.len), inspection);
     sb.dispose();
     const gz = await gzipSize(snap);
     if (id !== ex.runs) return;
-    const n = snaps.push({ text, size: `${size(snap.length)}${gz === null ? "" : `, ${size(gz)} gzipped`}` }) - 1;
+    const n = snaps.push({ bytes: snap, inspection, gz }) - 1;
     marker(`⏸ paused at ${esc(at)}: the run is now ${snapLink(n)} (${esc(size(snap.length))}), and its sandbox is gone`);
     showOut();
     showSnap(n);
@@ -454,9 +457,10 @@ async function runPausing(ex, l, id) {
       let sb2;
       try {
         sb2 = new Sandbox(opts);
+        const before2 = walk(sb2, l);
         const loaded = sb2.loadSnapshot(snap);
         await goOn(loaded).catch(() => {});
-        await step(sb2, loaded, n);
+        await step(sb2, loaded, before2, n);
       } catch (e) {
         sb2?.dispose();
         setStatus(`could not continue: ${e.message}`);
@@ -465,17 +469,70 @@ async function runPausing(ex, l, id) {
     };
     setRunLabel(ex, true);
   };
-  box.hidden = true;
   showOut();
   const sb = new Sandbox(opts);
+  const before = walk(sb, l);
   let run;
   try {
-    run = sb.begin(src, {}, { filename: "example.js" });
+    if (from) {
+      run = sb.loadSnapshot(from);
+      marker(`▶ restored from the snapshot you gave (${esc(size(from.length))}), in a fresh sandbox`);
+    } else run = sb.begin(src, {}, { filename: "example.js" });
   } catch (e) {
     sb.dispose();
     throw e;
   }
-  await step(sb, run, -1);
+  await step(sb, run, before, -1);
+}
+
+/** The options of the live examples' sandboxes: the docs' fixed setup (console, debugger). */
+function sandboxOptions(ex, module, out) {
+  return {
+    module,
+    typescript: ex.ts,
+    console: { log: out, info: out, warn: out, error: out },
+    fuelSlice: FUEL_SLICE,
+    maxFuel: MAX_FUEL,
+    now: 0,
+    // The pause: the run is idle while this call is open, so it can be snapshotted.
+    debugger: true,
+  };
+}
+
+/** The Snapshot tab shows snapshot `s` ({ bytes, inspection, gz }), headed `head`. */
+function showSnapshot(ex, s, head) {
+  const pane = ex.el.querySelector('[data-pane="snapshot"]');
+  const gz = s.gz === null || s.gz === undefined ? "" : ` (${size(s.gz)} with gzip)`;
+  pane.innerHTML = `<p class="sv-head">${esc(head)}${esc(gz)}</p>${panelHtml(s.inspection)}`;
+  wirePanel(pane, {
+    i: s.inspection,
+    bytes: s.bytes,
+    // A frame's title marks where it waits in the editor.
+    mark: (line, col) => {
+      ex.mark = markAt(ex.ta.value, line, col);
+      repaint(ex);
+      ex.el.querySelector(".live-editor").scrollIntoView?.({ block: "nearest" });
+    },
+    copy: (text) => navigator.clipboard.writeText(text),
+    download: (bytes, name) => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    },
+    link: (bytes) => {
+      const url = restoreUrl(bytes);
+      const status = pane.querySelector(".sv-act-status");
+      status.innerHTML = `<a href="${esc(url)}">the link</a> (${esc(words(url.length))}) is copied`;
+      return navigator.clipboard.writeText(url);
+    },
+  });
+}
+
+/** The snapshots page with `bytes` in the fragment (never sent to a server). */
+function restoreUrl(bytes) {
+  return new URL(`snapshots.html#restore=${toBase64Url(bytes)}`, location.href).href;
 }
 
 /** The Run button: "Continue" while a run is paused at `debugger;`. */
@@ -485,7 +542,8 @@ function setRunLabel(ex, paused) {
   b.classList.toggle("is-paused", paused);
 }
 
-async function run(ex) {
+/** Runs the example (from snapshot `from` instead, the restore box's). */
+async function run(ex, from = null) {
   const { el, ta } = ex;
   clearTimeout(ex.timer);
   const id = ++ex.runs;
@@ -501,15 +559,14 @@ async function run(ex) {
       ex.cont = null;
       setRunLabel(ex, false);
     }
-    if (hasDebugger(src)) {
+    if (from || hasDebugger(src)) {
       pane("bytecode").textContent = disasm(module, src, ex.ts) ?? ex.listing;
-      pane("heap").innerHTML = `<p class="muted">This run pauses at <code>debugger;</code>: each part of it runs in a sandbox of its own, which is gone once the run is a snapshot.</p>`;
-      pane("suspend").innerHTML = `<p class="muted">At each <code>debugger;</code> the run is written out as a snapshot; see the Output tab.</p>`;
-      select(ex, "out");
-      await runPausing(ex, l, id);
+      showTab(ex, "snapshot", true);
+      if (!from) select(ex, "out");
+      await runPausing(ex, l, id, from);
       return;
     }
-    el.querySelector(".live-snap-box").hidden = true;
+    showTab(ex, "snapshot", false);
     let lines = [];
     const out = (...a) => lines.push(esc(a.map(show).join(" ")));
     let slices = 0;
@@ -559,22 +616,25 @@ async function run(ex) {
     const listing = disasm(module, src, ex.ts);
     pane("bytecode").textContent =
       listing ?? (src === ex.original ? ex.listing : `(The original example's bytecode, from the build.)\n\n${ex.listing}`);
-    const after = walk(sb, l, before.len);
-    pane("heap").innerHTML = heapHtml(before, after);
-    const keep = sb;
-    pane("heap").querySelector(".live-gc").onclick = () => {
-      keep.collect();
-      pane("heap").innerHTML = heapHtml(before, walk(keep, l, before.len));
+    const memory = () => {
+      pane("memory").innerHTML = heapHtml(before, walk(keep, l, before.len));
+      pane("memory").querySelector(".live-gc").onclick = () => {
+        keep.collect();
+        memory();
+      };
     };
-    pane("suspend").innerHTML =
-      `<p>The run took <b>${ms.toFixed(2)} ms</b> in <b>${slices}</b> fuel slices of ${FUEL_SLICE} units: ` +
-      `the VM returned control to this page ${Math.max(0, slices - 1)} times between two instructions and resumed where it stopped. ` +
-      `Nothing of the run was on the Rust stack in between; it is all in the arena (${kb(sb.heapSize)}).</p>` +
-      `<p>That is how a host suspends a run inside its process. To keep a run beyond the process, a host waits for it to be idle ` +
-      `(only waiting on its tool calls) and writes it as a snapshot: its state as data, which a fresh sandbox continues.</p>`;
+    const keep = sb;
+    memory();
     ex.sandbox?.dispose();
     ex.sandbox = sb;
-    setStatus(failure ? (failure.text.startsWith("SyntaxError") ? "did not compile" : "threw") : `ran in ${ms.toFixed(1)} ms`);
+    // The run stopped and resumed between fuel slices: the fact the Suspend tab had.
+    const status = el.querySelector(".live-status");
+    if (failure) status.textContent = failure.text.startsWith("SyntaxError") ? "did not compile" : "threw";
+    else {
+      status.innerHTML =
+        `ran in ${ms.toFixed(1)} ms, in <a href="suspension.html#fuel" title="The VM returned control to this page between two instructions ` +
+        `${Math.max(0, slices - 1)} times and resumed where it stopped; nothing of the run was on the Rust stack in between">${slices} fuel slices</a>`;
+    }
   } catch (e) {
     if (id === ex.runs) setStatus(`could not run: ${e.message}`);
   } finally {
@@ -585,6 +645,14 @@ async function run(ex) {
 /** Shows the result tab `name`. */
 function select(ex, name) {
   ex.select?.(ex.el.querySelector(`[role="tab"][data-tab="${name}"]`));
+}
+
+/** Shows or hides the tab `name` (the Snapshot tab: only for runs that pause). */
+function showTab(ex, name, on) {
+  const t = ex.el.querySelector(`[role="tab"][data-tab="${name}"]`);
+  if (!t) return;
+  t.hidden = !on;
+  if (!on && t.getAttribute("aria-selected") === "true") select(ex, "out");
 }
 
 // ---- Setup ------------------------------------------------------------------------
@@ -645,6 +713,9 @@ function setup(el, n) {
     insert(ta, ex.original);
   };
 
+  const restore = el.querySelector(".live-restore");
+  if (restore) setupRestore(ex, restore);
+
   ta.addEventListener("keydown", (ev) => onKey(ev, ex));
   ta.addEventListener("input", () => {
     ex.mark = null;
@@ -684,6 +755,84 @@ function setup(el, n) {
     };
   }
   return ex;
+}
+
+/**
+ * The restore box of a ```js live restore block: base64 pasted (or from the page's
+ * `#restore=` fragment) becomes the snapshot's bytes; Load shows what it holds in the
+ * Snapshot tab, puts its script into the editor and loads it into a fresh sandbox of the
+ * docs' setup, from where Continue goes on. A snapshot this djs refuses (another build,
+ * other host values) says so with the engine's reason; its contents still show.
+ */
+function setupRestore(ex, box) {
+  box.hidden = false;
+  const input = box.querySelector(".live-restore-in");
+  const status = box.querySelector(".live-restore-status");
+  const say = (html) => (status.innerHTML = html);
+  box.querySelector(".live-load").onclick = async () => {
+    let bytes;
+    try {
+      bytes = fromBase64(input.value);
+      if (bytes.length === 0) throw new Error("empty");
+    } catch {
+      say(`<span class="live-error">That is not base64.</span>`);
+      return;
+    }
+    const l = await lib();
+    const id = ++ex.runs;
+    let inspection;
+    const probe = new l.Sandbox(sandboxOptions(ex, l.module, () => {}));
+    try {
+      inspection = probe.inspectSnapshot(bytes);
+    } catch (e) {
+      say(`<span class="live-error">${esc(e.message)}</span>`);
+      return;
+    } finally {
+      probe.dispose();
+    }
+    const s = { bytes, inspection, gz: await gzipSize(bytes) };
+    // A run of this example from before is over: its pause and transcript go.
+    ex.cont = null;
+    setRunLabel(ex, false);
+    ex.el.querySelector('[data-pane="out"]').innerHTML = `<span class="muted">(not run: the snapshot is not loaded)</span>`;
+    ex.el.querySelector(".live-status").textContent = "a snapshot, not loaded";
+    showTab(ex, "snapshot", true);
+    showSnapshot(ex, s, "The snapshot you gave");
+    select(ex, "snapshot");
+    const source = inspection.scripts[0]?.source;
+    if (source === undefined) {
+      say(`<span class="live-error">It names its script by a hash only, so this page cannot show or compile it.</span>`);
+      return;
+    }
+    // Its script into the editor: a frame's title marks where it waits there.
+    ex.ta.value = source;
+    ex.mark = null;
+    repaint(ex);
+    ex.el.querySelector(".live-reset").hidden = source === ex.original;
+    // Loading it for real is the test: this djs and the docs' setup load it, or refuse it
+    // with the reason.
+    const check = new l.Sandbox(sandboxOptions(ex, l.module, () => {}));
+    try {
+      check.loadSnapshot(bytes);
+    } catch (e) {
+      say(
+        `<span class="live-error">This djs refuses it: ${esc(e.message)}</span> ` +
+          `(<a href="#later-builds">what a later build loads</a>, <a href="#host-values">host values</a>)`,
+      );
+      return;
+    } finally {
+      check.dispose();
+    }
+    say(`Loaded: ${esc(words(bytes.length))}. Continue runs it on from where it waits.`);
+    if (id === ex.runs) await run(ex, bytes);
+  };
+  // A link to this page with a snapshot in its fragment fills the box and loads it.
+  const m = /^#restore=([A-Za-z0-9_-]+)$/.exec(location.hash);
+  if (m) {
+    input.value = m[1];
+    box.scrollIntoView?.({ block: "start" });
+    box.querySelector(".live-load").click();
+  }
 }
 
 const examples = [...document.querySelectorAll(".live")].map((el, i) => setup(el, i + 1));

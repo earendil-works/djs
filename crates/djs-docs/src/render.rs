@@ -142,11 +142,12 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 }
                 let mut words = info.split_whitespace();
                 let lang = words.next().unwrap_or("");
-                let live = matches!(lang, "js" | "ts") && words.any(|w| w == "live");
+                let rest: Vec<&str> = words.collect();
+                let live = matches!(lang, "js" | "ts") && rest.contains(&"live");
                 let hl = crate::highlight::highlight(lang, &code);
                 let html = if live {
                     live_n += 1;
-                    live_block(live_n, lang, &hl, &code)
+                    live_block(live_n, lang, &hl, &code, rest.contains(&"restore"))
                 } else {
                     format!("<pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre>\n")
                 };
@@ -288,23 +289,16 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
 /// A live example (D2103). The markup is the page without JavaScript: the highlighted
 /// code and the output and bytecode from the build. live.js turns the code into an
 /// editor (a textarea over this `pre`, which keeps showing the highlighting), shows the
-/// Run and Reset buttons and makes the tabs work.
-fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
+/// Run and Reset buttons and makes the tabs work. An example with a `debugger;` has a
+/// Snapshot tab (D3050, D3761): here the description of its snapshot at the first pause,
+/// so that the page shows it without JavaScript too; live.js shows each pause's snapshot
+/// there, explorable. `restore` (a ```js live restore block) adds the box that loads a
+/// snapshot given as base64.
+fn live_block(n: usize, lang: &str, hl: &str, code: &str, restore: bool) -> String {
     let ts = lang == "ts";
     let out_text = crate::run::run(code, ts);
     let disasm = crate::run::disasm(code, ts);
-    // An example with a `debugger;` shows the snapshot it is at its first pause (D3050,
-    // D3720), described: built here, so that the page shows it without JavaScript too;
-    // live.js replaces it with the snapshot of each pause.
-    let snap = if has_debugger(code) {
-        format!(
-            "<details class=\"live-snap-box\"><summary>The snapshot at the first \
-             <code>debugger;</code></summary><pre class=\"code live-snap\"><code>{}</code></pre></details>\n",
-            esc(&crate::run::snapshot(code, 1, ts))
-        )
-    } else {
-        "<details class=\"live-snap-box\" hidden><summary></summary><pre class=\"code live-snap\"><code></code></pre></details>\n".to_string()
-    };
+    let pausing = has_debugger(code) || restore;
     let tab = |id: &str, label: &str, selected: bool| {
         format!(
             "<button role=\"tab\" id=\"live-{n}-tab-{id}\" data-tab=\"{id}\" aria-controls=\"live-{n}-{id}\" \
@@ -321,34 +315,61 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
             if hidden { " hidden" } else { "" }
         )
     };
+    let (snap_tab, snap_pane) = if pausing {
+        let text = if has_debugger(code) {
+            crate::run::snapshot(code, 1, ts)
+        } else {
+            String::new()
+        };
+        (
+            tab("snapshot", "Snapshot", false),
+            pane(
+                "div",
+                "snapshot",
+                true,
+                &format!(
+                    "<p class=\"muted\">Run the example: each <code>debugger;</code> pause shows its snapshot here, to explore, copy and restore.</p>\
+                     <pre class=\"code sv-text\"><code>{}</code></pre>",
+                    esc(&text)
+                ),
+            ),
+        )
+    } else {
+        (String::new(), String::new())
+    };
+    let restore_box = if restore {
+        format!(
+            "<div class=\"live-restore\" hidden><label for=\"live-{n}-restore-in\">A snapshot as base64 (copied from a live example, or from <code>base64 pause.snapshot</code>):</label>\
+             <textarea id=\"live-{n}-restore-in\" class=\"live-restore-in\" rows=\"3\" spellcheck=\"false\" placeholder=\"REpTTkFQ…\"></textarea>\
+             <div class=\"live-restore-bar\"><button class=\"live-load\" type=\"button\">Load the snapshot</button>\
+             <span class=\"live-restore-status\" role=\"status\"></span></div></div>\n"
+        )
+    } else {
+        String::new()
+    };
     format!(
-        "<div class=\"live\" id=\"live-{n}\">\n\
+        "<div class=\"live{}\" id=\"live-{n}\">\n\
          <div class=\"live-bar\"><span class=\"live-badge\">live</span>\
          <span class=\"live-note\">output from the build</span>\
          <a class=\"live-info\" href=\"snapshots.html\" hidden aria-label=\"{INFO}\" data-tip=\"{INFO}\">ⓘ</a>\
          <button class=\"live-reset\" hidden>Reset</button>\
          <button class=\"live-run\" hidden>Run</button></div>\n\
+         {restore_box}\
          <div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre></div>\n\
-         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}\
+         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{snap_tab}\
          <span class=\"live-status\" role=\"status\"></span></div>\n\
-         {}{}{}{}{snap}</div>\n",
+         {}{}{}{snap_pane}</div>\n",
+        if restore { " live-restoring" } else { "" },
         tab("out", "Output", true),
         tab("bytecode", "Bytecode", false),
-        tab("heap", "Heap", false),
-        tab("suspend", "Suspend", false),
+        tab("memory", "Memory", false),
         pane("pre", "out", false, &esc(&out_text)),
         pane("pre", "bytecode", true, &esc(&disasm)),
         pane(
             "div",
-            "heap",
+            "memory",
             true,
             "<p class=\"muted\">Run the example to walk the VM's arena.</p>"
-        ),
-        pane(
-            "div",
-            "suspend",
-            true,
-            "<p class=\"muted\">Run the example to see it suspend.</p>"
         ),
     )
 }
@@ -811,5 +832,38 @@ mod tests {
         // The region's copy of the output is not rendered a second time.
         assert!(!p.html.contains("lang-text"), "{}", p.html);
         assert!(p.html.contains("<p>after</p>"));
+    }
+
+    /// An example that pauses has a Snapshot tab with its first pause described, for
+    /// readers without JavaScript; a `restore` block also the box that loads one.
+    #[test]
+    fn pausing_and_restoring_blocks() {
+        let md = "```js live\nlet n = 1;\ndebugger;\nconsole.log(n)\n```\n\n```js live restore\nconsole.log(2)\n```\n";
+        let (p, _) = with_env(|env| render("p.md", md, env));
+        let (first, second) = p.html.split_once("id=\"live-2\"").unwrap();
+        for want in [
+            "data-tab=\"memory\"",
+            "data-tab=\"snapshot\"",
+            "data-pane=\"snapshot\"",
+            "a pause at debugger; (open call 1)",
+        ] {
+            assert!(first.contains(want), "{want} in {first}");
+        }
+        assert!(!first.contains("live-restore\""), "{first}");
+        assert!(
+            p.html
+                .contains("<div class=\"live live-restoring\" id=\"live-2\">")
+        );
+        for want in [
+            "class=\"live-restore\" hidden",
+            "class=\"live-restore-in\"",
+            "data-tab=\"snapshot\"",
+        ] {
+            assert!(second.contains(want), "{want} in {second}");
+        }
+        // An example without `debugger;` has no Snapshot tab.
+        let (p, _) = with_env(|env| render("p.md", "```js live\nconsole.log(1)\n```\n", env));
+        assert!(!p.html.contains("data-tab=\"snapshot\""), "{}", p.html);
+        assert!(!p.html.contains("data-tab=\"suspend\""), "{}", p.html);
     }
 }

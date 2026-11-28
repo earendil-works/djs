@@ -9,6 +9,7 @@ use crate::{Guide, page_set, repo};
 
 const STYLE: &str = include_str!("../assets/style.css");
 const LIVE: &str = include_str!("../assets/live.js");
+const SNAPVIEW: &str = include_str!("../assets/snapview.js");
 const HIGHLIGHT: &str = include_str!("../assets/highlight.js");
 const SEARCH: &str = include_str!("../assets/search.js");
 const STRIP: &str = include_str!("../assets/strip.mjs");
@@ -131,6 +132,7 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     write("page.js", PAGE)?;
     copy_dir(&repo().join(ELANOR_DIR), &out.join("elanor"))?;
     write("live.js", LIVE)?;
+    write("snapview.js", SNAPVIEW)?;
     write("highlight.js", HIGHLIGHT)?;
     write("search.js", SEARCH)?;
     write("search.json", &crate::search::index(&rendered, html_name))?;

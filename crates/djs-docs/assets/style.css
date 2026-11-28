@@ -374,9 +374,6 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
 /* A pause at `debugger;` in the output, the snapshot under it, and the tip on what it is. */
 .live-pause { color: var(--semantic-color-text-secondary); font-style: italic; }
 .live-pause a.live-snap-link { color: inherit; text-decoration: underline; }
-.live-snap-box { border-block-start: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); }
-.live-snap-box > summary { cursor: pointer; padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); color: var(--semantic-color-text-secondary); }
-.live-snap-box pre { max-block-size: 22rem; overflow: auto; }
 .live button.live-run.is-paused { background: var(--semantic-color-background-fill-primary-positive); }
 .live-info { position: relative; color: var(--semantic-color-text-secondary); text-decoration: none; cursor: help; padding-inline: var(--semantic-dimension-space-control-gap-small); }
 .live-info::after {
@@ -401,6 +398,70 @@ table.bars .delta { color: var(--semantic-color-text-warning); }
 table.bars .bar { inline-size: 45%; min-inline-size: 6rem; }
 table.bars .bar span { display: block; block-size: var(--semantic-dimension-size-xxx-small); min-inline-size: 1px; border-radius: var(--semantic-dimension-radius-small); background: var(--semantic-color-background-fill-primary); }
 .mono { font-family: var(--semantic-font-family-code); }
+
+/* The Snapshot tab and the restore box (snapview.js, live.js; D3761): the run in
+   JavaScript terms first, how djs stores it and the bytes in layers below. */
+.live-restore { padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); border-block-end: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); }
+.live-restore label { display: block; color: var(--semantic-color-text-secondary); }
+.live-restore-in { display: block; box-sizing: border-box; inline-size: 100%; margin-block: var(--semantic-dimension-space-gap-small); font-family: var(--semantic-font-family-code); font-size: 0.85em; resize: vertical; background: var(--semantic-color-background-canvas); color: var(--semantic-color-text-primary); border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); border-radius: var(--semantic-dimension-radius-default); padding: var(--semantic-dimension-space-padding-xxx-small) var(--semantic-dimension-space-padding-small); }
+.live-restore-bar { display: flex; gap: var(--semantic-dimension-space-gap-small); align-items: baseline; flex-wrap: wrap; }
+.live-restore-status { color: var(--semantic-color-text-secondary); }
+.sv-head, .sv-summary { font-weight: var(--semantic-font-weight-ui-emphasis); }
+.sv-text { max-block-size: 22rem; overflow: auto; }
+.sv-actions { display: flex; flex-wrap: wrap; gap: var(--semantic-dimension-space-gap-small); align-items: baseline; margin-block: var(--semantic-dimension-space-flow-x-small); }
+.sv-act-status { color: var(--semantic-color-text-secondary); }
+ol.sv-chain { list-style: none; padding-inline-start: 0; margin-block: var(--semantic-dimension-space-flow-x-small); }
+ol.sv-chain ol.sv-chain { padding-inline-start: var(--semantic-dimension-space-padding-large); }
+li.sv-node { position: relative; padding-inline-start: var(--semantic-dimension-space-padding-large); padding-block-end: var(--semantic-dimension-space-gap-small); border-inline-start: var(--semantic-dimension-border-width-large) solid var(--semantic-color-border-secondary); }
+li.sv-node.sv-call { border-inline-start-color: var(--semantic-color-text-information); }
+li.sv-node.sv-result, li.sv-node.sv-end { border-inline-start-style: dashed; }
+li.sv-node + li.sv-node::before { content: "↑"; position: absolute; inset-inline-start: -0.45em; inset-block-start: -0.65em; color: var(--semantic-color-text-secondary); font-size: 0.8em; background: var(--semantic-color-background-surface); }
+.sv-title { font-weight: var(--semantic-font-weight-ui-emphasis); }
+.live button.sv-at { all: unset; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 0.2em; }
+@media (hover: hover) { .live button.sv-at:hover { background: var(--semantic-color-background-fill-secondary-hover); } }
+.sv-at:focus-visible { outline: var(--semantic-dimension-border-width-large) solid var(--semantic-color-focus-ring); }
+.live button.sv-why { padding: 0 0.4em; margin-inline-start: 0.25em; border-radius: 1em; font-size: 0.8em; line-height: 1.4; box-shadow: inset 0 0 0 var(--semantic-dimension-border-width-small) var(--semantic-color-border-secondary); background: none; color: var(--semantic-color-text-secondary); }
+.sv-note, .sv-note-text { display: block; font-weight: normal; color: var(--semantic-color-text-secondary); font-style: italic; }
+.sv-note[hidden] { display: none; }
+pre.sv-src { margin-block: var(--semantic-dimension-space-gap-small); padding: var(--semantic-dimension-space-padding-xxx-small) var(--semantic-dimension-space-padding-small); background: var(--semantic-color-background-fill-secondary); font-size: 0.9em; }
+.sv-ln { color: var(--semantic-color-text-secondary); }
+.sv-caret { color: var(--semantic-color-text-negative); font-weight: bold; }
+ul.sv-binds { list-style: none; padding-inline-start: 0; margin-block: var(--semantic-dimension-space-gap-small); font-family: var(--semantic-font-family-code); font-size: 0.9em; }
+ul.sv-binds li { margin-block: 0.1em; }
+.sv-name { color: var(--semantic-color-text-code-variable); }
+.sv-str { color: var(--semantic-color-text-code-string); }
+.sv-prim { color: var(--semantic-color-text-code-number); }
+.sv-named { color: var(--semantic-color-text-code-function); cursor: help; text-decoration: underline dotted; text-underline-offset: 0.2em; }
+.sv-more { color: var(--semantic-color-text-secondary); }
+.sv-ref { cursor: pointer; border-radius: var(--semantic-dimension-radius-small); }
+.sv-ref.is-same { background: var(--semantic-color-background-fill-secondary-warning); box-shadow: 0 0 0 1px var(--semantic-color-text-warning); }
+.sv-box { font-family: var(--semantic-font-family-ui, inherit); font-size: 0.8em; color: var(--semantic-color-text-secondary); border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); border-radius: 1em; padding: 0 0.4em; cursor: help; }
+.sv-sub, .sv-doing { color: var(--semantic-color-text-secondary); }
+.sv-doing { font-style: italic; }
+details.sv-store > summary, details.sv-layer > summary { cursor: pointer; color: var(--semantic-color-text-secondary); }
+details.sv-store ul { margin-block: var(--semantic-dimension-space-gap-small); font-size: 0.9em; color: var(--semantic-color-text-secondary); }
+details.sv-layer { margin-block: var(--semantic-dimension-space-flow-x-small); }
+.sv-h { font-weight: var(--semantic-font-weight-ui-emphasis); margin-block-end: 0; }
+ul.sv-needs { margin-block: var(--semantic-dimension-space-gap-small); }
+.sv-bar { display: flex; block-size: 0.8rem; border-radius: var(--semantic-dimension-radius-small); overflow: hidden; background: var(--semantic-color-background-fill-secondary); }
+.sv-bar span, .sv-swatch { display: inline-block; block-size: 100%; }
+.sv-swatch { inline-size: 0.8rem; block-size: 0.8rem; margin-inline-end: 0.4em; vertical-align: -0.1em; border-radius: 2px; }
+.sv-size-kinds { background: var(--semantic-color-text-secondary); }
+.sv-size-script { background: var(--semantic-color-text-code-string); }
+.sv-size-data { background: var(--semantic-color-background-fill-primary); }
+.sv-size-names { background: var(--semantic-color-text-code-function); }
+ul.sv-legend { list-style: none; padding-inline-start: 0; margin-block: var(--semantic-dimension-space-gap-small); }
+.sv-card { margin-block: var(--semantic-dimension-space-flow-x-small); padding: var(--semantic-dimension-space-padding-small); border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); border-radius: var(--semantic-dimension-radius-default); }
+.sv-card p { margin-block: 0.2em; }
+table.sv-fields, table.sv-records { font-size: 0.9em; margin-block: var(--semantic-dimension-space-gap-small); }
+table.sv-fields th { text-align: start; font-family: var(--semantic-font-family-code); font-weight: normal; color: var(--semantic-color-text-secondary); padding-inline-end: var(--semantic-dimension-space-padding-small); vertical-align: top; }
+table.sv-fields td { font-family: var(--semantic-font-family-code); overflow-wrap: anywhere; }
+table.sv-records td { padding: 0 var(--semantic-dimension-space-padding-small); }
+table.sv-records td.num { text-align: end; font-variant-numeric: tabular-nums; }
+table.sv-records tr.is-selected { background: var(--semantic-color-background-fill-secondary-warning); }
+pre.sv-hex { max-block-size: 22rem; overflow: auto; font-size: 0.8em; background: var(--semantic-color-background-canvas); }
+pre.sv-hex mark { background: var(--semantic-color-background-fill-secondary-warning); color: inherit; }
+.sv-hex-sec { color: var(--semantic-color-text-information); }
 
 /* Previous / next: Elanor's linked Card. */
 .pager { display: flex; gap: var(--semantic-dimension-space-gap-medium); margin-block-start: var(--semantic-dimension-space-flow-x-large); }

@@ -26,9 +26,11 @@ outlives the process.
 
 On this site, a `debugger;` statement in a live example makes the run wait: with the
 sandbox's `debugger` option the statement awaits a host call that the page settles when
-you continue, so the run is idle there, exactly as if it waited for a tool. The page then writes the run out as a snapshot and
-throws its sandbox away. **Continue** loads the snapshot into a fresh sandbox, which runs
-on to the next `debugger;` or the end:
+you continue, so the run is idle there, exactly as if it waited for a tool. The page
+then writes the run out as a snapshot and throws its sandbox away. Run this one, and open
+its **Snapshot** tab at the pause: it shows what the snapshot holds, in JavaScript terms
+first. **Continue** loads the snapshot into a fresh sandbox, which runs on to the next
+`debugger;` or the end:
 
 ```js live
 async function fetchPage(n) {
@@ -56,73 +58,64 @@ got page 3 of 3
 
 At the first pause, three things are in the middle of running: `fetchPage(1)`, stopped
 at its `debugger;`; the body, stopped at `await fetchPage(n)` halfway through
-`pages.push(...)`; and the `for` loop, at `n = 1`. `describeSnapshot` says what the
-snapshot at that pause holds, here as the guide's build writes it:
+`pages.push(...)`; and the `for` loop, at `n = 1`. In the Snapshot tab, the title of a
+stopped function marks where it waits in the code, each `?` says what a part is and why
+the snapshot holds it, hovering a value lights up every place the same object is
+reached from, and clicking one opens its record. Below the run come what the snapshot
+names instead of storing, its size in words, and two layers you can open: how djs
+stores it, record by record with named fields, and the bytes themselves, the selected
+record marked.
+
+### The same steps as host code
+
+The buttons at each pause do what a host does with a run that waits. **Copy** gives the
+snapshot's bytes as base64, **Download** as a file, **Link** puts them in the fragment of
+a link to [this page's restore box](#restoring-a-snapshot-here), which no server sees;
+**Continue** is a load and a settled call. With the JavaScript interface ([runs the host
+drives](js-api.md#runs-the-host-drives)), in node:
+
+```ts
+const options = { debugger: true, console };          // the setup of this site's examples
+const sandbox = await Sandbox.create(options);
+const run = sandbox.begin(code, {}, { filename: "example.js" });  // to the first pause
+const snapshot = run.snapshot();                      // the bytes: Download
+const text = Buffer.from(snapshot).toString("base64"); // as text: Copy, Link
+sandbox.dispose();                                     // the run lives on only as `text`
+// ... stored anywhere: a file, a database row, a queue; read back later, elsewhere:
+const again = await Sandbox.create(options);           // the same options
+const resumed = again.loadSnapshot(Buffer.from(text, "base64"));
+for (const call of resumed.calls) resumed.settle(call.id, { ok: true, value: undefined });
+await resumed.advance();                               // Continue: to the next pause or the end
+```
+
+The command line reads the same snapshot ([the command line](cli.md#snapshots-on-the-command-line)):
+decode what Copy gave, describe it, and go on from it, pausing at the next `debugger;`
+and from there to the end:
+
+```sh
+$ pbpaste | base64 -d > pause.snapshot
+$ djs describe pause.snapshot
+$ djs resume --debugger next.snapshot pause.snapshot
+got page 1 of 3
+djs: paused at example.js:3:3, wrote next.snapshot
+$ djs resume next.snapshot
+got page 2 of 3
+got page 3 of 3
+10 11 20 21 30 31
+```
+
+`djs resume` gives the loaded run the host values the site's examples have, `console`
+and `debugger`, so a snapshot of this page continues there; the second `resume` goes on
+through the pauses after it at once.
+
+### What the snapshot holds
+
+`describeSnapshot` (and `djs describe`) says in text what the Snapshot tab shows, here
+for the first pause as the guide's build writes it:
 
 <!-- gen:snapshot -->
 ```text
-example.js, paused at debugger; (2.6 KB, 21 records)
-
-a pause at debugger; (open call 1): the run waits until it is continued
-  · open call 1 is record #6 (HostCall), its promise #8
-  fetchPage(n = 1) is stopped at `debugger;` (line 3)
-       3 |   debugger;            // a tool call would wait here
-         |   ^
-    page = { n: 1, items: [10, 11] }
-    · activation #10 (Object.Generator, awaiting) continues at pc 45; its frame #11
-    · its frame holds callee, this, 1 argument, 2 locals, nothing on the operand stack
-    · its promise #12
-  the body is waiting for fetchPage, at `await fetchPage(n)` (line 8), halfway through
-    pages.push(…)
-       8 |   pages.push(await fetchPage(n));
-         |              ^
-    fetchPage = function fetchPage, pages = [], n = 1, items = undefined
-    · activation #17 (Object.Generator, awaiting) continues at pc 32; its frame #18
-    · its frame holds callee, this, 0 arguments, 5 locals, operand stack
-        Array.prototype.push, #20
-    · its promise #3
-  the run's result is a promise that is still pending
-    · promise #3 (Object.Promise), pending
-
-on the global object: console, debugger()
-named, not stored (a loading djs must have them):
-  the code of fetchPage and the body: the same bytecode, since they are stopped halfway
-    (checked by hash)
-  builtins every djs has: Object.prototype, Promise.prototype, %AsyncFunctionPrototype%,
-    Array.prototype, Array.prototype.push, Function.prototype
-  from the host: console, debugger()
-  · fetchPage is example.js 0..151, bytecode hash 1e85731ee0e5eed7
-  · the body is example.js 0..363, bytecode hash e12c4ee85db34661
-
-2.6 KB: 1.7 KB name the 11 kinds of data and their fields, so a later djs can read it;
-  370 bytes is the script's text, compiled again when the snapshot loads; 454 bytes is
-  the run's own data: 21 records and 12 strings; 49 bytes name what it refers to without
-  storing it: builtins, host values, functions.
-
-how djs stores it: 21 records, each a kind with named fields
-  #0 Patch.Global (17 B) the global object: props {console = console, debugger = debugger}
-  #1 Patch.GlobalLex (6 B) the global scope's let and const: (empty)
-  #2 Patch.SymbolRegistry (6 B) the Symbol.for registry: (empty)
-  #3 Object.Promise (10 B) the run's result: state pending
-  #4 ValueArray (2 B) rejections of the VM: (empty)
-  #5 ValueArray (4 B) hostCalls of the VM: VALUES [#6]
-  #6 HostCall (9 B) open call 1: ID 1, FN debugger, ARGS #7, PROMISE #8
-  #7 ValueArray (2 B) ARGS of #6: (empty)
-  #8 Object.Promise (11 B) the promise of debugger(): state pending, reactions #9
-  #9 ValueArray (7 B) reactions of #8: VALUES [undefined, #10, #10]
-  #10 Object.Generator (16 B) the activation of fetchPage(n = 1): state awaiting, frame #11, pc 45, hp…
-  #11 ValueArray (22 B) the frame of fetchPage(n = 1): VALUES [#13, undefined, 1, 0, 2, 29, 1, 0, unde…
-  #12 Object.Promise (11 B) the promise of fetchPage(n = 1): state pending, reactions #15
-  #13 Object.Function (8 B) function fetchPage: template code of fetchPage
-  #14 Object.Ordinary (16 B) page: props {n = 1, items = #16}
-  #15 ValueArray (7 B) reactions of #12: VALUES [undefined, #17, #17]
-  #16 Object.Array (12 B) page.items: elements [10, 11], length 2
-  #17 Object.Generator (16 B) the activation of the body: state awaiting, frame #18, pc 32, hp 2, prom…
-  #18 ValueArray (29 B) the frame of the body: VALUES [#19, undefined, 0, 0, 0, 0, 3, undefined, #17, …
-  #19 Object.Function (8 B) the body: template code of the body
-  #20 Object.Array (8 B) pages: length 0
-  bytes per section: types 1772, strings 154, builtins 7, intrinsics 1, host 5,
-    scripts 370, functions 29, records 228, vm 72
+(the run ended without pausing)
 ```
 <!-- /gen -->
 
@@ -148,6 +141,38 @@ Each Continue resumes from the snapshot alone; nothing else of the run survives 
 the parts. A later snapshot grows with the run's data (one more page each), not with the
 number of times the run was resumed, because a loaded run is the same heap the original
 was, not a description of it.
+
+## Restoring a snapshot here
+
+Paste a snapshot as base64 below, from a live example's Copy, from `base64
+pause.snapshot`, or follow a Link, which fills it in. Loading it shows what it holds in
+the Snapshot tab, puts its script into the editor, and loads it into a fresh sandbox of
+this site's setup, from where Continue goes on. Without a snapshot, the example below
+runs as any other; its two calls wait at once, so its snapshot shows how `Promise.all`
+waits for both:
+
+```js live restore
+const cart = new Map([["apple", 2]]);
+let total = 0;
+async function add(item, n) {
+  cart.set(item, (cart.get(item) ?? 0) + n);
+  debugger;            // both calls wait here at once
+  total += n;
+}
+await Promise.all([add("pear", 1), add("apple", 3)]);
+console.log([...cart].join(" "), total);
+```
+<!-- gen:run -->
+```text
+apple,5 pear,1 4
+```
+<!-- /gen -->
+
+A snapshot this page's djs cannot load is refused with the engine's reason, and its
+contents still show: one written by another build whose waiting functions compile
+differently ([later builds](#later-builds)), or one that names a host value this site
+does not give, such as a snapshot of `djs run --body`, whose run has `tools` and `print`
+([host values](#host-values)).
 
 ## Idle points
 
