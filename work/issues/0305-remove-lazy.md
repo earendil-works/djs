@@ -1,6 +1,6 @@
 # 0305: Remove lazy compilation and the dead code the dump removal left
 
-status: open
+status: in-progress
 agent: pclean
 branch: issue/0305-remove-lazy
 depends-on: -
