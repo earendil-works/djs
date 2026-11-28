@@ -590,8 +590,9 @@ vm_collect, vm_canonical_hash, vm_abort, vm_take_unhandled_rejections, ...
 ```
 
 The JS host package wraps it: `Sandbox` (js/src/sandbox.ts) runs codemode bodies with
-host functions, fuel slices, tasks and host-driven runs that persist as snapshots (the
-shipped module has them, D3600, D3730), a deterministic mode and journals.
+host functions and fuel slices as host-driven runs, which persist as snapshots (the
+shipped module has them, D3600, D3730), with `run`/`runAsync` as loops over them (D3745),
+a deterministic mode, re-runs from recorded results and journals (D3746).
 
 - **Async host functions** (`tools.*`, `models.*`): calling one creates a promise and an
   entry `{call_id, fn_id, args, promise}` in the heap's pending host call table. Execution
@@ -607,8 +608,10 @@ shipped module has them, D3600, D3730), a deterministic mode and journals.
   each open one with its id, its host function by identity and the host's state of it;
   after loading it the host decides whether to deliver a recorded result, re-issue the
   call or reject it (D3720). The VM provides
-  the call ids and arguments. The Sandbox also records and replays journals of a run's
-  external inputs, checked against canonical heap hashes (D1730).
+  the call ids and arguments. When a newer build refuses a snapshot, a deterministic run is
+  begun again from its script with its recorded results (D3746). The Sandbox also records
+  and replays journals of a run's external inputs, checked against canonical heap hashes
+  (D1730).
 - **Nondeterminism** comes only from the host: the clock is set by the host (`Date` reads
   it, D1383; with an async result it travels in the inbox entry, D1670), the time zone
   is a fixed offset, `Math.random` is seeded (D1314), and weak references can be made

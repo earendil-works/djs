@@ -512,10 +512,18 @@ tested in four places:
   functions by name, other function ids in the loading host, named handles, refusals);
   js/test/snapshot.test.ts (the Sandbox API with pi's code mode setup, js/test/pi-setup.ts)
   and js/test/snapshot-harvest.test.ts (every harvest case in that setup, moved to a fresh
-  sandbox through a snapshot at every idle point, half of them without sources: the output
-  and outcome must be the uninterrupted run's), both in the "js tests" leg; the CLI's
+  sandbox through a snapshot at every idle point: the output and outcome must be the
+  uninterrupted run's), both in the "js tests" leg; the CLI's
   `snapshot_after_every_idle_point`, `debugger_pauses_snapshot_and_resume` and the REPL's
   `snapshot_a_waiting_session`.
+- **Re-runs, the fallback for refused snapshots** (D3746): js/test/determinism.test.ts
+  (in "js tests") runs every harvest case deterministically in pi's setup, then begins it
+  again from its script with the first k deliveries, on another fuel slice, for every
+  idle point k: output, open calls, canonical hash and snapshot bytes must be the
+  original's there. A whole re-run must end the same way, a snapshot loaded in the middle
+  and continued with the recorded results (and clocks) must make the same calls and
+  output, and re-runs that do something else must report `diverged` with the first
+  difference.
 - **The negative control** (`negative_control_catches_a_broken_import`, in `test`): with an
   importer that loses dense elements, the corpus runs must differ.
 - **Malformed snapshots** (`malformed_snapshots_refuse`, in `test`: 400 deterministic
