@@ -1,6 +1,6 @@
 # 0306: One way to drive a run; determinism kept as the fallback for refused snapshots
 
-status: open
+status: in-progress
 agent: pclean
 branch: issue/0306-one-run-driver
 depends-on: 0305
