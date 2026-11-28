@@ -109,7 +109,8 @@ djs/
                     snapshot (include_bytes!, D1321).
     djs-wasm/       wasm32-unknown-unknown cdylib: the integer ABI (D1230), std with its
                     dlmalloc (D1231), panic hook.
-    djs-cli/        std binary `djs`: run, repl, disasm, strip-types (docs/cli.md).
+    djs-cli/        std binary `djs`: run, resume, describe, repl, disasm, strip-types
+                    (docs/guide/cli.md).
     djs-test262/    the test262 runner (qjs subprocess or djs in process).
     djs-difftest/   the differential corpus runner and the djs-abidrive driver.
     djs-bench/      benchmarks: component, engine track, wasm size.
@@ -122,14 +123,16 @@ djs/
                     tsconfig.json (so tsc and editors type-check them); gen/ holds the
                     generated prelude.js and resume-points.txt.
   js/               TypeScript host package: src/ (Sandbox, wire codec, heap reader,
-                    layout.generated.ts), pi/ (the pi codemode adapter), bench/, test/.
+                    layout.generated.ts), bench/, test/, pkg-test/ (the packed package).
   tests/            corpus/ (difftest cases with qjs-generated .expected files),
                     test262/ (ratchet and oracle lists), test262.toml (grouping), bench/,
-                    pi/, data/, scores/, strip-types/.
+                    builtins/ (the registry), data/, scores/, snapshot/, strip-types/.
   scripts/          gate.sh, merge-to-main.sh, bgen.sh, regen.sh, build-wasm.sh, bench.sh,
                     timeout.sh, perf/ (instruction-count tools), determinism/, ...
-  docs/             compiler.md, objects.md, host.md, wire.md, cli.md, decisions.md and
-                    decisions-index.md; guide/ is the guide for humans (D2100).
+  docs/             compiler.md, objects.md, wire.md, decisions.md and decisions-index.md,
+                    and research notes; guide/ is the guide for humans (D2100), where the
+                    CLI (cli.md), the Sandbox (js-api.md) and the ABI (host.md) are
+                    documented.
   work/             issues, the board and the process (work/README.md).
 ```
 
@@ -572,14 +575,15 @@ the protocol (D1503, D1560).
 ### Execution API
 
 The host interface is the integer ABI of djs-wasm (D1230): numbered VMs and handles, a staging buffer for bytes in
-and an out buffer for bytes back, and about 45 exports, documented in docs/host.md "The
-ABI". In outline:
+and an out buffer for bytes back, and about 60 operations behind one export (D3320),
+documented in docs/guide/host.md and, each with its contract, in crates/djs-wasm/src/lib.rs.
+In outline:
 
 ```
-vm_new(memory_limit, live, flags) -> vm          // a copy of the base image (D1321)
+vm_new(memory_limit, flags) -> vm                // a copy of the base image (D1321)
 vm_arena_ptr / vm_arena_len                      // the image: the arena bytes
 vm_snapshot / vm_load_snapshot                   // snapshots (D3700, D3720)
-vm_compile_file(vm, goal, name, params, src) -> h // goal: async body, Script, TS, ...
+vm_compile_file(vm, goal, name, params, src) -> h // goal: Script or async body, TS, debugger
 vm_call(vm, f, this, argc)                       // pushes a frame, does not run it
 vm_run(vm, fuel) -> status                       // Done | Threw | OutOfFuel | HostCall |
                                                  // Idle | HostOutOfMemory
@@ -663,8 +667,8 @@ similarly shaped objects; base64 images).
   referenced objects or accepts that they are dead after a load. The value tag and the
   wire tag are reserved (docs/wire.md).
 
-As built (D1180, D1210, D1211, D1781; docs/wire.md and docs/host.md have the formats and
-the numbers): the wire format beats `JSON.stringify` + `JSON.parse` in wasm by 1.4x on
+As built (D1180, D1210, D1211, D1781; docs/wire.md has the format, docs/guide/host.md and
+docs/guide/benchmarks.md the numbers): the wire format beats `JSON.stringify` + `JSON.parse` in wasm by 1.4x on
 objects up to 9x on one big string inbound, and the reader by 3x to 130x outbound.
 
 ### Images and snapshots (G4)
@@ -714,7 +718,7 @@ numbers, generated, D2101; D016 says why wasm numbers come first):
 | `vm_new` from the base snapshot | < 100 µs | about 40 µs in wasm, mostly the copy of the base (D1990); `Sandbox.create` ~60-140 µs, mostly instantiation |
 | compile throughput | > 50 MB/s of source on native builds | not tracked as a target; startup of a codemode script is µs |
 | interpreter speed | within 1.5x of QuickJS-wasm (stretch: parity) | wasm instructions vs quickjs-wasi: plain loops and property access 0.55-0.65x, strings and arrays 0.55-0.8x, JSON 0.5-0.6x; calls 1.3x, builtin-heavy code (higher-order, forEach) 2-4x, pi-like 1.5x |
-| host string out, 1 MiB | ~memcpy speed | yes (the reader, docs/host.md) |
+| host string out, 1 MiB | ~memcpy speed | yes (the reader, docs/guide/host.md) |
 
 The size gap is mostly the base image and the generated native builtins;
 work/issues/0052-bloat-investigation.md has the breakdown, D1634 the rule that each
@@ -737,8 +741,7 @@ Corpora, as they turned out:
 1. **The difftest corpus** (`tests/corpus/`; README.md "Status" has the counts):
    codemode-style scripts with fake tools, console and result formatting, builtins,
    errors, language and TypeScript cases, and dquickts' own `test_*.js` split into cases
-   (D1102). Real pi session scripts were not harvested; pi's own tests run on djs instead
-   (docs/host.md).
+   (D1102). Real pi session scripts were not harvested; pi's own tests run on djs instead.
 2. **test262**, grouped by `tests/test262.toml` into skip / later / active (D1022); the
    active group (README.md "Status" has the counts) is in the gate with a ratchet of
    known failures.

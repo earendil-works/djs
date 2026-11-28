@@ -37,17 +37,18 @@ The run has three host globals besides `console`:
 
 Whenever the run is idle, with only host calls open, the oldest open call that has an
 answer gets it, and the run continues. A call with no answer ends the run with
-`djs: no answer for #4 tools.read({"path":"x"})` on stderr. `--bind myTool=@sdk/x#myTool`
-gives a `--body` one more parameter, `myTool`, an async host function with that name,
-answered like a tool.
+`djs: no answer for #4 tools.read({"path":"x"})` on stderr. A host function is named by
+its full name, its identity: `tools.read` for a tool, `later`, `print`. `--bind
+myTool=@sdk/x#myTool` gives a `--body` one more parameter, `myTool`, the async host
+function of that identity, answered like a tool from the answers file's entry for it, a
+stand-in for an import a host would provide.
 
 Exit codes: 0 when the run succeeds; 1 for an uncaught exception (printed as
 `Uncaught TypeError: ...`) or a call without an answer; 2 for a usage or compile error.
 
 The remaining flags exercise the engine: `--gc-stress` collects garbage at every
-safepoint, `--suspend-every N` runs N fuel at a time and continues each slice in a
-fresh VM restored from the heap image. A script's output must not change under either
-of them.
+safepoint, `--suspend-every N` stops the run every N fuel and goes on. A script's output
+must not change under either of them.
 
 ### The answers file
 
@@ -80,14 +81,18 @@ host functions named, not written.
 - `djs run --snapshot-after K OUT file.js` writes the run as a snapshot to `OUT` at idle
   point K and stops. `djs resume OUT`, with the same `--tools`, prints the rest, so the
   two together print what the uninterrupted run prints. A run that cannot be snapshotted
-  is exit code 1, with the reason.
+  is exit code 1, with the reason: one whose script wrote a builtin, for instance
+  (`--frozen` in the REPL makes such a write fail at once instead). A run that ends
+  before idle point K says so on stderr.
 - `djs run --snapshot-every-idle file.js` snapshots at every idle point and continues in
   a fresh VM that loaded the snapshot: the run's output must be the same as without it.
 - `djs resume file.snapshot` loads a snapshot into a fresh VM, with frozen builtins if
   the run had them, and goes on to the end, like `run`. Its open calls keep their ids and
   are answered the same way; the tools the run made and the answers it used travel with
   it, so a resumed run gets the answers the uninterrupted run gets. `resume` takes the
-  flags of `run`.
+  flags of `run`. A file that is not a snapshot, or one that does not load (a waiting
+  function whose bytecode differs in this build, a host value the CLI does not have), is
+  exit code 2 with `djs: cannot load FILE: ...`.
 - `djs describe file.snapshot` says what a snapshot holds: its sections and their sizes,
   the scripts, the host values it names, the host's data, the functions it holds frames
   of, and its records by kind.
@@ -140,22 +145,49 @@ next, and prints its value:
 42
 ```
 
-**Inputs.** A line that leaves the input incomplete prompts `...` for more. An input
-with `await` outside a function runs as an async body whose declarations still become
-globals; such an input prints no value when it is a statement. An input that starts with
-`{` is an object literal, as in node. `--ts` (or `.ts on`) parses inputs as TypeScript.
+**Inputs.** A line that leaves the input incomplete (the compile error is at its end, or
+a template or comment is open) prompts `...` for more; Ctrl-C drops it. Each input is a
+Script: top-level `let`, `const` and `class` live in the global lexical scope and `var`
+and functions on the global object, so later inputs see them, and declaring a `let`
+again is a SyntaxError, as between two Scripts. An input prints its completion value,
+except the `undefined` of one that starts with a declaration. Two kinds of input run as
+the async body `return [(input)];` instead: an expression a Script cannot run (`await
+f()`), and one that starts with `{`, which is an object literal as in node (a block that
+is not an expression still runs as a Script). The array keeps the body from adopting a
+promise, so `Promise.resolve(1)` prints as a promise; a runtime error on the first line
+of such an input reports a column 9 too far. `--ts` (or `.ts on`) parses inputs as
+TypeScript.
+
+**Top-level `await`.** An input that is not a valid Script but contains `await` runs as
+an async body whose declarations become globals: `let`, `const` and `var` become
+assignments to names a Script declared first (so a redeclaration fails before the input
+runs), `class C {}` becomes `C = class C {};`, and a function declaration is followed by
+`globalThis.f = f`. In TypeScript the types are erased first. The rewrite has gaps: a
+`const` is assignable afterwards, a statement with `await` prints no value, a name
+declared by an input that throws stays declared as `undefined`, and the scan for
+declarations works on tokens, so exotic semicolon insertion can mislead it.
 
 **Output.** Values print in the style of node's `util.inspect`, read straight from the
 heap: no code of the script runs to print them, so getters show as `[Getter]` and
-proxies as their target and handler. An uncaught error prints as `Uncaught Name:
-message` with its stack.
+proxies as their target and handler. Nesting deeper than 3 prints `[Object]`, more than
+100 elements print `... n more items`, and a value wider than 72 columns breaks into one
+entry per line. An uncaught error prints as `Uncaught Name: message` with its stack.
+`console.log` prints strings raw and everything else the same way.
 
 **Editing.** Left and Right, Home and End, Up and Down for history, the usual Ctrl and
 Alt keys, and Tab, which completes globals and properties after a dotted path (`.complete
-text` shows the candidates). History is kept in `$DJS_HISTORY`, else `~/.djs_history`;
-`--no-history` turns it off. Ctrl-C stops a running input at the end of its fuel slice,
+text` shows the candidates). Completion follows data properties only, read from the
+heap: no getter or proxy trap runs, so a path through one completes nothing. History is
+kept in `$DJS_HISTORY`, else `~/.djs_history` (the last 1000 lines); `--no-history` turns
+it off. Ctrl-C stops a running input at the end of its fuel slice, a few milliseconds,
 and the globals stay. When stdin is not a terminal, the REPL reads lines with no prompt
-and prints only results.
+and prints only results; the CLI's tests drive it that way.
+
+> **Trade-off.** A line editor of its own over a library. The terminal is switched to
+> raw input with `stty`, and a thread hands keys to the REPL between fuel slices, so
+> Ctrl-C arrives as a key while a script runs, and the CLI has no dependencies for it.
+> The cost: characters count as one column each, long lines that wrap redraw
+> imperfectly, and without `stty` the REPL falls back to line mode.
 
 ### Commands
 
@@ -164,11 +196,11 @@ and prints only results.
 | `.help`, `.exit` | the list; leave (Ctrl-D on an empty line too) |
 | `.load <file>` | run a file as one input |
 | `.ts [on\|off]` | parse inputs as TypeScript |
-| `.disasm <code>` | the bytecode of the function `code` evaluates to, or of `code` itself |
-| `.fuel [n\|off]` | the fuel the last input used; with `n`, stop inputs after `n` fuel |
+| `.disasm <code>` | the bytecode of the function `code` evaluates to (a bound function's target), with its nested functions, or of `code` itself, compiled and not run, when it is not such an expression; the expression is evaluated |
+| `.fuel [n\|off]` | the fuel the last input used and the limit; with `n`, stop inputs after `n` fuel (the globals stay) |
 | `.time [on\|off]` | print wall time and fuel after each input |
-| `.suspend-every [n\|off]` | run inputs in slices of `n` fuel, print where each stop is, and continue each slice in a new VM restored from the heap image |
-| `.step [n\|off]` | pause running inputs every `n` fuel at a `step>` prompt: Enter runs the next slice, `c` to the end, `bt` prints the frames, `q` stops |
+| `.suspend-every [n\|off]` | run inputs in slices of `n` fuel and print the fuel so far and the innermost frame at each stop |
+| `.step [n\|off]` | pause running inputs every `n` fuel (default 1000) at a `step>` prompt: Enter runs the next slice, `c` to the end, `bt` prints the frames, `fuel` the fuel so far, `q` or Ctrl-C stops |
 | `.gc` | collect garbage; the arena's size before and after |
 | `.heap [sections]` | the heap report ([below](#the-heap-report)) |
 | `.pending` | the open tool calls and `debugger;` pauses, with the input that made each and where it waits |
@@ -273,6 +305,15 @@ compared with the base image every VM starts from. `.heap all` shows every secti
 | `shapes` | shapes and the most common key lists |
 | `functions` | bytecode per script, closures, builtin closures |
 | `session` | the run state, queued jobs, open host calls, promises, and suspended functions with their locals |
+
+`largest`, `strings`, `shapes` and `functions` describe the session's own part: the cells
+new or changed against the base, each after one line of the base's totals; a string the
+base already holds counts as an extra copy. Builtins are named by their paths
+(`%Array.prototype.map%`, `%get Map.prototype.size%`, `%ArrayIteratorPrototype%.next`),
+and paths read like JavaScript where the heap allows: `.name` for a property, `[i]` for
+an element, `~name` for a captured variable, `<frame>.x` for a suspended function's
+local, `<proto>`, `handle[n]` for the host's handles, and the layout's field names in
+brackets for internal cells (`<atoms><entries>`).
 
 [Images and the base snapshot](snapshots.md#inspecting-a-heap) explains how the report
 matches a heap against the base.
