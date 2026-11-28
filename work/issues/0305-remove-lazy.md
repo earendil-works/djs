@@ -44,6 +44,36 @@ the lowering itself.
 - [ ] Decisions recorded (superseding D2990-D2995, D3721's lazy part, D3732's caveat).
 
 ## Log
+- Gate CPU before (0304's gate, .worktrees/gate/target/gate-steps.tsv, CPU-s): test262 174.0,
+  snapshots 14.6, difftest 60.6, build:difftest 50.6, total 791.3.
+- Lazy compilation deleted: compiler/lazy.rs, interp/run/lazy.rs, vm/lazy_tests.rs, the cfg
+  sites, `resolve::Unit`/`Plan`/`lazy_roots`/`emit_lazy` (two pools now, written inline),
+  `Op::Lazy` (super_call_frame/forward move down one: 213, 214), `capture_desc::IMMUTABLE/
+  CHECKED`, `Vm::compile_lazy_templates` and seal's pass, `VmOptions::lazy_functions`,
+  `Lexer::seek`, the snapshot interface hash's synthetic-number stripping (the `<no name>`
+  case stays: privileged templates keep no names), the import's lazy comment, the
+  `--lazy`/DJS_LAZY flags and `lazy` features of difftest, test262 and bench (the bench's
+  `compile/typescript.js lazy` row and the status key `compile/typescript-lazy-time-pct`).
+- Frame bytecode pin: one entry changed (codemode-harvest/h164-load.js, the top level): the
+  per-function constant pools of lazily compilable functions are gone, so native builds lay
+  out pools as the wasm module always did (its pin entry is now the module's). Regenerated.
+- Class-span recorder deleted (parser.rs, class.rs).
+- Gate: test262 runs once (no `--lazy` twin), snapshots once, difftest without `--lazy`,
+  the full-only gc-stress leg once; build:difftest builds djs-difftest and djs-abidrive in
+  one cargo invocation (same features now).
+- Guide: compiler.md ("Lazy functions" replaced by a short "Every function compiles at
+  load" with its trade-off), interpreter.md (call table row), testing.md, rust-api.md;
+  status.md regenerated.
+- **fast_step/fast_more kept** (survey item verified false): with the tier deleted and
+  `hot_loop: false` going straight to `step_once`, `hot_loop_is_invisible` and
+  `hot_loop_paths_are_invisible_at_every_stop` fail on raw images. The general path is not
+  the reference the survey assumed: `lookup_ic` never consults the inline cache (it looks up
+  and refills every time, so a slot the tier-0 loop hits keeps an older receiver shape there
+  while `step_once` rewrites it), and an array's `length` comes back as an f64 from the
+  general path, an int32 from the fast paths. The test-only tier is what makes the raw
+  image of a run without the loop equal the loop's. Keeping raw-image equality (the 0282
+  dead-slot bug was found by it) means keeping the tier; the alternative (compare canonical
+  hashes there) weakens the test. Attempt saved in work/scratch/0305/.
 
 ## Follow-ups
 
