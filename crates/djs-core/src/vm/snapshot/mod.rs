@@ -34,6 +34,9 @@ mod hash;
 #[cfg(test)]
 mod host_tests;
 mod import;
+mod inspect;
+#[cfg(test)]
+mod inspect_tests;
 mod schema;
 #[cfg(test)]
 mod tests;
@@ -48,7 +51,8 @@ use crate::heap::{Property, Ref};
 use crate::value::Value;
 use wire::Writer;
 
-pub use import::{SnapshotStats, describe, needs};
+pub use import::{SnapshotStats, needs};
+pub use inspect::{Inspection, describe, inspect};
 
 /// The format version: bumped whenever the encoding changes.
 pub const FORMAT: u8 = 2;

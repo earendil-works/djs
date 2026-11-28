@@ -32,7 +32,7 @@ pub struct SnapshotStats {
 
 /// A value as the snapshot has it.
 #[derive(Clone, Copy, Debug)]
-enum V {
+pub(super) enum V {
     Imm(Value),
     Str(u32),
     Rec(u32, bool),
@@ -45,22 +45,22 @@ enum V {
 
 /// A host entry as the snapshot has it (export's `HostEntry`, string ids).
 #[derive(Clone, Copy, Debug)]
-enum HostEntry {
+pub(super) enum HostEntry {
     Root(u32),
     Member(u32, u32),
     Function(u32),
 }
 
 #[derive(Clone, Debug)]
-struct P {
-    key: V,
-    bits: u64,
-    a: V,
-    b: V,
+pub(super) struct P {
+    pub key: V,
+    pub bits: u64,
+    pub a: V,
+    pub b: V,
 }
 
 #[derive(Clone, Debug)]
-enum F {
+pub(super) enum F {
     V(V),
     U(u64),
     I(i64),
@@ -80,7 +80,7 @@ enum F {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Ty {
+pub(super) enum Ty {
     Value,
     Ref,
     Uint,
@@ -100,9 +100,9 @@ enum Ty {
     Tail(Vec<(String, Ty)>),
 }
 
-struct TypeInfo {
-    name: String,
-    fields: Vec<(String, Ty)>,
+pub(super) struct TypeInfo {
+    pub name: String,
+    pub fields: Vec<(String, Ty)>,
 }
 
 fn parse_ty(s: &str, sets: &BTreeMap<String, Vec<String>>) -> Option<Ty> {
@@ -147,27 +147,27 @@ fn parse_ty(s: &str, sets: &BTreeMap<String, Vec<String>>) -> Option<Ty> {
 }
 
 /// A script: name and parameters (string ids), options, the source or its hash.
-type ScriptEntry<'a> = (u32, u32, u32, Result<&'a [u8], u64>);
+pub(super) type ScriptEntry<'a> = (u32, u32, u32, Result<&'a [u8], u64>);
 /// A function: script, span, pinned, hash, template objects by constant index.
-type FunctionEntry = (u32, u32, u32, bool, u64, Vec<(u32, V)>);
+pub(super) type FunctionEntry = (u32, u32, u32, bool, u64, Vec<(u32, V)>);
 
-struct Snap<'a> {
-    types: Vec<TypeInfo>,
-    strings: Vec<(bool, &'a [u8])>,
-    bases: Vec<u32>,
-    intrinsics: Vec<u32>,
-    host: Vec<HostEntry>,
+pub(super) struct Snap<'a> {
+    pub types: Vec<TypeInfo>,
+    pub strings: Vec<(bool, &'a [u8])>,
+    pub bases: Vec<u32>,
+    pub intrinsics: Vec<u32>,
+    pub host: Vec<HostEntry>,
     /// The flag and constant sets' names, for `describe`.
-    set_names: Vec<String>,
+    pub set_names: Vec<String>,
     /// Name, parameters, options, and the source or its hash.
-    scripts: Vec<ScriptEntry<'a>>,
+    pub scripts: Vec<ScriptEntry<'a>>,
     /// Script, span, whether the bytecode is pinned, the hash, the template objects made
     /// at its tagged templates (by constant index).
-    functions: Vec<FunctionEntry>,
-    records: Vec<(u32, Vec<F>)>,
-    root: (u32, Vec<F>),
+    pub functions: Vec<FunctionEntry>,
+    pub records: Vec<(u32, Vec<F>)>,
+    pub root: (u32, Vec<F>),
     /// Where each section starts, for `describe`.
-    marks: Vec<(&'static str, usize)>,
+    pub marks: Vec<(&'static str, usize)>,
 }
 
 fn short(_: Short) -> Refusal {
@@ -181,7 +181,7 @@ fn refusal(s: String) -> Refusal {
 }
 
 impl<'a> Snap<'a> {
-    fn parse(bytes: &'a [u8]) -> Result<Snap<'a>, Refusal> {
+    pub(super) fn parse(bytes: &'a [u8]) -> Result<Snap<'a>, Refusal> {
         let mut r = Reader::new(bytes);
         if r.raw(6).map_err(short)? != MAGIC {
             return Err(refusal(String::from("not a djs logical snapshot")));
@@ -399,7 +399,7 @@ fn field(r: &mut Reader<'_>, t: &Ty) -> Result<F, Short> {
     })
 }
 
-fn fields(r: &mut Reader<'_>, tys: &[(String, Ty)]) -> Result<Vec<F>, Short> {
+pub(super) fn fields(r: &mut Reader<'_>, tys: &[(String, Ty)]) -> Result<Vec<F>, Short> {
     tys.iter().map(|(_, t)| field(r, t)).collect()
 }
 
@@ -571,7 +571,7 @@ pub fn needs(bytes: &[u8]) -> Result<Needs, Refusal> {
     Ok(out)
 }
 
-fn string_of(two: bool, d: &[u8]) -> String {
+pub(super) fn string_of(two: bool, d: &[u8]) -> String {
     if two {
         let units: Vec<u16> = d
             .as_chunks::<2>()
@@ -1649,91 +1649,6 @@ impl Loader<'_> {
 pub(super) fn sources_len(bytes: &[u8]) -> Option<usize> {
     let s = Snap::parse(bytes).ok()?;
     Some(s.scripts.iter().map(|x| x.3.map_or(0, |b| b.len())).sum())
-}
-
-/// A snapshot's sections and record types, for people.
-pub fn describe(bytes: &[u8]) -> Result<String, Refusal> {
-    let s = Snap::parse(bytes)?;
-    let mut out = String::new();
-    for w in s.marks.windows(2) {
-        out += &format!("{:10} {:8} bytes\n", w[0].0, w[1].1 - w[0].1);
-    }
-    let strings: usize = s.strings.iter().map(|x| x.1.len()).sum();
-    out += &format!(
-        "{} strings ({strings} bytes of text), {} builtins, {} intrinsics, {} scripts, {} functions, {} records\n",
-        s.strings.len(),
-        s.bases.len(),
-        s.intrinsics.len(),
-        s.scripts.len(),
-        s.functions.len(),
-        s.records.len()
-    );
-    let mut names = Vec::new();
-    for &b in &s.bases {
-        let (two, d) = s.strings[b as usize];
-        if !two {
-            names.push(d.iter().map(|&c| c as char).collect::<String>());
-        }
-    }
-    out += &format!("builtins: {}\n", names.join(" "));
-    out += &format!("flags and constants: {}\n", s.set_names.join(" "));
-    let text = |i: u32| {
-        s.strings
-            .get(i as usize)
-            .map_or_else(String::new, |&(two, d)| string_of(two, d))
-    };
-    for (k, &(name, params, _, src)) in s.scripts.iter().enumerate() {
-        out += &format!(
-            "script {k}: {}{} ({})\n",
-            text(name),
-            if text(params).is_empty() {
-                String::new()
-            } else {
-                format!(", parameters {}", text(params))
-            },
-            match src {
-                Ok(b) => format!("{} bytes of source", b.len()),
-                Err(h) => format!("source by hash {h:016x}"),
-            }
-        );
-    }
-    let host: Vec<String> = s
-        .host
-        .iter()
-        .filter_map(|e| match *e {
-            HostEntry::Root(n) => Some(text(n)),
-            HostEntry::Function(n) => Some(format!("{}()", text(n))),
-            HostEntry::Member(..) => None,
-        })
-        .collect();
-    if !host.is_empty() {
-        let members = s.host.len() - host.len();
-        out += &format!("host values: {} (and {members} members)\n", host.join(" "));
-    }
-    for ((name, _), f) in s.types[s.root.0 as usize].fields.iter().zip(&s.root.1) {
-        if let ("hostData", F::V(V::Str(i))) = (name.as_str(), f) {
-            out += &format!("host data: {}\n", text(*i));
-        }
-    }
-    for (sc, a, b, pinned, _, sites) in &s.functions {
-        out += &format!(
-            "function {sc}:{a}..{b}{}{}\n",
-            if *pinned { " (bytecode)" } else { "" },
-            if sites.is_empty() {
-                String::new()
-            } else {
-                format!(" ({} template objects)", sites.len())
-            }
-        );
-    }
-    let mut by: BTreeMap<&str, usize> = BTreeMap::new();
-    for (t, _) in &s.records {
-        *by.entry(&s.types[*t as usize].name).or_default() += 1;
-    }
-    for (t, n) in by {
-        out += &format!("  {n:6} {t}\n");
-    }
-    Ok(out)
 }
 
 #[cfg(test)]

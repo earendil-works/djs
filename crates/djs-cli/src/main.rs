@@ -11,7 +11,7 @@ const USAGE: &str = "usage: djs <command> ...\n\
   djs run [--body] [--ts] [--gc-stress] [--suspend-every N]\n\
           [--tools answers.json] <file.js>\n\
   djs resume [--tools answers.json] <file.snapshot>\n\
-  djs describe <file.snapshot>\n\
+  djs describe [--json] <file.snapshot>\n\
   djs disasm [--body] <file.js>\n\
   djs repl [--ts] [--gc-stress] [--no-history]\n\
   djs strip-types <file.ts>";

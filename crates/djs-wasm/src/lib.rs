@@ -40,7 +40,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 14;
+pub const ABI_VERSION: u32 = 15;
 
 /// `vm_run` results.
 pub mod status {
@@ -1559,6 +1559,7 @@ ops! {
     59 vm_load_snapshot(a, b);
     60 djs_snapshot_needs(a);
     #[cfg(feature = "docs")] 61 djs_snapshot_describe(a);
+    #[cfg(feature = "docs")] 62 djs_snapshot_inspect(a);
 }
 
 // ---- Logical snapshots (D3700, D3720) ---------------------------------
@@ -1752,15 +1753,34 @@ pub extern "C" fn djs_snapshot_needs(len: usize) -> u32 {
     })
 }
 
-/// The snapshot in staging[0..len] described for people (`snapshot::describe`), in the
-/// out buffer: 0, or 1 with the reason it cannot be read. For the docs site: only with the
-/// `docs` feature (D3751; the CLI describes natively).
+/// The snapshot in staging[0..len] described for people (`snapshot::describe`: the run
+/// as a tree from its open calls), in the out buffer: 0, or 1 with the reason it cannot be
+/// read. For the docs site: only with the `docs` feature (D3751; the CLI describes
+/// natively).
 #[cfg(feature = "docs")]
 pub extern "C" fn djs_snapshot_describe(len: usize) -> u32 {
     with(
         |s| match djs_core::vm::snapshot::describe(&s.staging[..len]) {
             Ok(t) => {
                 s.set_out(t.as_bytes());
+                0
+            }
+            Err(e) => {
+                s.set_out(e.0.join("\n").as_bytes());
+                1
+            }
+        },
+    )
+}
+
+/// The snapshot in staging[0..len] inspected for tools (`Inspection::json`, D3760), as
+/// JSON in the out buffer: 0, or 1 with the reason it cannot be read. Docs feature only.
+#[cfg(feature = "docs")]
+pub extern "C" fn djs_snapshot_inspect(len: usize) -> u32 {
+    with(
+        |s| match djs_core::vm::snapshot::inspect(&s.staging[..len]) {
+            Ok(i) => {
+                s.set_out(i.json().as_bytes());
                 0
             }
             Err(e) => {

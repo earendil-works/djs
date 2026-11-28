@@ -386,17 +386,22 @@ impl<'a> Exporter<'a> {
 
     pub fn str_lit(&mut self, s: &str) -> u32 {
         // Literal strings (names): latin1 when they fit, else UTF-16.
-        let id = self.strings.len() as u32;
-        if s.chars().all(|c| (c as u32) < 256) {
-            self.strings
-                .push((false, s.chars().map(|c| c as u8).collect()));
+        let entry = if s.chars().all(|c| (c as u32) < 256) {
+            (false, s.chars().map(|c| c as u8).collect())
         } else {
             let mut d = Vec::new();
             for u in s.encode_utf16() {
                 d.extend_from_slice(&u.to_le_bytes());
             }
-            self.strings.push((true, d));
+            (true, d)
+        };
+        // Once: a host value's name is often also the global's key (`console`). The
+        // names are few, so a scan does.
+        if let Some(i) = self.strings.iter().position(|e| *e == entry) {
+            return i as u32;
         }
+        let id = self.strings.len() as u32;
+        self.strings.push(entry);
         id
     }
 

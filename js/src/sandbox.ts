@@ -240,6 +240,82 @@ export interface CallSite {
   column: number;
 }
 
+/**
+ * A value as a snapshot holds it (`Sandbox.inspectSnapshot`): its kind `t` and, for most
+ * kinds, its content `v`: a string's text, a number, a record's id (its position in
+ * `records`), a builtin's path, a host value's name, a function's index in `functions`.
+ */
+export interface SnapshotValue {
+  t: "undefined" | "null" | "bool" | "int" | "number" | "string" | "hole" | "uninitialized" | "record" | "builtin" | "function" | "script" | "host";
+  v?: boolean | number | string;
+  /** An internal reference (a frame, a box, a list), not a JavaScript value. */
+  internal?: boolean;
+}
+
+/** A record of a snapshot: its type, byte range, fields by name and the records holding it. */
+export interface SnapshotRecord {
+  type: string;
+  start: number;
+  end: number;
+  fields: Record<string, unknown>;
+  /** Record ids, and `"vm"` for the VM record. */
+  heldBy?: (number | "vm")[];
+}
+
+/** What waits on a promise of a snapshot's run: one link of an await chain. */
+export type SnapshotLink =
+  | {
+    kind: "activation"; record: number; function: number | null; label: string; callee: SnapshotValue;
+    pc: number; line?: number; col?: number; this: SnapshotValue;
+    args: { name: string | null; value: SnapshotValue }[];
+    locals: { name: string; value: SnapshotValue }[];
+    captures: { name: string; value: SnapshotValue }[];
+    stack: SnapshotValue[]; slots: SnapshotValue[]; promise: number | null; waiters: SnapshotLink[];
+  }
+  | {
+    kind: "element"; record: number; combinator: string; index: number | null; values: SnapshotValue | null;
+    remaining: number | null; promise: number | null; waiters: SnapshotLink[];
+  }
+  | { kind: "reaction"; handler: SnapshotValue; promise: number | null; waiters: SnapshotLink[] }
+  | { kind: "end"; promise: number; state: string; result: boolean; heldAs: string | null }
+  | { kind: "seen"; promise: number };
+
+/**
+ * A snapshot inspected (`Sandbox.inspectSnapshot`, D3760): every part of it, and the run as
+ * a tree from its open calls. `format` is the snapshot format's version; the shape changes
+ * with it.
+ */
+export interface SnapshotInspection {
+  format: number;
+  bytes: number;
+  sections: { name: string; start: number; end: number }[];
+  types: { name: string; fields: [string, string][] }[];
+  strings: string[];
+  builtins: string[];
+  intrinsics: string[];
+  host: { name: string; kind: "value" | "member" | "function" }[];
+  scripts: {
+    name: string; params: string[]; goal: "script" | "body" | "eval" | "module"; typescript: boolean;
+    debuggerAwaits: boolean; source?: string; sourceHash?: string;
+  }[];
+  functions: {
+    script: number; start: number; end: number; name: string; label: string; hash: string;
+    hashKind: "bytecode" | "interface"; line?: number; col?: number;
+    params?: string[]; locals?: string[]; captures?: string[];
+    templateObjects: { constant: number; value: SnapshotValue }[];
+  }[];
+  records: SnapshotRecord[];
+  vm: SnapshotRecord;
+  run: {
+    state: "waiting" | "done" | "threw";
+    result: SnapshotValue;
+    calls: { id: number; record: number; function: string; args: SnapshotValue[]; promise: number | null; waiters: SnapshotLink[] }[];
+    /** Suspended activations no open call leads to. */
+    others: SnapshotLink[];
+  };
+  needs: { bytecode: number[]; interface: number[]; builtins: string[]; intrinsics: string[]; host: string[]; types: string[] };
+}
+
 /** Options of one run. */
 export interface RunOptions {
   /** Record the run (deterministic sandboxes only): entries are appended to this array. */
@@ -352,7 +428,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 14;
+const ABI_VERSION = 15;
 /** `vm_new`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
@@ -470,6 +546,7 @@ interface Exports {
   djs_snapshot_needs(len: number): number;
   /** Docs module only (D3751). */
   djs_snapshot_describe?(len: number): number;
+  djs_snapshot_inspect?(len: number): number;
   djs_elastic_stack(on: number): void;
   djs_stack(len: number): number;
   /** The base image (D1321), coded in the module (D2252). */
@@ -788,10 +865,12 @@ export class Sandbox {
   }
 
   /**
-   * A snapshot described for people: its sections and sizes, record types, builtins,
-   * functions and the run's state. Any sandbox of the module that wrote it can read it.
-   * Only the docs module (djs-wasm's `docs` feature) has it; the shipped module throws
-   * `misuse` (`djs describe` reads snapshots natively).
+   * A snapshot described for people: the run as a tree from its open calls (each waiting
+   * activation with its source line, its locals and captures by name and the data they
+   * reach, up the await chain to the run's result), what a loading build must agree on,
+   * and the bytes per section. Any sandbox of the module that wrote it can read it. Only
+   * the docs module (djs-wasm's `docs` feature) has it; the shipped module throws `misuse`
+   * (`djs describe` reads snapshots natively).
    */
   describeSnapshot(snapshot: Uint8Array): string {
     const x = this.x;
@@ -800,6 +879,21 @@ export class Sandbox {
     this.stage(snapshot);
     if (describe(snapshot.length) !== 0) throw new SandboxError("misuse", `not a snapshot: ${outText(x)}`);
     return outText(x);
+  }
+
+  /**
+   * A snapshot inspected for tools: what `describeSnapshot` tells as data, and every part
+   * of the snapshot (sections with byte ranges, record types, strings, scripts with their
+   * sources, functions with their names, records with their fields and holders). Docs
+   * module only, as `describeSnapshot`; `djs describe --json` writes the same.
+   */
+  inspectSnapshot(snapshot: Uint8Array): SnapshotInspection {
+    const x = this.x;
+    const inspect = x.djs_snapshot_inspect;
+    if (inspect === undefined) throw new SandboxError("misuse", "inspectSnapshot needs the docs module");
+    this.stage(snapshot);
+    if (inspect(snapshot.length) !== 0) throw new SandboxError("misuse", `not a snapshot: ${outText(x)}`);
+    return JSON.parse(outText(x)) as SnapshotInspection;
   }
 
   /**

@@ -78,8 +78,8 @@ pub fn run(src: &str, ts: bool) -> String {
 /// Host function ids of [`snapshot`]'s VMs.
 const DEBUGGER: u32 = 2;
 
-/// The snapshot `src` is at its `nth` pause (from 1), described (`snapshot::describe`,
-/// without the record types' fields): a `debugger;` in an async function awaits the host's
+/// The snapshot `src` is at its `nth` pause (from 1), described (`snapshot::describe`: the
+/// run as a tree from its open calls): a `debugger;` in an async function awaits the host's
 /// `debugger` there (D3050), and the run is snapshotted while it waits, as the live
 /// examples do with the Sandbox (D3720): `console` and `debugger` the host's values, the
 /// body by its hash. The text, or why there is none.
@@ -148,10 +148,7 @@ pub fn snapshot(src: &str, nth: usize, ts: bool) -> String {
                     host: Some(host),
                 };
                 return match vm.snapshot_with(&base, &opts) {
-                    Ok(bytes) => {
-                        let text = describe(&bytes).unwrap_or_default();
-                        format!("{} bytes\n{text}", bytes.len())
-                    }
+                    Ok(bytes) => describe(&bytes).unwrap_or_else(|e| e.0.join("; ")),
                     Err(e) => format!("(refused: {})\n", e.0.join("; ")),
                 };
             }
@@ -210,9 +207,10 @@ mod tests {
     fn examples_snapshot_at_debugger() {
         let src = "let n = 0;\nfor (const x of [1, 2]) {\n  n += x;\n  debugger;\n}\nreturn n;\n";
         let d = snapshot(src, 1, false);
-        assert!(d.contains("1 HostCall"), "{d}");
-        assert!(d.contains("debugger()"), "{d}");
-        assert!(snapshot(src, 2, false).contains("1 HostCall"));
+        assert!(d.contains("open call 1: debugger()"), "{d}");
+        assert!(d.contains("the body waits at 4:3"), "{d}");
+        assert!(d.contains("n = 1"), "{d}");
+        assert!(snapshot(src, 2, false).contains("n = 3"));
         assert_eq!(snapshot(src, 3, false), "(the run ended without pausing)\n");
     }
 }

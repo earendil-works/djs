@@ -155,11 +155,16 @@ pub fn load(vm: &mut Vm, tools: &mut Tools, bytes: &[u8]) -> Result<Loaded, Stri
     })
 }
 
-/// `djs describe FILE`: a snapshot described for people.
+/// `djs describe [--json] FILE`: a snapshot described for people (the run as a tree from
+/// its open calls), or with `--json` every part of it for tools (D3760).
 pub fn describe_main(args: &[String]) -> i32 {
-    let [path] = args else {
-        eprintln!("usage: djs describe <file.snapshot>");
-        return 2;
+    let (json, path) = match args {
+        [path] if path != "--json" => (false, path),
+        [flag, path] if flag == "--json" => (true, path),
+        _ => {
+            eprintln!("usage: djs describe [--json] <file.snapshot>");
+            return 2;
+        }
     };
     let bytes = match std::fs::read(path) {
         Ok(b) => b,
@@ -168,9 +173,13 @@ pub fn describe_main(args: &[String]) -> i32 {
             return 2;
         }
     };
-    match djs_core::vm::snapshot::describe(&bytes) {
-        Ok(t) => {
-            print!("{t}");
+    match djs_core::vm::snapshot::inspect(&bytes) {
+        Ok(i) if json => {
+            println!("{}", i.json());
+            0
+        }
+        Ok(i) => {
+            print!("{}", i.text());
             0
         }
         Err(e) => {

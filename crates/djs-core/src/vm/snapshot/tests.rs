@@ -529,7 +529,7 @@ fn program_vm() -> Vm {
 }
 
 /// Runs program `src`, calling `at_idle(vm, k)` at idle point `k` (from 0): its lines.
-fn run_program(src: &str, at_idle: &mut dyn FnMut(&mut Vm, usize)) -> Vec<String> {
+pub(super) fn run_program(src: &str, at_idle: &mut dyn FnMut(&mut Vm, usize)) -> Vec<String> {
     let mut vm = program_vm();
     let f = vm
         .compile(src.as_bytes(), &CompileOptions::script("src.js"))
@@ -571,7 +571,7 @@ fn run_program(src: &str, at_idle: &mut dyn FnMut(&mut Vm, usize)) -> Vec<String
     lines
 }
 
-fn programs() -> Vec<(String, String)> {
+pub(super) fn programs() -> Vec<(String, String)> {
     let dir =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/snapshot/programs");
     let mut files: Vec<_> = std::fs::read_dir(&dir)
@@ -1037,7 +1037,7 @@ text(String(re.exec("ab cd ")?.groups.w) + " " + Object.getOwnPropertySymbols(o)
         case,
         Some(&mut |vm: &mut Vm, _: Handle, _k: usize| {
             let b = vm.snapshot(info()).unwrap();
-            let d = describe(&b).unwrap();
+            let d = inspect(&b).unwrap().json();
             for c in [
                 "Object.TypedArray",
                 "Object.WeakMap",
@@ -1381,7 +1381,7 @@ fn records_case_with(skew: super::export::Skew) -> (Vec<String>, Vec<String>, Ve
             let b = vm.snapshot(info());
             super::export::SKEW.with(|s| s.set(super::export::Skew::None));
             let b = b.unwrap();
-            descs.push(describe(&b).unwrap());
+            descs.push(inspect(&b).unwrap().json());
             match Vm::from_snapshot(info(), &b) {
                 Ok(v) => *vm = v,
                 Err(e) => refusals.push(e.0.join(" | ")),
@@ -1419,9 +1419,9 @@ fn records_and_constants_travel_by_name() {
         "Object.Record.UsingRecord",
         "Object.Record.FromAsyncState",
         "Object.Record.AsyncDisposeState",
-        " GeneratorStates",
-        " HelperStates",
-        " PromiseFlags",
+        ":GeneratorStates\"",
+        ":HelperStates\"",
+        ":PromiseFlags\"",
     ] {
         assert!(all.contains(t), "{t} not in any snapshot");
     }
