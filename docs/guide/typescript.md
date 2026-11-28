@@ -141,7 +141,7 @@ class Greeter {
 
 - **Modules in scripts.** In a script `import` and `export` are syntax errors, also
   `import type` and `export type`: a script is one piece of code, and its host gives it
-  its functions as globals or parameters ([bindings](js-api.md#host-functions)). A
+  its functions as globals or imports of host modules ([host functions](js-api.md#host-functions)). A
   TypeScript [module](language.md#modules), which native hosts can load, has them, and
   its type-only imports and exports are erased.
 - **JSX and `.tsx`.** `<T>expr` is always a cast.

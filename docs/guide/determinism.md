@@ -1,19 +1,21 @@
 # Determinism
 
-A codemode run can be stopped, saved, moved and resumed, and the host may want to run
-the same script again: after a crash, to debug what a model's script did, or to check a
-new engine build against an old one. All of that works only if a run is a function of
-its inputs, which is why [determinism](goals.md#determinism) is a requirement under
-every goal of djs. This page explains which inputs those are, how djs keeps everything else out
-of a run, how a host checks that two runs really were the same, and where determinism
-ends.
+A codemode run can be stopped, saved, moved and continued, and sometimes the host has to
+run the same script again: when a newer build of djs refuses the snapshot of a waiting
+run, to debug what a model's script did, or to check one engine build against another.
+All of that works only if a run is a function of its inputs, which is why
+[determinism](goals.md#determinism) is a requirement under every goal of djs. This page
+explains which inputs those are, how djs keeps everything else out of a run, how a host
+runs a script again from its recorded results and checks that the two runs agree, and
+where determinism ends.
 
 > **In short.** The VM reads nothing from its environment: the clock, the time zone, the
 > random seed and the behavior of weak references are inputs the host sets, and results
-> of host calls take effect in the order they were delivered, never when they arrived.
-> Given the same inputs in the same order, a run does the same thing and leaves
-> byte-identical heap images, however it was sliced, restored from images or compiled. The gate
-> checks that, and a canonical hash and run journals let hosts check it too.
+> of host calls take effect one at a time in the order they were settled, never when they
+> arrived. Given the same inputs in the same order, a run does the same thing and leaves
+> byte-identical heap images, however it was sliced, restored from images or compiled. A
+> deterministic run begun again from its script with the results it had comes back to
+> where it was, which is the host's way back when a newer build refuses a snapshot.
 
 ## Why it matters
 
@@ -22,9 +24,11 @@ from a [snapshot](persistence.md), and the host hands it inputs and reads result
 without the VM doing any I/O ([the JavaScript interface](js-api.md)). Determinism is
 what makes that useful:
 
-- **Durability.** A host can make a run durable by recording the results of its tool
-  calls and, after a restart, replaying them into a fresh run. That only works if the
-  fresh run makes the same calls in the same order and reaches the same state.
+- **Durability.** A snapshot loads only into a build of djs that compiles the run's
+  waiting functions the same way. When a newer build refuses one, the host begins the
+  run again from its script and gives it the results its calls had, in the same order: it
+  makes the same calls and comes back to the state it was in, in the new build
+  ([below](#when-a-snapshot-is-refused)).
 - **Debugging and reproduction.** A model's script that misbehaved can be run again with
   the recorded tool results, and it does exactly what it did.
 - **Testing.** The suspension tests compare a run in one go with the same run stopped
@@ -46,7 +50,7 @@ image carries it along:
 | `Math.random()` | xorshift64*, as in QuickJS, seeded by the host (`vm_set_random_seed`). The state is in the heap, so a restored VM continues the sequence. |
 | The string hash's key | Derived from the same seed (one-way), and kept in the image. It decides where the VM's own atoms and Map and Set keys sit in their tables, never what a script sees: iteration follows insertion order. |
 | `WeakRef`, `FinalizationRegistry` | By default they work as specified, and collection timing is observable. Deterministic mode makes them strong (nothing ever dies). |
-| Tool results | Applied in delivery order, as macrotasks (below). |
+| Tool results | Applied one at a time in the order they were settled, as macrotasks (below). |
 
 The examples in this guide run with the clock at 0 and the default seed, so their output
 is fixed and the gate can check it:
@@ -62,14 +66,17 @@ console.log(Math.random(), Math.random());
 ```
 <!-- /gen -->
 
-## Results in the order they were delivered
+## Results in the order they were settled
 
 Async tool calls are where timing would leak in. A result can reach the host at any
 moment, and if the VM applied it at once, the order in which promise callbacks run would
 depend on the fuel slice that happened to be running. So results are macrotasks:
 they wait in an inbox in the heap, and the VM applies the oldest one only when its job
 queue is empty. A script's behavior depends on the order of the results, never on when
-they arrived ([the wasm boundary](host.md) has the details).
+they arrived ([the wasm boundary](host.md) has the details). It does not depend on how
+the host grouped them either: two results settled before one step are applied as if
+each had come alone, the first run to its end before the second, so a run given the
+same results one per step reaches the same states.
 
 A sync host function cannot leak timing at all: it parks the VM at a fixed instruction,
 and the script continues only with the value the host returns.
@@ -133,21 +140,53 @@ compare outputs.
 A host chooses how much of this it wants. By default the `Sandbox` behaves like an
 ordinary engine: the clock follows the host's clock, `Math.random` gets a seed from the
 host's entropy, and weak references are collected ([the JavaScript
-interface](js-api.md#deterministic-runs-and-journals) has the options). With
+interface](js-api.md#deterministic-runs) has the options). With
 `deterministic: { startedAt, seed }`, it sets everything up for repeatable runs:
 
 - `Math.random` is seeded from `seed`, and so is the key of the string hash, so the same
   seed lays the heap out the same way; the time zone is UTC;
 - weak references are strong;
-- the clock starts at `startedAt` and moves only when an async result is delivered: to
-  the host's clock at that moment, never backwards. Fuel slices and sync calls do not
-  move it.
+- the clock starts at `startedAt` and moves only when an async result is applied: to
+  the host's clock when the result was settled, never backwards. Fuel slices and sync
+  calls do not move it. The run records each result it applied with that clock, its
+  **deliveries**.
 
-With a fixed clock as well, the same code, parameters and results in the same order do
-the same thing on every run, with any fuel slice, and across restores from images (the
-clock is in the heap). A snapshot keeps `Math.random`'s state and the ids of the run's
-host calls too, so a run resumed from a snapshot makes the calls an uninterrupted run
-makes, under the same ids.
+So the same code, parameters, sync results and async results in the same order do the
+same thing on every run, with any fuel slice, and across restores from images (the
+clock is in the heap). A snapshot keeps the clock, `Math.random`'s state and the ids of
+the run's host calls too, so a run loaded from a snapshot makes the calls an
+uninterrupted run makes, under the same ids; it loads only into a sandbox that is
+deterministic too.
+
+## When a snapshot is refused
+
+A host that keeps a deterministic run's snapshots keeps its deliveries beside them: per
+result, the call (id, function, arguments), the outcome and the clock. When a newer
+build refuses a snapshot, the host makes a sandbox with the same options and begins the
+script again with those deliveries ([the JavaScript
+interface](js-api.md#deterministic-runs)). The sandbox applies each one once its call is
+open, checking that the call is the one recorded, and hands the run back idle where the
+original was after its last result, waiting on the same calls; the host goes on from
+there. If the new build or a changed script makes another call, or the same call with
+other arguments, the re-run stops with a `diverged` error that names the first
+difference, before anything of the host's is touched.
+
+Running a script again should not do again what it did. At the engine's level that
+means: no async host function runs during a re-run, since every result comes from the
+deliveries; the sync host functions are called as the script calls them, and they are
+the host's to stub: output the host has already shown, data it has already stored, a
+lookup it answers from its record. A host that records everything instead (a journal,
+below) can replay a run with no host function called at all.
+
+A re-run costs the run's whole computation again, and the fuel it spends is counted
+again in the new build, which may differ slightly where builtins changed. What has to be
+the same is what the script does with the results: its calls, which the re-run checks.
+
+> **Trade-off.** Re-running from the results over keeping the old build alive. The
+> results are small and the host has them anyway; a re-run needs nothing of the old
+> build and lands the run in the new one. The cost: the re-run executes everything again,
+> and it works only for runs made deterministic from their start, since a run's clock,
+> random numbers and weak references must be inputs from the first instruction.
 
 ## Canonical hashes and journals
 
@@ -157,13 +196,14 @@ computed on a copy so that the VM itself is not touched. The copying collector l
 heap out breadth-first from the roots, so garbage, the order of allocation and the moment
 of the last collection do not affect it: it identifies the object graph. The builtin
 prefix is hashed as it is: the same bytes in every VM of the build, unless a script
-changed a builtin.
+changed a builtin. A re-run from its deliveries reaches the canonical hash, and the
+snapshot bytes, of the original at every idle point.
 
 On top of that, a deterministic `Sandbox` can record a run as a **journal**: the start
 (engine build, code, parameters, hash), every sync call and its outcome, every async
 result with the clock it carried, a hash at every point where the VM went idle, and the
 end. `replay(journal)` runs the script again without calling any host function: it
-answers sync calls from the journal, delivers async results one per idle point in the
+answers sync calls from the journal, applies async results one per idle point in the
 recorded order, and compares the hashes along the way. A difference is a `diverged`
 error that says where. Because results are macrotasks, a replay passes through every
 recorded idle state even if the recording got several results at once.
@@ -211,25 +251,28 @@ Some things are deliberately outside the guarantee:
   per instruction.
   Which builtins run as Rust is part of the build, so a different build may spend
   different fuel on the same script.
-- **Other builds.** Journals are tied to the build hash, which covers the engine's
-  sources (its math library's included) and features: a different build may run the same
-  script in a different number of steps. Images load only into the build that made
-  them ([images](snapshots.md#what-an-image-depends-on)); a run loaded from a
-  [snapshot](persistence.md) into another build goes on with that build's code for every
-  function it does not wait in.
+- **Other builds.** Journals and canonical hashes are tied to the build hash, which
+  covers the engine's sources (its math library's included) and features: a different
+  build may run the same script in a different number of steps. Images load only into
+  the build that made them ([images](snapshots.md#what-an-image-depends-on)); a run
+  loaded from a [snapshot](persistence.md) into another build goes on with that build's
+  code for every function it does not wait in, and a re-run in another build is checked
+  by its calls, not by hashes.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
   before every fuel slice, so what `Date.now()` returns depends on timing, as it does in
   any engine.
 
 > **Trade-off.** Determinism as an opt-in mode over always. Strong weak references and a
 > virtual clock are not what a script expects from an ordinary engine, and an embedder
-> that does not replay runs gains nothing from them. The cost: a host must choose the
-> mode up front, since a run that was not recorded in deterministic mode cannot be
-> replayed.
+> that does not run scripts again gains nothing from them. The cost: a host must choose
+> the mode up front, since a run that did not start in deterministic mode cannot be run
+> again to the same state.
 
 ## Where to look
 
-- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): journals and replay.
+- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): deliveries, re-runs, journals and
+  replay; [`js/test/determinism.test.ts`](../../js/test/determinism.test.ts): re-runs of
+  the harvested corpus checked at every idle point.
   [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs):
   `canonical_hash`, `set_now`, `set_random_seed`, `set_weak_refs`.
 - [`scripts/determinism/`](../../scripts/determinism/): the native-versus-wasm check.

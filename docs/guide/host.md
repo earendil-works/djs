@@ -154,9 +154,9 @@ length-prefixed UTF-8 strings in the staging buffer:
 
 | operation | does |
 | --- | --- |
-| `vm_snapshot(vm, len)` | writes the idle VM as a snapshot into the out buffer (its length), or the reasons it refuses (-1). Staging holds the flags (store the scripts' text; a host's run), the host functions by id and identity, the host values by handle and name, the handles the host wants back by name, and the host's data, a string |
-| `vm_load_snapshot(vm, len)` | loads a snapshot into `vm`, a fresh VM the host set up as it set up the one that wrote it: staging holds the snapshot, the candidate scripts' texts, the host functions (id, handle, identity) and the host values (handle, name). The out buffer then holds the handles by name, the open calls' ids and the host's data; on a refusal, the reasons, and the VM is to be freed |
-| `djs_snapshot_needs(len)` | what loading a snapshot needs: the names of the scripts it stores by hash only, and the host values and functions it names, so the host can find the texts and make what it makes lazily before the load |
+| `vm_snapshot(vm, len)` | writes the host's run in the idle VM as a snapshot, with the scripts' texts, into the out buffer (its length), or the reasons it refuses (-1). Staging holds the host functions by id and identity, the host values by handle and name, and the host's data, a string |
+| `vm_load_snapshot(vm, len)` | loads a snapshot into `vm`, a fresh VM the host set up as it set up the one that wrote it: staging holds the snapshot, the host functions (id, handle, identity) and the host values (handle, name). The out buffer then holds the open calls' ids and the host's data; on a refusal, the reasons, and the VM is to be freed |
+| `djs_snapshot_needs(len)` | what loading a snapshot needs: the host values and functions it names, so the host can make what it makes lazily before the load |
 | `djs_snapshot_describe(len)` | a snapshot described for people, as text |
 
 A snapshot names builtins by their paths in the base. The instance works them out from
@@ -359,8 +359,10 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections), `snapshot` (snapshots) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->511 KB<!--/n--> with gzip |
-| docs module | `docs` and `snapshot` | this site's live examples: `djs_disasm`, the bytecode listing an edited example shows, and snapshots for their `debugger;` pauses |
+| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->511 KB<!--/n--> with gzip |
+| docs module | `docs` | this site's live examples: `djs_disasm`, the bytecode listing an edited example shows |
+
+Every module has snapshots.
 
 A host that persists runs calls `vm_snapshot` on the idle VM itself, in the module it
 runs in; it leaves the VM as it was, so the run goes on there or in whichever sandbox

@@ -24,9 +24,9 @@ page, is the form that outlives the process.
 
 ## A run that waits
 
-On this site, a `debugger;` statement in a live example makes the run wait: the page
-gives the sandbox a host function that the statement awaits, so the run is idle there,
-exactly as if it waited for a tool. The page then writes the run out as a snapshot and
+On this site, a `debugger;` statement in a live example makes the run wait: with the
+sandbox's `debugger` option the statement awaits a host call that the page settles when
+you continue, so the run is idle there, exactly as if it waited for a tool. The page then writes the run out as a snapshot and
 throws its sandbox away. **Continue** loads the snapshot into a fresh sandbox, which runs
 on to the next `debugger;` or the end:
 
@@ -61,20 +61,20 @@ snapshot at that pause holds, here as the guide's build writes it:
 
 <!-- gen:snapshot -->
 ```text
-2306 bytes
+2663 bytes
 types          1772 bytes
 strings         172 bytes
 builtins          7 bytes
 intrinsics        1 bytes
 host              5 bytes
-scripts          13 bytes
+scripts         370 bytes
 functions        29 bytes
 records         228 bytes
 vm               72 bytes
 15 strings (156 bytes of text), 6 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
 builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% Array.prototype Array.prototype.push Function.prototype
 flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-script 0: example.js (source by hash f2e1787ddc436dfa)
+script 0: example.js (363 bytes of source)
 host values: console debugger() (and 0 members)
 host data: 
 function 0:0..151 (bytecode)
@@ -92,8 +92,8 @@ function 0:0..363 (bytecode)
 ```
 <!-- /gen -->
 
-The snapshot names the example's script by its hash, not its text: the page keeps the
-script, and the loading sandbox finds it there. The two functions with frames are the
+The snapshot holds the example's script, its text, which the loading sandbox compiles
+again. The two functions with frames are the
 body (bytes 0 to 363, the whole example) and `fetchPage` (0 to 151), each tied to its
 span of the script and its bytecode hash. The records are the run's state: the two
 suspended async functions (`Object.Generator`, with their frames in value arrays), the
@@ -117,8 +117,8 @@ results, and no function is on the stack. There, everything in progress is an as
 function stopped at an `await` or a generator stopped at a `yield`, whose frame is a
 record in the heap and whose code the loading engine can find again. A run that is
 computing has frames on the interpreter's stack and may be in the middle of a builtin. A
-host that must persist it gives it fuel until it reaches an idle point, or reruns it from
-its last tool result, which [determinism](determinism.md) makes safe.
+host that must persist it gives it fuel until it reaches an idle point, or keeps the last
+snapshot it took, from which the run goes on the same way.
 
 Inside one process, a run can stop anywhere, between two instructions, and be kept as an
 image of its memory ([images](snapshots.md)); a snapshot is for keeping a run beyond the
@@ -126,16 +126,13 @@ process.
 
 ## Taking and loading a snapshot
 
-A host has three ways to take one, all on [the JavaScript interface](js-api.md):
+A host has two ways to take one:
 
-- **A task** ([tasks](js-api.md#tasks-suspend-and-resume)) is a run the sandbox drives.
-  `task.suspend()` waits for the next idle point, writes the snapshot and stops the run;
-  `task.checkpoint()` writes one and lets it go on. `Sandbox.resume(snapshot, options)`
-  continues it in a new sandbox made with the same options.
-- **A host-driven run** ([host-driven runs](js-api.md#host-driven-runs)) is one whose
-  calls the host settles itself: while it is idle, `run.snapshot({ states })` writes it,
-  and `sandbox.loadSnapshot(snapshot)` loads it into a fresh sandbox and returns the run
-  with its open calls.
+- **A run the host drives** ([the JavaScript interface](js-api.md#runs-the-host-drives))
+  is one whose async calls the host settles itself: while it is idle,
+  `run.snapshot({ states })` writes it, and `sandbox.loadSnapshot(snapshot)` loads it
+  into a fresh sandbox made with the same options and returns the run with its open
+  calls.
 - **The command line** writes and loads snapshot files: `djs run --snapshot-after K OUT`,
   `djs resume`, `djs describe`, and the REPL's `.snapshot` and `.restore` ([the command
   line](cli.md#snapshots-on-the-command-line)).
@@ -143,8 +140,7 @@ A host has three ways to take one, all on [the JavaScript interface](js-api.md):
 The open host calls travel with the run, by the ids the VM gave them, and each carries
 the host's own state of the call, JSON data such as a deadline or a request id. After a
 load, the host continues each open call from that state, issues it again or rejects it:
-the run itself only waits for the call's outcome. An async host function says how with
-its hooks (`save`, `resume`, [tasks](js-api.md#tasks-suspend-and-resume)).
+the run itself only waits for the call's outcome.
 
 The fuel the run used travels too, so a budget holds across any number of snapshots and
 loads ([limits](limits.md)).
@@ -161,7 +157,7 @@ A snapshot is binary and describes itself. It has:
   `%ArrayIteratorPrototype%.next`), and the builtin closure kinds by name
   (`PromiseResolveFunction`);
 - the **host values** it refers to, by the host's names;
-- the **scripts**: name, parameters, compile options, and the source text or its hash;
+- the **scripts**: name, parameters, compile options, and the source text;
 - the **functions** it refers to, each as its script and its span of source text, with a
   hash ([below](#code-compiled-again));
 - the **records**, one for every cell the run can reach beyond the builtins, each its
@@ -215,14 +211,6 @@ A test pins the bytecode hash of every function of the test corpus that can wait
 change to the compiler that would refuse such snapshots is one its author sees and
 decides on.
 
-## Scripts: text or hash
-
-By default a snapshot stores the text of every script it refers to and loads anywhere.
-With `sources: false` (an option of `suspend`, `checkpoint` and `snapshot`) it stores
-each script's name and a hash of its text instead, which is smaller. The loading sandbox
-finds the script among the ones its process ran, or asks its `sources(name)` option for
-it, which a host that keeps its scripts answers; a text with another hash is refused.
-
 ## Host values
 
 What the host gave the sandbox is named, never written: its host functions by identity,
@@ -250,7 +238,9 @@ A field the snapshot lacks starts at zero in the loaded cell, the state every ne
 starts in; a field the snapshot has and the loading build lacks is refused unless it
 holds that zero state. A refused load leaves the sandbox unusable, and the host disposes
 of it. What it does with the run then is its own decision: keep the previous build for
-the runs in flight, or treat the open calls as interrupted.
+the runs in flight, treat the open calls as interrupted, or, for a deterministic run,
+begin it again from its script with the results it had, which brings it back to where
+it was in the new build ([determinism](determinism.md#when-a-snapshot-is-refused)).
 
 Loading checks what it builds before anything runs: every count and index in the bytes,
 each object's internal slots against what its class's code relies on, each suspended
@@ -282,8 +272,7 @@ holds:
   ([frozen builtins](builtins.md#frozen-builtins));
 - a host value the host has no name for.
 
-A task's `suspend` rejects in such a case and the task goes on; the host can snapshot it
-at a later idle point, when the value is gone.
+The run goes on; the host can snapshot it at a later idle point, when the value is gone.
 
 ## Describing a snapshot
 
@@ -299,10 +288,11 @@ loads. The live examples' pause lines come from it.
 
 ## Pauses at `debugger;`
 
-A sandbox with the `debugger` option, a host function, makes `debugger;` in an async
-function a pause: the statement awaits a call of that function, so the run is idle there
-and can be snapshotted. The snapshot keeps the pause as any open call, and a sandbox
-with the option that loads it continues on to the next `debugger;`. The live examples on
+A sandbox with the `debugger` option makes `debugger;` in an async function a pause: the
+statement awaits a call of the async host function `debugger`, so the run is idle there
+and can be snapshotted. The snapshot keeps the pause as any open call; a sandbox with the
+option that loads it settles the call to go on, and pauses again at the next
+`debugger;`. The live examples on
 this site and the command line's `--debugger` work this way. Without the option,
 `debugger;` does nothing.
 
@@ -314,9 +304,9 @@ this site and the command line's `--debugger` work this way. Without the option,
   [`crates/djs-core/src/vm/snapshot/hash.rs`](../../crates/djs-core/src/vm/snapshot/hash.rs): the bytecode and interface hashes;
   [`crates/djs-core/src/vm/snapshot/schema.rs`](../../crates/djs-core/src/vm/snapshot/schema.rs): the slot names of every object class;
   [`crates/djs-core/src/vm/snapshot/wire.rs`](../../crates/djs-core/src/vm/snapshot/wire.rs): the encoding.
-- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `Task.suspend`, `Run.snapshot`,
-  `Sandbox.resume`, `loadSnapshot`, `describeSnapshot` and `callSite`.
+- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `Run.snapshot`, `loadSnapshot`,
+  `describeSnapshot` and `callSite`.
 - [`tests/snapshot/`](../../tests/snapshot/): the programs the snapshot tests stop at
   every idle point, and the pinned bytecode hashes of the corpus's waiting functions.
 - [`examples/sleep-snapshot/`](../../examples/sleep-snapshot/): a complete host that
-  suspends a run into a snapshot and resumes it in another process.
+  snapshots a waiting run and continues it in another process.

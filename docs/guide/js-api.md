@@ -1,16 +1,17 @@
 # The JavaScript interface
 
 A host uses djs through the `@earendil-works/djs` package: one class, `Sandbox`, over the
-djs-wasm module. This page covers all of it, from running one script to runs that are
-suspended into a snapshot and continued in another process. Each sandbox is its own wasm instance with
+djs-wasm module. This page covers all of it, from running one script to runs that wait
+on tools, are written out as a snapshot and continue in another process. Each sandbox is its own wasm instance with
 one VM, so sandboxes share nothing and a fault in one cannot touch another.
 
 > **In short.** `Sandbox.create(options)` makes a sandbox; `run` and `runAsync` run a
 > script as a codemode body with parameters and return its result as a plain host value.
-> Host functions are given by name and bound as globals or parameters. Errors are
-> `SandboxError`s with a `kind`. For runs that wait on tools, `start` returns a task that
-> can be suspended into a [snapshot](persistence.md) and resumed with
-> `Sandbox.resume`; `begin` hands every call to the host instead.
+> Host functions are given by name in the options and bound as globals or imports.
+> Errors are `SandboxError`s with a `kind`. For runs that wait on tools, `begin` hands
+> every call to the host, which settles it and advances the run; an idle run can be
+> written as a [snapshot](persistence.md) and loaded into another sandbox, and a
+> deterministic one can be run again from its script and its results.
 
 ## Installing
 
@@ -63,7 +64,7 @@ All options are optional:
 | --- | --- |
 | `module` | the compiled djs-wasm module; default `loadModule()` |
 | `functions`, `asyncFunctions` | the host functions, by name ([below](#host-functions)) |
-| `globals`, `bindings` | where scripts find them: as globals, or as parameters of every body |
+| `globals` | where scripts find them as globals ([below](#host-functions)) |
 | `modules` | the host modules bodies import, resolved by specifier ([below](#host-modules)) |
 | `values` | host data bound as frozen globals, which snapshots name instead of writing ([below](#host-data)) |
 | `jsonBoundary` | convert what crosses to the host as JSON would, for all host functions or all but some ([below](#the-json-boundary)) |
@@ -76,11 +77,11 @@ All options are optional:
 | `now` | the clock `Date` reads: a fixed time or a function; default `Date.now` |
 | `timeZoneOffset` | the local time zone in minutes east of UTC; default the host's |
 | `randomSeed` | the seed of `Math.random`; default from `crypto.getRandomValues` |
-| `deterministic` | `{ startedAt, seed }`: repeatable runs ([below](#deterministic-runs-and-journals)) |
-| `unhandledRejections` | `"warn"` (default), `"throw"` or `"collect"` |
+| `deterministic` | `{ startedAt, seed }`: repeatable runs ([below](#deterministic-runs)) |
+| `unhandledRejections` | `"warn"` (default), `"throw"` or `"ignore"` |
 | `frozenBuiltins` | the builtins behave as frozen ([the language](language.md#frozen-builtins)) |
 | `typescript`, `experimentalDecorators`, `emitDecoratorMetadata` | compile scripts as TypeScript ([TypeScript](typescript.md)) |
-| `sources`, `debugger` | for [snapshots](#snapshots): the scripts a loaded snapshot names by hash, and `debugger;` pauses |
+| `debugger` | `debugger;` in an async function pauses the run ([below](#snapshots)) |
 
 ## Running code
 
@@ -97,15 +98,16 @@ drives the VM to the end synchronously, so its host functions must return synchr
 too. `runAsync` is the same but awaits host functions that return promises, and lets
 async host functions run concurrently while the script goes on.
 
-A run ends when the body's result settles. Async calls still running then are dropped:
-the run does not wait for them, their results are ignored, and the call's `signal` of an
-[`AsyncHostFunction`](#tasks-suspend-and-resume) aborts, so the host can cancel the work.
-A script that wants a call finished awaits it.
+Both are loops over a [run the host drives](#runs-the-host-drives): the script runs until
+it is idle, waiting on nothing but async host calls; then the sandbox calls the async
+host functions it called, settles each call with what it returned (`runAsync`: when its
+promise settles), and lets the script go on. A run ends when the body's result settles.
+Async calls still running then are dropped: the run does not wait for them and their
+results are ignored. A script that wants a call finished awaits it.
 
 A sandbox runs one thing at a time, and it keeps its state between runs: what a script
-puts on `globalThis` is there for the next one. `setGlobal(name, value)` defines a global
-holding a copy of a host value. `dispose()` releases the instance; a disposed sandbox
-throws on every use.
+puts on `globalThis` is there for the next one. `dispose()` releases the instance; a
+disposed sandbox throws on every use.
 
 ## Host functions
 
@@ -131,42 +133,39 @@ await sandbox.runAsync("return (await tools.read('a.txt')).length");
   `run`, that is an error.
 - An **async host function** (`asyncFunctions`) returns a promise in the VM at once, and
   the script goes on, so several calls can be open together, as in
-  `Promise.all(paths.map(tools.read))`. Results are applied in the order they are
-  delivered, each when the script's job queue is empty, like I/O callbacks in an event
-  loop ([determinism](determinism.md)).
+  `Promise.all(paths.map(tools.read))`. Results are applied one at a time in the order
+  they are settled, each when the script has nothing else to run, like I/O callbacks in
+  an event loop ([determinism](determinism.md)).
+
+Everything a sandbox defines comes from its options: there is no adding functions to a
+sandbox that exists, so what a run can call is fixed before it starts.
 
 **Where scripts find them.** By default, a name like `tools.read` makes a global
 namespace object `tools` with a member `read`, a name that is an identifier becomes a
 global of that name, and `console` is a namespace like `tools`. `globals` replaces that
-rule with an explicit table, global name to function or namespace name, and `bindings`
-passes them as parameters of every body instead, after the run's own `params`: a stand-in
-for imports.
+rule with an explicit table, global name to function or namespace name. A function with
+no global, such as `@sdk/our-stuff#myTool`, is one scripts [import](#host-modules).
 
 ```ts
 const sandbox = await Sandbox.create({
   functions: { "@sdk/our-stuff#myTool": (x) => `tool(${x})` },
-  bindings: { myTool: "@sdk/our-stuff#myTool" },
+  modules: (spec) => (spec === "@sdk/our-stuff" ? { exports: { myTool: "@sdk/our-stuff#myTool" } } : undefined),
 });
-sandbox.run("return myTool('x')");                       // "tool(x)"; no global myTool
+sandbox.run(`import { myTool } from "@sdk/our-stuff"; return myTool('x')`);   // "tool(x)"; no global myTool
 ```
 
 The globals the sandbox binds (functions, namespaces, `values`, the `globals` table) are
 read-only and cannot be deleted: `globalThis.tools = null` throws a `TypeError` in a
 codemode body, which is strict code, and `tools` stays. A loading sandbox binds them the
-same way. Globals that `setGlobal` defines, or that scripts make, are ordinary.
-
-`defineFunction(name, f)` and `defineAsyncFunction(name, f)` add functions to a sandbox
-that exists, bound by the default rule. Or scripts import them from [host
-modules](#host-modules).
+same way. Globals that scripts make are ordinary.
 
 ### Namespaces
 
 A namespace such as `tools` or `console` is an object the sandbox makes, with a null
 prototype and its functions as enumerable members in the order they were defined, so
-`Object.keys(tools)` lists them and `tools.toString` is `undefined`. The sandbox freezes it before the first script runs: a
-script can neither add, change nor delete a member (and a codemode body is strict code,
-so trying throws a `TypeError`). `defineFunction` can add members until then; a member
-for a namespace that is frozen already is a `misuse` error.
+`Object.keys(tools)` lists them and `tools.toString` is `undefined`. The sandbox freezes
+it once it has its members, before any script runs: a script can neither add, change nor
+delete a member (and a codemode body is strict code, so trying throws a `TypeError`).
 
 Two options shape what a script sees of them:
 
@@ -203,8 +202,8 @@ left out.
 
 **Ending the run.** A host function that throws `new RunExit(value)` ends the run where
 it is: the script cannot catch it, no `finally` runs and no more of its code runs. The run
-is done with `value`: `run` and `runAsync` return it, a task's result is it, and a
-host-driven run is `done` with `exited` set. That is how an agent's `exit()` helper is
+is done with `value`: `run` and `runAsync` return it, and a host-driven run is `done`
+with `exited` set. That is how an agent's `exit()` helper is
 written. An async host function may throw or reject with it too; the run ends when that
 result would be applied.
 
@@ -216,11 +215,16 @@ specifier to the module's exports, and the sandbox asks it once per specifier, o
 those the scripts import, so a host with a hundred tool servers lists none up front:
 
 ```ts
+const asyncFunctions = {};
+for (const [spec, server] of mcpServers) {                 // "@mcp/github"
+  for (const t of server.tools) asyncFunctions[`${spec}#${t.name}`] = (args) => server.call(t.name, args);
+}
 const sandbox = await Sandbox.create({
+  asyncFunctions,
   modules: (specifier) => {
-    const server = mcpServers.get(specifier);              // "@mcp/github"
+    const server = mcpServers.get(specifier);
     if (server === undefined) return undefined;            // Cannot find module
-    return { exports: Object.fromEntries(server.tools.map((t) => [t.name, { fn: (args) => server.call(t.name, args) }])) };
+    return { exports: Object.fromEntries(server.tools.map((t) => [t.name, `${specifier}#${t.name}`])) };
   },
 });
 await sandbox.runAsync(`
@@ -229,23 +233,16 @@ await sandbox.runAsync(`
 `);
 ```
 
-Each export is one of:
-
-- an object `{ fn, sync }`: a host function the sandbox defines on the first import, with
-  the name `specifier#export` (`@mcp/github#search_issues`), async unless `sync` is set.
-  `fn` may be left out where the host drives the run itself, which never calls async host
-  functions: the calls show up in `run.calls` under that name;
-- a string: the name of a host function, namespace or value the sandbox has already, such
-  as `"tools.read"`.
-
-An unknown module or export is a `syntax` error of the run, with the specifier or the
-name and their position: `SyntaxError: Cannot find module '@mcp/nope' at 1:19`. The
-imported names are the body's parameters after `params` and `bindings`, so a name taken
+Each export names a host function, namespace or value of the sandbox, such as
+`"@mcp/github#search_issues"` or `"tools.read"`; the function keeps that name in calls
+and snapshots. An unknown module or export is a `syntax` error of the run, with the
+specifier or the name and their position: `SyntaxError: Cannot find module '@mcp/nope'
+at 1:19`. The imported names are the body's parameters after `params`, so a name taken
 twice is one too. A namespace import (`import * as linear from "@mcp/linear"`) gives one
 frozen object per specifier in the sandbox, with every export as a member, named by the
 specifier in snapshots; a specifier that is also the name of a namespace such as `tools`
-cannot be imported as a namespace. A sandbox that loads a snapshot makes the module's
-values the snapshot names before it loads it, through the same `modules`.
+cannot be imported as a namespace. A sandbox that loads a snapshot makes the module
+namespaces the snapshot names before it loads it, through the same `modules`.
 
 The resolver's descriptor can serve the scripts' documentation too. A host that lets the
 model read a virtual `.d.ts` file per module writes it from the same table, so what the
@@ -264,9 +261,11 @@ function declarations(specifier: string): string | undefined {
 }
 
 const sandbox = await Sandbox.create({
+  asyncFunctions: Object.fromEntries([...servers].flatMap(([spec, tools]) =>
+    tools.map((t) => [`${spec}#${t.name}`, (args) => callTool(spec, t.name, args)]))),
   modules: (specifier) => {
     const tools = servers.get(specifier);
-    return tools && { exports: Object.fromEntries(tools.map((t) => [t.name, { fn: (args) => callTool(specifier, t.name, args) }])) };
+    return tools && { exports: Object.fromEntries(tools.map((t) => [t.name, `${specifier}#${t.name}`])) };
   },
 });
 ```
@@ -274,7 +273,7 @@ const sandbox = await Sandbox.create({
 ### Host data
 
 `values` binds host data as globals: each is copied in, deep-frozen, and is a host value
-of its name, like a namespace, so `bindings` can name it too. A list of the tools a script
+of its name, like a namespace, so a module can export it too. A list of the tools a script
 may call is the typical one:
 
 ```ts
@@ -311,7 +310,7 @@ made, so a script that replaces `JSON.stringify` does not change what the host r
 
 ## Values in and out
 
-**In.** Parameters, `setGlobal` values and host function results go into the VM in a
+**In.** Parameters, `values` and host function results go into the VM in a
 compact binary format that the VM decodes in one pass. It carries `undefined`, `null`,
 booleans, numbers, strings, arrays (holes included), `Uint8Array`s as raw bytes, and
 plain objects (prototype `Object.prototype` or `null`; their own enumerable string
@@ -368,12 +367,11 @@ for an exception, the thrown `value`:
 | `threw` | the script threw, or its promise rejected; `message` is the error's display text (`TypeError: bad`), `value` the thrown value as a host value (an `Error` with the VM's `name`, `message` and `stack`) | usable |
 | `syntax` | the code did not compile; `message` gives the position (`SyntaxError: ... at 1:11`) | usable |
 | `fuel` | the run used up `maxFuel` (`out of fuel after N units`), or a step its own budget | usable |
-| `aborted` | a step's `signal` was aborted ([host-driven runs](#host-driven-runs)) | usable |
+| `aborted` | a step's `signal` was aborted ([runs the host drives](#runs-the-host-drives)) | usable |
 | `memory` | the host could not provide memory below the cap, or a host-side allocation failed | usable |
 | `trap` | the engine trapped: a bug, never something a script can cause | unusable |
 | `misuse` | the API was used wrongly: a run already in progress, a snapshot of a run that holds what snapshots refuse, a module without a needed export | depends |
-| `diverged` | a replay did not match its journal | usable |
-| `suspended` | a task's result, after the task was suspended into a snapshot | (the task is over) |
+| `diverged` | a re-run or a replay did not do what the recorded run did ([deterministic runs](#deterministic-runs)) | usable |
 
 Running out of the heap cap is not a `memory` error: the script gets a catchable
 `InternalError: out of memory` and may recover, and only if it does not is the run
@@ -382,7 +380,7 @@ Running out of the heap cap is not a `memory` error: the script gets a catchable
 A promise that is rejected with no handler, once the job queue is empty, is reported as
 QuickJS reports it: with `unhandledRejections: "warn"` its reason goes to
 `console.warn` as `Possibly unhandled promise rejection: Error: lost`; `"throw"` fails
-the run; `"collect"` keeps the reasons for `takeUnhandledRejections()`.
+the run; `"ignore"` drops them.
 
 ## Limits
 
@@ -399,56 +397,10 @@ try {
 }
 ```
 
-## Tasks: suspend and resume
-
-A **task** is a run the sandbox drives, like `runAsync`, that can be suspended while it
-waits on host calls and continued later from a snapshot:
-
-```ts
-const task = sandbox.start(code, params, { filename: "job.js" });
-// ... the run calls async host functions and waits ...
-const snapshot = await task.suspend();     // a Uint8Array, at the next idle point; the task stops
-const resumed = await Sandbox.resume(snapshot, options);
-const result = await resumed.result;
-```
-
-- `start(code, params, { filename })` runs the body to its first stop; a compile error
-  throws. `task.result` is a promise of the outcome; `task.calls` lists the open host
-  calls.
-- `task.suspend()` waits for the next idle point, writes the snapshot and stops the run:
-  `task.result` rejects with kind `suspended`, and the open calls' abort signals fire.
-  If the run cannot be snapshotted there, `suspend()` rejects and the task goes on.
-- `task.checkpoint()` writes a snapshot at the next idle point and lets the task go on.
-- `Sandbox.resume(snapshot, options)` makes a new sandbox with the same options and
-  continues the run in it; `sandbox.resume(snapshot)` does the same in a fresh sandbox
-  the host made itself.
-
-An async host function that should survive a suspension is an object with hooks, an
-`AsyncHostFunction`:
-
-```ts
-const sleep: AsyncHostFunction<{ due: number }> = {
-  async call(ms) {                         // the script called it; `this` is the call
-    this.state = { due: Date.now() + Number(ms) };
-    await until(this.state.due, this.signal);
-  },
-  save(call) { return call.state; },       // optional: the state a snapshot keeps (the default)
-  async resume({ due }, call) {            // after a load, with that state
-    await until(due, call.signal);
-  },
-};
-```
-
-`call` starts the call; `this` is a `HostCall`, with the call's `id`, `fn`, `args`,
-`startedAt`, its `state` (JSON data a snapshot keeps) and a `signal` that aborts when the
-sandbox stops waiting for it. After a load, `resume(state, call)` continues each open
-call; a function without `resume` is called again, and a plain function's open call is
-rejected, since the sandbox cannot know whether calling it again is safe.
-
-## Host-driven runs
+## Runs the host drives
 
 A host that wants to decide every call itself, for instance to keep each call in a
-durable queue of its own, drives the run instead:
+durable queue of its own, drives the run:
 
 ```ts
 const run = sandbox.begin(code, params, { filename: "job.js" });
@@ -464,8 +416,8 @@ else throw run.error;
 
 `begin` runs the body to its first idle point and never calls async host functions:
 `run.calls` lists them, oldest first. `settle(id, { ok, value })` delivers an outcome;
-`advance()` applies the settled results in order and runs to the next idle point or the
-end. Sync host functions are still called as the script calls them. While the run is
+`advance()` runs to the next idle point or the end, applying the settled results one at a
+time in the order they were settled. Sync host functions are still called as the script calls them. While the run is
 idle, `run.snapshot({ states })` writes it as a snapshot, with the host's state of each
 open call by id, and `sandbox.loadSnapshot(snapshot)` loads one into a fresh sandbox and
 returns the run with its open calls (same ids) and their states, for the host to settle,
@@ -485,6 +437,12 @@ for (const call of run.dropped) cancel(call.id);
 `maxFuel` bounds the run over all its steps, and `run.fuelUsed` says how much it has
 used. A snapshot carries the count: the loaded run goes on counting from it, so the
 budget holds across any number of snapshots and loads.
+
+A `debugger;` statement in an async function is a pause when the sandbox has the
+`debugger` option: the statement awaits a call of the async host function `debugger`,
+listed in `run.calls` like any other, so the run is idle there and can be snapshotted;
+settling the call goes on. `run` and `runAsync` call the option's function, or with
+`debugger: true` go on at once. Without the option, `debugger;` does nothing.
 
 **Bounded steps.** A step can be bounded, so that a script that computes for long does
 not hold the host:
@@ -524,23 +482,18 @@ again. What the options and methods do:
   snapshot must be made with options that give the same names; it loads into its own
   setup, so a script's `tools` is the loading sandbox's `tools`. A name it lacks is a
   `misuse` error before anything is loaded.
-- `run.snapshot({ sources: false })` (and the same option of `suspend` and `checkpoint`)
-  writes each script's hash instead of its text: smaller, and the loading sandbox finds
-  the script among the ones this process ran, or asks the `sources(name)` option for it.
-  The default stores the text, and the snapshot loads anywhere.
+- The scripts' texts are in the snapshot, so it loads anywhere the host gives the same
+  names.
 - Loading checks every waiting function's bytecode against the loading build's: a djs
   that compiles one of them differently refuses the snapshot, naming the function, and
   so does one without a builtin, record field or named constant the snapshot uses. A
   refused load leaves the sandbox unusable; dispose it.
 - A snapshot cannot hold a `WeakRef` or a `FinalizationRegistry`, nor a run whose script
   changed a builtin object: snapshotting such a run throws a `misuse` error that names
-  what it met, and a task's `suspend` rejects and the task goes on.
+  what it met, and the run goes on.
 - `sandbox.describeSnapshot(snapshot)` describes one for people: its sections and their
   sizes, the scripts, the host values it names, the host's data (the open calls' states
   and the fuel used), the functions it holds frames of, and its records by kind.
-- `debugger`, a host function, makes `debugger;` in an async function a pause: the
-  statement awaits a call of this function, so the run is idle there and can be
-  snapshotted. Without the option, `debugger;` does nothing.
 - `sandbox.callSite(id)` says where the run waits on open call `id`: `{ file, line,
   column }` of the `await` of the innermost activation waiting on it, directly or through
   `Promise.all` and the like, in the script the run started with, also after any number
@@ -550,23 +503,52 @@ A snapshot is trusted input: load only snapshots you wrote. [Snapshots: keeping 
 run](persistence.md) explains what a snapshot holds, what a later build of djs can load,
 and why.
 
-## Deterministic runs and journals
+## Deterministic runs
+
+A snapshot loads only into a build of djs that compiles its waiting functions alike. When
+a newer build refuses one, the run is not lost if it is deterministic: the host begins it
+again from its script and gives it the results it had, and the run is back where it was.
 
 ```ts
-const sandbox = await Sandbox.create({ deterministic: { startedAt: 0, seed: 42n }, now: 0 });
-const journal: JournalEntry[] = [];
-const result = await sandbox.runAsync(code, params, { journal });
-// later, in a fresh sandbox made the same way:
-const again = await Sandbox.create({ deterministic: { startedAt: 0, seed: 42n }, now: 0 });
-await again.replay(journal);                             // the same result, or a `diverged` error
+const options = { deterministic: { startedAt: Date.now(), seed: 42n }, ...rest };
+const sandbox = await Sandbox.create(options);
+const run = sandbox.begin(code, params);
+// ... the host settles calls and advances; with each snapshot it also keeps:
+save({ snapshot: run.snapshot(), deliveries: run.deliveries });
+
+// Later, when `loadSnapshot` refuses the snapshot: the same script, parameters and options.
+const again = await Sandbox.create(options);
+const rerun = again.begin(code, params, { deliveries });   // idle where the run was, or `diverged`
 ```
 
 With `deterministic`, `Math.random` is seeded from `seed`, the time zone is UTC, weak
 references are strong, and the clock starts at `startedAt` and moves only when an async
-result is delivered. A run with a `journal` records everything it took from outside;
-`replay(journal)` runs it again without calling any host function and checks the
-`canonicalHash()` of the VM at every idle point. [Determinism](determinism.md) explains
-what that guarantees.
+result is applied: to the time of `now` when it was settled, never back. `run.deliveries`
+lists the results the run applied, in order, each with its call (`id`, `fn`, `args`),
+its outcome and the clock it set. `begin` with `deliveries` applies them again, each once
+its call is open, checked against it, and returns the run idle where the earlier one was
+after its last delivery, with the same open calls; from there the host goes on as before.
+If the script, its parameters or the options changed so that the run makes another call,
+or the same call with other arguments, `begin` throws a `diverged` error naming the first
+difference. No async host function runs during a re-run; the sync ones run as they did,
+so a host stubs those whose effects it has already (output it showed, data it stored)
+and gives the others the answers they gave. A host continuing such a run by hand can
+settle with the recorded clock too: `settle(id, { ok, value, now })`. A snapshot of a
+deterministic run carries its clock and random state, and loads only into a sandbox that
+is deterministic too.
+
+A run with a `journal` records more: every sync host call and its outcome, every result,
+and the VM's `canonicalHash()` at every idle point. `replay(journal)` runs it again in a
+fresh sandbox made the same way without calling any host function but `console`, and
+checks every step:
+
+```ts
+const journal: JournalEntry[] = [];
+await sandbox.runAsync(code, params, { journal });       // or begin(code, params, { journal })
+await (await Sandbox.create(options)).replay(journal);   // the same result, or a `diverged` error
+```
+
+[Determinism](determinism.md) explains what that guarantees.
 
 ## Inspecting a sandbox
 
@@ -578,8 +560,8 @@ examples do).
 
 ## Where to look
 
-- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): the `Sandbox`, `Task` and `Run`
-  classes and every option, with their doc comments.
+- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): the `Sandbox` and `Run` classes and
+  every option, with their doc comments.
 - [`js/src/wire.ts`](../../js/src/wire.ts) and [`js/src/reader.ts`](../../js/src/reader.ts):
   values in and out.
 - [`scripts/npm-pack.sh`](../../scripts/npm-pack.sh) and
@@ -587,4 +569,4 @@ examples do).
   the packed package is tested in node, Bun, Deno and a browser, bundled and not.
 - [`js/test/`](../../js/test/): the package's tests, which use every part of it.
 - [`examples/sleep-snapshot/`](../../examples/sleep-snapshot/): a complete host that
-  suspends a run into a snapshot and resumes it in another process.
+  snapshots a waiting run and continues it in another process.

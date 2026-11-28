@@ -181,7 +181,7 @@ names the build.
 | --- | --- |
 | Sloppy mode, `with` | See above: one set of semantics. `with` is a syntax error. |
 | Direct `eval` | A direct `eval` can see and change the caller's local variables, so every function that contains one would need its scopes kept by name. `eval(x)` is always an indirect eval: it compiles `x` as a global Script. The `Function` constructors work. |
-| ES modules in codemode | A codemode script is one piece of code: in a Script, `import` and `export` declarations are syntax errors, in a body all but its leading [imports of host modules](#imports-in-a-body), and `import()` compiles and returns a rejected promise. Hosts give scripts their functions as imports, globals or parameters ([bindings](js-api.md#host-functions)). Native hosts can load [modules](#modules). |
+| ES modules in codemode | A codemode script is one piece of code: in a Script, `import` and `export` declarations are syntax errors, in a body all but its leading [imports of host modules](#imports-in-a-body), and `import()` compiles and returns a rejected promise. Hosts give scripts their functions as imports or globals ([host functions](js-api.md#host-functions)). Native hosts can load [modules](#modules). |
 | `Intl` | Locale data is megabytes. `toLocaleString` and friends use a fixed, locale-independent form. |
 | `Temporal` | Not needed by the scripts djs runs; `Date` is there. |
 | `SharedArrayBuffer`, `Atomics`, workers | A sandbox is one thread. |

@@ -146,8 +146,9 @@ pub fn snapshot(src: &str, nth: usize, ts: bool) -> String {
                     values: vec![("console".to_string(), Value::object(console))],
                     ..Default::default()
                 };
+                // With the script's text, as the Sandbox writes snapshots.
                 let opts = SnapshotOptions {
-                    sources: false,
+                    sources: true,
                     host: Some(host),
                 };
                 return match vm.snapshot_with(&base, &opts) {

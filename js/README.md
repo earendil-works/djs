@@ -40,17 +40,25 @@ Errors are `SandboxError`s with a `kind`: `threw`, `syntax`, `fuel`, `memory`, .
 
 ## Snapshots
 
-A run that waits on the host can be suspended into a snapshot, bytes the host keeps, and
-continued by a sandbox made with the same options, in this or another process. The
+A host can drive a run itself: `begin` runs the script until it waits on async host
+calls, which it lists instead of calling them, and the host settles each call and
+advances the run. While the run waits, `run.snapshot()` writes it as bytes the host keeps,
+and a sandbox made with the same options continues it, in this or another process. The
 sandbox's host functions and values are named in it, not written.
 
 ```js
 const sandbox = await Sandbox.create({ asyncFunctions });
-const task = sandbox.start(code, params);
-const snapshot = await task.suspend(); // later, anywhere: (await Sandbox.resume(snapshot, options)).result
+const run = sandbox.begin(code, params);    // idle: run.calls lists the open calls
+const snapshot = run.snapshot();
+// later, anywhere:
+const again = (await Sandbox.create({ asyncFunctions })).loadSnapshot(snapshot);
+again.settle(again.calls[0].id, { ok: true, value: 42 });
+await again.advance();                      // to the next idle point, or the end
 ```
 
-A host-driven run (`sandbox.begin`) has `run.snapshot()` and `sandbox.loadSnapshot(bytes)`.
+With `deterministic`, `run.deliveries` lists the results the run applied, and
+`begin(code, params, { deliveries })` runs the script again to where it was, for when a
+newer djs no longer loads a snapshot.
 
 ## Loading the module
 

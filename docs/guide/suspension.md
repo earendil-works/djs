@@ -306,20 +306,20 @@ named by its span and bytecode hash:
 
 <!-- gen:snapshot -->
 ```text
-2278 bytes
+2416 bytes
 types          1813 bytes
 strings         191 bytes
 builtins          7 bytes
 intrinsics        1 bytes
 host              5 bytes
-scripts          13 bytes
+scripts         151 bytes
 functions        15 bytes
 records         154 bytes
 vm               72 bytes
 16 strings (174 bytes of text), 6 builtins, 0 intrinsics, 1 scripts, 1 functions, 15 records
 builtins: Object.prototype Promise.prototype %ArrayIteratorPrototype%.next Function.prototype %ArrayIteratorPrototype% Array.prototype
 flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-script 0: example.js (source by hash adba3bded187355a)
+script 0: example.js (144 bytes of source)
 host values: console debugger() (and 0 members)
 host data: 
 function 0:0..144 (bytecode)

@@ -14,7 +14,7 @@ everywhere else, hosts are described in general.
 ## Durable code mode on host-driven runs
 
 pi's durable code mode, being built on djs, drops the prelude altogether: a script runs as
-a [host-driven run](js-api.md#host-driven-runs) of a plain `Sandbox`, and everything it
+a [host-driven run](js-api.md#runs-the-host-drives) of a plain `Sandbox`, and everything it
 can reach outside the language is a host function named by a stable identity. No code
 of pi's sits in the VM, so none is in a snapshot.
 
@@ -24,7 +24,7 @@ of pi's sits in the VM, so none is in a snapshot.
   script runs in, and the other modes carry them unused.
 - **Tools and globals are async host functions** with identities such as `tools.read`,
   `searchTools` or `@mcp/github#search_issues`, bound as the `tools` namespace, as
-  globals, or as bindings of the body. The run never calls them: they show up in
+  globals, or as exports of host modules. The run never calls them: they show up in
   `run.calls`, and pi answers each one as a nested task of its own, keyed by the call's
   id, so that a call can outlive the process that issued it.
 - **Output and the store are sync host functions** (`text`, `image`, `store`, `load`,
@@ -49,14 +49,15 @@ of pi's sits in the VM, so none is in a snapshot.
   person or a slow job, pi writes the idle run as a snapshot (`run.snapshot()`), with
   the output and store writes so far. A restart or a wake, maybe weeks later, loads it
   with `loadSnapshot` and the same scope, finds each open call's task by its id and goes
-  on. Nothing is replayed, and no journal is kept: the latest snapshot is the script's
-  state. The namespaces with their aliases and hints, `ALL_TOOLS`, the converting
+  on. The latest snapshot is the script's state. The namespaces with their aliases and hints, `ALL_TOOLS`, the converting
   functions and the imported modules are named in the snapshot and are the resuming
   sandbox's own, and the fuel used travels with it. djs's tests move every harvested
   script of pi's through a snapshot at each of its idle points in this setup. [Later
   builds](persistence.md#later-builds) says what a snapshot relies on: an upgrade of djs
   that compiles a waiting function differently refuses the snapshots waiting in it, with
-  the reason.
+  the reason. For that case a run can be made deterministic and its results kept with
+  its snapshots, so that a refused snapshot's run is begun again from its script and
+  results in the new build ([determinism](determinism.md#when-a-snapshot-is-refused)).
 - **Steps.** pi runs code mode on its own thread, so each `advance` is bounded:
   `yieldMs` keeps pi responsive while a script computes, and pi's abort signal stops
   the step.
@@ -103,19 +104,21 @@ An agent host that wants djs for its codemode builds on the `Sandbox`:
 
 1. **Tools as async host functions.** Give each tool a name (`tools.search`) and make it
    an async host function, so a script can run several at once
-   (`Promise.all(queries.map(tools.search))`). Bind them as a `tools` namespace, or pass
-   them as parameters of the body ([host functions](js-api.md#host-functions)).
+   (`Promise.all(queries.map(tools.search))`). Bind them as a `tools` namespace, or as
+   exports of host modules ([host functions](js-api.md#host-functions)).
 2. **Output as sync host functions.** Helpers such as `text(...)` that only record
    output are sync host functions: cheap, and they keep the order of output.
 3. **Limits.** Choose a heap cap, a fuel budget and a slice ([limits](limits.md)); in a
    host-driven run, bound each step with a signal, a fuel budget and yields to your
-   event loop ([bounded steps](js-api.md#host-driven-runs)).
+   event loop ([bounded steps](js-api.md#runs-the-host-drives)).
 4. **Frozen builtins** instead of a lockdown in a prelude: a script that writes a builtin
    fails at the write, and the run stays one a snapshot can hold.
-5. **Persistence.** Start each script as a task; when the agent must wait long (a person,
-   a slow job), suspend the task into a snapshot, store it with the open calls' state,
-   and resume it later with `Sandbox.resume` ([snapshots](persistence.md)). Or, as
-   pi's durable code mode does, drive the run yourself and keep its latest snapshot.
+5. **Persistence.** Drive the run yourself, as pi's durable code mode does: when the
+   agent must wait long (a person, a slow job), write the idle run as a snapshot with
+   the open calls' state, and load it later with `loadSnapshot`
+   ([snapshots](persistence.md)). Make it deterministic and keep its deliveries too, and
+   a snapshot a newer djs refuses can be run again from its script
+   ([determinism](determinism.md#when-a-snapshot-is-refused)).
 6. **Values at the boundary.** `jsonBoundary` gives tools JSON, as a prelude that
    stringifies arguments would, without a prelude ([the JSON
    boundary](js-api.md#the-json-boundary)).

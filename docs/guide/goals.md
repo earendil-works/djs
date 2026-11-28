@@ -134,14 +134,16 @@ has to write; and the engine has no timers or event loop of its own.
 
 **For you:** the same script with the same inputs, delivered in the same order, does the
 same thing every time, however it was sliced, stopped and resumed. A run can be
-recorded and replayed.
+recorded and replayed, and a waiting run whose snapshot a newer build refuses can be run
+again from its script and results to where it was.
 
 **Why:** it makes suspension testable (a run stopped a thousand times must equal a run
-in one go), makes a misbehaving script reproducible, and makes replaying a run after a
-crash safe.
+in one go), makes a misbehaving script reproducible, and gives a host a way back when a
+newer build refuses a snapshot.
 
 **How:** every source of nondeterminism is an input the host sets, tool results take
-effect in delivery order, and the heap is laid out as a function of the program
+effect one at a time in the order they were settled, and the heap is laid out as a
+function of the program
 ([determinism](determinism.md)).
 
 **The cost:** some common engine techniques are ruled out (hashing by address, weak
