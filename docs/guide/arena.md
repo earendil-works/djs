@@ -98,7 +98,7 @@ Allocating a cell rounds the size up to 8, checks it against the cap, moves the 
 the used region (`len`) and writes the header:
 
 <!-- gen:excerpt crates/djs-core/src/heap/mod.rs "impl Heap" "pub fn alloc_cell(" 10 -->
-[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L592-L601), lines 592–601:
+[`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs#L563-L572), lines 563–572:
 
 ```rust
 pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {
@@ -140,9 +140,7 @@ of wasm memory: wasm linear memory never shrinks, so the peak is what a run cost
 
 - **It starts small.** A VM made from the base or restored from an image reserves the
   image rounded up to whole 64 KiB pages, not room up to its first collection threshold:
-  an idle sandbox needs no more, and a running one grows in place. Only a host that says how big
-  the heap will get (one that runs a large script of its own right after creating the
-  VM, say) gets that room up front.
+  an idle sandbox needs no more, and a running one grows in place.
 - **It grows in small steps and stops at the GC threshold.** Below the threshold, each
   growth adds an eighth, in whole pages, rather than doubling: in wasm the arena grows in
   place, so doubling would only reserve pages the run may never touch. Growth never
