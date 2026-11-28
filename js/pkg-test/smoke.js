@@ -11,24 +11,6 @@ function eq(actual, expected, what) {
   if (a !== e) throw new Error(`${what}: got ${a}, expected ${e}`);
 }
 
-/**
- * `tools.wait(v)`: never settles while `w.hold` (the run waits there to be suspended), else
- * resolves to `got v`; a resumed call resolves to `resumed v`.
- */
-function waiter() {
-  const w = {
-    hold: true,
-    fn: {
-      call(v) {
-        this.state = { v };
-        return w.hold ? new Promise(() => {}) : `got ${v}`;
-      },
-      resume: ({ v }) => `resumed ${v}`,
-    },
-  };
-  return w;
-}
-
 const SCRIPT = "const a = await tools.wait(x); const b = await tools.wait(a + '!'); return [a, b];";
 
 export async function smoke() {
@@ -66,19 +48,24 @@ export async function smoke() {
   for (const s of [sb, io, ts]) s.dispose();
   done.push("run, runAsync, console, typescript, errors");
 
-  // A task suspended into a snapshot and resumed in a fresh sandbox.
-  const w = waiter();
-  const opts = { frozenBuiltins: true, asyncFunctions: { "tools.wait": w.fn } };
+  // A host-driven run snapshotted while it waits and continued in a fresh sandbox.
+  const opts = { frozenBuiltins: true, asyncFunctions: { "tools.wait": () => {} } };
   const a = await Sandbox.create(opts);
-  const task = a.start(SCRIPT, { x: "a" });
-  const snapshot = await task.suspend();
+  const run = a.begin(SCRIPT, { x: "a" });
+  eq(run.calls.map((c) => [c.fn, c.args]), [["tools.wait", ["a"]]], "calls");
+  const snapshot = run.snapshot();
   a.dispose();
-  w.hold = false;
   if (!(snapshot instanceof Uint8Array)) throw new Error("not a snapshot");
-  const resumed = await Sandbox.resume(snapshot, opts);
-  eq(await resumed.result, ["resumed a", "got resumed a!"], "resume");
-  resumed.sandbox.dispose();
-  done.push("suspend and resume");
+  const b = await Sandbox.create(opts);
+  const loaded = b.loadSnapshot(snapshot);
+  while (loaded.state === "idle") {
+    const [c] = loaded.calls;
+    loaded.settle(c.id, { ok: true, value: `got ${c.args[0]}` });
+    await loaded.advance();
+  }
+  eq(loaded.value, ["got a", "got got a!"], "loaded run");
+  b.dispose();
+  done.push("snapshot and load");
 
   return done;
 }
