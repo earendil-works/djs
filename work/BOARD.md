@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0309 | One meaning per word: images and snapshots (guide pages renamed, base image, djs-embed Image) | pname | .worktrees/pname |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -52,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0309 | One meaning per word: images and snapshots | a5c3aa1d (agent pname; D3756; guide snapshots.md (run) / images.md; base image; djs-embed Image (Gondolin renames listed in the issue)) |
 | 0308 | Docs and tooling cleanup after the dump removal | 9de44719 (agent pclean; D3753-D3755; docs/cli.md, docs/host.md folded into the guide; dump research deleted; decisions index pruned; unsafe-heap difftest leg 38 -> 0.7 CPU-s) |
 | 0307 | Shipped-module trims; legacy decorators gone | ca3fcd14 (agent pclean; D3750-D3752; ABI 14; 509,843 -> 498,108 B gz; describe/callSite docs-only; strip-types feature) |
 | 0306 | One run driver; determinism as the snapshot fallback (Run.deliveries, begin({deliveries}), diverged) | fedf4616 (agent pclean; D3745-D3747; ABI 13; re-run equivalence on 1,164 harvest idle points) |
