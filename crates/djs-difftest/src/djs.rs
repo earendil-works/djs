@@ -44,8 +44,6 @@ pub struct Djs {
     pub gc_stress: bool,
     /// Report the raw heap image's hash and the canonical hash (`--determinism`).
     pub image: bool,
-    /// Lazy functions (`VmOptions::lazy_functions`, D2990).
-    pub lazy: bool,
 }
 
 impl Djs {
@@ -56,9 +54,6 @@ impl Djs {
         }
         if self.gc_stress {
             s += " --gc-stress";
-        }
-        if self.lazy {
-            s += " --lazy";
         }
         s
     }
@@ -167,8 +162,6 @@ impl Djs {
                 ..ExecOptions::default()
             },
             prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),
-            #[cfg(feature = "lazy")]
-            lazy_functions: self.lazy,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

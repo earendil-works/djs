@@ -24,8 +24,6 @@ mod for_in_of;
 mod func;
 mod function;
 mod generator;
-#[cfg(feature = "lazy")]
-mod lazy;
 mod module;
 pub mod module_meta;
 mod parser;
@@ -162,7 +160,7 @@ impl<'a> CompileOptions<'a> {
 
     /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
     /// keeps no source: never compiled again).
-    #[cfg(any(feature = "lazy", feature = "snapshot"))]
+    #[cfg(feature = "snapshot")]
     pub(crate) fn from_bits(filename: &'a str, params: &'a [&'a str], bits: u32) -> Self {
         CompileOptions {
             goal: match bits & 3 {
@@ -224,13 +222,6 @@ pub struct CompileError {
 }
 
 impl CompileError {
-    /// [`CompileErrorKind::NeedStack`].
-    #[cfg(feature = "lazy")]
-    #[cold]
-    pub(crate) fn need_stack() -> CompileError {
-        error_at(b"", PErr::need_stack())
-    }
-
     /// The error as text: `SyntaxError: <message> at <line>:<col>` (the Display form,
     /// built without core::fmt for the shipped module, D2339).
     pub fn text(&self) -> String {
@@ -441,29 +432,6 @@ pub fn compile_module(
     }
     elastic(heap, both, PErr::need_stack).map_err(|e| error_at(src, e))
 }
-
-/// [`compile`] with lazy functions (D2990): the source is parsed whole (every early
-/// error is reported), but a function that is not run at once gets a lazy template,
-/// compiled at its first call ([`compile_lazy`]). Its code is the same either way.
-#[cfg(feature = "lazy")]
-pub fn compile_lazy_unit(
-    heap: &mut Heap,
-    src: &[u8],
-    opts: &CompileOptions<'_>,
-) -> Result<Ref, CompileError> {
-    if crate::EMBED && opts.goal == Goal::Module {
-        return Err(not_a_module_entry(src));
-    }
-    let result = parse(heap, src, opts, |mut p| {
-        p.unit.lazy = true;
-        p.compile()
-    });
-    result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
-}
-
-#[cfg(feature = "lazy")]
-pub use lazy::compile_lazy;
-pub use parser::{ClassSpan, ClassSpanKind};
 
 /// The names of the prelude function table's slots (D2440), in slot order, for
 /// privileged source `src`: the prelude functions that others refer to. The registry

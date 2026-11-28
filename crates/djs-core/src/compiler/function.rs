@@ -67,7 +67,6 @@ impl Parser<'_, '_> {
         };
         let flavor = (is_async, is_gen);
         let child = self.parse_function_rest(FuncKind::Normal, name, start, own, flavor)?;
-        self.note_call(child);
         self.code().fclosure(child);
         if !own {
             self.last_anon_fn = Some((start, self.prev_end));
@@ -106,11 +105,6 @@ impl Parser<'_, '_> {
         self.start_flavor(flavor)?;
         self.f.name = name;
         self.f.src_start = start;
-        #[cfg(feature = "lazy")]
-        {
-            self.f.lazy_ok = dp.is_none();
-            self.f.head = self.tok.start;
-        }
         self.ts_fn_type_params()?;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params_dp(dp.as_deref_mut())?;
@@ -164,11 +158,6 @@ impl Parser<'_, '_> {
             let v = self.f.add_var(name, VarKind::FuncName, s);
             self.f.func_name_var = Some(v);
         }
-        #[cfg(feature = "lazy")]
-        {
-            self.f.lazy_ok = self.may_wait(start);
-            self.f.head = self.tok.start;
-        }
         self.ts_fn_type_params()?;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
@@ -178,38 +167,6 @@ impl Parser<'_, '_> {
         let child = self.end_function()?;
         self.leave();
         Ok(child)
-    }
-
-    /// Whether a function (expression) starting at `start` may wait for its first call:
-    /// one that is a call's argument or parenthesized usually runs at once, and stays
-    /// eager (D2995). (Both are in the parent's text, as `resolve::lazy_roots` needs.)
-    #[cfg(feature = "lazy")]
-    fn may_wait(&self, start: u32) -> bool {
-        start != self.arg_start && start != self.paren_inner
-    }
-
-    /// After a function expression or arrow `child`: whether a call follows it right
-    /// away (`fn(`, `(fn)(`), which keeps it eager (D2990).
-    fn note_call(&mut self, child: u32) {
-        #[cfg(feature = "lazy")]
-        self.note_call_lazy(child);
-        #[cfg(not(feature = "lazy"))]
-        let _ = child;
-    }
-
-    #[cfg(feature = "lazy")]
-    fn note_call_lazy(&mut self, child: u32) {
-        let end = if self.is(TokenKind::LParen) {
-            self.tok.end
-        } else if self.is(TokenKind::RParen) && self.peek().kind == TokenKind::LParen {
-            self.peek().end
-        } else {
-            return;
-        };
-        let id = self.f.children[child as usize];
-        if let Some(f) = self.done[id as usize].as_mut() {
-            f.call_end = end;
-        }
     }
 
     /// Formal parameters up to and including the `)`. Simple lists keep the
@@ -597,16 +554,6 @@ impl Parser<'_, '_> {
         self.start_flavor((is_async, false))?;
         self.f.name = hint;
         self.f.src_start = start;
-        // `super()` and `this` in a constructor's arrows depend on the constructor's
-        // state (D2990): those stay eager.
-        #[cfg(feature = "lazy")]
-        {
-            self.f.head = start;
-            self.f.after_q = after_q;
-            self.f.owner = self.own_this_kind().unwrap_or(FuncKind::Normal);
-            self.f.lazy_ok = !matches!(self.f.owner, FuncKind::ClassCtor | FuncKind::DerivedCtor)
-                && self.may_wait(start);
-        }
         self.ts_fn_type_params()?;
         if self.is(TokenKind::Ident) {
             self.f.in_params = true;
@@ -640,7 +587,6 @@ impl Parser<'_, '_> {
         self.f.src_end = self.prev_end;
         let child = self.end_function()?;
         self.leave();
-        self.note_call(child);
         self.code().fclosure(child);
         self.last_anon_fn = Some((start, self.prev_end));
         if !hint.is_null() {

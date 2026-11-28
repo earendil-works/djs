@@ -132,9 +132,6 @@ pub(super) struct Parser<'a, 'h> {
     /// Where the content of the innermost parentheses being parsed starts (`u32::MAX`:
     /// none), so an optional chain knows it is all of it (`(a?.b)()`).
     pub paren_inner: u32,
-    /// The start of the call argument being parsed: a function there is eager (D2995).
-    #[cfg(feature = "lazy")]
-    pub arg_start: u32,
     /// The next unary operand is the operand of `delete`.
     pub delete_operand: bool,
     /// The memoized pattern-or-literal scan (docs/compiler.md 3.3).
@@ -161,10 +158,6 @@ pub(super) struct Parser<'a, 'h> {
     pub spec: u32,
     /// The erased type ranges, for `strip_types` (`None`: not recorded).
     pub erased: Option<Erased>,
-    /// The spans of the outermost class's code that runs when the class is evaluated,
-    /// for `class_spans` (`None`: not recorded), and the class nesting depth.
-    pub class_spans: Option<Vec<ClassSpan>>,
-    pub class_depth: u32,
     /// When set, `finish_unit` fills it with the names of the prelude function table's
     /// slots, in slot order (privileged code, D2440).
     pub builtin_names: Option<Vec<crate::heap::Atom>>,
@@ -197,9 +190,6 @@ pub(super) struct Parser<'a, 'h> {
     pub completion: Option<Atom>,
     /// The atoms of the identifiers seen so far, by source text (0096).
     pub ident_atoms: IdentAtoms,
-    /// Lazy or eager, and a lazy function's own compile (D2990).
-    #[cfg(feature = "lazy")]
-    pub unit: super::resolve::Unit,
 }
 
 /// The atoms of unescaped identifiers by their text in the source: most names repeat,
@@ -259,24 +249,6 @@ impl IdentAtoms {
         }
         self.slots[i] = e;
     }
-}
-
-/// A span of class code that runs when the class is evaluated (`compiler::class_spans`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ClassSpan {
-    pub start: u32,
-    pub end: u32,
-    pub kind: ClassSpanKind,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ClassSpanKind {
-    /// A static block's body, between its braces.
-    StaticBlock,
-    /// A static field's ` = initializer`, from the `=`.
-    StaticInit,
-    /// The same of a static private field or auto-accessor (only class code sets it).
-    StaticPrivateInit,
 }
 
 /// Erased TypeScript ranges: `start..end` byte offsets and the kind (`ts::ER_*`).
@@ -366,8 +338,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             class_thunk: None,
             delete_operand: false,
             paren_inner: u32::MAX,
-            #[cfg(feature = "lazy")]
-            arg_start: u32::MAX,
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),
             open_iters: Vec::new(),
@@ -377,8 +347,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             debugger_awaits: opts.debugger_awaits,
             spec: 0,
             erased: None,
-            class_spans: None,
-            class_depth: 0,
             builtin_names: None,
             after_q: false,
             ts_decls: Vec::new(),
@@ -391,8 +359,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             using: Default::default(),
             completion: None,
             ident_atoms: IdentAtoms::default(),
-            #[cfg(feature = "lazy")]
-            unit: super::resolve::Unit::EAGER,
         };
         p.f.src_end = src.len() as u32;
         if crate::EMBED && kind == FuncKind::Module {
@@ -492,10 +458,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.heap,
             self.src,
             self.opts,
-            #[cfg(feature = "lazy")]
-            &self.unit,
-            #[cfg(not(feature = "lazy"))]
-            &super::resolve::Unit::EAGER,
             self.atom_undefined,
             funcs,
             &self.ts_decls,

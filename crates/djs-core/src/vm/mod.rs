@@ -110,11 +110,6 @@ pub struct VmOptions {
     /// builtins (TESTING.md lists them); frozen builtins arm it anyway. Not part of the
     /// image: applied at creation and restore. Release builds ignore it.
     pub prefix_barrier: bool,
-    /// Lazy functions (D2990, builds with the `lazy` feature): `Vm::compile` parses the
-    /// whole source (every early error is reported) but compiles a function's body at its
-    /// first call. Not part of the image: a VM's lazy templates compile in any lazy build.
-    #[cfg(feature = "lazy")]
-    pub lazy_functions: bool,
 }
 
 impl Default for VmOptions {
@@ -127,8 +122,6 @@ impl Default for VmOptions {
             weak_refs: WeakRefs::Collected,
             frozen_builtins: false,
             prefix_barrier: false,
-            #[cfg(feature = "lazy")]
-            lazy_functions: false,
         }
     }
 }
@@ -482,7 +475,7 @@ impl Vm {
         src: &[u8],
         opts: &crate::compiler::CompileOptions<'_>,
     ) -> Result<Value, crate::compiler::CompileError> {
-        let template = self.compile_unit(src, opts)?;
+        let template = crate::compiler::compile(&mut self.heap, src, opts)?;
         self.instantiate(template)
             .map_err(|e| crate::compiler::CompileError {
                 kind: if e == HeapError::HostOutOfMemory {
@@ -495,61 +488,6 @@ impl Vm {
                 line: 0,
                 col: 0,
             })
-    }
-
-    /// Compiles every lazy template in the heap that has not run yet (D2990), the ones
-    /// inside them too. Their closures switch to the compiled template at their next
-    /// call.
-    #[cfg(feature = "lazy")]
-    pub fn compile_lazy_templates(&mut self) -> Result<(), HeapError> {
-        use crate::heap::CellKind;
-        use crate::heap::cells::FuncTemplate;
-        let lazy = [crate::bytecode::Op::Lazy as u8];
-        loop {
-            let h = &self.heap;
-            let todo: Vec<u32> = h
-                .cells()
-                .filter(|c| {
-                    c.kind == CellKind::FuncTemplate
-                        && h.arena()
-                            .get::<Ref>(c.offset, FuncTemplate::IC)
-                            .get()
-                            .is_none()
-                        && crate::bytecode::template::code(h, c.offset) == lazy
-                })
-                .map(|c| c.offset)
-                .collect();
-            if todo.is_empty() {
-                return Ok(());
-            }
-            for t in todo {
-                // Not elastic: no host call in between moves the stack.
-                let elastic = core::mem::replace(&mut self.heap.stack_elastic, false);
-                let c = crate::compiler::compile_lazy(&mut self.heap, Ref(t));
-                self.heap.stack_elastic = elastic;
-                let c = c.map_err(|e| {
-                    if e.kind == crate::compiler::CompileErrorKind::HostOutOfMemory {
-                        HeapError::HostOutOfMemory
-                    } else {
-                        HeapError::OutOfMemory
-                    }
-                })?;
-                self.heap.arena_mut().set(t, FuncTemplate::IC, c);
-            }
-        }
-    }
-
-    /// Compiles `src`, lazily with `VmOptions::lazy_functions` (D2990).
-    fn compile_unit(
-        &mut self,
-        src: &[u8],
-        opts: &crate::compiler::CompileOptions<'_>,
-    ) -> Result<Ref, crate::compiler::CompileError> {
-        #[cfg(feature = "lazy")]
-        if self.opts.lazy_functions {
-            return crate::compiler::compile_lazy_unit(&mut self.heap, src, opts);
-        }
-        crate::compiler::compile(&mut self.heap, src, opts)
     }
 
     /// A function implemented by the embedder: calling it parks the VM with
@@ -1108,10 +1046,6 @@ impl Vm {
     /// collections while scripts run leave it alone. For the end of the embedder's setup
     /// (pi calls it after its prelude).
     pub fn seal(&mut self) -> Result<(), HeapError> {
-        // A sealed image (pi's prelude) runs many times: compile its lazy functions now
-        // rather than in every run (D2990).
-        #[cfg(feature = "lazy")]
-        self.compile_lazy_templates()?;
         let g = self.global();
         self.heap.move_to_end(g)?;
         self.collect_as(Collection::Seal)
@@ -1350,13 +1284,10 @@ fn fnv64(bytes: &[u8]) -> u64 {
 mod encoding_tests;
 #[cfg(test)]
 mod frozen_tests;
-#[cfg(all(test, feature = "lazy"))]
-mod lazy_tests;
 #[cfg(all(test, feature = "embed"))]
 mod module_tests;
 #[cfg(all(
     test,
-    feature = "lazy",
     feature = "regexp-unicode-props",
     feature = "unicode-normalization",
     not(feature = "cold-unicode")

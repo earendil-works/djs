@@ -31,8 +31,6 @@ options:
                       and by canonical hash (hard failure; GC stress is not compared, D1720)
                       The stressed runs get 3x the time limit; cases marked
                       `difftest: no-stress` skip them
-  --lazy              djs only: every djs run compiles functions at their first call
-                      (VmOptions::lazy_functions, D2990)
   --clusters          group the failures by the first line of what went wrong
   --idle-points       djs only: list the idle points (tool results delivered by
                       `host.later`, D2590) per case; the total is always printed
@@ -73,7 +71,6 @@ struct Args {
     quiet: bool,
     suspend_every: Option<u64>,
     gc_stress: bool,
-    lazy: bool,
     determinism: bool,
     clusters: bool,
     idle_points: bool,
@@ -115,7 +112,6 @@ fn parse_args() -> Result<Args, String> {
         quiet: false,
         suspend_every: None,
         gc_stress: false,
-        lazy: false,
         determinism: false,
         clusters: false,
         idle_points: false,
@@ -173,7 +169,6 @@ fn parse_args() -> Result<Args, String> {
                 args.suspend_every = Some(n);
             }
             "--gc-stress" => args.gc_stress = true,
-            "--lazy" if cfg!(feature = "lazy") => args.lazy = true,
             "--determinism" => args.determinism = true,
             "--clusters" => args.clusters = true,
             "--idle-points" => args.idle_points = true,
@@ -271,7 +266,6 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
         "djs" => Box::new(Djs {
             image: args.determinism,
-            lazy: args.lazy,
             ..Djs::default()
         }),
         e => return Err(format!("unknown engine `{e}`")),
@@ -572,7 +566,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: Some(n),
             gc_stress: false,
             image: args.determinism,
-            lazy: args.lazy,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -581,7 +574,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: None,
             gc_stress: true,
             image: false,
-            lazy: args.lazy,
         };
         v.push((e.label(), Box::new(e)));
     }

@@ -810,8 +810,7 @@ impl Exec<'_> {
     /// The loop does not check `pc` against the code's length per instruction (D3390).
     /// It relies on what the stack checker enforces for every template
     /// (`alloc_template_in`, the only place that makes one: the compiler's functions,
-    /// lazily compiled ones and the builtins alike; images hold templates made that
-    /// way): execution cannot fall off the end of the code, and every jump lands on an
+    /// and the builtins alike; images hold templates made that way): execution cannot fall off the end of the code, and every jump lands on an
     /// instruction inside it. Whether the frame has code at all (a native frame has
     /// none) and whether its last instruction can be fetched as a word is checked where
     /// the frame changes: on entry, in the call arm and in the return arm. Debug builds

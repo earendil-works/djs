@@ -1094,10 +1094,6 @@ impl Parser<'_, '_> {
                 self.parse_assign(false)?;
                 self.code().array_spread();
             } else {
-                #[cfg(feature = "lazy")]
-                {
-                    self.arg_start = self.tok.start;
-                }
                 self.parse_assign(false)?;
                 if array {
                     self.code().array_push();

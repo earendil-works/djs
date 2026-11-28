@@ -16,11 +16,9 @@ test = false
 path = "src/main.rs"
 
 [features]
-default = ["unicode", "lazy", "embed"]
+default = ["unicode", "embed"]
 # djs-core's Unicode tables.
 unicode = ["djs-prelude/unicode"]
-# `--lazy`: lazy functions (D2990).
-lazy = ["djs-core/lazy"]
 # djs-core's `embed` (D3175): ES modules, for the `flags: [module]` tests. djs-difftest
 # builds this crate without it, so its engine stays the wasm modules' feature set.
 embed = ["djs-prelude/embed"]

@@ -34,13 +34,10 @@ pub(super) fn base() -> &'static [u8] {
     })
 }
 
-/// The VMs' options: frozen builtins, as pi runs; with `DJS_LAZY=1` lazy functions
-/// (D2990).
+/// The VMs' options: frozen builtins, as pi runs.
 pub(super) fn vm_opts() -> VmOptions {
     VmOptions {
         frozen_builtins: true,
-        #[cfg(feature = "lazy")]
-        lazy_functions: std::env::var("DJS_LAZY").is_ok_and(|v| v == "1"),
         ..VmOptions::default()
     }
 }

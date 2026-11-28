@@ -157,29 +157,17 @@ pub(super) fn interface_hash(h: &Heap, t: u32) -> u64 {
     f.str(&h.atom_name(Atom::from_id(name)));
     let d = template::debug_info(h, t);
     let locals = u32::from(a.get::<u16>(t, FuncTemplate::LOCALS));
-    // The captured bindings by name (a lazy template that never ran has no names when it
-    // captures nothing, D2990: the same interface as its compiled form). A synthetic
-    // binding's number (`<fields 3>`) counts within the unit compiled, which differs
-    // between a lazy function's compile and its script's: left out.
+    // The captured bindings by name (privileged code keeps no names).
     use crate::heap::cells::U32Array;
     let len: u32 = d.names.get().map_or(0, |n| a.get(n, U32Array::LEN));
     for i in locals..locals + u32::from(caps) {
         match d.names.get().filter(|_| i < len) {
             Some(n) => {
                 let name = h.atom_name(Atom::from_id(a.read(U32Array::DATA.at(n, i))));
-                f.str(synthetic_kind(&name).unwrap_or(&name));
+                f.str(&name);
             }
             None => f.str("<no name>"),
         }
     }
     f.0
-}
-
-/// `<fields 3>` as `<fields`: a synthetic binding without its number.
-fn synthetic_kind(name: &str) -> Option<&str> {
-    let rest = name.strip_prefix('<')?.strip_suffix('>')?;
-    let (kind, n) = rest.rsplit_once(' ')?;
-    n.bytes()
-        .all(|b| b.is_ascii_digit())
-        .then(|| &name[..kind.len() + 1])
 }

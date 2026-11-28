@@ -14,16 +14,11 @@ doctest = false
 djs-libm = { path = "../djs-libm" }
 
 [features]
-default = ["unicode", "lazy", "embed", "snapshot"]
+default = ["unicode", "embed", "snapshot"]
 # Logical snapshots (0300, 0301, D3700): `Vm::snapshot`/`Vm::from_snapshot`, a waiting VM
 # as a graph of named-field records keyed by bytecode hashes: djs's persistence format.
 # Code only (not in the build hash).
 snapshot = ["intrinsic-names"]
-# Lazy function compilation (0218, D2990): with `VmOptions::lazy_functions`, a function
-# body is compiled at its first call; the load still parses everything. Code only: a
-# build without it treats a lazy template as corrupt bytecode, and `Vm::seal` compiles
-# them all first.
-lazy = []
 # What Rust hosts (djs-embed) use beyond the wasm modules' needs (D3175, D3180): the
 # outbound wire encoder (`wire::encode`), the wire format's uncounted UTF-8 strings,
 # `ExecOptions::fatal_out_of_memory`, and ES modules (D3171: the module goal, the loader,

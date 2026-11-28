@@ -19,11 +19,9 @@ fn vm() -> Vm {
             vm.bytes().to_vec()
         };
     }
-    let opts = VmOptions {
-        lazy_functions: true,
-        ..VmOptions::default()
-    };
-    let mut vm = BASE.with(|b| Vm::from_base(b, opts)).unwrap();
+    let mut vm = BASE
+        .with(|b| Vm::from_base(b, VmOptions::default()))
+        .unwrap();
     vm.set_elastic_stack(true);
     vm
 }
@@ -128,7 +126,7 @@ fn handed_over_tables_change_nothing() {
     .chain(
         [
             // Run-time compiles of sources and patterns made at run time: new RegExp,
-            // eval, Function, a lazy function inside eval, RegExp through String methods.
+            // eval, Function, a function inside eval, RegExp through String methods.
             "new RegExp(b + 'p{Nd}+', 'u').exec('x123y')[0]",
             "eval('/' + b + 'P{L}/u.test(\"1\")')",
             "new Function('s', 'return /' + b + 'p{Emoji}/u.test(s)')('😀')",

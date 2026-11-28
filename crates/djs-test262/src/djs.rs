@@ -46,8 +46,6 @@ const SETUP: &str = "$262.evalScript = function evalScript(src) { return $262.__
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Djs {
     pub fuel: u64,
-    /// Lazy functions (`--lazy`, `VmOptions::lazy_functions`, D2990).
-    pub lazy: bool,
     /// A collection at every safepoint (`--gc-stress`, D3440).
     pub gc_stress: bool,
 }
@@ -56,7 +54,6 @@ impl Default for Djs {
     fn default() -> Djs {
         Djs {
             fuel: DEFAULT_FUEL,
-            lazy: false,
             gc_stress: false,
         }
     }
@@ -106,8 +103,6 @@ impl Djs {
                 gc_stress: self.gc_stress,
                 ..Default::default()
             },
-            #[cfg(feature = "lazy")]
-            lazy_functions: self.lazy,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

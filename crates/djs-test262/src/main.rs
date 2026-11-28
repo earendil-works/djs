@@ -37,8 +37,6 @@ list options:
 
 run options:
   --engine NAME       qjs (default) or djs (in-process)
-  --lazy              djs only: compile functions at their first call
-                      (VmOptions::lazy_functions, D2990)
   --gc-stress         djs only: collect garbage at every safepoint (D3440)
   --exclude FILTER    leave out the tests a filter selects (repeatable)
   --exclude-from FILE --exclude for each line of FILE (`#` starts a comment)
@@ -75,7 +73,6 @@ struct Args {
     test262: Option<PathBuf>,
     config: PathBuf,
     paths: bool,
-    lazy: bool,
     gc_stress: bool,
     shard: Option<(usize, usize)>,
     excludes: Vec<String>,
@@ -118,7 +115,6 @@ fn parse_args() -> Result<Args, String> {
         test262: None,
         config: suite::workspace_root().join("tests/test262.toml"),
         paths: false,
-        lazy: false,
         gc_stress: false,
         shard: None,
         excludes: Vec::new(),
@@ -160,7 +156,6 @@ fn parse_args() -> Result<Args, String> {
                 let n: f64 = v.parse().map_err(|_| format!("--fuel: bad number `{v}`"))?;
                 args.fuel = Some(n as u64);
             }
-            "--lazy" if cfg!(feature = "lazy") => args.lazy = true,
             "--gc-stress" => args.gc_stress = true,
             "--exclude" => args.excludes.push(value(&a)?),
             "--exclude-from" => {
@@ -333,7 +328,6 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             })
         }
         "djs" => Box::new(djs_test262::djs::Djs {
-            lazy: args.lazy,
             gc_stress: args.gc_stress,
             fuel: args.fuel.unwrap_or(djs_test262::djs::DEFAULT_FUEL),
         }),
