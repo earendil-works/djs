@@ -125,7 +125,7 @@ incompatible change to the operations, and the `Sandbox` checks it.
 
 ## The operations
 
-The shipped module has <!--n wasm/ops-->60<!--/n--> operations. By area:
+The shipped module has <!--n wasm/ops-->57<!--/n--> operations. By area:
 
 | area | operations |
 | --- | --- |
@@ -360,7 +360,7 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->511 KB<!--/n--> with gzip |
+| shipped | `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host, the ones that persist runs and the ones that never do: <!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->498 KB<!--/n--> with gzip |
 | docs module | `docs` | this site's live examples: `djs_disasm`, the bytecode listing an edited example shows; `djs_snapshot_describe` and `vm_call_site`, what a paused example says about its snapshot and where it waits |
 
 Every module has snapshots. What only people read about a snapshot, its description and

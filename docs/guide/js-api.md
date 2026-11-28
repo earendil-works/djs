@@ -20,7 +20,7 @@ npm install @earendil-works/djs
 ```
 
 The package has no dependencies and carries the wasm module itself: one module,
-<!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->511 KB<!--/n--> with gzip, which every host uses, the
+<!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->498 KB<!--/n--> with gzip, which every host uses, the
 ones that persist runs and the ones that never do, because it has
 [snapshots](persistence.md). It runs in node 20 or newer, Bun, Deno, browsers and web
 workers: the module has no imports, so it runs in any wasm runtime. The package has one

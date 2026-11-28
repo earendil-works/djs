@@ -45,6 +45,6 @@ const count = await sandbox.runAsync(
 
 djs is written in `no_std` Rust and behaves like QuickJS, down to its error messages. It
 passes <!--n test262/passed-->39,325<!--/n--> of the <!--n test262/active-->39,365<!--/n-->
-test262 tests it targets, and its wasm module is <!--n wasm/brotli kb-->428 KB<!--/n-->
+test262 tests it targets, and its wasm module is <!--n wasm/brotli kb-->418 KB<!--/n-->
 with brotli. [What djs is](introduction.md) is the place to start;
 [the JavaScript interface](js-api.md) shows how to embed it.

@@ -56,10 +56,10 @@ Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 ## Size
 
 <!-- gen:status size -->
-`djs_wasm.wasm`, the one module djs ships, is 1,193 KB (511 KB gzip, 428 KB brotli):
-1,016 KB of code, 79 KB of data, and the base snapshot (the initialized realm with all
+`djs_wasm.wasm`, the one module djs ships, is 1,161 KB (498 KB gzip, 418 KB brotli): 986
+KB of code, 79 KB of data, and the base snapshot (the initialized realm with all
 builtins, 191 KB) coded to 45 KB in a custom section. Module sizes measured at
-5de0990ce6-dirty, 2026-11-27.
+0f27ab975f, 2026-11-28.
 <!-- /gen -->
 
 ## The engine in numbers
@@ -132,13 +132,13 @@ instructions.
 | `startup/sandbox-run-us` | 85.7 | eff46ec6ce, 2026-11-21 |
 | `startup/sandbox-us` | 62.2 | eff46ec6ce, 2026-11-21 |
 | `startup/vm-new-us` | 2.7 | eff46ec6ce, 2026-11-21 |
-| `wasm/base-coded` | 45122 | 5de0990ce6-dirty, 2026-11-27 |
-| `wasm/brotli` | 428076 | 5de0990ce6-dirty, 2026-11-27 |
-| `wasm/bytes` | 1192832 | 5de0990ce6-dirty, 2026-11-27 |
-| `wasm/code` | 1016347 | 5de0990ce6-dirty, 2026-11-27 |
-| `wasm/data` | 79380 | 5de0990ce6-dirty, 2026-11-27 |
-| `wasm/gzip` | 510652 | 5de0990ce6-dirty, 2026-11-27 |
-| `wasm/ops` | 60 | 5de0990ce6-dirty, 2026-11-27 |
+| `wasm/base-coded` | 44904 | 0f27ab975f, 2026-11-28 |
+| `wasm/brotli` | 418296 | 0f27ab975f, 2026-11-28 |
+| `wasm/bytes` | 1161233 | 0f27ab975f, 2026-11-28 |
+| `wasm/code` | 985655 | 0f27ab975f, 2026-11-28 |
+| `wasm/data` | 78748 | 0f27ab975f, 2026-11-28 |
+| `wasm/gzip` | 498108 | 0f27ab975f, 2026-11-28 |
+| `wasm/ops` | 57 | 0f27ab975f, 2026-11-28 |
 | `wire/decode-vs-json-objects` | 2.16 | ab471c4906, 2026-11-21 |
 | `wire/decode-vs-json-string` | 2.81 | ab471c4906, 2026-11-21 |
 | `wire/read-vs-json-objects` | 1.52 | ab471c4906, 2026-11-21 |
