@@ -192,6 +192,10 @@ access fault.
 
 ## Where to look
 
+- [Runaway scripts](benchmarks.md#runaway-scripts) on the benchmarks page: the same
+  endless loops, exhausted heaps and deep recursions run on djs and the other engines
+  under one budget, with what ended each run, when, and whether the script could catch it.
+
 - [`crates/djs-core/src/interp/run.rs`](../../crates/djs-core/src/interp/run.rs): the
   run loop, fuel and its debt, the stack limit.
 - [`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs): the cap
