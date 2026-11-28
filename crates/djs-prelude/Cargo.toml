@@ -11,7 +11,7 @@ description = "The base snapshot: djs-core's realm with the prelude installed, m
 doctest = false
 
 [features]
-default = ["raw", "registry", "unicode", "embed"]
+default = ["raw", "unicode", "embed"]
 # djs-core's features, for the base image this crate builds: its build script's djs-core
 # must have the same as the library's (a build-dependency resolves its features on its
 # own), which lib.rs checks by the build hash.
@@ -25,9 +25,6 @@ raw = []
 # `BASE_PACKED`, the image coded with djs-lzrc (D2252): djs-wasm, where the module's size
 # counts (D020); `unpack_base` decodes it once.
 packed = ["dep:djs-lzrc"]
-# The builtin registry (D2371, tests/builtins/registry.tsv) with this build's base offsets:
-# tools and native hosts. Off in djs-wasm, whose size counts.
-registry = []
 
 [dependencies]
 djs-core = { path = "../djs-core", default-features = false }

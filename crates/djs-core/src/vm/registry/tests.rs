@@ -73,19 +73,14 @@ fn update_drops_the_gone_and_appends_the_new() {
     let before = reg.clone();
     assert_eq!(reg.update(heap), Update::default());
     assert_eq!(reg, before);
-    // An entry that no longer resolves is dropped, and the ones after it move up.
-    let map = reg.id_of(EntryKind::Value, "Array.prototype.map").unwrap();
+    // An entry that no longer resolves is dropped; the others keep their order.
     reg.entries.insert(
         0,
         Entry {
-            id: 0,
             kind: EntryKind::Value,
             path: "Array.prototype.noSuchMethod".into(),
         },
     );
-    for (i, e) in reg.entries.iter_mut().enumerate() {
-        e.id = i as u32;
-    }
     let problems = reg.check(heap);
     assert_eq!(problems.len(), 1, "{problems:?}");
     let u = reg.update(heap);
@@ -95,26 +90,21 @@ fn update_drops_the_gone_and_appends_the_new() {
     );
     assert!(u.added.is_empty());
     assert_eq!(reg, before);
-    assert_eq!(
-        reg.id_of(EntryKind::Value, "Array.prototype.map"),
-        Some(map)
-    );
     // The text round-trips.
     let text = reg.to_text();
     assert_eq!(Registry::parse(&text).unwrap(), reg);
 }
 
 #[test]
-fn ids_name_cells_and_intrinsics() {
+fn name_cells_and_intrinsics() {
     let vm = vm();
     let heap = vm.heap();
     let mut reg = Registry::default();
     reg.update(heap);
-    let map = reg.id_of(EntryKind::Value, "Array.prototype.map").unwrap();
     let cells = reg.name_cells(heap);
     let cell = cells
         .iter()
-        .find(|(_, id)| **id == map)
+        .find(|(_, p)| **p == "Array.prototype.map")
         .map(|(c, _)| *c)
         .unwrap();
     let mut r = Resolver::new(heap);
@@ -122,19 +112,18 @@ fn ids_name_cells_and_intrinsics() {
         r.resolve("Array.prototype.map").and_then(cell_of),
         Some(cell)
     );
-    // An alias gets no entry of its own: the object keeps its id.
-    assert!(reg.id_of(EntryKind::Value, "globalThis.Array").is_none());
-    let ids = reg.intrinsic_ids();
-    assert_eq!(ids.len(), crate::bytecode::intrinsics::INTRINSICS.len());
-    assert!(ids.iter().all(Option::is_some));
+    // An alias gets no entry of its own.
+    assert!(!reg.has(EntryKind::Value, "globalThis.Array"));
+    assert!(crate::bytecode::intrinsics::names().all(|i| reg.has(EntryKind::Intrinsic, i)));
 }
 
 #[test]
-fn parse_rejects_gaps_and_duplicates() {
-    assert!(Registry::parse("0\tvalue\tArray\n2\tvalue\tObject\n").is_err());
-    assert!(Registry::parse("0\tvalue\tArray\n1\tvalue\tArray\n").is_err());
-    assert!(Registry::parse("0\tvalue\tArray\tremoved: x\n").is_err());
-    assert!(Registry::parse("0\tthing\tArray\n").is_err());
+fn parse_rejects_duplicates_and_bad_lines() {
+    assert!(Registry::parse("value\tArray\nvalue\tArray\n").is_err());
+    assert!(Registry::parse("value\tArray\tremoved: x\n").is_err());
+    assert!(Registry::parse("thing\tArray\n").is_err());
+    assert!(Registry::parse("0\tvalue\tArray\n").is_err());
+    assert!(Registry::parse("value\tArray\nintrinsic\tArray\n").is_ok());
 }
 
 /// Every object and symbol of the base realm has a name, except the realm's own state

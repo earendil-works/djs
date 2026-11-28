@@ -433,20 +433,20 @@ default: its loops over dense arrays already run in leaf intrinsics.
 ## Builtins by name: the builtin registry
 
 Offsets, intrinsic ids and the base image's layout change from build to build: a new
-builtin shifts every cell after it. Tools that print or compare builtins, such as the
-heap analyzer, name them by their *registry* entry instead. Every builtin object,
+builtin shifts every cell after it. Snapshots and the tools that print or compare
+builtins, such as the heap analyzer, name them by their *registry* path instead. Every builtin object,
 function and symbol of the base realm, and every intrinsic, has an entry there, keyed by a
 path in the spec's style:
 
 ```text
-0     value      globalThis
-2     value      Array
-267   value      Array.prototype.map
-431   value      get Map.prototype.size
-538   value      %ArrayIteratorPrototype%
-687   value      %intrinsic:PromiseResolveFunction%   (the prelude function behind it)
-1180  value      %prelude:SameValueZero%              (a prelude helper builtins call)
-1120  intrinsic  PromiseResolveFunction               (the intrinsic, by name)
+value      globalThis
+value      Array
+value      Array.prototype.map
+value      get Map.prototype.size
+value      %ArrayIteratorPrototype%
+value      %intrinsic:PromiseResolveFunction%   (the prelude function behind it)
+value      %prelude:SameValueZero%              (a prelude helper builtins call)
+intrinsic  PromiseResolveFunction               (the intrinsic, by name)
 ```
 
 A path walks from `globalThis`, a global, a realm intrinsic that no global reaches
@@ -455,19 +455,16 @@ a helper in the realm's prelude function table, by its source name (`%prelude:Na
 through properties (`.key`, `[Symbol.iterator]`) and `.[[Prototype]]`. A new builtin gets
 the first path a breadth-first walk finds, so the paths read like the spec wherever the
 spec has a name, and a builtin reached by a second path keeps its first entry (the other
-paths are aliases). The number in front is the entry's position: it names a builtin
-within one build, and the path is the name that stays.
+paths are aliases). The path is the name that stays from build to build.
 
 The table is a committed file,
 [`tests/builtins/registry.tsv`](../../tests/builtins/registry.tsv), so that a change that
 adds or removes a builtin shows in review. `scripts/registry-update.sh` drops the
 entries of removed builtins and appends new ones, keeping the order of the rest. Tests
-fail when a builtin has no entry or an entry does not resolve. At build time the base
-image gets a table from positions to cell offsets
-([`crates/djs-prelude/src/registry.rs`](../../crates/djs-prelude/src/registry.rs)); for
-any other heap the paths are resolved on that heap
+fail when a builtin has no entry or an entry does not resolve. The paths are resolved
+on the heap at hand
 ([`crates/djs-core/src/vm/registry.rs`](../../crates/djs-core/src/vm/registry.rs)). The
-heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
+heap analyzer prints builtins by their paths (`%Array.prototype.map%`).
 
 > **Trade-off.** Paths over generated names. A path is what a reader recognizes and
 > what the spec prints, and it is checked by resolving it. Helpers that no property

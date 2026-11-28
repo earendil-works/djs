@@ -27,9 +27,8 @@ fn main() {
             for (kind, path) in &u.removed {
                 println!("removed {kind:?} {path}");
             }
-            for id in &u.added {
-                let e = &reg.entries[*id as usize];
-                println!("added {} {:?} {}", e.id, e.kind, e.path);
+            for (kind, path) in &u.added {
+                println!("added {kind:?} {path}");
             }
             std::fs::write(FILE, reg.to_text()).expect("cannot write the registry");
             println!(

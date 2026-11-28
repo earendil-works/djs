@@ -1,1454 +1,1453 @@
 # The builtin registry (D2371, D3644): every builtin and intrinsic by path. Never edit by
 # hand: `scripts/registry-update.sh` drops removed builtins and appends new ones. Columns:
-# id (the position, which names a builtin within one build), kind (value: an object or
-# symbol by path; intrinsic: by name), path.
-0	value	globalThis
-1	value	AggregateError
-2	value	Array
-3	value	ArrayBuffer
-4	value	AsyncDisposableStack
-5	value	BigInt
-6	value	BigInt64Array
-7	value	BigUint64Array
-8	value	Boolean
-9	value	DOMException
-10	value	DataView
-11	value	Date
-12	value	DisposableStack
-13	value	Error
-14	value	EvalError
-15	value	FinalizationRegistry
-16	value	Float16Array
-17	value	Float32Array
-18	value	Float64Array
-19	value	Function
-20	value	Int16Array
-21	value	Int32Array
-22	value	Int8Array
-23	value	InternalError
-24	value	Iterator
-25	value	JSON
-26	value	Map
-27	value	Math
-28	value	Number
-29	value	Object
-30	value	Promise
-31	value	Proxy
-32	value	RangeError
-33	value	ReferenceError
-34	value	Reflect
-35	value	RegExp
-36	value	Set
-37	value	String
-38	value	SuppressedError
-39	value	Symbol
-40	value	SyntaxError
-41	value	TypeError
-42	value	URIError
-43	value	Uint16Array
-44	value	Uint32Array
-45	value	Uint8Array
-46	value	Uint8ClampedArray
-47	value	WeakMap
-48	value	WeakRef
-49	value	WeakSet
-50	value	atob
-51	value	btoa
-52	value	decodeURI
-53	value	decodeURIComponent
-54	value	encodeURI
-55	value	encodeURIComponent
-56	value	escape
-57	value	eval
-58	value	isFinite
-59	value	isNaN
-60	value	parseFloat
-61	value	parseInt
-62	value	queueMicrotask
-63	value	unescape
-64	value	AggregateError.prototype
-65	value	Array.from
-66	value	Array.fromAsync
-67	value	Array.isArray
-68	value	Array.of
-69	value	Array.prototype
-70	value	get Array[Symbol.species]
-71	value	ArrayBuffer.isView
-72	value	ArrayBuffer.prototype
-73	value	get ArrayBuffer[Symbol.species]
-74	value	AsyncDisposableStack.prototype
-75	value	BigInt.asIntN
-76	value	BigInt.asUintN
-77	value	BigInt.prototype
-78	value	BigInt64Array.prototype
-79	value	BigUint64Array.prototype
-80	value	Boolean.prototype
-81	value	DOMException.prototype
-82	value	DataView.prototype
-83	value	Date.UTC
-84	value	Date.now
-85	value	Date.parse
-86	value	Date.prototype
-87	value	DisposableStack.prototype
-88	value	Error.captureStackTrace
-89	value	Error.isError
-90	value	Error.prototype
-91	value	EvalError.prototype
-92	value	FinalizationRegistry.prototype
-93	value	Float16Array.prototype
-94	value	Float32Array.prototype
-95	value	Float64Array.prototype
-96	value	Function.prototype
-97	value	Int16Array.prototype
-98	value	Int32Array.prototype
-99	value	Int8Array.prototype
-100	value	InternalError.prototype
-101	value	Iterator.concat
-102	value	Iterator.from
-103	value	Iterator.prototype
-104	value	Iterator.zip
-105	value	Iterator.zipKeyed
-106	value	JSON.isRawJSON
-107	value	JSON.parse
-108	value	JSON.rawJSON
-109	value	JSON.stringify
-110	value	Map.groupBy
-111	value	Map.prototype
-112	value	get Map[Symbol.species]
-113	value	Math.abs
-114	value	Math.acos
-115	value	Math.acosh
-116	value	Math.asin
-117	value	Math.asinh
-118	value	Math.atan
-119	value	Math.atan2
-120	value	Math.atanh
-121	value	Math.cbrt
-122	value	Math.ceil
-123	value	Math.clz32
-124	value	Math.cos
-125	value	Math.cosh
-126	value	Math.exp
-127	value	Math.expm1
-128	value	Math.f16round
-129	value	Math.floor
-130	value	Math.fround
-131	value	Math.hypot
-132	value	Math.imul
-133	value	Math.log
-134	value	Math.log10
-135	value	Math.log1p
-136	value	Math.log2
-137	value	Math.max
-138	value	Math.min
-139	value	Math.pow
-140	value	Math.random
-141	value	Math.round
-142	value	Math.sign
-143	value	Math.sin
-144	value	Math.sinh
-145	value	Math.sqrt
-146	value	Math.sumPrecise
-147	value	Math.tan
-148	value	Math.tanh
-149	value	Math.trunc
-150	value	Number.isFinite
-151	value	Number.isInteger
-152	value	Number.isNaN
-153	value	Number.isSafeInteger
-154	value	Number.prototype
-155	value	Object.assign
-156	value	Object.create
-157	value	Object.defineProperties
-158	value	Object.defineProperty
-159	value	Object.entries
-160	value	Object.freeze
-161	value	Object.fromEntries
-162	value	Object.getOwnPropertyDescriptor
-163	value	Object.getOwnPropertyDescriptors
-164	value	Object.getOwnPropertyNames
-165	value	Object.getOwnPropertySymbols
-166	value	Object.getPrototypeOf
-167	value	Object.groupBy
-168	value	Object.hasOwn
-169	value	Object.is
-170	value	Object.isExtensible
-171	value	Object.isFrozen
-172	value	Object.isSealed
-173	value	Object.keys
-174	value	Object.preventExtensions
-175	value	Object.prototype
-176	value	Object.seal
-177	value	Object.setPrototypeOf
-178	value	Object.values
-179	value	Promise.all
-180	value	Promise.allKeyed
-181	value	Promise.allSettled
-182	value	Promise.allSettledKeyed
-183	value	Promise.any
-184	value	Promise.prototype
-185	value	Promise.race
-186	value	Promise.reject
-187	value	Promise.resolve
-188	value	Promise.try
-189	value	Promise.withResolvers
-190	value	get Promise[Symbol.species]
-191	value	Proxy.revocable
-192	value	RangeError.prototype
-193	value	ReferenceError.prototype
-194	value	Reflect.apply
-195	value	Reflect.construct
-196	value	Reflect.defineProperty
-197	value	Reflect.deleteProperty
-198	value	Reflect.get
-199	value	Reflect.getOwnPropertyDescriptor
-200	value	Reflect.getPrototypeOf
-201	value	Reflect.has
-202	value	Reflect.isExtensible
-203	value	Reflect.ownKeys
-204	value	Reflect.preventExtensions
-205	value	Reflect.set
-206	value	Reflect.setPrototypeOf
-207	value	RegExp.escape
-208	value	RegExp.prototype
-209	value	get RegExp[Symbol.species]
-210	value	Set.prototype
-211	value	get Set[Symbol.species]
-212	value	String.fromCharCode
-213	value	String.fromCodePoint
-214	value	String.prototype
-215	value	String.raw
-216	value	SuppressedError.prototype
-217	value	Symbol.asyncDispose
-218	value	Symbol.asyncIterator
-219	value	Symbol.dispose
-220	value	Symbol.for
-221	value	Symbol.hasInstance
-222	value	Symbol.isConcatSpreadable
-223	value	Symbol.iterator
-224	value	Symbol.keyFor
-225	value	Symbol.match
-226	value	Symbol.matchAll
-227	value	Symbol.metadata
-228	value	Symbol.prototype
-229	value	Symbol.replace
-230	value	Symbol.search
-231	value	Symbol.species
-232	value	Symbol.split
-233	value	Symbol.toPrimitive
-234	value	Symbol.toStringTag
-235	value	Symbol.unscopables
-236	value	SyntaxError.prototype
-237	value	TypeError.prototype
-238	value	URIError.prototype
-239	value	Uint16Array.prototype
-240	value	Uint32Array.prototype
-241	value	Uint8Array.fromBase64
-242	value	Uint8Array.fromHex
-243	value	Uint8Array.prototype
-244	value	Uint8ClampedArray.prototype
-245	value	WeakMap.prototype
-246	value	WeakRef.prototype
-247	value	WeakSet.prototype
-248	value	Array.prototype.at
-249	value	Array.prototype.concat
-250	value	Array.prototype.copyWithin
-251	value	Array.prototype.entries
-252	value	Array.prototype.every
-253	value	Array.prototype.fill
-254	value	Array.prototype.filter
-255	value	Array.prototype.find
-256	value	Array.prototype.findIndex
-257	value	Array.prototype.findLast
-258	value	Array.prototype.findLastIndex
-259	value	Array.prototype.flat
-260	value	Array.prototype.flatMap
-261	value	Array.prototype.forEach
-262	value	Array.prototype.includes
-263	value	Array.prototype.indexOf
-264	value	Array.prototype.join
-265	value	Array.prototype.keys
-266	value	Array.prototype.lastIndexOf
-267	value	Array.prototype.map
-268	value	Array.prototype.pop
-269	value	Array.prototype.push
-270	value	Array.prototype.reduce
-271	value	Array.prototype.reduceRight
-272	value	Array.prototype.reverse
-273	value	Array.prototype.shift
-274	value	Array.prototype.slice
-275	value	Array.prototype.some
-276	value	Array.prototype.sort
-277	value	Array.prototype.splice
-278	value	Array.prototype.toLocaleString
-279	value	Array.prototype.toReversed
-280	value	Array.prototype.toSorted
-281	value	Array.prototype.toSpliced
-282	value	Array.prototype.toString
-283	value	Array.prototype.unshift
-284	value	Array.prototype.values
-285	value	Array.prototype.with
-286	value	Array.prototype[Symbol.unscopables]
-287	value	ArrayBuffer.prototype.resize
-288	value	ArrayBuffer.prototype.slice
-289	value	ArrayBuffer.prototype.sliceToImmutable
-290	value	ArrayBuffer.prototype.transfer
-291	value	ArrayBuffer.prototype.transferToFixedLength
-292	value	ArrayBuffer.prototype.transferToImmutable
-293	value	get ArrayBuffer.prototype.byteLength
-294	value	get ArrayBuffer.prototype.detached
-295	value	get ArrayBuffer.prototype.immutable
-296	value	get ArrayBuffer.prototype.maxByteLength
-297	value	get ArrayBuffer.prototype.resizable
-298	value	AsyncDisposableStack.prototype.adopt
-299	value	AsyncDisposableStack.prototype.defer
-300	value	AsyncDisposableStack.prototype.disposeAsync
-301	value	AsyncDisposableStack.prototype.move
-302	value	AsyncDisposableStack.prototype.use
-303	value	get AsyncDisposableStack.prototype.disposed
-304	value	BigInt.prototype.toLocaleString
-305	value	BigInt.prototype.toString
-306	value	BigInt.prototype.valueOf
-307	value	Boolean.prototype.toString
-308	value	Boolean.prototype.valueOf
-309	value	get DOMException.prototype.code
-310	value	get DOMException.prototype.message
-311	value	get DOMException.prototype.name
-312	value	DataView.prototype.getBigInt64
-313	value	DataView.prototype.getBigUint64
-314	value	DataView.prototype.getFloat16
-315	value	DataView.prototype.getFloat32
-316	value	DataView.prototype.getFloat64
-317	value	DataView.prototype.getInt16
-318	value	DataView.prototype.getInt32
-319	value	DataView.prototype.getInt8
-320	value	DataView.prototype.getUint16
-321	value	DataView.prototype.getUint32
-322	value	DataView.prototype.getUint8
-323	value	DataView.prototype.setBigInt64
-324	value	DataView.prototype.setBigUint64
-325	value	DataView.prototype.setFloat16
-326	value	DataView.prototype.setFloat32
-327	value	DataView.prototype.setFloat64
-328	value	DataView.prototype.setInt16
-329	value	DataView.prototype.setInt32
-330	value	DataView.prototype.setInt8
-331	value	DataView.prototype.setUint16
-332	value	DataView.prototype.setUint32
-333	value	DataView.prototype.setUint8
-334	value	get DataView.prototype.buffer
-335	value	get DataView.prototype.byteLength
-336	value	get DataView.prototype.byteOffset
-337	value	Date.prototype.getDate
-338	value	Date.prototype.getDay
-339	value	Date.prototype.getFullYear
-340	value	Date.prototype.getHours
-341	value	Date.prototype.getMilliseconds
-342	value	Date.prototype.getMinutes
-343	value	Date.prototype.getMonth
-344	value	Date.prototype.getSeconds
-345	value	Date.prototype.getTime
-346	value	Date.prototype.getTimezoneOffset
-347	value	Date.prototype.getUTCDate
-348	value	Date.prototype.getUTCDay
-349	value	Date.prototype.getUTCFullYear
-350	value	Date.prototype.getUTCHours
-351	value	Date.prototype.getUTCMilliseconds
-352	value	Date.prototype.getUTCMinutes
-353	value	Date.prototype.getUTCMonth
-354	value	Date.prototype.getUTCSeconds
-355	value	Date.prototype.getYear
-356	value	Date.prototype.setDate
-357	value	Date.prototype.setFullYear
-358	value	Date.prototype.setHours
-359	value	Date.prototype.setMilliseconds
-360	value	Date.prototype.setMinutes
-361	value	Date.prototype.setMonth
-362	value	Date.prototype.setSeconds
-363	value	Date.prototype.setTime
-364	value	Date.prototype.setUTCDate
-365	value	Date.prototype.setUTCFullYear
-366	value	Date.prototype.setUTCHours
-367	value	Date.prototype.setUTCMilliseconds
-368	value	Date.prototype.setUTCMinutes
-369	value	Date.prototype.setUTCMonth
-370	value	Date.prototype.setUTCSeconds
-371	value	Date.prototype.toDateString
-372	value	Date.prototype.toGMTString
-373	value	Date.prototype.toISOString
-374	value	Date.prototype.toJSON
-375	value	Date.prototype.toLocaleDateString
-376	value	Date.prototype.toLocaleString
-377	value	Date.prototype.toLocaleTimeString
-378	value	Date.prototype.toString
-379	value	Date.prototype.toTimeString
-380	value	Date.prototype.valueOf
-381	value	Date.prototype[Symbol.toPrimitive]
-382	value	DisposableStack.prototype.adopt
-383	value	DisposableStack.prototype.defer
-384	value	DisposableStack.prototype.dispose
-385	value	DisposableStack.prototype.move
-386	value	DisposableStack.prototype.use
-387	value	get DisposableStack.prototype.disposed
-388	value	Error.prototype.toString
-389	value	get Error.prototype.stack
-390	value	set Error.prototype.stack
-391	value	FinalizationRegistry.prototype.register
-392	value	FinalizationRegistry.prototype.unregister
-393	value	Function.prototype.apply
-394	value	Function.prototype.bind
-395	value	Function.prototype.call
-396	value	Function.prototype.toString
-397	value	Function.prototype[Symbol.hasInstance]
-398	value	get Function.prototype.arguments
-399	value	Iterator.prototype.chunks
-400	value	Iterator.prototype.drop
-401	value	Iterator.prototype.every
-402	value	Iterator.prototype.filter
-403	value	Iterator.prototype.find
-404	value	Iterator.prototype.flatMap
-405	value	Iterator.prototype.forEach
-406	value	Iterator.prototype.includes
-407	value	Iterator.prototype.join
-408	value	Iterator.prototype.map
-409	value	Iterator.prototype.reduce
-410	value	Iterator.prototype.some
-411	value	Iterator.prototype.take
-412	value	Iterator.prototype.toArray
-413	value	Iterator.prototype.windows
-414	value	Iterator.prototype[Symbol.dispose]
-415	value	Iterator.prototype[Symbol.iterator]
-416	value	get Iterator.prototype.constructor
-417	value	get Iterator.prototype[Symbol.toStringTag]
-418	value	set Iterator.prototype.constructor
-419	value	set Iterator.prototype[Symbol.toStringTag]
-420	value	Map.prototype.clear
-421	value	Map.prototype.delete
-422	value	Map.prototype.entries
-423	value	Map.prototype.forEach
-424	value	Map.prototype.get
-425	value	Map.prototype.getOrInsert
-426	value	Map.prototype.getOrInsertComputed
-427	value	Map.prototype.has
-428	value	Map.prototype.keys
-429	value	Map.prototype.set
-430	value	Map.prototype.values
-431	value	get Map.prototype.size
-432	value	Number.prototype.toExponential
-433	value	Number.prototype.toFixed
-434	value	Number.prototype.toLocaleString
-435	value	Number.prototype.toPrecision
-436	value	Number.prototype.toString
-437	value	Number.prototype.valueOf
-438	value	Object.prototype.hasOwnProperty
-439	value	Object.prototype.isPrototypeOf
-440	value	Object.prototype.propertyIsEnumerable
-441	value	Object.prototype.toLocaleString
-442	value	Object.prototype.toString
-443	value	Object.prototype.valueOf
-444	value	get Object.prototype.__proto__
-445	value	set Object.prototype.__proto__
-446	value	Promise.prototype.catch
-447	value	Promise.prototype.finally
-448	value	Promise.prototype.then
-449	value	RegExp.prototype.exec
-450	value	RegExp.prototype.test
-451	value	RegExp.prototype.toString
-452	value	RegExp.prototype[Symbol.matchAll]
-453	value	RegExp.prototype[Symbol.match]
-454	value	RegExp.prototype[Symbol.replace]
-455	value	RegExp.prototype[Symbol.search]
-456	value	RegExp.prototype[Symbol.split]
-457	value	get RegExp.prototype.dotAll
-458	value	get RegExp.prototype.flags
-459	value	get RegExp.prototype.global
-460	value	get RegExp.prototype.hasIndices
-461	value	get RegExp.prototype.ignoreCase
-462	value	get RegExp.prototype.multiline
-463	value	get RegExp.prototype.source
-464	value	get RegExp.prototype.sticky
-465	value	get RegExp.prototype.unicode
-466	value	get RegExp.prototype.unicodeSets
-467	value	Set.prototype.add
-468	value	Set.prototype.clear
-469	value	Set.prototype.delete
-470	value	Set.prototype.difference
-471	value	Set.prototype.entries
-472	value	Set.prototype.forEach
-473	value	Set.prototype.has
-474	value	Set.prototype.intersection
-475	value	Set.prototype.isDisjointFrom
-476	value	Set.prototype.isSubsetOf
-477	value	Set.prototype.isSupersetOf
-478	value	Set.prototype.keys
-479	value	Set.prototype.symmetricDifference
-480	value	Set.prototype.union
-481	value	get Set.prototype.size
-482	value	String.prototype.at
-483	value	String.prototype.charAt
-484	value	String.prototype.charCodeAt
-485	value	String.prototype.codePointAt
-486	value	String.prototype.concat
-487	value	String.prototype.endsWith
-488	value	String.prototype.includes
-489	value	String.prototype.indexOf
-490	value	String.prototype.isWellFormed
-491	value	String.prototype.lastIndexOf
-492	value	String.prototype.localeCompare
-493	value	String.prototype.match
-494	value	String.prototype.matchAll
-495	value	String.prototype.normalize
-496	value	String.prototype.padEnd
-497	value	String.prototype.padStart
-498	value	String.prototype.repeat
-499	value	String.prototype.replace
-500	value	String.prototype.replaceAll
-501	value	String.prototype.search
-502	value	String.prototype.slice
-503	value	String.prototype.split
-504	value	String.prototype.startsWith
-505	value	String.prototype.substr
-506	value	String.prototype.substring
-507	value	String.prototype.toLocaleLowerCase
-508	value	String.prototype.toLocaleUpperCase
-509	value	String.prototype.toLowerCase
-510	value	String.prototype.toString
-511	value	String.prototype.toUpperCase
-512	value	String.prototype.toWellFormed
-513	value	String.prototype.trim
-514	value	String.prototype.trimEnd
-515	value	String.prototype.trimLeft
-516	value	String.prototype.valueOf
-517	value	String.prototype[Symbol.iterator]
-518	value	Symbol.prototype.toString
-519	value	Symbol.prototype.valueOf
-520	value	Symbol.prototype[Symbol.toPrimitive]
-521	value	get Symbol.prototype.description
-522	value	Uint8Array.prototype.setFromBase64
-523	value	Uint8Array.prototype.setFromHex
-524	value	Uint8Array.prototype.toBase64
-525	value	Uint8Array.prototype.toHex
-526	value	WeakMap.prototype.delete
-527	value	WeakMap.prototype.get
-528	value	WeakMap.prototype.getOrInsert
-529	value	WeakMap.prototype.getOrInsertComputed
-530	value	WeakMap.prototype.has
-531	value	WeakMap.prototype.set
-532	value	WeakRef.prototype.deref
-533	value	WeakSet.prototype.add
-534	value	WeakSet.prototype.delete
-535	value	WeakSet.prototype.has
-536	value	%OutOfMemoryError%
-537	value	%SymbolRegistry%
-538	value	%ArrayIteratorPrototype%
-539	value	%StringIteratorPrototype%
-540	value	%MapIteratorPrototype%
-541	value	%SetIteratorPrototype%
-542	value	%GeneratorPrototype%
-543	value	%TypedArray%
-544	value	%TypedArrayPrototype%
-545	value	%GeneratorFunctionPrototype%
-546	value	%AsyncFunctionPrototype%
-547	value	%AsyncGeneratorFunctionPrototype%
-548	value	%AsyncIteratorPrototype%
-549	value	%AsyncGeneratorPrototype%
-550	value	%AsyncFromSyncIteratorPrototype%
-551	value	%RegExpStringIteratorPrototype%
-552	value	%IteratorHelperPrototype%
-553	value	%WrapForValidIteratorPrototype%
-554	value	%CallSitePrototype%
-555	value	%ArrayIteratorPrototype%.next
-556	value	%StringIteratorPrototype%.next
-557	value	%MapIteratorPrototype%.next
-558	value	%SetIteratorPrototype%.next
-559	value	%GeneratorPrototype%.next
-560	value	%GeneratorPrototype%.return
-561	value	%GeneratorPrototype%.throw
-562	value	%TypedArray%.from
-563	value	%TypedArray%.of
-564	value	get %TypedArray%[Symbol.species]
-565	value	%TypedArrayPrototype%.at
-566	value	%TypedArrayPrototype%.copyWithin
-567	value	%TypedArrayPrototype%.entries
-568	value	%TypedArrayPrototype%.every
-569	value	%TypedArrayPrototype%.fill
-570	value	%TypedArrayPrototype%.filter
-571	value	%TypedArrayPrototype%.find
-572	value	%TypedArrayPrototype%.findIndex
-573	value	%TypedArrayPrototype%.findLast
-574	value	%TypedArrayPrototype%.findLastIndex
-575	value	%TypedArrayPrototype%.forEach
-576	value	%TypedArrayPrototype%.includes
-577	value	%TypedArrayPrototype%.indexOf
-578	value	%TypedArrayPrototype%.join
-579	value	%TypedArrayPrototype%.keys
-580	value	%TypedArrayPrototype%.lastIndexOf
-581	value	%TypedArrayPrototype%.map
-582	value	%TypedArrayPrototype%.reduce
-583	value	%TypedArrayPrototype%.reduceRight
-584	value	%TypedArrayPrototype%.reverse
-585	value	%TypedArrayPrototype%.set
-586	value	%TypedArrayPrototype%.slice
-587	value	%TypedArrayPrototype%.some
-588	value	%TypedArrayPrototype%.sort
-589	value	%TypedArrayPrototype%.subarray
-590	value	%TypedArrayPrototype%.toLocaleString
-591	value	%TypedArrayPrototype%.toReversed
-592	value	%TypedArrayPrototype%.toSorted
-593	value	%TypedArrayPrototype%.values
-594	value	%TypedArrayPrototype%.with
-595	value	get %TypedArrayPrototype%.buffer
-596	value	get %TypedArrayPrototype%.byteLength
-597	value	get %TypedArrayPrototype%.byteOffset
-598	value	get %TypedArrayPrototype%.length
-599	value	get %TypedArrayPrototype%[Symbol.toStringTag]
-600	value	%GeneratorFunctionPrototype%.constructor
-601	value	%AsyncFunctionPrototype%.constructor
-602	value	%AsyncGeneratorFunctionPrototype%.constructor
-603	value	%AsyncIteratorPrototype%[Symbol.asyncDispose]
-604	value	%AsyncIteratorPrototype%[Symbol.asyncIterator]
-605	value	%AsyncGeneratorPrototype%.next
-606	value	%AsyncGeneratorPrototype%.return
-607	value	%AsyncGeneratorPrototype%.throw
-608	value	%AsyncFromSyncIteratorPrototype%.next
-609	value	%AsyncFromSyncIteratorPrototype%.return
-610	value	%AsyncFromSyncIteratorPrototype%.throw
-611	value	%RegExpStringIteratorPrototype%.next
-612	value	%IteratorHelperPrototype%.next
-613	value	%IteratorHelperPrototype%.return
-614	value	%WrapForValidIteratorPrototype%.next
-615	value	%WrapForValidIteratorPrototype%.return
-616	value	%CallSitePrototype%.getColumnNumber
-617	value	%CallSitePrototype%.getFileName
-618	value	%CallSitePrototype%.getFunction
-619	value	%CallSitePrototype%.getFunctionName
-620	value	%CallSitePrototype%.getLineNumber
-621	value	%CallSitePrototype%.isConstructor
-622	value	%CallSitePrototype%.isNative
-623	value	%intrinsic:ArraySpeciesCreate%
-624	value	%intrinsic:FindViaPredicate%
-625	value	%intrinsic:EveryOrSome%
-626	value	%intrinsic:SortList%
-627	value	%intrinsic:CollectPresent%
-628	value	%intrinsic:ArraySetLength%
-629	value	%intrinsic:AsyncGeneratorStep%
-630	value	%intrinsic:AsyncGeneratorAwaitReturnFulfilled%
-631	value	%intrinsic:AsyncGeneratorAwaitReturnRejected%
-632	value	%intrinsic:GetAsyncIterator%
-633	value	%intrinsic:AsyncIteratorReturnMethod%
-634	value	%intrinsic:AsyncIteratorCloseThrow%
-635	value	%intrinsic:AsyncFromSyncIteratorUnwrap%
-636	value	%intrinsic:AsyncFromSyncIteratorCloseThrow%
-637	value	%intrinsic:ToBigInt%
-638	value	%intrinsic:ToNumeric%
-639	value	%intrinsic:ToPrimitive%
-640	value	%intrinsic:ToNumber%
-641	value	%intrinsic:ToString%
-642	value	%intrinsic:LengthOfArrayLike%
-643	value	%intrinsic:ToPropertyKey%
-644	value	%intrinsic:DecoratorStart%
-645	value	%intrinsic:ApplyDecorators%
-646	value	%intrinsic:DecoratorRunInits%
-647	value	%intrinsic:DecoratorRunExtras%
-648	value	%intrinsic:DecoratorAddInitializer%
-649	value	%intrinsic:DecoratorAccessGet%
-650	value	%intrinsic:DecoratorAccessSet%
-651	value	%intrinsic:DecoratorAccessHas%
-652	value	%intrinsic:ApplyLegacyDecorators%
-653	value	%intrinsic:DecoratorParam%
-654	value	%intrinsic:DecoratorParamCall%
-655	value	%intrinsic:DecoratorMetadata%
-656	value	%intrinsic:AsyncDisposeFulfilled%
-657	value	%intrinsic:AsyncDisposeRejected%
-658	value	%intrinsic:UsingCreate%
-659	value	%intrinsic:UsingAdd%
-660	value	%intrinsic:AwaitUsingAdd%
-661	value	%intrinsic:UsingDisposeError%
-662	value	%intrinsic:UsingDispose%
-663	value	%intrinsic:UsingDisposeStep%
-664	value	%intrinsic:UsingAwaitValue%
-665	value	%intrinsic:CallPrepareStackTrace%
-666	value	%intrinsic:ThrowWithStack%
-667	value	%intrinsic:MicrotaskJob%
-668	value	%intrinsic:FromAsyncFulfilled%
-669	value	%intrinsic:FromAsyncRejected%
-670	value	%intrinsic:InstanceofOperator%
-671	value	%intrinsic:ClassHeritage%
-672	value	%intrinsic:FunctionPrototypeBehavior%
-673	value	%intrinsic:AsyncAwait%
-674	value	%intrinsic:AsyncFunctionReturn%
-675	value	%intrinsic:DynamicImport%
-676	value	%intrinsic:GetIterator%
-677	value	%intrinsic:IteratorClose%
-678	value	%intrinsic:IteratorCloseThrow%
-679	value	%intrinsic:IteratorRest%
-680	value	%intrinsic:SerializeJSONProperty%
-681	value	%intrinsic:JSONStackIncludes%
-682	value	%intrinsic:JSONJoin%
-683	value	%intrinsic:SerializeJSONObject%
-684	value	%intrinsic:SerializeJSONArray%
-685	value	%intrinsic:AddEntriesFromIterable%
-686	value	%intrinsic:ResolvePromise%
-687	value	%intrinsic:PromiseResolveFunction%
-688	value	%intrinsic:PromiseRejectFunction%
-689	value	%intrinsic:GetCapabilitiesExecutor%
-690	value	%intrinsic:PromiseReactionJob%
-691	value	%intrinsic:PromiseResolveThenableJob%
-692	value	%intrinsic:PromiseAllResolveElement%
-693	value	%intrinsic:PromiseAllSettledResolveElement%
-694	value	%intrinsic:PromiseAllSettledRejectElement%
-695	value	%intrinsic:PromiseAnyRejectElement%
-696	value	%intrinsic:PromiseThenFinally%
-697	value	%intrinsic:PromiseCatchFinally%
-698	value	%intrinsic:PromiseValueThunk%
-699	value	%intrinsic:PromiseThrower%
-700	value	%intrinsic:HostCallSettle%
-701	value	%intrinsic:ProxyRevokeFunction%
-702	value	%intrinsic:ProxyGetPrototypeOf%
-703	value	%intrinsic:ProxySetPrototypeOf%
-704	value	%intrinsic:ProxyIsExtensible%
-705	value	%intrinsic:ProxyPreventExtensions%
-706	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%
-707	value	%intrinsic:ProxyHasOwnProperty%
-708	value	%intrinsic:ProxyOwnPropertyAttributes%
-709	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%
-710	value	%intrinsic:ProxyDefineDataPropertyOrThrow%
-711	value	%intrinsic:ProxyCreateDataProperty%
-712	value	%intrinsic:ProxyCreateDataPropertyOrThrow%
-713	value	%intrinsic:ProxyHas%
-714	value	%intrinsic:ProxyGet%
-715	value	%intrinsic:ProxySet%
-716	value	%intrinsic:ProxySetOrThrow%
-717	value	%intrinsic:ProxySetOnReceiver%
-718	value	%intrinsic:ProxyDeleteProperty%
-719	value	%intrinsic:ProxyDeletePropertyOrThrow%
-720	value	%intrinsic:ProxyOwnPropertyKeys%
-721	value	%intrinsic:ProxyCall%
-722	value	%intrinsic:ProxyConstruct%
-723	value	%intrinsic:OrdinaryConstructSlow%
-724	value	%intrinsic:ProxySetIntegrityLevel%
-725	value	%intrinsic:ProxyTestIntegrityLevel%
-726	value	%intrinsic:ForInStep%
-727	value	%intrinsic:ArraySpread%
-728	value	%intrinsic:CopyDataProperties%
-729	value	%intrinsic:CopyDataPropertiesExcluding%
-730	value	%intrinsic:TypedArraySetElementSlow%
-731	value	%intrinsic:FinalizationRegistryCleanupJob%
-732	intrinsic	IsObject
-733	intrinsic	IsCallable
-734	intrinsic	IsConstructor
-735	intrinsic	IsArray
-736	intrinsic	IsString
-737	intrinsic	IsNumber
-738	intrinsic	IsSymbol
-739	intrinsic	IsBoolean
-740	intrinsic	AsObj
-741	intrinsic	AsFn
-742	intrinsic	AsStr
-743	intrinsic	AsNumber
-744	intrinsic	AsSym
-745	intrinsic	AsBool
-746	intrinsic	ToBoolean
-747	intrinsic	ToNumberPrimitive
-748	intrinsic	ToStringPrimitive
-749	intrinsic	ToObject
-750	intrinsic	ToIntegerOrInfinityNumber
-751	intrinsic	F64ToU32
-752	intrinsic	F64ToI32
-753	intrinsic	StrLength
-754	intrinsic	Get
-755	intrinsic	GetV
-756	intrinsic	Set
-757	intrinsic	HasProperty
-758	intrinsic	CreateDataPropertyOrThrow
-759	intrinsic	DeletePropertyOrThrow
-760	intrinsic	Call
-761	intrinsic	Construct
-762	intrinsic	ObjectCreate
-763	intrinsic	ArrayCreate
-764	intrinsic	NewTypeError
-765	intrinsic	NewNotConstructorError
-766	intrinsic	NewSyntaxError
-767	intrinsic	NewReferenceError
-768	intrinsic	NewRangeError
-769	intrinsic	WellKnownSymbol
-770	intrinsic	RealmIntrinsic
-771	intrinsic	ErrorCreate
-772	intrinsic	DOMExceptionCreate
-773	intrinsic	DOMExceptionField
-774	intrinsic	DOMExceptionCode
-775	intrinsic	DOMExceptionConstant
-776	intrinsic	Btoa
-777	intrinsic	Atob
-778	intrinsic	CaptureStack
-779	intrinsic	ErrorStack
-780	intrinsic	StackTraceValue
-781	intrinsic	IsPendingStack
-782	intrinsic	SetErrorStack
-783	intrinsic	CallSiteSlot
-784	intrinsic	DefineDataPropertyOrThrow
-785	intrinsic	DefineOwnPropertyFromRecord
-786	intrinsic	GetOwnPropertyDescriptorObject
-787	intrinsic	HasOwnProperty
-788	intrinsic	OwnPropertyAttributes
-789	intrinsic	OwnPropertyKeys
-790	intrinsic	GetPrototypeOf
-791	intrinsic	SetPrototypeOf
-792	intrinsic	PreventExtensions
-793	intrinsic	IsExtensible
-794	intrinsic	SetIntegrityLevel
-795	intrinsic	TestIntegrityLevel
-796	intrinsic	SameValue
-797	intrinsic	ObjectClassTag
-798	intrinsic	WrapPrimitive
-799	intrinsic	PrimitiveValue
-800	intrinsic	ConstructWithArray
-801	intrinsic	ConstructWithThis
-802	intrinsic	GetWithReceiver
-803	intrinsic	SetWithReceiver
-804	intrinsic	DeleteProperty
-805	intrinsic	IsProxy
-806	intrinsic	NewProxy
-807	intrinsic	ProxyTarget
-808	intrinsic	ProxyHandler
-809	intrinsic	ProxyRevoke
-810	intrinsic	CollectionCreate
-811	intrinsic	CollectionClass
-812	intrinsic	CollectionGet
-813	intrinsic	CollectionHas
-814	intrinsic	CollectionSet
-815	intrinsic	CollectionDelete
-816	intrinsic	CollectionClear
-817	intrinsic	CollectionSize
-818	intrinsic	CollectionIterator
-819	intrinsic	CollectionIteratorNext
-820	intrinsic	IsOriginalCollectionAdder
-821	intrinsic	CollectionIteratorStep
-822	intrinsic	CollectionIteratorKey
-823	intrinsic	CollectionIteratorValue
-824	intrinsic	CanBeHeldWeakly
-825	intrinsic	DateNow
-826	intrinsic	DateCreate
-827	intrinsic	DateValue
-828	intrinsic	DateSetValue
-829	intrinsic	DateFromFields
-830	intrinsic	DateGetField
-831	intrinsic	DateSetFields
-832	intrinsic	DateFormat
-833	intrinsic	DateParse
-834	intrinsic	DateTimezoneOffset
-835	intrinsic	ArrayBufferCreate
-836	intrinsic	BufferInfo
-837	intrinsic	BufferDetach
-838	intrinsic	BufferResize
-839	intrinsic	BufferTransfer
-840	intrinsic	BufferCopy
-841	intrinsic	SortNumbers
-842	intrinsic	DataViewCreate
-843	intrinsic	DataViewField
-844	intrinsic	DataViewGet
-845	intrinsic	DataViewSet
-846	intrinsic	IsDataView
-847	intrinsic	RealmConstructor
-848	intrinsic	IsTypedArray
-849	intrinsic	TypedArrayCreate
-850	intrinsic	TypedArrayField
-851	intrinsic	TypedArrayGet
-852	intrinsic	TypedArraySet
-853	intrinsic	TypedArrayCopy
-854	intrinsic	TypedArrayKindProto
-855	intrinsic	Base64Encode
-856	intrinsic	HexEncode
-857	intrinsic	Base64Decode
-858	intrinsic	HexDecode
-859	intrinsic	CallWithArray
-860	intrinsic	BoundFunctionCreate
-861	intrinsic	BoundTargetFunction
-862	intrinsic	FunctionToString
-863	intrinsic	NumberPow
-864	intrinsic	SymbolDescriptiveString
-865	intrinsic	CompareStrings
-866	intrinsic	StringCodePoints
-867	intrinsic	SortPrimitives
-868	intrinsic	ArraySpliceDense
-869	intrinsic	ArrayCanPopDense
-870	intrinsic	ArrayPopDense
-871	intrinsic	ArrayFillDense
-872	intrinsic	ArrayPushDense
-873	intrinsic	ArraySearchDense
-874	intrinsic	ArraySliceDense
-875	intrinsic	EachDense
-876	intrinsic	ArrayJoinDense
-877	intrinsic	EnumerableOwnDataProperties
-878	intrinsic	TypedArraySetFromDense
-879	intrinsic	StrLocaleCompare
-880	intrinsic	StrCharCodeAt
-881	intrinsic	StrCodePointAt
-882	intrinsic	StrSubstring
-883	intrinsic	StrIndexOf
-884	intrinsic	StrLastIndexOf
-885	intrinsic	StrToCase
-886	intrinsic	StrTrim
-887	intrinsic	StrIsWellFormed
-888	intrinsic	StrToWellFormed
-889	intrinsic	StrRepeat
-890	intrinsic	StrFromCodeUnits
-891	intrinsic	StrFromCodePoints
-892	intrinsic	StrNormalize
-893	intrinsic	NewSymbol
-894	intrinsic	SymbolDescription
-895	intrinsic	SymbolFor
-896	intrinsic	SymbolKeyFor
-897	intrinsic	NumberToString
-898	intrinsic	NumberToFixed
-899	intrinsic	NumberToExponential
-900	intrinsic	NumberToPrecision
-901	intrinsic	StringParseFloat
-902	intrinsic	StringParseInt
-903	intrinsic	UriEncode
-904	intrinsic	UriDecode
-905	intrinsic	StrEscape
-906	intrinsic	StrUnescape
-907	intrinsic	CompileEval
-908	intrinsic	CompileFunction
-909	intrinsic	GlobalObject
-910	intrinsic	EnqueueMicrotask
-911	intrinsic	NumberToInt32
-912	intrinsic	NumberToUint32
-913	intrinsic	F64Abs
-914	intrinsic	F64Acos
-915	intrinsic	F64Acosh
-916	intrinsic	F64Asin
-917	intrinsic	F64Asinh
-918	intrinsic	F64Atan
-919	intrinsic	F64Atanh
-920	intrinsic	F64Atan2
-921	intrinsic	F64Cbrt
-922	intrinsic	F64Hypot
-923	intrinsic	F64Ceil
-924	intrinsic	F64Clz32
-925	intrinsic	F64Cos
-926	intrinsic	F64Cosh
-927	intrinsic	F64Exp
-928	intrinsic	F64Expm1
-929	intrinsic	F64Floor
-930	intrinsic	F64Fround
-931	intrinsic	F64F16round
-932	intrinsic	F64SumPrecise
-933	intrinsic	F64Imul
-934	intrinsic	F64Log
-935	intrinsic	F64Log1p
-936	intrinsic	F64Log10
-937	intrinsic	F64Log2
-938	intrinsic	F64Round
-939	intrinsic	F64Sign
-940	intrinsic	F64Sin
-941	intrinsic	F64Sinh
-942	intrinsic	F64Sqrt
-943	intrinsic	F64Tan
-944	intrinsic	F64Tanh
-945	intrinsic	F64Trunc
-946	intrinsic	MathRandom
-947	intrinsic	CreateArrayIterator
-948	intrinsic	ArrayIteratorTarget
-949	intrinsic	ArrayIteratorIndex
-950	intrinsic	ArrayIteratorSetIndex
-951	intrinsic	ArrayIteratorFinish
-952	intrinsic	ArrayIteratorKind
-953	intrinsic	CreateStringIterator
-954	intrinsic	StringIteratorTarget
-955	intrinsic	StrCodePointString
-956	intrinsic	HasOriginalIteration
-957	intrinsic	IteratorFastReady
-958	intrinsic	IteratorFastValue
-959	intrinsic	CreateIterResultObject
-960	intrinsic	CreateArrayFromPair
-961	intrinsic	PromiseCreate
-962	intrinsic	IsPromise
-963	intrinsic	IntrinsicPromise
-964	intrinsic	PromiseState
-965	intrinsic	PromiseResult
-966	intrinsic	FulfillPromise
-967	intrinsic	RejectPromise
-968	intrinsic	PromiseClaimResolve
-969	intrinsic	PerformPromiseThen
-970	intrinsic	EnqueuePromiseResolveThenableJob
-971	intrinsic	NewRecord
-972	intrinsic	RecordGet
-973	intrinsic	RecordSet
-974	intrinsic	NewBuiltinClosure
-975	intrinsic	GeneratorState
-976	intrinsic	GeneratorSetState
-977	intrinsic	GeneratorResume
-978	intrinsic	IsAsyncFunctionState
-979	intrinsic	AsyncFunctionPromise
-980	intrinsic	AsyncGeneratorState
-981	intrinsic	AsyncGeneratorEnqueue
-982	intrinsic	AsyncGeneratorFirstRequest
-983	intrinsic	AsyncGeneratorDequeue
-984	intrinsic	CreateAsyncFromSyncIterator
-985	intrinsic	CreateIteratorHelper
-986	intrinsic	ThisIteratorHelper
-987	intrinsic	WeakRefCreate
-988	intrinsic	WeakRefDeref
-989	intrinsic	FinalizationRegistryCreate
-990	intrinsic	ThisFinalizationRegistry
-991	intrinsic	FinalizationRegistryRegister
-992	intrinsic	FinalizationRegistryUnregister
-993	intrinsic	FinalizationRegistryNextDead
-994	intrinsic	FinalizationRegistryTake
-995	intrinsic	FinalizationRegistrySetQueued
-996	intrinsic	DisposableStackCreate
-997	intrinsic	ThisDisposableStack
-998	intrinsic	JsonParse
-999	intrinsic	JsonRawJSON
-1000	intrinsic	IsRawJSON
-1001	intrinsic	JsonStringifyFast
-1002	intrinsic	JsonStringifyFastAt
-1003	intrinsic	JsonQuote
-1004	intrinsic	CreateDataProperty
-1005	intrinsic	IsBigInt
-1006	intrinsic	ToBigIntPrimitive
-1007	intrinsic	NumberToBigInt
-1008	intrinsic	BigIntToString
-1009	intrinsic	BigIntAsIntN
-1010	intrinsic	BigIntAsUintN
-1011	intrinsic	BigIntToNumber
-1012	intrinsic	IsRegExpObject
-1013	intrinsic	RegExpCreate
-1014	intrinsic	RegExpSource
-1015	intrinsic	RegExpFlags
-1016	intrinsic	RegExpHasFlag
-1017	intrinsic	RegExpEscapedSource
-1018	intrinsic	RegExpExecRaw
-1019	intrinsic	RegExpTestRaw
-1020	intrinsic	IsOriginalRegExpExec
-1021	intrinsic	CreateRegExpStringIterator
-1022	intrinsic	RegExpStringIteratorSlot
-1023	intrinsic	RegExpStringIteratorFinish
-1024	intrinsic	RegExpEscapeString
-1025	intrinsic	IsPristineRegExp
-1026	intrinsic	RegExpSplitRaw
-1027	intrinsic	RegExpReplaceRaw
-1028	intrinsic	IsDenseArray
-1029	intrinsic	AllNumbers
-1030	intrinsic	AllCodePoints
-1031	intrinsic	InstallMethod
-1032	intrinsic	InstallConstructor
-1033	intrinsic	InstallPrototype
-1034	intrinsic	InstallPrototypeConstructor
-1035	intrinsic	InstallAccessor
-1036	intrinsic	InstallValue
-1037	intrinsic	InstallIntrinsic
-1038	intrinsic	MarkNative
-1039	intrinsic	MarkFast
-1040	intrinsic	ArraySpeciesCreate
-1041	intrinsic	ArrayConstructor
-1042	intrinsic	ArraySpecies
-1043	intrinsic	FindViaPredicate
-1044	intrinsic	EveryOrSome
-1045	intrinsic	SortList
-1046	intrinsic	CollectPresent
-1047	intrinsic	ArraySetLength
-1048	intrinsic	AsyncGeneratorStep
-1049	intrinsic	AsyncGeneratorAwaitReturnFulfilled
-1050	intrinsic	AsyncGeneratorAwaitReturnRejected
-1051	intrinsic	GetAsyncIterator
-1052	intrinsic	AsyncIteratorReturnMethod
-1053	intrinsic	AsyncIteratorCloseThrow
-1054	intrinsic	AsyncFromSyncIteratorUnwrap
-1055	intrinsic	AsyncFromSyncIteratorCloseThrow
-1056	intrinsic	ToBigInt
-1057	intrinsic	ToNumeric
-1058	intrinsic	ToPrimitive
-1059	intrinsic	ToNumber
-1060	intrinsic	ToString
-1061	intrinsic	LengthOfArrayLike
-1062	intrinsic	ToPropertyKey
-1063	intrinsic	DatePrototypeValueOf
-1064	intrinsic	DatePrototypeToISOString
-1065	intrinsic	DatePrototypeToJSON
-1066	intrinsic	DatePrototypeToPrimitive
-1067	intrinsic	DecoratorStart
-1068	intrinsic	ApplyDecorators
-1069	intrinsic	DecoratorRunInits
-1070	intrinsic	DecoratorRunExtras
-1071	intrinsic	DecoratorAddInitializer
-1072	intrinsic	DecoratorAccessGet
-1073	intrinsic	DecoratorAccessSet
-1074	intrinsic	DecoratorAccessHas
-1075	intrinsic	ApplyLegacyDecorators
-1076	intrinsic	DecoratorParam
-1077	intrinsic	DecoratorParamCall
-1078	intrinsic	DecoratorMetadata
-1079	intrinsic	AsyncDisposeFulfilled
-1080	intrinsic	AsyncDisposeRejected
-1081	intrinsic	UsingCreate
-1082	intrinsic	UsingAdd
-1083	intrinsic	AwaitUsingAdd
-1084	intrinsic	UsingDisposeError
-1085	intrinsic	UsingDispose
-1086	intrinsic	UsingDisposeStep
-1087	intrinsic	UsingAwaitValue
-1088	intrinsic	CallPrepareStackTrace
-1089	intrinsic	ThrowWithStack
-1090	intrinsic	MicrotaskJob
-1091	intrinsic	FromAsyncFulfilled
-1092	intrinsic	FromAsyncRejected
-1093	intrinsic	InstanceofOperator
-1094	intrinsic	ClassHeritage
-1095	intrinsic	ThrowTypeError
-1096	intrinsic	FunctionPrototypeBehavior
-1097	intrinsic	AsyncAwait
-1098	intrinsic	AsyncFunctionReturn
-1099	intrinsic	GeneratorFunctionConstructor
-1100	intrinsic	AsyncGeneratorFunctionConstructor
-1101	intrinsic	AsyncFunctionConstructor
-1102	intrinsic	DynamicImport
-1103	intrinsic	GetIterator
-1104	intrinsic	IteratorClose
-1105	intrinsic	IteratorCloseThrow
-1106	intrinsic	IteratorRest
-1107	intrinsic	ArrayPrototypeValues
-1108	intrinsic	ArrayIteratorPrototypeNext
-1109	intrinsic	StringPrototypeIterator
-1110	intrinsic	StringIteratorPrototypeNext
-1111	intrinsic	SerializeJSONProperty
-1112	intrinsic	JSONStackIncludes
-1113	intrinsic	JSONJoin
-1114	intrinsic	SerializeJSONObject
-1115	intrinsic	SerializeJSONArray
-1116	intrinsic	AddEntriesFromIterable
-1117	intrinsic	MapPrototypeSet
-1118	intrinsic	MapIteratorPrototypeNext
-1119	intrinsic	ResolvePromise
-1120	intrinsic	PromiseResolveFunction
-1121	intrinsic	PromiseRejectFunction
-1122	intrinsic	GetCapabilitiesExecutor
-1123	intrinsic	PromiseReactionJob
-1124	intrinsic	PromiseResolveThenableJob
-1125	intrinsic	PromiseConstructor
-1126	intrinsic	PromiseAllResolveElement
-1127	intrinsic	PromiseAllSettledResolveElement
-1128	intrinsic	PromiseAllSettledRejectElement
-1129	intrinsic	PromiseAnyRejectElement
-1130	intrinsic	PromiseThenFinally
-1131	intrinsic	PromiseCatchFinally
-1132	intrinsic	PromiseValueThunk
-1133	intrinsic	PromiseThrower
-1134	intrinsic	HostCallSettle
-1135	intrinsic	ProxyRevokeFunction
-1136	intrinsic	ProxyGetPrototypeOf
-1137	intrinsic	ProxySetPrototypeOf
-1138	intrinsic	ProxyIsExtensible
-1139	intrinsic	ProxyPreventExtensions
-1140	intrinsic	ProxyGetOwnPropertyDescriptorObject
-1141	intrinsic	ProxyHasOwnProperty
-1142	intrinsic	ProxyOwnPropertyAttributes
-1143	intrinsic	ProxyDefineOwnPropertyFromRecord
-1144	intrinsic	ProxyDefineDataPropertyOrThrow
-1145	intrinsic	ProxyCreateDataProperty
-1146	intrinsic	ProxyCreateDataPropertyOrThrow
-1147	intrinsic	ProxyHas
-1148	intrinsic	ProxyGet
-1149	intrinsic	ProxySet
-1150	intrinsic	ProxySetOrThrow
-1151	intrinsic	ProxySetOnReceiver
-1152	intrinsic	ProxyDeleteProperty
-1153	intrinsic	ProxyDeletePropertyOrThrow
-1154	intrinsic	ProxyOwnPropertyKeys
-1155	intrinsic	ProxyCall
-1156	intrinsic	ProxyConstruct
-1157	intrinsic	OrdinaryConstructSlow
-1158	intrinsic	ProxySetIntegrityLevel
-1159	intrinsic	ProxyTestIntegrityLevel
-1160	intrinsic	ForInStep
-1161	intrinsic	RegExpSpecies
-1162	intrinsic	RegExpPrototypeHasIndices
-1163	intrinsic	RegExpPrototypeGlobal
-1164	intrinsic	RegExpPrototypeIgnoreCase
-1165	intrinsic	RegExpPrototypeMultiline
-1166	intrinsic	RegExpPrototypeDotAll
-1167	intrinsic	RegExpPrototypeUnicode
-1168	intrinsic	RegExpPrototypeUnicodeSets
-1169	intrinsic	RegExpPrototypeSticky
-1170	intrinsic	RegExpPrototypeFlags
-1171	intrinsic	RegExpPrototypeExec
-1172	intrinsic	RegExpPrototypeMatch
-1173	intrinsic	SetPrototypeAdd
-1174	intrinsic	SetIteratorPrototypeNext
-1175	intrinsic	ArraySpread
-1176	intrinsic	CopyDataProperties
-1177	intrinsic	CopyDataPropertiesExcluding
-1178	intrinsic	TypedArraySetElementSlow
-1179	intrinsic	FinalizationRegistryCleanupJob
-1180	value	%prelude:SameValueZero%
-1181	value	%prelude:RelativeIndex%
-1182	value	%prelude:MoveElements%
-1183	value	%prelude:FlattenIntoArray%
-1184	value	%prelude:ToIndex%
-1185	value	%prelude:AllocateArrayBuffer%
-1186	value	%prelude:ArrayBufferCopyAndDetach%
-1187	value	%prelude:AsyncGeneratorCompleteStep%
-1188	value	%prelude:AsyncGeneratorDrainQueue%
-1189	value	%prelude:AsyncGeneratorAwaitReturn%
-1190	value	%prelude:AsyncFromSyncIteratorContinuation%
-1191	value	%prelude:OrdinaryToPrimitive%
-1192	value	%prelude:GetMethod%
-1193	value	%prelude:ToLength%
-1194	value	%prelude:DVOutOfBounds%
-1195	value	%prelude:DVByteIndex%
-1196	value	%prelude:GetViewElement%
-1197	value	%prelude:SetViewValue%
-1198	value	%prelude:DateValueFromArgs%
-1199	value	%prelude:TimeClip%
-1200	value	%prelude:DateSetter%
-1201	value	%prelude:DecoratorKindName%
-1202	value	%prelude:DecoratorNewAccess%
-1203	value	%prelude:DecoratorNewContext%
-1204	value	%prelude:DecoratorAccessorFn%
-1205	value	%prelude:NewSuppressedError%
-1206	value	%prelude:PendingDisposableStack%
-1207	value	%prelude:AddResource%
-1208	value	%prelude:AddDisposableValue%
-1209	value	%prelude:DisposableStackMove%
-1210	value	%prelude:AsyncDisposeError%
-1211	value	%prelude:AsyncDisposeAwait%
-1212	value	%prelude:AsyncDisposeContinue%
-1213	value	%prelude:InstallErrorCause%
-1214	value	%prelude:FinishStack%
-1215	value	%prelude:FinishErrorStack%
-1216	value	%prelude:RecordStack%
-1217	value	%prelude:ErrorConstruct%
-1218	value	%prelude:CreateDynamicFunction%
-1219	value	%prelude:FromAsyncStart%
-1220	value	%prelude:FromAsyncAwait%
-1221	value	%prelude:FromAsyncIteratorNext%
-1222	value	%prelude:FromAsyncClose%
-1223	value	%prelude:FromAsyncIteratorResult%
-1224	value	%prelude:FromAsyncIteratorStore%
-1225	value	%prelude:FromAsyncArrayLikeNext%
-1226	value	%prelude:FromAsyncArrayLikeValue%
-1227	value	%prelude:CreateListFromArrayLike%
-1228	value	%prelude:OrdinaryHasInstance%
-1229	value	%prelude:GeneratorValidate%
-1230	value	%prelude:GeneratorStep%
-1231	value	%prelude:IterableToList%
-1232	value	%prelude:ArrayFromIterator%
-1233	value	%prelude:GroupByProperty%
-1234	value	%prelude:IteratorStepResult%
-1235	value	%prelude:GetIteratorFlattenable%
-1236	value	%prelude:HelperLimit%
-1237	value	%prelude:NewIteratorHelper%
-1238	value	%prelude:HelperCallFunction%
-1239	value	%prelude:IteratorHelperStep%
-1240	value	%prelude:ArrayPrefixCopy%
-1241	value	%prelude:ChunksStep%
-1242	value	%prelude:WindowsStep%
-1243	value	%prelude:IteratorCloseAll%
-1244	value	%prelude:ZipStep%
-1245	value	%prelude:ZipAnyOpen%
-1246	value	%prelude:FlatMapStep%
-1247	value	%prelude:ConcatStep%
-1248	value	%prelude:IteratorHelperReturnAtYield%
-1249	value	%prelude:IteratorConsume%
-1250	value	%prelude:SetterThatIgnoresPrototypeProperties%
-1251	value	%prelude:ChunkingSize%
-1252	value	%prelude:ZipOptions%
-1253	value	%prelude:ZipAddIterator%
-1254	value	%prelude:ZipCreate%
-1255	value	%prelude:InternalizeJSONProperty%
-1256	value	%prelude:InternalizeJSONMember%
-1257	value	%prelude:JSONPropertyList%
-1258	value	%prelude:JSONListIncludes%
-1259	value	%prelude:CoerceNumbers%
-1260	value	%prelude:ToPropertyDescriptor%
-1261	value	%prelude:DefineOwnProperty%
-1262	value	%prelude:DefinePropertyOrThrow%
-1263	value	%prelude:SetPrototypeOrThrow%
-1264	value	%prelude:ObjectDefinePropertiesHelper%
-1265	value	%prelude:EnumerableOwnProperties%
-1266	value	%prelude:ObjectToString%
-1267	value	%prelude:ClaimResolution%
-1268	value	%prelude:ResolveWithData%
-1269	value	%prelude:RejectWithData%
-1270	value	%prelude:ResolveCapability%
-1271	value	%prelude:RejectCapability%
-1272	value	%prelude:NewPromiseCapability%
-1273	value	%prelude:PromiseResolve%
-1274	value	%prelude:SpeciesConstructor%
-1275	value	%prelude:NewElementRecord%
-1276	value	%prelude:SettleElement%
-1277	value	%prelude:KeyedResult%
-1278	value	%prelude:PerformPromiseKeyed%
-1279	value	%prelude:SettledRecord%
-1280	value	%prelude:NewAggregateError%
-1281	value	%prelude:CreateArrayFromList%
-1282	value	%prelude:PerformPromiseCombinator%
-1283	value	%prelude:ProxyTrap%
-1284	value	%prelude:CompletePropertyDescriptor%
-1285	value	%prelude:IsCompatiblePropertyDescriptor%
-1286	value	%prelude:FromPropertyDescriptor%
-1287	value	%prelude:DescriptorAttributes%
-1288	value	%prelude:ListIncludes%
-1289	value	%prelude:ProxyGetOwnProperty%
-1290	value	%prelude:DataDescriptorRecord%
-1291	value	%prelude:ProxyOwnKeys%
-1292	value	%prelude:StrikeKey%
-1293	value	%prelude:RequireConstructor%
-1294	value	%prelude:ReachesReceiver%
-1295	value	%prelude:RegExpFlagGetter%
-1296	value	%prelude:RegExpExec%
-1297	value	%prelude:AdvanceStringIndex%
-1298	value	%prelude:AdvanceAfterEmptyMatch%
-1299	value	%prelude:GetSubstitution%
-1300	value	%prelude:GetSetRecord%
-1301	value	%prelude:SetCopy%
-1302	value	%prelude:KeysNext%
-1303	value	%prelude:RequireGlobalFlag%
-1304	value	%prelude:StringReplacement%
-1305	value	%prelude:IsRegExp%
-1306	value	%prelude:KindName%
-1307	value	%prelude:TALength%
-1308	value	%prelude:ValidateTypedArray%
-1309	value	%prelude:ToElementValue%
-1310	value	%prelude:AllocateTypedArrayOfLength%
-1311	value	%prelude:TypedArrayFromBuffer%
-1312	value	%prelude:TypedArrayFromValues%
-1313	value	%prelude:TypedArrayConstruct%
-1314	value	%prelude:BufferInfoOrUndefined%
-1315	value	%prelude:TypedArrayCreateWithLength%
-1316	value	%prelude:TypedArraySpeciesCreate%
-1317	value	%prelude:Base64Alphabet%
-1318	value	%prelude:LastChunkHandling%
-1319	value	%prelude:WriteDecoded%
-1320	value	%prelude:TAEveryOrSome%
-1321	value	%prelude:TAFind%
-1322	value	%prelude:TAReduce%
-1323	value	%prelude:TASortedList%
-1324	value	%prelude:IsCanonicalNumericKey%
-1325	value	%prelude:TASet%
-1326	value	%prelude:NewDOMException%
-1327	intrinsic	IteratorFastDrain
-1328	intrinsic	ArgumentCount
-1329	intrinsic	Throw
-1330	intrinsic	RegExpExecOwn
-1331	intrinsic	PromiseSpecies
-1332	intrinsic	PromiseStaticResolve
-1333	intrinsic	PromisePrototypeThen
-1334	intrinsic	PromiseCombinatorRun
-1335	intrinsic	IsArrayConstructor
-1336	intrinsic	SortStart
-1337	intrinsic	SortStep
-1338	intrinsic	SortOperand
-1339	value	%intrinsic:GetPrototypeFromConstructorSlow%
-1340	value	%prelude:GetPrototypeFromConstructor%
-1341	intrinsic	ConstructorPrototype
-1342	intrinsic	GetPrototypeFromConstructorSlow
-1343	value	%intrinsic:ModuleOp%
-1344	value	%prelude:ModuleEvaluate%
-1345	value	%prelude:InnerModuleEvaluation%
-1346	intrinsic	NsOp
-1347	intrinsic	ModuleOp
-1348	value	TextDecoder
-1349	value	TextEncoder
-1350	value	TextDecoder.prototype
-1351	value	TextEncoder.prototype
-1352	value	TextDecoder.prototype.decode
-1353	value	get TextDecoder.prototype.encoding
-1354	value	get TextDecoder.prototype.fatal
-1355	value	get TextDecoder.prototype.ignoreBOM
-1356	value	TextEncoder.prototype.encode
-1357	value	TextEncoder.prototype.encodeInto
-1358	value	get TextEncoder.prototype.encoding
-1359	value	%prelude:TextLabelIsUtf8%
-1360	intrinsic	TextCodecCreate
-1361	intrinsic	TextCodecFlags
-1362	intrinsic	IsBufferSource
-1363	intrinsic	Utf8Encode
-1364	intrinsic	Utf8Decode
-1365	value	%prelude:ImportCall%
-1366	value	%prelude:FinishImport%
-1367	value	%prelude:ExecuteAsyncModule%
-1368	value	%prelude:GatherAvailableAncestors%
-1369	value	%prelude:ListContains%
-1370	value	%prelude:AsyncModuleExecutionFulfilled%
-1371	value	%prelude:AsyncModuleExecutionRejected%
-1372	value	%intrinsic:GetSite%
-1373	value	%prelude:RequireCallable%
-1374	value	%prelude:CheckLength%
-1375	value	%prelude:ArrayCreateChecked%
-1376	value	%prelude:IsConcatSpreadable%
-1377	value	%prelude:ThisArrayBuffer%
-1378	value	%prelude:IsImmutableBuffer%
-1379	value	%prelude:ThisBigIntValue%
-1380	value	%prelude:ThisBooleanValue%
-1381	value	%prelude:ToIntegerOrInfinity%
-1382	value	%prelude:DVByteLength%
-1383	value	%prelude:GetViewValue%
-1384	value	%prelude:IsDateObject%
-1385	value	%prelude:DecoratorPush%
-1386	value	%prelude:DecoratorCheckResult%
-1387	value	%prelude:DecoratorDefine%
-1388	value	%prelude:DecoratorReflectFn%
-1389	value	%prelude:CallDisposeMethod%
-1390	value	%prelude:TextCodecPrototype%
-1391	value	%prelude:TextDictionary%
-1392	value	%prelude:TextIsAsciiWhitespace%
-1393	value	%prelude:FromAsyncReject%
-1394	value	%prelude:GetIteratorFromMethod%
-1395	value	%prelude:IteratorNextResult%
-1396	value	%prelude:ThisIteratorObject%
-1397	value	%prelude:HelperCallable%
-1398	value	%prelude:HelperYield%
-1399	value	%prelude:ThisMap%
-1400	value	%prelude:CanonicalizeKeyedCollectionKey%
-1401	value	%prelude:HasTLA%
-1402	value	%prelude:ModuleClosure%
-1403	value	%prelude:ThisNumberValue%
-1404	value	%prelude:IsFiniteNumber%
-1405	value	%prelude:CapabilityPromise%
-1406	value	%prelude:CapabilityResolveFunction%
-1407	value	%prelude:CapabilityRejectFunction%
-1408	value	%prelude:InvokeThen%
-1409	value	%prelude:PromiseThisConstructor%
-1410	value	%prelude:GetPromiseResolve%
-1411	value	%prelude:DecrementRemaining%
-1412	value	%prelude:ProxyCreate%
-1413	value	%prelude:TrapKey%
-1414	value	%prelude:DescFlag%
-1415	value	%prelude:IsAccessorDescriptor%
-1416	value	%prelude:IsDataDescriptor%
-1417	value	%prelude:ReflectTarget%
-1418	value	%prelude:ThisRegExpObject%
-1419	value	%prelude:RegExpBuiltinExec%
-1420	value	%prelude:ThisSet%
-1421	value	%prelude:RecordHas%
-1422	value	%prelude:RecordKeys%
-1423	value	%prelude:RequireThisCoercible%
-1424	value	%prelude:InvokeSymbol%
-1425	value	%prelude:RegExpFromPattern%
-1426	value	%prelude:ThisStringValue%
-1427	value	%prelude:ThisToString%
-1428	value	%prelude:ThisSymbolValue%
-1429	value	%prelude:ElementSize%
-1430	value	%prelude:KindOf%
-1431	value	%prelude:SameContentType%
-1432	value	%prelude:IsElementValue%
-1433	value	%prelude:RequireMutableTypedArray%
-1434	value	%prelude:ValidateUint8Array%
-1435	value	%prelude:GetOptionsObject%
-1436	value	%prelude:Uint8ArrayFromRecord%
-1437	value	%prelude:ThisWeakMap%
-1438	value	%prelude:ThisWeakSet%
-1439	value	%prelude:DOMExceptionPrototypeObject%
-1440	value	%prelude:DOMExceptionThisField%
-1441	value	%prelude:DOMExceptionEnumerable%
-1442	intrinsic	StrPad
-1443	intrinsic	GetSite
-1444	intrinsic	SortCompareCall
-1445	intrinsic	ObjectFromEntriesDense
-1446	value	%prelude:AsyncGeneratorEnqueueRequest%
-1447	value	%prelude:StackResources%
-1448	value	%prelude:NewCallbackHelper%
-1449	value	%prelude:ZipCloseAll%
+# kind (value: an object or symbol by path; intrinsic: by name), path.
+value	globalThis
+value	AggregateError
+value	Array
+value	ArrayBuffer
+value	AsyncDisposableStack
+value	BigInt
+value	BigInt64Array
+value	BigUint64Array
+value	Boolean
+value	DOMException
+value	DataView
+value	Date
+value	DisposableStack
+value	Error
+value	EvalError
+value	FinalizationRegistry
+value	Float16Array
+value	Float32Array
+value	Float64Array
+value	Function
+value	Int16Array
+value	Int32Array
+value	Int8Array
+value	InternalError
+value	Iterator
+value	JSON
+value	Map
+value	Math
+value	Number
+value	Object
+value	Promise
+value	Proxy
+value	RangeError
+value	ReferenceError
+value	Reflect
+value	RegExp
+value	Set
+value	String
+value	SuppressedError
+value	Symbol
+value	SyntaxError
+value	TypeError
+value	URIError
+value	Uint16Array
+value	Uint32Array
+value	Uint8Array
+value	Uint8ClampedArray
+value	WeakMap
+value	WeakRef
+value	WeakSet
+value	atob
+value	btoa
+value	decodeURI
+value	decodeURIComponent
+value	encodeURI
+value	encodeURIComponent
+value	escape
+value	eval
+value	isFinite
+value	isNaN
+value	parseFloat
+value	parseInt
+value	queueMicrotask
+value	unescape
+value	AggregateError.prototype
+value	Array.from
+value	Array.fromAsync
+value	Array.isArray
+value	Array.of
+value	Array.prototype
+value	get Array[Symbol.species]
+value	ArrayBuffer.isView
+value	ArrayBuffer.prototype
+value	get ArrayBuffer[Symbol.species]
+value	AsyncDisposableStack.prototype
+value	BigInt.asIntN
+value	BigInt.asUintN
+value	BigInt.prototype
+value	BigInt64Array.prototype
+value	BigUint64Array.prototype
+value	Boolean.prototype
+value	DOMException.prototype
+value	DataView.prototype
+value	Date.UTC
+value	Date.now
+value	Date.parse
+value	Date.prototype
+value	DisposableStack.prototype
+value	Error.captureStackTrace
+value	Error.isError
+value	Error.prototype
+value	EvalError.prototype
+value	FinalizationRegistry.prototype
+value	Float16Array.prototype
+value	Float32Array.prototype
+value	Float64Array.prototype
+value	Function.prototype
+value	Int16Array.prototype
+value	Int32Array.prototype
+value	Int8Array.prototype
+value	InternalError.prototype
+value	Iterator.concat
+value	Iterator.from
+value	Iterator.prototype
+value	Iterator.zip
+value	Iterator.zipKeyed
+value	JSON.isRawJSON
+value	JSON.parse
+value	JSON.rawJSON
+value	JSON.stringify
+value	Map.groupBy
+value	Map.prototype
+value	get Map[Symbol.species]
+value	Math.abs
+value	Math.acos
+value	Math.acosh
+value	Math.asin
+value	Math.asinh
+value	Math.atan
+value	Math.atan2
+value	Math.atanh
+value	Math.cbrt
+value	Math.ceil
+value	Math.clz32
+value	Math.cos
+value	Math.cosh
+value	Math.exp
+value	Math.expm1
+value	Math.f16round
+value	Math.floor
+value	Math.fround
+value	Math.hypot
+value	Math.imul
+value	Math.log
+value	Math.log10
+value	Math.log1p
+value	Math.log2
+value	Math.max
+value	Math.min
+value	Math.pow
+value	Math.random
+value	Math.round
+value	Math.sign
+value	Math.sin
+value	Math.sinh
+value	Math.sqrt
+value	Math.sumPrecise
+value	Math.tan
+value	Math.tanh
+value	Math.trunc
+value	Number.isFinite
+value	Number.isInteger
+value	Number.isNaN
+value	Number.isSafeInteger
+value	Number.prototype
+value	Object.assign
+value	Object.create
+value	Object.defineProperties
+value	Object.defineProperty
+value	Object.entries
+value	Object.freeze
+value	Object.fromEntries
+value	Object.getOwnPropertyDescriptor
+value	Object.getOwnPropertyDescriptors
+value	Object.getOwnPropertyNames
+value	Object.getOwnPropertySymbols
+value	Object.getPrototypeOf
+value	Object.groupBy
+value	Object.hasOwn
+value	Object.is
+value	Object.isExtensible
+value	Object.isFrozen
+value	Object.isSealed
+value	Object.keys
+value	Object.preventExtensions
+value	Object.prototype
+value	Object.seal
+value	Object.setPrototypeOf
+value	Object.values
+value	Promise.all
+value	Promise.allKeyed
+value	Promise.allSettled
+value	Promise.allSettledKeyed
+value	Promise.any
+value	Promise.prototype
+value	Promise.race
+value	Promise.reject
+value	Promise.resolve
+value	Promise.try
+value	Promise.withResolvers
+value	get Promise[Symbol.species]
+value	Proxy.revocable
+value	RangeError.prototype
+value	ReferenceError.prototype
+value	Reflect.apply
+value	Reflect.construct
+value	Reflect.defineProperty
+value	Reflect.deleteProperty
+value	Reflect.get
+value	Reflect.getOwnPropertyDescriptor
+value	Reflect.getPrototypeOf
+value	Reflect.has
+value	Reflect.isExtensible
+value	Reflect.ownKeys
+value	Reflect.preventExtensions
+value	Reflect.set
+value	Reflect.setPrototypeOf
+value	RegExp.escape
+value	RegExp.prototype
+value	get RegExp[Symbol.species]
+value	Set.prototype
+value	get Set[Symbol.species]
+value	String.fromCharCode
+value	String.fromCodePoint
+value	String.prototype
+value	String.raw
+value	SuppressedError.prototype
+value	Symbol.asyncDispose
+value	Symbol.asyncIterator
+value	Symbol.dispose
+value	Symbol.for
+value	Symbol.hasInstance
+value	Symbol.isConcatSpreadable
+value	Symbol.iterator
+value	Symbol.keyFor
+value	Symbol.match
+value	Symbol.matchAll
+value	Symbol.metadata
+value	Symbol.prototype
+value	Symbol.replace
+value	Symbol.search
+value	Symbol.species
+value	Symbol.split
+value	Symbol.toPrimitive
+value	Symbol.toStringTag
+value	Symbol.unscopables
+value	SyntaxError.prototype
+value	TypeError.prototype
+value	URIError.prototype
+value	Uint16Array.prototype
+value	Uint32Array.prototype
+value	Uint8Array.fromBase64
+value	Uint8Array.fromHex
+value	Uint8Array.prototype
+value	Uint8ClampedArray.prototype
+value	WeakMap.prototype
+value	WeakRef.prototype
+value	WeakSet.prototype
+value	Array.prototype.at
+value	Array.prototype.concat
+value	Array.prototype.copyWithin
+value	Array.prototype.entries
+value	Array.prototype.every
+value	Array.prototype.fill
+value	Array.prototype.filter
+value	Array.prototype.find
+value	Array.prototype.findIndex
+value	Array.prototype.findLast
+value	Array.prototype.findLastIndex
+value	Array.prototype.flat
+value	Array.prototype.flatMap
+value	Array.prototype.forEach
+value	Array.prototype.includes
+value	Array.prototype.indexOf
+value	Array.prototype.join
+value	Array.prototype.keys
+value	Array.prototype.lastIndexOf
+value	Array.prototype.map
+value	Array.prototype.pop
+value	Array.prototype.push
+value	Array.prototype.reduce
+value	Array.prototype.reduceRight
+value	Array.prototype.reverse
+value	Array.prototype.shift
+value	Array.prototype.slice
+value	Array.prototype.some
+value	Array.prototype.sort
+value	Array.prototype.splice
+value	Array.prototype.toLocaleString
+value	Array.prototype.toReversed
+value	Array.prototype.toSorted
+value	Array.prototype.toSpliced
+value	Array.prototype.toString
+value	Array.prototype.unshift
+value	Array.prototype.values
+value	Array.prototype.with
+value	Array.prototype[Symbol.unscopables]
+value	ArrayBuffer.prototype.resize
+value	ArrayBuffer.prototype.slice
+value	ArrayBuffer.prototype.sliceToImmutable
+value	ArrayBuffer.prototype.transfer
+value	ArrayBuffer.prototype.transferToFixedLength
+value	ArrayBuffer.prototype.transferToImmutable
+value	get ArrayBuffer.prototype.byteLength
+value	get ArrayBuffer.prototype.detached
+value	get ArrayBuffer.prototype.immutable
+value	get ArrayBuffer.prototype.maxByteLength
+value	get ArrayBuffer.prototype.resizable
+value	AsyncDisposableStack.prototype.adopt
+value	AsyncDisposableStack.prototype.defer
+value	AsyncDisposableStack.prototype.disposeAsync
+value	AsyncDisposableStack.prototype.move
+value	AsyncDisposableStack.prototype.use
+value	get AsyncDisposableStack.prototype.disposed
+value	BigInt.prototype.toLocaleString
+value	BigInt.prototype.toString
+value	BigInt.prototype.valueOf
+value	Boolean.prototype.toString
+value	Boolean.prototype.valueOf
+value	get DOMException.prototype.code
+value	get DOMException.prototype.message
+value	get DOMException.prototype.name
+value	DataView.prototype.getBigInt64
+value	DataView.prototype.getBigUint64
+value	DataView.prototype.getFloat16
+value	DataView.prototype.getFloat32
+value	DataView.prototype.getFloat64
+value	DataView.prototype.getInt16
+value	DataView.prototype.getInt32
+value	DataView.prototype.getInt8
+value	DataView.prototype.getUint16
+value	DataView.prototype.getUint32
+value	DataView.prototype.getUint8
+value	DataView.prototype.setBigInt64
+value	DataView.prototype.setBigUint64
+value	DataView.prototype.setFloat16
+value	DataView.prototype.setFloat32
+value	DataView.prototype.setFloat64
+value	DataView.prototype.setInt16
+value	DataView.prototype.setInt32
+value	DataView.prototype.setInt8
+value	DataView.prototype.setUint16
+value	DataView.prototype.setUint32
+value	DataView.prototype.setUint8
+value	get DataView.prototype.buffer
+value	get DataView.prototype.byteLength
+value	get DataView.prototype.byteOffset
+value	Date.prototype.getDate
+value	Date.prototype.getDay
+value	Date.prototype.getFullYear
+value	Date.prototype.getHours
+value	Date.prototype.getMilliseconds
+value	Date.prototype.getMinutes
+value	Date.prototype.getMonth
+value	Date.prototype.getSeconds
+value	Date.prototype.getTime
+value	Date.prototype.getTimezoneOffset
+value	Date.prototype.getUTCDate
+value	Date.prototype.getUTCDay
+value	Date.prototype.getUTCFullYear
+value	Date.prototype.getUTCHours
+value	Date.prototype.getUTCMilliseconds
+value	Date.prototype.getUTCMinutes
+value	Date.prototype.getUTCMonth
+value	Date.prototype.getUTCSeconds
+value	Date.prototype.getYear
+value	Date.prototype.setDate
+value	Date.prototype.setFullYear
+value	Date.prototype.setHours
+value	Date.prototype.setMilliseconds
+value	Date.prototype.setMinutes
+value	Date.prototype.setMonth
+value	Date.prototype.setSeconds
+value	Date.prototype.setTime
+value	Date.prototype.setUTCDate
+value	Date.prototype.setUTCFullYear
+value	Date.prototype.setUTCHours
+value	Date.prototype.setUTCMilliseconds
+value	Date.prototype.setUTCMinutes
+value	Date.prototype.setUTCMonth
+value	Date.prototype.setUTCSeconds
+value	Date.prototype.toDateString
+value	Date.prototype.toGMTString
+value	Date.prototype.toISOString
+value	Date.prototype.toJSON
+value	Date.prototype.toLocaleDateString
+value	Date.prototype.toLocaleString
+value	Date.prototype.toLocaleTimeString
+value	Date.prototype.toString
+value	Date.prototype.toTimeString
+value	Date.prototype.valueOf
+value	Date.prototype[Symbol.toPrimitive]
+value	DisposableStack.prototype.adopt
+value	DisposableStack.prototype.defer
+value	DisposableStack.prototype.dispose
+value	DisposableStack.prototype.move
+value	DisposableStack.prototype.use
+value	get DisposableStack.prototype.disposed
+value	Error.prototype.toString
+value	get Error.prototype.stack
+value	set Error.prototype.stack
+value	FinalizationRegistry.prototype.register
+value	FinalizationRegistry.prototype.unregister
+value	Function.prototype.apply
+value	Function.prototype.bind
+value	Function.prototype.call
+value	Function.prototype.toString
+value	Function.prototype[Symbol.hasInstance]
+value	get Function.prototype.arguments
+value	Iterator.prototype.chunks
+value	Iterator.prototype.drop
+value	Iterator.prototype.every
+value	Iterator.prototype.filter
+value	Iterator.prototype.find
+value	Iterator.prototype.flatMap
+value	Iterator.prototype.forEach
+value	Iterator.prototype.includes
+value	Iterator.prototype.join
+value	Iterator.prototype.map
+value	Iterator.prototype.reduce
+value	Iterator.prototype.some
+value	Iterator.prototype.take
+value	Iterator.prototype.toArray
+value	Iterator.prototype.windows
+value	Iterator.prototype[Symbol.dispose]
+value	Iterator.prototype[Symbol.iterator]
+value	get Iterator.prototype.constructor
+value	get Iterator.prototype[Symbol.toStringTag]
+value	set Iterator.prototype.constructor
+value	set Iterator.prototype[Symbol.toStringTag]
+value	Map.prototype.clear
+value	Map.prototype.delete
+value	Map.prototype.entries
+value	Map.prototype.forEach
+value	Map.prototype.get
+value	Map.prototype.getOrInsert
+value	Map.prototype.getOrInsertComputed
+value	Map.prototype.has
+value	Map.prototype.keys
+value	Map.prototype.set
+value	Map.prototype.values
+value	get Map.prototype.size
+value	Number.prototype.toExponential
+value	Number.prototype.toFixed
+value	Number.prototype.toLocaleString
+value	Number.prototype.toPrecision
+value	Number.prototype.toString
+value	Number.prototype.valueOf
+value	Object.prototype.hasOwnProperty
+value	Object.prototype.isPrototypeOf
+value	Object.prototype.propertyIsEnumerable
+value	Object.prototype.toLocaleString
+value	Object.prototype.toString
+value	Object.prototype.valueOf
+value	get Object.prototype.__proto__
+value	set Object.prototype.__proto__
+value	Promise.prototype.catch
+value	Promise.prototype.finally
+value	Promise.prototype.then
+value	RegExp.prototype.exec
+value	RegExp.prototype.test
+value	RegExp.prototype.toString
+value	RegExp.prototype[Symbol.matchAll]
+value	RegExp.prototype[Symbol.match]
+value	RegExp.prototype[Symbol.replace]
+value	RegExp.prototype[Symbol.search]
+value	RegExp.prototype[Symbol.split]
+value	get RegExp.prototype.dotAll
+value	get RegExp.prototype.flags
+value	get RegExp.prototype.global
+value	get RegExp.prototype.hasIndices
+value	get RegExp.prototype.ignoreCase
+value	get RegExp.prototype.multiline
+value	get RegExp.prototype.source
+value	get RegExp.prototype.sticky
+value	get RegExp.prototype.unicode
+value	get RegExp.prototype.unicodeSets
+value	Set.prototype.add
+value	Set.prototype.clear
+value	Set.prototype.delete
+value	Set.prototype.difference
+value	Set.prototype.entries
+value	Set.prototype.forEach
+value	Set.prototype.has
+value	Set.prototype.intersection
+value	Set.prototype.isDisjointFrom
+value	Set.prototype.isSubsetOf
+value	Set.prototype.isSupersetOf
+value	Set.prototype.keys
+value	Set.prototype.symmetricDifference
+value	Set.prototype.union
+value	get Set.prototype.size
+value	String.prototype.at
+value	String.prototype.charAt
+value	String.prototype.charCodeAt
+value	String.prototype.codePointAt
+value	String.prototype.concat
+value	String.prototype.endsWith
+value	String.prototype.includes
+value	String.prototype.indexOf
+value	String.prototype.isWellFormed
+value	String.prototype.lastIndexOf
+value	String.prototype.localeCompare
+value	String.prototype.match
+value	String.prototype.matchAll
+value	String.prototype.normalize
+value	String.prototype.padEnd
+value	String.prototype.padStart
+value	String.prototype.repeat
+value	String.prototype.replace
+value	String.prototype.replaceAll
+value	String.prototype.search
+value	String.prototype.slice
+value	String.prototype.split
+value	String.prototype.startsWith
+value	String.prototype.substr
+value	String.prototype.substring
+value	String.prototype.toLocaleLowerCase
+value	String.prototype.toLocaleUpperCase
+value	String.prototype.toLowerCase
+value	String.prototype.toString
+value	String.prototype.toUpperCase
+value	String.prototype.toWellFormed
+value	String.prototype.trim
+value	String.prototype.trimEnd
+value	String.prototype.trimLeft
+value	String.prototype.valueOf
+value	String.prototype[Symbol.iterator]
+value	Symbol.prototype.toString
+value	Symbol.prototype.valueOf
+value	Symbol.prototype[Symbol.toPrimitive]
+value	get Symbol.prototype.description
+value	Uint8Array.prototype.setFromBase64
+value	Uint8Array.prototype.setFromHex
+value	Uint8Array.prototype.toBase64
+value	Uint8Array.prototype.toHex
+value	WeakMap.prototype.delete
+value	WeakMap.prototype.get
+value	WeakMap.prototype.getOrInsert
+value	WeakMap.prototype.getOrInsertComputed
+value	WeakMap.prototype.has
+value	WeakMap.prototype.set
+value	WeakRef.prototype.deref
+value	WeakSet.prototype.add
+value	WeakSet.prototype.delete
+value	WeakSet.prototype.has
+value	%OutOfMemoryError%
+value	%SymbolRegistry%
+value	%ArrayIteratorPrototype%
+value	%StringIteratorPrototype%
+value	%MapIteratorPrototype%
+value	%SetIteratorPrototype%
+value	%GeneratorPrototype%
+value	%TypedArray%
+value	%TypedArrayPrototype%
+value	%GeneratorFunctionPrototype%
+value	%AsyncFunctionPrototype%
+value	%AsyncGeneratorFunctionPrototype%
+value	%AsyncIteratorPrototype%
+value	%AsyncGeneratorPrototype%
+value	%AsyncFromSyncIteratorPrototype%
+value	%RegExpStringIteratorPrototype%
+value	%IteratorHelperPrototype%
+value	%WrapForValidIteratorPrototype%
+value	%CallSitePrototype%
+value	%ArrayIteratorPrototype%.next
+value	%StringIteratorPrototype%.next
+value	%MapIteratorPrototype%.next
+value	%SetIteratorPrototype%.next
+value	%GeneratorPrototype%.next
+value	%GeneratorPrototype%.return
+value	%GeneratorPrototype%.throw
+value	%TypedArray%.from
+value	%TypedArray%.of
+value	get %TypedArray%[Symbol.species]
+value	%TypedArrayPrototype%.at
+value	%TypedArrayPrototype%.copyWithin
+value	%TypedArrayPrototype%.entries
+value	%TypedArrayPrototype%.every
+value	%TypedArrayPrototype%.fill
+value	%TypedArrayPrototype%.filter
+value	%TypedArrayPrototype%.find
+value	%TypedArrayPrototype%.findIndex
+value	%TypedArrayPrototype%.findLast
+value	%TypedArrayPrototype%.findLastIndex
+value	%TypedArrayPrototype%.forEach
+value	%TypedArrayPrototype%.includes
+value	%TypedArrayPrototype%.indexOf
+value	%TypedArrayPrototype%.join
+value	%TypedArrayPrototype%.keys
+value	%TypedArrayPrototype%.lastIndexOf
+value	%TypedArrayPrototype%.map
+value	%TypedArrayPrototype%.reduce
+value	%TypedArrayPrototype%.reduceRight
+value	%TypedArrayPrototype%.reverse
+value	%TypedArrayPrototype%.set
+value	%TypedArrayPrototype%.slice
+value	%TypedArrayPrototype%.some
+value	%TypedArrayPrototype%.sort
+value	%TypedArrayPrototype%.subarray
+value	%TypedArrayPrototype%.toLocaleString
+value	%TypedArrayPrototype%.toReversed
+value	%TypedArrayPrototype%.toSorted
+value	%TypedArrayPrototype%.values
+value	%TypedArrayPrototype%.with
+value	get %TypedArrayPrototype%.buffer
+value	get %TypedArrayPrototype%.byteLength
+value	get %TypedArrayPrototype%.byteOffset
+value	get %TypedArrayPrototype%.length
+value	get %TypedArrayPrototype%[Symbol.toStringTag]
+value	%GeneratorFunctionPrototype%.constructor
+value	%AsyncFunctionPrototype%.constructor
+value	%AsyncGeneratorFunctionPrototype%.constructor
+value	%AsyncIteratorPrototype%[Symbol.asyncDispose]
+value	%AsyncIteratorPrototype%[Symbol.asyncIterator]
+value	%AsyncGeneratorPrototype%.next
+value	%AsyncGeneratorPrototype%.return
+value	%AsyncGeneratorPrototype%.throw
+value	%AsyncFromSyncIteratorPrototype%.next
+value	%AsyncFromSyncIteratorPrototype%.return
+value	%AsyncFromSyncIteratorPrototype%.throw
+value	%RegExpStringIteratorPrototype%.next
+value	%IteratorHelperPrototype%.next
+value	%IteratorHelperPrototype%.return
+value	%WrapForValidIteratorPrototype%.next
+value	%WrapForValidIteratorPrototype%.return
+value	%CallSitePrototype%.getColumnNumber
+value	%CallSitePrototype%.getFileName
+value	%CallSitePrototype%.getFunction
+value	%CallSitePrototype%.getFunctionName
+value	%CallSitePrototype%.getLineNumber
+value	%CallSitePrototype%.isConstructor
+value	%CallSitePrototype%.isNative
+value	%intrinsic:ArraySpeciesCreate%
+value	%intrinsic:FindViaPredicate%
+value	%intrinsic:EveryOrSome%
+value	%intrinsic:SortList%
+value	%intrinsic:CollectPresent%
+value	%intrinsic:ArraySetLength%
+value	%intrinsic:AsyncGeneratorStep%
+value	%intrinsic:AsyncGeneratorAwaitReturnFulfilled%
+value	%intrinsic:AsyncGeneratorAwaitReturnRejected%
+value	%intrinsic:GetAsyncIterator%
+value	%intrinsic:AsyncIteratorReturnMethod%
+value	%intrinsic:AsyncIteratorCloseThrow%
+value	%intrinsic:AsyncFromSyncIteratorUnwrap%
+value	%intrinsic:AsyncFromSyncIteratorCloseThrow%
+value	%intrinsic:ToBigInt%
+value	%intrinsic:ToNumeric%
+value	%intrinsic:ToPrimitive%
+value	%intrinsic:ToNumber%
+value	%intrinsic:ToString%
+value	%intrinsic:LengthOfArrayLike%
+value	%intrinsic:ToPropertyKey%
+value	%intrinsic:DecoratorStart%
+value	%intrinsic:ApplyDecorators%
+value	%intrinsic:DecoratorRunInits%
+value	%intrinsic:DecoratorRunExtras%
+value	%intrinsic:DecoratorAddInitializer%
+value	%intrinsic:DecoratorAccessGet%
+value	%intrinsic:DecoratorAccessSet%
+value	%intrinsic:DecoratorAccessHas%
+value	%intrinsic:ApplyLegacyDecorators%
+value	%intrinsic:DecoratorParam%
+value	%intrinsic:DecoratorParamCall%
+value	%intrinsic:DecoratorMetadata%
+value	%intrinsic:AsyncDisposeFulfilled%
+value	%intrinsic:AsyncDisposeRejected%
+value	%intrinsic:UsingCreate%
+value	%intrinsic:UsingAdd%
+value	%intrinsic:AwaitUsingAdd%
+value	%intrinsic:UsingDisposeError%
+value	%intrinsic:UsingDispose%
+value	%intrinsic:UsingDisposeStep%
+value	%intrinsic:UsingAwaitValue%
+value	%intrinsic:CallPrepareStackTrace%
+value	%intrinsic:ThrowWithStack%
+value	%intrinsic:MicrotaskJob%
+value	%intrinsic:FromAsyncFulfilled%
+value	%intrinsic:FromAsyncRejected%
+value	%intrinsic:InstanceofOperator%
+value	%intrinsic:ClassHeritage%
+value	%intrinsic:FunctionPrototypeBehavior%
+value	%intrinsic:AsyncAwait%
+value	%intrinsic:AsyncFunctionReturn%
+value	%intrinsic:DynamicImport%
+value	%intrinsic:GetIterator%
+value	%intrinsic:IteratorClose%
+value	%intrinsic:IteratorCloseThrow%
+value	%intrinsic:IteratorRest%
+value	%intrinsic:SerializeJSONProperty%
+value	%intrinsic:JSONStackIncludes%
+value	%intrinsic:JSONJoin%
+value	%intrinsic:SerializeJSONObject%
+value	%intrinsic:SerializeJSONArray%
+value	%intrinsic:AddEntriesFromIterable%
+value	%intrinsic:ResolvePromise%
+value	%intrinsic:PromiseResolveFunction%
+value	%intrinsic:PromiseRejectFunction%
+value	%intrinsic:GetCapabilitiesExecutor%
+value	%intrinsic:PromiseReactionJob%
+value	%intrinsic:PromiseResolveThenableJob%
+value	%intrinsic:PromiseAllResolveElement%
+value	%intrinsic:PromiseAllSettledResolveElement%
+value	%intrinsic:PromiseAllSettledRejectElement%
+value	%intrinsic:PromiseAnyRejectElement%
+value	%intrinsic:PromiseThenFinally%
+value	%intrinsic:PromiseCatchFinally%
+value	%intrinsic:PromiseValueThunk%
+value	%intrinsic:PromiseThrower%
+value	%intrinsic:HostCallSettle%
+value	%intrinsic:ProxyRevokeFunction%
+value	%intrinsic:ProxyGetPrototypeOf%
+value	%intrinsic:ProxySetPrototypeOf%
+value	%intrinsic:ProxyIsExtensible%
+value	%intrinsic:ProxyPreventExtensions%
+value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%
+value	%intrinsic:ProxyHasOwnProperty%
+value	%intrinsic:ProxyOwnPropertyAttributes%
+value	%intrinsic:ProxyDefineOwnPropertyFromRecord%
+value	%intrinsic:ProxyDefineDataPropertyOrThrow%
+value	%intrinsic:ProxyCreateDataProperty%
+value	%intrinsic:ProxyCreateDataPropertyOrThrow%
+value	%intrinsic:ProxyHas%
+value	%intrinsic:ProxyGet%
+value	%intrinsic:ProxySet%
+value	%intrinsic:ProxySetOrThrow%
+value	%intrinsic:ProxySetOnReceiver%
+value	%intrinsic:ProxyDeleteProperty%
+value	%intrinsic:ProxyDeletePropertyOrThrow%
+value	%intrinsic:ProxyOwnPropertyKeys%
+value	%intrinsic:ProxyCall%
+value	%intrinsic:ProxyConstruct%
+value	%intrinsic:OrdinaryConstructSlow%
+value	%intrinsic:ProxySetIntegrityLevel%
+value	%intrinsic:ProxyTestIntegrityLevel%
+value	%intrinsic:ForInStep%
+value	%intrinsic:ArraySpread%
+value	%intrinsic:CopyDataProperties%
+value	%intrinsic:CopyDataPropertiesExcluding%
+value	%intrinsic:TypedArraySetElementSlow%
+value	%intrinsic:FinalizationRegistryCleanupJob%
+intrinsic	IsObject
+intrinsic	IsCallable
+intrinsic	IsConstructor
+intrinsic	IsArray
+intrinsic	IsString
+intrinsic	IsNumber
+intrinsic	IsSymbol
+intrinsic	IsBoolean
+intrinsic	AsObj
+intrinsic	AsFn
+intrinsic	AsStr
+intrinsic	AsNumber
+intrinsic	AsSym
+intrinsic	AsBool
+intrinsic	ToBoolean
+intrinsic	ToNumberPrimitive
+intrinsic	ToStringPrimitive
+intrinsic	ToObject
+intrinsic	ToIntegerOrInfinityNumber
+intrinsic	F64ToU32
+intrinsic	F64ToI32
+intrinsic	StrLength
+intrinsic	Get
+intrinsic	GetV
+intrinsic	Set
+intrinsic	HasProperty
+intrinsic	CreateDataPropertyOrThrow
+intrinsic	DeletePropertyOrThrow
+intrinsic	Call
+intrinsic	Construct
+intrinsic	ObjectCreate
+intrinsic	ArrayCreate
+intrinsic	NewTypeError
+intrinsic	NewNotConstructorError
+intrinsic	NewSyntaxError
+intrinsic	NewReferenceError
+intrinsic	NewRangeError
+intrinsic	WellKnownSymbol
+intrinsic	RealmIntrinsic
+intrinsic	ErrorCreate
+intrinsic	DOMExceptionCreate
+intrinsic	DOMExceptionField
+intrinsic	DOMExceptionCode
+intrinsic	DOMExceptionConstant
+intrinsic	Btoa
+intrinsic	Atob
+intrinsic	CaptureStack
+intrinsic	ErrorStack
+intrinsic	StackTraceValue
+intrinsic	IsPendingStack
+intrinsic	SetErrorStack
+intrinsic	CallSiteSlot
+intrinsic	DefineDataPropertyOrThrow
+intrinsic	DefineOwnPropertyFromRecord
+intrinsic	GetOwnPropertyDescriptorObject
+intrinsic	HasOwnProperty
+intrinsic	OwnPropertyAttributes
+intrinsic	OwnPropertyKeys
+intrinsic	GetPrototypeOf
+intrinsic	SetPrototypeOf
+intrinsic	PreventExtensions
+intrinsic	IsExtensible
+intrinsic	SetIntegrityLevel
+intrinsic	TestIntegrityLevel
+intrinsic	SameValue
+intrinsic	ObjectClassTag
+intrinsic	WrapPrimitive
+intrinsic	PrimitiveValue
+intrinsic	ConstructWithArray
+intrinsic	ConstructWithThis
+intrinsic	GetWithReceiver
+intrinsic	SetWithReceiver
+intrinsic	DeleteProperty
+intrinsic	IsProxy
+intrinsic	NewProxy
+intrinsic	ProxyTarget
+intrinsic	ProxyHandler
+intrinsic	ProxyRevoke
+intrinsic	CollectionCreate
+intrinsic	CollectionClass
+intrinsic	CollectionGet
+intrinsic	CollectionHas
+intrinsic	CollectionSet
+intrinsic	CollectionDelete
+intrinsic	CollectionClear
+intrinsic	CollectionSize
+intrinsic	CollectionIterator
+intrinsic	CollectionIteratorNext
+intrinsic	IsOriginalCollectionAdder
+intrinsic	CollectionIteratorStep
+intrinsic	CollectionIteratorKey
+intrinsic	CollectionIteratorValue
+intrinsic	CanBeHeldWeakly
+intrinsic	DateNow
+intrinsic	DateCreate
+intrinsic	DateValue
+intrinsic	DateSetValue
+intrinsic	DateFromFields
+intrinsic	DateGetField
+intrinsic	DateSetFields
+intrinsic	DateFormat
+intrinsic	DateParse
+intrinsic	DateTimezoneOffset
+intrinsic	ArrayBufferCreate
+intrinsic	BufferInfo
+intrinsic	BufferDetach
+intrinsic	BufferResize
+intrinsic	BufferTransfer
+intrinsic	BufferCopy
+intrinsic	SortNumbers
+intrinsic	DataViewCreate
+intrinsic	DataViewField
+intrinsic	DataViewGet
+intrinsic	DataViewSet
+intrinsic	IsDataView
+intrinsic	RealmConstructor
+intrinsic	IsTypedArray
+intrinsic	TypedArrayCreate
+intrinsic	TypedArrayField
+intrinsic	TypedArrayGet
+intrinsic	TypedArraySet
+intrinsic	TypedArrayCopy
+intrinsic	TypedArrayKindProto
+intrinsic	Base64Encode
+intrinsic	HexEncode
+intrinsic	Base64Decode
+intrinsic	HexDecode
+intrinsic	CallWithArray
+intrinsic	BoundFunctionCreate
+intrinsic	BoundTargetFunction
+intrinsic	FunctionToString
+intrinsic	NumberPow
+intrinsic	SymbolDescriptiveString
+intrinsic	CompareStrings
+intrinsic	StringCodePoints
+intrinsic	SortPrimitives
+intrinsic	ArraySpliceDense
+intrinsic	ArrayCanPopDense
+intrinsic	ArrayPopDense
+intrinsic	ArrayFillDense
+intrinsic	ArrayPushDense
+intrinsic	ArraySearchDense
+intrinsic	ArraySliceDense
+intrinsic	EachDense
+intrinsic	ArrayJoinDense
+intrinsic	EnumerableOwnDataProperties
+intrinsic	TypedArraySetFromDense
+intrinsic	StrLocaleCompare
+intrinsic	StrCharCodeAt
+intrinsic	StrCodePointAt
+intrinsic	StrSubstring
+intrinsic	StrIndexOf
+intrinsic	StrLastIndexOf
+intrinsic	StrToCase
+intrinsic	StrTrim
+intrinsic	StrIsWellFormed
+intrinsic	StrToWellFormed
+intrinsic	StrRepeat
+intrinsic	StrFromCodeUnits
+intrinsic	StrFromCodePoints
+intrinsic	StrNormalize
+intrinsic	NewSymbol
+intrinsic	SymbolDescription
+intrinsic	SymbolFor
+intrinsic	SymbolKeyFor
+intrinsic	NumberToString
+intrinsic	NumberToFixed
+intrinsic	NumberToExponential
+intrinsic	NumberToPrecision
+intrinsic	StringParseFloat
+intrinsic	StringParseInt
+intrinsic	UriEncode
+intrinsic	UriDecode
+intrinsic	StrEscape
+intrinsic	StrUnescape
+intrinsic	CompileEval
+intrinsic	CompileFunction
+intrinsic	GlobalObject
+intrinsic	EnqueueMicrotask
+intrinsic	NumberToInt32
+intrinsic	NumberToUint32
+intrinsic	F64Abs
+intrinsic	F64Acos
+intrinsic	F64Acosh
+intrinsic	F64Asin
+intrinsic	F64Asinh
+intrinsic	F64Atan
+intrinsic	F64Atanh
+intrinsic	F64Atan2
+intrinsic	F64Cbrt
+intrinsic	F64Hypot
+intrinsic	F64Ceil
+intrinsic	F64Clz32
+intrinsic	F64Cos
+intrinsic	F64Cosh
+intrinsic	F64Exp
+intrinsic	F64Expm1
+intrinsic	F64Floor
+intrinsic	F64Fround
+intrinsic	F64F16round
+intrinsic	F64SumPrecise
+intrinsic	F64Imul
+intrinsic	F64Log
+intrinsic	F64Log1p
+intrinsic	F64Log10
+intrinsic	F64Log2
+intrinsic	F64Round
+intrinsic	F64Sign
+intrinsic	F64Sin
+intrinsic	F64Sinh
+intrinsic	F64Sqrt
+intrinsic	F64Tan
+intrinsic	F64Tanh
+intrinsic	F64Trunc
+intrinsic	MathRandom
+intrinsic	CreateArrayIterator
+intrinsic	ArrayIteratorTarget
+intrinsic	ArrayIteratorIndex
+intrinsic	ArrayIteratorSetIndex
+intrinsic	ArrayIteratorFinish
+intrinsic	ArrayIteratorKind
+intrinsic	CreateStringIterator
+intrinsic	StringIteratorTarget
+intrinsic	StrCodePointString
+intrinsic	HasOriginalIteration
+intrinsic	IteratorFastReady
+intrinsic	IteratorFastValue
+intrinsic	CreateIterResultObject
+intrinsic	CreateArrayFromPair
+intrinsic	PromiseCreate
+intrinsic	IsPromise
+intrinsic	IntrinsicPromise
+intrinsic	PromiseState
+intrinsic	PromiseResult
+intrinsic	FulfillPromise
+intrinsic	RejectPromise
+intrinsic	PromiseClaimResolve
+intrinsic	PerformPromiseThen
+intrinsic	EnqueuePromiseResolveThenableJob
+intrinsic	NewRecord
+intrinsic	RecordGet
+intrinsic	RecordSet
+intrinsic	NewBuiltinClosure
+intrinsic	GeneratorState
+intrinsic	GeneratorSetState
+intrinsic	GeneratorResume
+intrinsic	IsAsyncFunctionState
+intrinsic	AsyncFunctionPromise
+intrinsic	AsyncGeneratorState
+intrinsic	AsyncGeneratorEnqueue
+intrinsic	AsyncGeneratorFirstRequest
+intrinsic	AsyncGeneratorDequeue
+intrinsic	CreateAsyncFromSyncIterator
+intrinsic	CreateIteratorHelper
+intrinsic	ThisIteratorHelper
+intrinsic	WeakRefCreate
+intrinsic	WeakRefDeref
+intrinsic	FinalizationRegistryCreate
+intrinsic	ThisFinalizationRegistry
+intrinsic	FinalizationRegistryRegister
+intrinsic	FinalizationRegistryUnregister
+intrinsic	FinalizationRegistryNextDead
+intrinsic	FinalizationRegistryTake
+intrinsic	FinalizationRegistrySetQueued
+intrinsic	DisposableStackCreate
+intrinsic	ThisDisposableStack
+intrinsic	JsonParse
+intrinsic	JsonRawJSON
+intrinsic	IsRawJSON
+intrinsic	JsonStringifyFast
+intrinsic	JsonStringifyFastAt
+intrinsic	JsonQuote
+intrinsic	CreateDataProperty
+intrinsic	IsBigInt
+intrinsic	ToBigIntPrimitive
+intrinsic	NumberToBigInt
+intrinsic	BigIntToString
+intrinsic	BigIntAsIntN
+intrinsic	BigIntAsUintN
+intrinsic	BigIntToNumber
+intrinsic	IsRegExpObject
+intrinsic	RegExpCreate
+intrinsic	RegExpSource
+intrinsic	RegExpFlags
+intrinsic	RegExpHasFlag
+intrinsic	RegExpEscapedSource
+intrinsic	RegExpExecRaw
+intrinsic	RegExpTestRaw
+intrinsic	IsOriginalRegExpExec
+intrinsic	CreateRegExpStringIterator
+intrinsic	RegExpStringIteratorSlot
+intrinsic	RegExpStringIteratorFinish
+intrinsic	RegExpEscapeString
+intrinsic	IsPristineRegExp
+intrinsic	RegExpSplitRaw
+intrinsic	RegExpReplaceRaw
+intrinsic	IsDenseArray
+intrinsic	AllNumbers
+intrinsic	AllCodePoints
+intrinsic	InstallMethod
+intrinsic	InstallConstructor
+intrinsic	InstallPrototype
+intrinsic	InstallPrototypeConstructor
+intrinsic	InstallAccessor
+intrinsic	InstallValue
+intrinsic	InstallIntrinsic
+intrinsic	MarkNative
+intrinsic	MarkFast
+intrinsic	ArraySpeciesCreate
+intrinsic	ArrayConstructor
+intrinsic	ArraySpecies
+intrinsic	FindViaPredicate
+intrinsic	EveryOrSome
+intrinsic	SortList
+intrinsic	CollectPresent
+intrinsic	ArraySetLength
+intrinsic	AsyncGeneratorStep
+intrinsic	AsyncGeneratorAwaitReturnFulfilled
+intrinsic	AsyncGeneratorAwaitReturnRejected
+intrinsic	GetAsyncIterator
+intrinsic	AsyncIteratorReturnMethod
+intrinsic	AsyncIteratorCloseThrow
+intrinsic	AsyncFromSyncIteratorUnwrap
+intrinsic	AsyncFromSyncIteratorCloseThrow
+intrinsic	ToBigInt
+intrinsic	ToNumeric
+intrinsic	ToPrimitive
+intrinsic	ToNumber
+intrinsic	ToString
+intrinsic	LengthOfArrayLike
+intrinsic	ToPropertyKey
+intrinsic	DatePrototypeValueOf
+intrinsic	DatePrototypeToISOString
+intrinsic	DatePrototypeToJSON
+intrinsic	DatePrototypeToPrimitive
+intrinsic	DecoratorStart
+intrinsic	ApplyDecorators
+intrinsic	DecoratorRunInits
+intrinsic	DecoratorRunExtras
+intrinsic	DecoratorAddInitializer
+intrinsic	DecoratorAccessGet
+intrinsic	DecoratorAccessSet
+intrinsic	DecoratorAccessHas
+intrinsic	ApplyLegacyDecorators
+intrinsic	DecoratorParam
+intrinsic	DecoratorParamCall
+intrinsic	DecoratorMetadata
+intrinsic	AsyncDisposeFulfilled
+intrinsic	AsyncDisposeRejected
+intrinsic	UsingCreate
+intrinsic	UsingAdd
+intrinsic	AwaitUsingAdd
+intrinsic	UsingDisposeError
+intrinsic	UsingDispose
+intrinsic	UsingDisposeStep
+intrinsic	UsingAwaitValue
+intrinsic	CallPrepareStackTrace
+intrinsic	ThrowWithStack
+intrinsic	MicrotaskJob
+intrinsic	FromAsyncFulfilled
+intrinsic	FromAsyncRejected
+intrinsic	InstanceofOperator
+intrinsic	ClassHeritage
+intrinsic	ThrowTypeError
+intrinsic	FunctionPrototypeBehavior
+intrinsic	AsyncAwait
+intrinsic	AsyncFunctionReturn
+intrinsic	GeneratorFunctionConstructor
+intrinsic	AsyncGeneratorFunctionConstructor
+intrinsic	AsyncFunctionConstructor
+intrinsic	DynamicImport
+intrinsic	GetIterator
+intrinsic	IteratorClose
+intrinsic	IteratorCloseThrow
+intrinsic	IteratorRest
+intrinsic	ArrayPrototypeValues
+intrinsic	ArrayIteratorPrototypeNext
+intrinsic	StringPrototypeIterator
+intrinsic	StringIteratorPrototypeNext
+intrinsic	SerializeJSONProperty
+intrinsic	JSONStackIncludes
+intrinsic	JSONJoin
+intrinsic	SerializeJSONObject
+intrinsic	SerializeJSONArray
+intrinsic	AddEntriesFromIterable
+intrinsic	MapPrototypeSet
+intrinsic	MapIteratorPrototypeNext
+intrinsic	ResolvePromise
+intrinsic	PromiseResolveFunction
+intrinsic	PromiseRejectFunction
+intrinsic	GetCapabilitiesExecutor
+intrinsic	PromiseReactionJob
+intrinsic	PromiseResolveThenableJob
+intrinsic	PromiseConstructor
+intrinsic	PromiseAllResolveElement
+intrinsic	PromiseAllSettledResolveElement
+intrinsic	PromiseAllSettledRejectElement
+intrinsic	PromiseAnyRejectElement
+intrinsic	PromiseThenFinally
+intrinsic	PromiseCatchFinally
+intrinsic	PromiseValueThunk
+intrinsic	PromiseThrower
+intrinsic	HostCallSettle
+intrinsic	ProxyRevokeFunction
+intrinsic	ProxyGetPrototypeOf
+intrinsic	ProxySetPrototypeOf
+intrinsic	ProxyIsExtensible
+intrinsic	ProxyPreventExtensions
+intrinsic	ProxyGetOwnPropertyDescriptorObject
+intrinsic	ProxyHasOwnProperty
+intrinsic	ProxyOwnPropertyAttributes
+intrinsic	ProxyDefineOwnPropertyFromRecord
+intrinsic	ProxyDefineDataPropertyOrThrow
+intrinsic	ProxyCreateDataProperty
+intrinsic	ProxyCreateDataPropertyOrThrow
+intrinsic	ProxyHas
+intrinsic	ProxyGet
+intrinsic	ProxySet
+intrinsic	ProxySetOrThrow
+intrinsic	ProxySetOnReceiver
+intrinsic	ProxyDeleteProperty
+intrinsic	ProxyDeletePropertyOrThrow
+intrinsic	ProxyOwnPropertyKeys
+intrinsic	ProxyCall
+intrinsic	ProxyConstruct
+intrinsic	OrdinaryConstructSlow
+intrinsic	ProxySetIntegrityLevel
+intrinsic	ProxyTestIntegrityLevel
+intrinsic	ForInStep
+intrinsic	RegExpSpecies
+intrinsic	RegExpPrototypeHasIndices
+intrinsic	RegExpPrototypeGlobal
+intrinsic	RegExpPrototypeIgnoreCase
+intrinsic	RegExpPrototypeMultiline
+intrinsic	RegExpPrototypeDotAll
+intrinsic	RegExpPrototypeUnicode
+intrinsic	RegExpPrototypeUnicodeSets
+intrinsic	RegExpPrototypeSticky
+intrinsic	RegExpPrototypeFlags
+intrinsic	RegExpPrototypeExec
+intrinsic	RegExpPrototypeMatch
+intrinsic	SetPrototypeAdd
+intrinsic	SetIteratorPrototypeNext
+intrinsic	ArraySpread
+intrinsic	CopyDataProperties
+intrinsic	CopyDataPropertiesExcluding
+intrinsic	TypedArraySetElementSlow
+intrinsic	FinalizationRegistryCleanupJob
+value	%prelude:SameValueZero%
+value	%prelude:RelativeIndex%
+value	%prelude:MoveElements%
+value	%prelude:FlattenIntoArray%
+value	%prelude:ToIndex%
+value	%prelude:AllocateArrayBuffer%
+value	%prelude:ArrayBufferCopyAndDetach%
+value	%prelude:AsyncGeneratorCompleteStep%
+value	%prelude:AsyncGeneratorDrainQueue%
+value	%prelude:AsyncGeneratorAwaitReturn%
+value	%prelude:AsyncFromSyncIteratorContinuation%
+value	%prelude:OrdinaryToPrimitive%
+value	%prelude:GetMethod%
+value	%prelude:ToLength%
+value	%prelude:DVOutOfBounds%
+value	%prelude:DVByteIndex%
+value	%prelude:GetViewElement%
+value	%prelude:SetViewValue%
+value	%prelude:DateValueFromArgs%
+value	%prelude:TimeClip%
+value	%prelude:DateSetter%
+value	%prelude:DecoratorKindName%
+value	%prelude:DecoratorNewAccess%
+value	%prelude:DecoratorNewContext%
+value	%prelude:DecoratorAccessorFn%
+value	%prelude:NewSuppressedError%
+value	%prelude:PendingDisposableStack%
+value	%prelude:AddResource%
+value	%prelude:AddDisposableValue%
+value	%prelude:DisposableStackMove%
+value	%prelude:AsyncDisposeError%
+value	%prelude:AsyncDisposeAwait%
+value	%prelude:AsyncDisposeContinue%
+value	%prelude:InstallErrorCause%
+value	%prelude:FinishStack%
+value	%prelude:FinishErrorStack%
+value	%prelude:RecordStack%
+value	%prelude:ErrorConstruct%
+value	%prelude:CreateDynamicFunction%
+value	%prelude:FromAsyncStart%
+value	%prelude:FromAsyncAwait%
+value	%prelude:FromAsyncIteratorNext%
+value	%prelude:FromAsyncClose%
+value	%prelude:FromAsyncIteratorResult%
+value	%prelude:FromAsyncIteratorStore%
+value	%prelude:FromAsyncArrayLikeNext%
+value	%prelude:FromAsyncArrayLikeValue%
+value	%prelude:CreateListFromArrayLike%
+value	%prelude:OrdinaryHasInstance%
+value	%prelude:GeneratorValidate%
+value	%prelude:GeneratorStep%
+value	%prelude:IterableToList%
+value	%prelude:ArrayFromIterator%
+value	%prelude:GroupByProperty%
+value	%prelude:IteratorStepResult%
+value	%prelude:GetIteratorFlattenable%
+value	%prelude:HelperLimit%
+value	%prelude:NewIteratorHelper%
+value	%prelude:HelperCallFunction%
+value	%prelude:IteratorHelperStep%
+value	%prelude:ArrayPrefixCopy%
+value	%prelude:ChunksStep%
+value	%prelude:WindowsStep%
+value	%prelude:IteratorCloseAll%
+value	%prelude:ZipStep%
+value	%prelude:ZipAnyOpen%
+value	%prelude:FlatMapStep%
+value	%prelude:ConcatStep%
+value	%prelude:IteratorHelperReturnAtYield%
+value	%prelude:IteratorConsume%
+value	%prelude:SetterThatIgnoresPrototypeProperties%
+value	%prelude:ChunkingSize%
+value	%prelude:ZipOptions%
+value	%prelude:ZipAddIterator%
+value	%prelude:ZipCreate%
+value	%prelude:InternalizeJSONProperty%
+value	%prelude:InternalizeJSONMember%
+value	%prelude:JSONPropertyList%
+value	%prelude:JSONListIncludes%
+value	%prelude:CoerceNumbers%
+value	%prelude:ToPropertyDescriptor%
+value	%prelude:DefineOwnProperty%
+value	%prelude:DefinePropertyOrThrow%
+value	%prelude:SetPrototypeOrThrow%
+value	%prelude:ObjectDefinePropertiesHelper%
+value	%prelude:EnumerableOwnProperties%
+value	%prelude:ObjectToString%
+value	%prelude:ClaimResolution%
+value	%prelude:ResolveWithData%
+value	%prelude:RejectWithData%
+value	%prelude:ResolveCapability%
+value	%prelude:RejectCapability%
+value	%prelude:NewPromiseCapability%
+value	%prelude:PromiseResolve%
+value	%prelude:SpeciesConstructor%
+value	%prelude:NewElementRecord%
+value	%prelude:SettleElement%
+value	%prelude:KeyedResult%
+value	%prelude:PerformPromiseKeyed%
+value	%prelude:SettledRecord%
+value	%prelude:NewAggregateError%
+value	%prelude:CreateArrayFromList%
+value	%prelude:PerformPromiseCombinator%
+value	%prelude:ProxyTrap%
+value	%prelude:CompletePropertyDescriptor%
+value	%prelude:IsCompatiblePropertyDescriptor%
+value	%prelude:FromPropertyDescriptor%
+value	%prelude:DescriptorAttributes%
+value	%prelude:ListIncludes%
+value	%prelude:ProxyGetOwnProperty%
+value	%prelude:DataDescriptorRecord%
+value	%prelude:ProxyOwnKeys%
+value	%prelude:StrikeKey%
+value	%prelude:RequireConstructor%
+value	%prelude:ReachesReceiver%
+value	%prelude:RegExpFlagGetter%
+value	%prelude:RegExpExec%
+value	%prelude:AdvanceStringIndex%
+value	%prelude:AdvanceAfterEmptyMatch%
+value	%prelude:GetSubstitution%
+value	%prelude:GetSetRecord%
+value	%prelude:SetCopy%
+value	%prelude:KeysNext%
+value	%prelude:RequireGlobalFlag%
+value	%prelude:StringReplacement%
+value	%prelude:IsRegExp%
+value	%prelude:KindName%
+value	%prelude:TALength%
+value	%prelude:ValidateTypedArray%
+value	%prelude:ToElementValue%
+value	%prelude:AllocateTypedArrayOfLength%
+value	%prelude:TypedArrayFromBuffer%
+value	%prelude:TypedArrayFromValues%
+value	%prelude:TypedArrayConstruct%
+value	%prelude:BufferInfoOrUndefined%
+value	%prelude:TypedArrayCreateWithLength%
+value	%prelude:TypedArraySpeciesCreate%
+value	%prelude:Base64Alphabet%
+value	%prelude:LastChunkHandling%
+value	%prelude:WriteDecoded%
+value	%prelude:TAEveryOrSome%
+value	%prelude:TAFind%
+value	%prelude:TAReduce%
+value	%prelude:TASortedList%
+value	%prelude:IsCanonicalNumericKey%
+value	%prelude:TASet%
+value	%prelude:NewDOMException%
+intrinsic	IteratorFastDrain
+intrinsic	ArgumentCount
+intrinsic	Throw
+intrinsic	RegExpExecOwn
+intrinsic	PromiseSpecies
+intrinsic	PromiseStaticResolve
+intrinsic	PromisePrototypeThen
+intrinsic	PromiseCombinatorRun
+intrinsic	IsArrayConstructor
+intrinsic	SortStart
+intrinsic	SortStep
+intrinsic	SortOperand
+value	%intrinsic:GetPrototypeFromConstructorSlow%
+value	%prelude:GetPrototypeFromConstructor%
+intrinsic	ConstructorPrototype
+intrinsic	GetPrototypeFromConstructorSlow
+value	%intrinsic:ModuleOp%
+value	%prelude:ModuleEvaluate%
+value	%prelude:InnerModuleEvaluation%
+intrinsic	NsOp
+intrinsic	ModuleOp
+value	TextDecoder
+value	TextEncoder
+value	TextDecoder.prototype
+value	TextEncoder.prototype
+value	TextDecoder.prototype.decode
+value	get TextDecoder.prototype.encoding
+value	get TextDecoder.prototype.fatal
+value	get TextDecoder.prototype.ignoreBOM
+value	TextEncoder.prototype.encode
+value	TextEncoder.prototype.encodeInto
+value	get TextEncoder.prototype.encoding
+value	%prelude:TextLabelIsUtf8%
+intrinsic	TextCodecCreate
+intrinsic	TextCodecFlags
+intrinsic	IsBufferSource
+intrinsic	Utf8Encode
+intrinsic	Utf8Decode
+value	%prelude:ImportCall%
+value	%prelude:FinishImport%
+value	%prelude:ExecuteAsyncModule%
+value	%prelude:GatherAvailableAncestors%
+value	%prelude:ListContains%
+value	%prelude:AsyncModuleExecutionFulfilled%
+value	%prelude:AsyncModuleExecutionRejected%
+value	%intrinsic:GetSite%
+value	%prelude:RequireCallable%
+value	%prelude:CheckLength%
+value	%prelude:ArrayCreateChecked%
+value	%prelude:IsConcatSpreadable%
+value	%prelude:ThisArrayBuffer%
+value	%prelude:IsImmutableBuffer%
+value	%prelude:ThisBigIntValue%
+value	%prelude:ThisBooleanValue%
+value	%prelude:ToIntegerOrInfinity%
+value	%prelude:DVByteLength%
+value	%prelude:GetViewValue%
+value	%prelude:IsDateObject%
+value	%prelude:DecoratorPush%
+value	%prelude:DecoratorCheckResult%
+value	%prelude:DecoratorDefine%
+value	%prelude:DecoratorReflectFn%
+value	%prelude:CallDisposeMethod%
+value	%prelude:TextCodecPrototype%
+value	%prelude:TextDictionary%
+value	%prelude:TextIsAsciiWhitespace%
+value	%prelude:FromAsyncReject%
+value	%prelude:GetIteratorFromMethod%
+value	%prelude:IteratorNextResult%
+value	%prelude:ThisIteratorObject%
+value	%prelude:HelperCallable%
+value	%prelude:HelperYield%
+value	%prelude:ThisMap%
+value	%prelude:CanonicalizeKeyedCollectionKey%
+value	%prelude:HasTLA%
+value	%prelude:ModuleClosure%
+value	%prelude:ThisNumberValue%
+value	%prelude:IsFiniteNumber%
+value	%prelude:CapabilityPromise%
+value	%prelude:CapabilityResolveFunction%
+value	%prelude:CapabilityRejectFunction%
+value	%prelude:InvokeThen%
+value	%prelude:PromiseThisConstructor%
+value	%prelude:GetPromiseResolve%
+value	%prelude:DecrementRemaining%
+value	%prelude:ProxyCreate%
+value	%prelude:TrapKey%
+value	%prelude:DescFlag%
+value	%prelude:IsAccessorDescriptor%
+value	%prelude:IsDataDescriptor%
+value	%prelude:ReflectTarget%
+value	%prelude:ThisRegExpObject%
+value	%prelude:RegExpBuiltinExec%
+value	%prelude:ThisSet%
+value	%prelude:RecordHas%
+value	%prelude:RecordKeys%
+value	%prelude:RequireThisCoercible%
+value	%prelude:InvokeSymbol%
+value	%prelude:RegExpFromPattern%
+value	%prelude:ThisStringValue%
+value	%prelude:ThisToString%
+value	%prelude:ThisSymbolValue%
+value	%prelude:ElementSize%
+value	%prelude:KindOf%
+value	%prelude:SameContentType%
+value	%prelude:IsElementValue%
+value	%prelude:RequireMutableTypedArray%
+value	%prelude:ValidateUint8Array%
+value	%prelude:GetOptionsObject%
+value	%prelude:Uint8ArrayFromRecord%
+value	%prelude:ThisWeakMap%
+value	%prelude:ThisWeakSet%
+value	%prelude:DOMExceptionPrototypeObject%
+value	%prelude:DOMExceptionThisField%
+value	%prelude:DOMExceptionEnumerable%
+intrinsic	StrPad
+intrinsic	GetSite
+intrinsic	SortCompareCall
+intrinsic	ObjectFromEntriesDense
+value	%prelude:AsyncGeneratorEnqueueRequest%
+value	%prelude:StackResources%
+value	%prelude:NewCallbackHelper%
+value	%prelude:ZipCloseAll%

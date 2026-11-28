@@ -698,12 +698,10 @@ built at run time).
 ### Builtin registry (D2371, D3644)
 
 tests/builtins/registry.tsv names every builtin object, function and symbol and every
-intrinsic by a spec-style path, with an id that is its position (it names a builtin
-within one build: djs-prelude's base offsets, the REPL's `.heap`). `cargo test -p
-djs-prelude` (registry test) checks that every builtin and intrinsic of this build has an
+intrinsic by a spec-style path. `cargo test -p djs-prelude` (registry test) checks that every builtin and intrinsic of this build has an
 entry and every entry resolves. When it fails after adding or removing builtins, run
 `scripts/registry-update.sh` and commit the file: removed builtins are dropped, new ones
-appended, and the ids follow. A merge keeps one side of the file and scripts/regen.sh
+appended. A merge keeps one side of the file and scripts/regen.sh
 (run by merge-to-main after the rebase) runs the update on the merged tree.
 
 ### Derived files that merge by themselves (D1791, 0214)

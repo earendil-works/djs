@@ -1,12 +1,11 @@
 //! The builtin registry (D2371, issue 0145, D3644): a name for every builtin object,
-//! function and symbol of the realm and every intrinsic, a spec-style path, and an id.
+//! function and symbol of the realm and every intrinsic, a spec-style path.
 //!
 //! The registry is a committed table (tests/builtins/registry.tsv), so that a change that
 //! adds or removes a builtin shows in review and every builtin is reachable by a path.
-//! An id is the entry's position in this tree's table: it names a builtin within a build
-//! (djs-prelude's base offsets, the REPL's `.heap`) and changes when builtins come or go;
-//! the path is the name that stays. `update` drops the entries that no longer resolve and
-//! appends the new builtins, keeping the order of the others.
+//! Snapshots name builtins by their canonical paths (`reachable_names`), the paths this
+//! table records for new builtins, so a path is the name that stays across builds. `update` drops the entries that no longer resolve and appends the
+//! new builtins, keeping the order of the others.
 //!
 //! **Paths.** A *value* entry is a path that leads from a root to an object or symbol of the
 //! base realm, the way the spec writes intrinsics without the `%`s:
@@ -23,8 +22,8 @@
 //! its name: the kinds of builtin closures (`PromiseResolveFunction`-like records hold an
 //! intrinsic id) and the operands of `call_intrinsic`.
 //!
-//! Several registered paths may lead to the same object (a new alias); the object's id is
-//! the lowest. New builtins are appended under their canonical path: the first one a
+//! Several registered paths may lead to the same object (a new alias); the first one names
+//! it. New builtins are appended under their canonical path: the first one a
 //! breadth-first walk from the roots reaches, with keys in sorted order.
 use crate::PushOut;
 
@@ -59,7 +58,6 @@ impl EntryKind {
 /// One line of the registry.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Entry {
-    pub id: u32,
     pub kind: EntryKind,
     pub path: String,
 }
@@ -67,15 +65,14 @@ pub struct Entry {
 /// The registry.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Registry {
-    /// In id order: `entries[i].id == i`.
+    /// In file order.
     pub entries: Vec<Entry>,
 }
 
-/// What [`Registry::update`] changed: the entries added (their new ids) and the paths of
-/// the ones dropped.
+/// What [`Registry::update`] changed: the entries added and the ones dropped.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Update {
-    pub added: Vec<u32>,
+    pub added: Vec<(EntryKind, String)>,
     pub removed: Vec<(EntryKind, String)>,
 }
 
@@ -83,13 +80,11 @@ pub struct Update {
 const HEADER: &str = "\
 # The builtin registry (D2371, D3644): every builtin and intrinsic by path. Never edit by
 # hand: `scripts/registry-update.sh` drops removed builtins and appends new ones. Columns:
-# id (the position, which names a builtin within one build), kind (value: an object or
-# symbol by path; intrinsic: by name), path.
+# kind (value: an object or symbol by path; intrinsic: by name), path.
 ";
 
 impl Registry {
-    /// Parses the registry file. Ids must be 0, 1, 2, ... in order, and no two entries of a
-    /// kind may share a path.
+    /// Parses the registry file. No two entries of a kind may share a path.
     pub fn parse(text: &str) -> Result<Registry, String> {
         let mut entries = Vec::new();
         let mut seen = BTreeSet::new();
@@ -98,31 +93,20 @@ impl Registry {
                 continue;
             }
             let cols: Vec<&str> = line.split('\t').collect();
-            if cols.len() != 3 {
-                return Err(format!("line {}: expected 3 columns", n + 1));
+            if cols.len() != 2 {
+                return Err(format!("line {}: expected 2 columns", n + 1));
             }
-            let id: u32 = cols[0]
-                .parse()
-                .map_err(|_| format!("line {}: bad id {:?}", n + 1, cols[0]))?;
-            if id as usize != entries.len() {
-                return Err(format!(
-                    "line {}: id {id} out of sequence (expected {})",
-                    n + 1,
-                    entries.len()
-                ));
-            }
-            let kind = match cols[1] {
+            let kind = match cols[0] {
                 "value" => EntryKind::Value,
                 "intrinsic" => EntryKind::Intrinsic,
                 k => return Err(format!("line {}: unknown kind {k:?}", n + 1)),
             };
-            if !seen.insert((kind, cols[2].to_string())) {
-                return Err(format!("line {}: {} registered twice", n + 1, cols[2]));
+            if !seen.insert((kind, cols[1].to_string())) {
+                return Err(format!("line {}: {} registered twice", n + 1, cols[1]));
             }
             entries.push_out(Entry {
-                id,
                 kind,
-                path: cols[2].to_string(),
+                path: cols[1].to_string(),
             });
         }
         Ok(Registry { entries })
@@ -132,40 +116,28 @@ impl Registry {
     pub fn to_text(&self) -> String {
         let mut out = String::from(HEADER);
         for e in &self.entries {
-            out.push_str(&format!("{}\t{}\t{}\n", e.id, e.kind.as_str(), e.path));
+            out.push_str(&format!("{}\t{}\n", e.kind.as_str(), e.path));
         }
         out
     }
 
-    /// The entry with this kind and path.
-    pub fn id_of(&self, kind: EntryKind, path: &str) -> Option<u32> {
+    /// Whether an entry has this kind and path.
+    pub fn has(&self, kind: EntryKind, path: &str) -> bool {
         self.entries
             .iter()
-            .find(|e| e.kind == kind && e.path == path)
-            .map(|e| e.id)
+            .any(|e| e.kind == kind && e.path == path)
     }
 
-    pub fn entry(&self, id: u32) -> Option<&Entry> {
-        self.entries.get(id as usize)
-    }
-
-    /// Registry ids of the intrinsics table, by intrinsic id (`None`: unregistered).
-    pub fn intrinsic_ids(&self) -> Vec<Option<u32>> {
-        intrinsics::names()
-            .map(|i| self.id_of(EntryKind::Intrinsic, i))
-            .collect()
-    }
-
-    /// The ids of the builtin objects and symbols of `heap`, by cell offset: every value
-    /// entry resolved on this heap, the lowest id for an object with several paths.
-    pub fn name_cells(&self, heap: &Heap) -> BTreeMap<u32, u32> {
+    /// The builtin objects and symbols of `heap` that have an entry, by cell offset: every
+    /// value entry resolved on this heap, the first path for an object with several.
+    pub fn name_cells(&self, heap: &Heap) -> BTreeMap<u32, &str> {
         let mut r = Resolver::new(heap);
         let mut out = BTreeMap::new();
         for e in &self.entries {
             if e.kind == EntryKind::Value
                 && let Some(cell) = r.resolve(&e.path).and_then(cell_of)
             {
-                out.entry(cell).or_insert(e.id);
+                out.entry(cell).or_insert(e.path.as_str());
             }
         }
         out
@@ -182,12 +154,7 @@ impl Registry {
                 EntryKind::Intrinsic => intrinsics::names().any(|i| i == e.path),
             };
             if !ok {
-                problems.push(format!(
-                    "{} {} (id {}) is gone",
-                    e.kind.as_str(),
-                    e.path,
-                    e.id
-                ));
+                problems.push(format!("{} {} is gone", e.kind.as_str(), e.path));
             }
         }
         let named = self.name_cells(heap);
@@ -197,7 +164,7 @@ impl Registry {
             }
         }
         for i in intrinsics::names() {
-            if self.id_of(EntryKind::Intrinsic, i).is_none() {
+            if !self.has(EntryKind::Intrinsic, i) {
                 problems.push_out(format!("intrinsic {i} has no entry"));
             }
         }
@@ -205,8 +172,7 @@ impl Registry {
     }
 
     /// Brings the registry up to date with this realm: drops the entries that no longer
-    /// resolve, then appends the builtins and intrinsics that have none, and numbers the
-    /// entries by their position again.
+    /// resolve, then appends the builtins and intrinsics that have none.
     pub fn update(&mut self, heap: &Heap) -> Update {
         let mut u = Update::default();
         let mut r = Resolver::new(heap);
@@ -220,28 +186,26 @@ impl Registry {
             }
             ok
         });
-        for (i, e) in self.entries.iter_mut().enumerate() {
-            e.id = i as u32;
-        }
-        let named = self.name_cells(heap);
+        let named: BTreeSet<u32> = self.name_cells(heap).into_keys().collect();
+        let mut add = Vec::new();
         for (cell, path) in canonical_names(heap) {
-            if !named.contains_key(&cell) {
-                u.added.push_out(self.push(EntryKind::Value, path));
+            if !named.contains(&cell) {
+                add.push_out((EntryKind::Value, path));
             }
         }
         for i in intrinsics::names() {
-            if self.id_of(EntryKind::Intrinsic, i).is_none() {
-                u.added
-                    .push_out(self.push(EntryKind::Intrinsic, i.to_string()));
+            if !self.has(EntryKind::Intrinsic, i) {
+                add.push_out((EntryKind::Intrinsic, i.to_string()));
             }
         }
+        for (kind, path) in add {
+            self.entries.push_out(Entry {
+                kind,
+                path: path.clone(),
+            });
+            u.added.push_out((kind, path));
+        }
         u
-    }
-
-    fn push(&mut self, kind: EntryKind, path: String) -> u32 {
-        let id = self.entries.len() as u32;
-        self.entries.push_out(Entry { id, kind, path });
-        id
     }
 }
 

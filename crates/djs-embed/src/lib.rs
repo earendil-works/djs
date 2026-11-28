@@ -237,8 +237,7 @@
 //! - **Features.** The only one is `unicode` (default): `\p{..}` in regular expressions and
 //!   `String.prototype.normalize`, about 60 KB of native code;
 //!   `default-features = false` leaves it out. djs-embed picks djs-core's features itself
-//!   (every builtin, nothing a host does not use: no snapshots or compile cache) and
-//!   turns djs-prelude's builtin registry off.
+//!   (every builtin, nothing a host does not use: no snapshots or compile cache).
 //! - **Runtime crates.** `cargo tree -e normal` gives djs-embed, djs-core, djs-prelude
 //!   and djs-libm (djs's copy of libm's math functions): no third-party crate.
 //! - **Git checkouts.** The crates read files elsewhere in the repository at build time

@@ -30,8 +30,8 @@ def registry():
         if line.startswith("#") or not line.strip():
             continue
         cols = line.rstrip("\n").split("\t")
-        if len(cols) >= 3 and cols[1] == "value" and len(cols) == 3:
-            out.append(cols[2])
+        if len(cols) == 2 and cols[0] == "value":
+            out.append(cols[1])
     return out
 
 
