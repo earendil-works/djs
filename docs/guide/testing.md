@@ -202,7 +202,7 @@ every stop, and under GC stress.
 
 ## Snapshots: continuing in a fresh VM and in another build
 
-A [snapshot](persistence.md) must continue in a fresh VM exactly as the run would have
+A [snapshot](snapshots.md) must continue in a fresh VM exactly as the run would have
 gone on, and a later build must either continue it the same way or refuse it. Four kinds
 of tests hold it to that:
 
@@ -249,7 +249,7 @@ tested against it:
   bytes of a heap image with most cell kinds in it, and loading must return an error or
   a valid heap, never panic or read outside the arena.
 - **Images of another build.** A test changes an image's build hash and expects every
-  load path to refuse it ([what an image depends on](snapshots.md#what-an-image-depends-on)).
+  load path to refuse it ([what an image depends on](images.md#what-an-image-depends-on)).
 - **The builtin prefix.** Debug builds can arm a write barrier that panics on any write
   to the base image's cells; it is armed for every VM with frozen builtins and for the
   codemode cases of the corpus, whose scripts never change a builtin.

@@ -1,4 +1,4 @@
-//! The base snapshot (ARCH G2, "Images and snapshots"; D1321): the image of an idle VM with its
+//! The base image (ARCH G2, "Images and snapshots"; D1321): the image of an idle VM with its
 //! realm and prelude, made by `build.rs` when djs-core changes and embedded here. A new
 //! VM is a copy of it, with no compile at startup.
 //!
@@ -96,7 +96,7 @@ pub fn new_vm(opts: VmOptions) -> Result<Vm, HeapError> {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         // Made by this build's build.rs and verified there: anything else is a build bug.
-        Err(e) => panic!("the embedded base snapshot does not load: {e}"),
+        Err(e) => panic!("the embedded base image does not load: {e}"),
     }
 }
 
@@ -106,7 +106,7 @@ pub fn new_vm_owned(base: alloc::vec::Vec<u8>, opts: VmOptions) -> Result<Vm, He
     match Vm::from_base_vec(base, opts) {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
-        Err(e) => panic!("the embedded base snapshot does not load: {e}"),
+        Err(e) => panic!("the embedded base image does not load: {e}"),
     }
 }
 

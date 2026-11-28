@@ -44,7 +44,7 @@ object, compiling the script) is pure latency, and every sandbox's memory counts
 host runs many.
 
 **How:** the initialized realm ships as a prebuilt image, so creating a VM is a copy
-([images and the base snapshot](snapshots.md#the-base-snapshot)); the compiler works in
+([images and the base image](images.md#the-base-image)); the compiler works in
 one pass (next goal); and most builtins are compact bytecode rather than Rust
 ([builtins](builtins.md)).
 
@@ -78,9 +78,9 @@ build of djs that compiles the functions it waits in the same way.
 that time is wasteful, and a restart would lose it.
 
 **How:** at an **idle point**, where the run only waits for its tools, djs writes it as a
-[snapshot](persistence.md): its objects and internal records by kind and field names,
+[snapshot](snapshots.md): its objects and internal records by kind and field names,
 builtins by name, and its code by its place in the script, compiled again on load and
-checked by bytecode hash ([later builds](persistence.md#later-builds) says what a later
+checked by bytecode hash ([later builds](snapshots.md#later-builds) says what a later
 djs loads). Inside one process a copy of the arena does the same job for any stop ([the
 arena](arena.md)), but such an image is tied to how one engine build numbers its
 internals, so it is not what a run is kept in.

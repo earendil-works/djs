@@ -1,4 +1,4 @@
-//! [`Instance`]: a VM made from a snapshot, and the call protocol.
+//! [`Instance`]: a VM made from an image, and the call protocol.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
@@ -8,9 +8,9 @@ use djs_core::interp::{Intrinsic, intrinsic};
 use djs_core::value::Value as Raw;
 use djs_core::vm::{Status, Vm, VmError};
 
-use crate::snapshot::vm_options;
+use crate::image::vm_options;
 use crate::value::to_raw;
-use crate::{Data, Error, Exception, Snapshot, Throw, Value, ValueRef};
+use crate::{Data, Error, Exception, Image, Throw, Value, ValueRef};
 
 /// The budgets of an instance's calls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,11 +80,11 @@ struct Call {
     over: bool,
 }
 
-/// A VM in a snapshot's state: runs one call at a time. `Send` (move it to another thread
+/// A VM in an image's state: runs one call at a time. `Send` (move it to another thread
 /// between calls or steps), not `Sync`.
 pub struct Instance {
     pub(crate) vm: Vm,
-    snapshot: Snapshot,
+    image: Image,
     limits: Limits,
     call: Option<Call>,
     poisoned: bool,
@@ -115,24 +115,24 @@ pub(crate) fn exception(vm: &mut Vm, e: Raw) -> Error {
 }
 
 impl Instance {
-    pub(crate) fn new(snapshot: Snapshot, limits: Limits) -> Result<Instance, Error> {
-        let opts = vm_options(limits.memory, snapshot.frozen_builtins());
-        let bytes = snapshot.image_buffer(limits.memory);
+    pub(crate) fn new(image: Image, limits: Limits) -> Result<Instance, Error> {
+        let opts = vm_options(limits.memory, image.frozen_builtins());
+        let bytes = image.buffer(limits.memory);
         let vm = guard_vm(|| Vm::from_bytes_trusted(bytes, opts))?.map_err(|e| match e {
             djs_core::heap::LoadError::TooLarge => Error::OutOfMemory,
-            e => Error::Usage(format!("cannot load the snapshot: {e:?}")),
+            e => Error::Usage(format!("cannot load the image: {e:?}")),
         })?;
         Ok(Instance {
             vm,
-            snapshot,
+            image,
             limits,
             call: None,
             poisoned: false,
         })
     }
 
-    pub fn snapshot(&self) -> &Snapshot {
-        &self.snapshot
+    pub fn image(&self) -> &Image {
+        &self.image
     }
 
     pub fn limits(&self) -> Limits {
@@ -143,7 +143,7 @@ impl Instance {
     /// from the next [`Instance::reset`].
     pub fn set_limits(&mut self, limits: Limits) {
         self.limits = limits;
-        let opts = vm_options(limits.memory, self.snapshot.frozen_builtins());
+        let opts = vm_options(limits.memory, self.image.frozen_builtins());
         self.vm.set_options(opts);
     }
 
@@ -161,19 +161,19 @@ impl Instance {
         guard_vm(|| f(vm)).inspect_err(|_| self.poisoned = true)
     }
 
-    /// Back to the snapshot's state (globals, heap, clock), reusing the heap's allocation:
+    /// Back to the image's state (globals, heap, clock), reusing the heap's allocation:
     /// what a fresh instance would be, without its allocation. Ends a call in progress.
     /// The allocation stays as large as calls grew it ([`Instance::heap_size`]);
     /// [`Instance::shrink_heap`] returns what a pool does not want to keep.
     pub fn reset(&mut self) -> Result<(), Error> {
         self.call = None;
-        let image = self.snapshot.clone();
-        match self.guard(|vm| vm.reset_to(image.image()))? {
+        let image = self.image.clone();
+        match self.guard(|vm| vm.reset_to(image.bytes()))? {
             Ok(()) => Ok(()),
             Err(e) => {
                 // The VM has no heap left.
                 self.poisoned = true;
-                Err(Error::Usage(format!("cannot load the snapshot: {e:?}")))
+                Err(Error::Usage(format!("cannot load the image: {e:?}")))
             }
         }
     }
@@ -185,7 +185,7 @@ impl Instance {
         self.vm.heap().arena().capacity()
     }
 
-    /// The bytes of the heap in use: the snapshot's image right after a reset, more while a
+    /// The bytes of the heap in use: the image right after a reset, more while a
     /// call allocates (until its garbage is collected).
     pub fn heap_used(&self) -> usize {
         self.vm.heap().arena().len() as usize
@@ -201,7 +201,7 @@ impl Instance {
     }
 
     /// Sets the clock `Date.now()` and `new Date()` read, in ms since the epoch. The VM
-    /// never reads a system clock; a snapshot's clock is what setup left (0 unless set).
+    /// never reads a system clock; an image's clock is what setup left (0 unless set).
     pub fn set_now(&mut self, ms: f64) -> Result<(), Error> {
         self.guard(|vm| vm.set_now(ms))
     }
@@ -318,7 +318,7 @@ impl Instance {
     }
 
     /// Runs one slice of the current call (at most [`Limits::slice`] fuel). An `import()`
-    /// is answered here, with the snapshot's loader (and synthetic modules), without a
+    /// is answered here, with the image's loader (and synthetic modules), without a
     /// [`Step`] for it: the graph is loaded, compiled and linked between two slices (that
     /// work is not metered as fuel), and the script goes on.
     pub fn step(&mut self) -> Result<Step, Error> {
@@ -328,9 +328,9 @@ impl Instance {
                 return Ok(step);
             };
             let n = ids.len();
-            let snapshot = self.snapshot.clone();
+            let image = self.image.clone();
             let raw = ids.into_iter().map(CallId::get).collect();
-            let r = self.guard(|vm| answer_imports(vm, &mut snapshot.adapter(), raw));
+            let r = self.guard(|vm| answer_imports(vm, &mut image.adapter(), raw));
             let rest = match r {
                 Ok(Ok(rest)) => rest,
                 Ok(Err(e)) | Err(e) => return self.fail(e),

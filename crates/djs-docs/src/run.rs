@@ -3,7 +3,7 @@
 //!
 //! Examples are codemode async function bodies (D008), as in pi and in the live examples
 //! (`Sandbox.run`): top-level `await` and `return` work, and `console.log` prints. The
-//! VM starts from the base snapshot, with the clock at 0. The bodies have no parameters:
+//! VM starts from the base image, with the clock at 0. The bodies have no parameters:
 //! `console` is a global, as a host binds it (D2972).
 
 use djs_core::bytecode::template::disasm_template;

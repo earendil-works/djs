@@ -113,7 +113,7 @@ instance_locals! {
         staging: Vec::new(),
         out: Vec::new(),
     });
-    /// The base snapshot, decoded from the coded image at the first use (D2252) or written
+    /// The base image, decoded from the coded image at the first use (D2252) or written
     /// by the host (`djs_base_inject`). The first `vm_new` takes it as its
     /// arena, growing it in place to the arena's capacity (at memory's end, D2053). After
     /// that, a use decodes it again and the instance keeps it, for later VMs to copy
@@ -274,7 +274,7 @@ fn base_capacity() -> usize {
     ))
 }
 
-/// The base snapshot (D1321), decoded now unless the instance holds it (D2252), and its
+/// The base image (D1321), decoded now unless the instance holds it (D2252), and its
 /// address (valid until the next `vm_new` or `djs_base_inject_ptr`).
 fn base_ptr() -> usize {
     if BASE.with(|b| b.borrow().is_none()) {
@@ -308,7 +308,7 @@ fn page_block(len: usize) -> usize {
     len
 }
 
-/// The base snapshot as a buffer for a new VM's arena (D2060). The first VM of an
+/// The base image as a buffer for a new VM's arena (D2060). The first VM of an
 /// instance takes the instance's bytes (decoded or injected; decoded straight into the
 /// arena's buffer if there are none). Later VMs copy the base, which the instance then
 /// keeps: a host that makes several VMs in one instance decodes twice, not each time.
@@ -337,10 +337,10 @@ fn take_base() -> Option<Vec<u8>> {
     })
 }
 
-/// A VM from the base snapshot, or the reason there is none.
+/// A VM from the base image, or the reason there is none.
 fn new_from_base(opts: VmOptions) -> Result<Vm, &'static str> {
     let base = take_base().ok_or(
-        "no base snapshot: the host must hand over the module's djs_base section \
+        "no base image: the host must hand over the module's djs_base section \
          (djs_base_coded_ptr) or inject a decoded base",
     )?;
     djs_prelude::new_vm_owned(base, opts).map_err(|e| e.as_str())
@@ -568,7 +568,7 @@ pub extern "C" fn djs_build_hash() -> u32 {
     djs_core::vm::BUILD_HASH
 }
 
-/// The address of the base snapshot (D1321, decoded at the first use, D2252) in this
+/// The address of the base image (D1321, decoded at the first use, D2252) in this
 /// module's memory, read-only. Hosts compress snapshots against it (D2260): it is the
 /// image every `vm_new` starts from, and the build hash fixes its bytes. Valid until the
 /// next `vm_new`, which takes the bytes as its arena (D2060): a host that keeps the base
@@ -579,7 +579,7 @@ pub extern "C" fn djs_base_ptr() -> usize {
     base_ptr()
 }
 
-/// Room for the base snapshot a host decoded before (in another instance of this
+/// Room for the base image a host decoded before (in another instance of this
 /// module): the host writes its bytes there and calls `djs_base_inject`, and the instance
 /// never decodes its own (D2252). 0 if this instance already has its base or `len` is not
 /// the base's length.
@@ -647,7 +647,7 @@ pub extern "C" fn djs_base_coded_ptr(len: usize) -> usize {
     })
 }
 
-/// The length of the base snapshot in bytes (see `djs_base_ptr`).
+/// The length of the base image in bytes (see `djs_base_ptr`).
 pub extern "C" fn djs_base_len() -> usize {
     djs_prelude::base_len()
 }
@@ -721,7 +721,7 @@ fn options(memory_limit: u32) -> VmOptions {
 pub const VM_FROZEN_BUILTINS: u32 = 1;
 
 /// A new VM with a heap cap of `memory_limit` bytes (0: the default): a copy of the base
-/// snapshot (djs-prelude, D1321). `flags`: [`VM_FROZEN_BUILTINS`]. Returns its number, or
+/// image (djs-prelude, D1321). `flags`: [`VM_FROZEN_BUILTINS`]. Returns its number, or
 /// 0 if the cap is too small for the realm or a flag is unknown (the reason in the out
 /// buffer).
 pub extern "C" fn vm_new(memory_limit: u32, flags: u32) -> u32 {
@@ -1583,7 +1583,7 @@ fn with_snap_base<R>(
             let base = BASE
                 .with(|b| b.borrow_mut().take())
                 .or_else(|| decode_base(base_capacity()))
-                .ok_or_else(|| String::from("no base snapshot: hand the base over again"))?;
+                .ok_or_else(|| String::from("no base image: hand the base over again"))?;
             *b = Some(djs_core::vm::snapshot::BaseInfo::from_owned(base, opts)?);
         }
         Ok(f(b.as_ref().unwrap()))

@@ -96,8 +96,8 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         exec,
         ..Default::default()
     };
-    // Every case starts from one base image (prelude + console), as a base snapshot
-    // would: building the prelude per case dominated the run time.
+    // Every case starts from one image of the prelude and console, as VMs start from the
+    // base image: building the prelude per case dominated the run time.
     let (image, console) = base();
     let (mut vm, console) = (Vm::from_bytes(image.clone(), opts).unwrap(), *console);
     let body = src.starts_with("// mode: body");

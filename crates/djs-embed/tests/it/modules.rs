@@ -1,9 +1,9 @@
 //! ES modules (0243): a policy module with `@sdk/...` synthetic imports and helper modules
-//! from an in-memory map, compiled once into a snapshot of the evaluated graph; module
+//! from an in-memory map, compiled once into an image of the evaluated graph; module
 //! exports as entry points and read by the host; `import()` answered inside `step`.
 
 use djs_embed::{
-    Data, Error, HostFn, Limits, Loader, ModuleMap, ModuleSource, Snapshot, Source, Step,
+    Data, Error, HostFn, Image, Limits, Loader, ModuleMap, ModuleSource, Source, Step,
     SyntheticModule, Value,
 };
 
@@ -55,8 +55,8 @@ fn sdk() -> SyntheticModule {
         .data("secret", Data::object([("token", Data::from("t0k"))]))
 }
 
-fn policy_snapshot() -> Snapshot {
-    Snapshot::builder()
+fn policy_image() -> Image {
+    Image::builder()
         .module(sdk())
         .loader(files())
         .source(Source::module("policy.js", POLICY))
@@ -82,8 +82,8 @@ fn request(host: &str) -> Data {
 
 #[test]
 fn a_policy_module_with_sdk_imports() {
-    let snap = policy_snapshot();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = policy_image();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let req = request("Example.COM");
     let out = i
         .call_export("policy.js", "onRequest", &[Value::Data(&req)], host)
@@ -110,14 +110,14 @@ fn a_policy_module_with_sdk_imports() {
         i.export("policy.js", "calls").unwrap().unwrap().as_number(),
         Some(2.0)
     );
-    // The snapshot holds the evaluated graph: setup ran the module once, and a reset or
+    // The image holds the evaluated graph: setup ran the module once, and a reset or
     // a fresh instance starts from there without running it again.
     i.reset().unwrap();
     assert_eq!(
         i.export("policy.js", "calls").unwrap().unwrap().as_number(),
         Some(0.0)
     );
-    let mut fresh = snap.instantiate(Limits::default()).unwrap();
+    let mut fresh = img.instantiate(Limits::default()).unwrap();
     for vm in [&mut i, &mut fresh] {
         assert_eq!(
             vm.export("policy.js", "loadedAt")
@@ -147,8 +147,8 @@ fn a_policy_module_with_sdk_imports() {
 
 #[test]
 fn stepping_an_exported_entry() {
-    let snap = policy_snapshot();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = policy_image();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let req = request("example.com");
     i.start_export("policy.js", "onRequest", &[Value::Data(&req)])
         .unwrap();
@@ -190,8 +190,8 @@ fn stepping_an_exported_entry() {
 
 #[test]
 fn dynamic_import_in_a_call() {
-    let snap = policy_snapshot();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = policy_image();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let lazy = |i: &mut djs_embed::Instance, name: &str| {
         i.call_export("policy.js", "lazy", &[Value::Str(name)], host)
     };
@@ -233,7 +233,7 @@ fn dynamic_import_in_a_call() {
 
 #[test]
 fn scripts_import_too() {
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .module(sdk())
         .loader(files())
         .source(Source::script(
@@ -244,8 +244,8 @@ fn scripts_import_too() {
         ))
         .build()
         .unwrap();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
-    // Setup answered the import before it took the snapshot.
+    let mut i = img.instantiate(Limits::default()).unwrap();
+    // Setup answered the import before it took the image.
     assert_eq!(super::call(&mut i, "g").unwrap(), Data::from("a"));
     let out = i.call("f", &[Value::Str("./suffix.js")], host).unwrap();
     assert_eq!(out, Data::Array(vec![Data::from("suffix")]));
@@ -265,7 +265,7 @@ fn typescript_modules_and_custom_loaders() {
             )))
         }
     }
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .loader(Gen)
         .source(Source::typescript_module(
             "main.ts",
@@ -274,7 +274,7 @@ fn typescript_modules_and_custom_loaders() {
         ))
         .build()
         .unwrap();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let arg = Data::object([("n", Data::from(1.0))]);
     let out = i
         .call_export("main.ts", "f", &[Value::Data(&arg)], host)
@@ -285,7 +285,7 @@ fn typescript_modules_and_custom_loaders() {
 #[test]
 fn setup_errors() {
     let build = |src: &str| {
-        Snapshot::builder()
+        Image::builder()
             .module(sdk())
             .loader(files())
             .source(Source::module("bad.js", src))
@@ -314,17 +314,17 @@ fn setup_errors() {
         e => panic!("{e:?}"),
     }
     // Without a loader only synthetic modules resolve.
-    let e = Snapshot::builder()
+    let e = Image::builder()
         .source(Source::module("m.js", "import './x.js';"))
         .build()
         .unwrap_err();
     assert!(matches!(e, Error::Load { message, .. } if message.contains("no module loader")));
-    let e = Snapshot::builder()
+    let e = Image::builder()
         .module(SyntheticModule::new("s").host_fn(HostFn::sync(u32::MAX, "f")))
         .build()
         .unwrap_err();
     assert!(matches!(e, Error::Usage(m) if m.contains("reserved")));
-    let e = Snapshot::builder()
+    let e = Image::builder()
         .module(
             SyntheticModule::new("s")
                 .data("a", Data::Null)
@@ -353,7 +353,7 @@ fn stack_traces_of_module_code() {
              export function g(x: T): string { return new Error('u' + x.a).stack!; }\n",
         ),
     );
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .loader(files)
         .source(Source::module(
             "main.js",
@@ -364,7 +364,7 @@ fn stack_traces_of_module_code() {
         ))
         .build()
         .unwrap_or_else(|e| panic!("{e}"));
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     match i.call_export("main.js", "h", &[], host) {
         Err(Error::Exception(e)) => assert_eq!(
             e.stack.as_deref(),
@@ -382,7 +382,7 @@ fn stack_traces_of_module_code() {
         top.as_str().as_deref(),
         Some("    at <anonymous> (main.js:8:29)\n")
     );
-    let e = Snapshot::builder()
+    let e = Image::builder()
         .loader(ModuleMap::new().module("x.js", "\n\nthrow new Error('top');"))
         .source(Source::module("m.js", "import './x.js';"))
         .build()
@@ -403,7 +403,7 @@ fn json_modules() {
             r#"{"allow": ["example.com", "api.example.com"]}"#,
         )
         .module("lib/x.js", "export const x = 1;");
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .loader(files.clone())
         .source(Source::module(
             "policy.js",
@@ -416,7 +416,7 @@ fn json_modules() {
         ))
         .build()
         .unwrap();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let out = i
         .call_export(
             "policy.js",
@@ -436,7 +436,7 @@ fn json_modules() {
             "not a JSON module",
         ),
     ] {
-        let e = Snapshot::builder()
+        let e = Image::builder()
             .loader(files.clone())
             .source(Source::module("bad.js", src))
             .build()
@@ -454,7 +454,7 @@ fn top_level_await() {
             "export const hosts = await Promise.resolve(['example.com']);",
         )
         .module("lib/never.js", "await new Promise(() => {});");
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .loader(files.clone())
         .source(Source::module(
             "policy.js",
@@ -464,13 +464,13 @@ fn top_level_await() {
         ))
         .build()
         .unwrap();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let out = i
         .call_export("policy.js", "allowed", &[Value::Str("example.com")], host)
         .unwrap();
     assert_eq!(out, Data::Bool(true));
     // A top-level await that waits on nothing fails the build.
-    let e = Snapshot::builder()
+    let e = Image::builder()
         .loader(files)
         .source(Source::module("bad.js", "import './lib/never.js';"))
         .build()

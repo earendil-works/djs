@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use djs_embed::{Data, Error, HostFn, Instance, Limits, Snapshot, Source, Step, Throw, Value};
+use djs_embed::{Data, Error, HostFn, Image, Instance, Limits, Source, Step, Throw, Value};
 
 const SHIM: &str = include_str!("shim.js");
 
@@ -186,9 +186,9 @@ fn parse_url(input: &str) -> Option<[(&'static str, String); 11]> {
 /// How a hook call gets an instance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
-    /// A fresh instance from the snapshot per call
+    /// A fresh instance from the image per call
     Fresh,
-    /// Pooled instances, reset to the snapshot after each call
+    /// Pooled instances, reset to the image after each call
     Reset,
     /// Pooled long-lived instances (globals persist across calls)
     Pooled,
@@ -196,7 +196,7 @@ enum Mode {
 
 /// A policy compiled with the shim, run through djs-embed.
 struct DjsHooks {
-    snapshot: Snapshot,
+    image: Image,
     mode: Mode,
     limits: Limits,
     pool: Mutex<Vec<Instance>>,
@@ -208,7 +208,7 @@ struct DjsHooks {
 
 impl DjsHooks {
     fn new(policy: &str, mode: Mode, limits: Limits) -> Result<DjsHooks, Error> {
-        let snapshot = Snapshot::builder()
+        let image = Image::builder()
             .host_fn(HostFn::sync(URL_PARSE, "__url_parse"))
             .host_fn(HostFn::asynchronous(BODY_READ, "__body_read"))
             .host_fn(HostFn::sync(LOG, "__log"))
@@ -217,7 +217,7 @@ impl DjsHooks {
             .memory(limits.memory)
             .build()?;
         Ok(DjsHooks {
-            snapshot,
+            image,
             mode,
             limits,
             pool: Mutex::new(Vec::new()),
@@ -232,7 +232,7 @@ impl DjsHooks {
         {
             return Ok(i);
         }
-        self.snapshot.instantiate(self.limits)
+        self.image.instantiate(self.limits)
     }
 
     fn put(&self, mut i: Instance, ok: bool) {
@@ -636,12 +636,12 @@ fn main() {
     let t = Instant::now();
     let fresh = make("allowlist", Mode::Fresh);
     println!(
-        "compile shim + allowlist policy into a snapshot: {:.1} ms (image {} KiB)",
+        "compile shim + allowlist policy into an image: {:.1} ms ({} KiB)",
         t.elapsed().as_secs_f64() * 1e3,
-        fresh.snapshot.image_len() / 1024
+        fresh.image.size() / 1024
     );
     let t = Instant::now();
-    drop(fresh.snapshot.instantiate(limits).unwrap());
+    drop(fresh.image.instantiate(limits).unwrap());
     println!(
         "instantiate (cold): {:.1} µs",
         t.elapsed().as_secs_f64() * 1e6

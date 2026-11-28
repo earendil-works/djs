@@ -534,7 +534,7 @@ fn file_names_seeds_and_build_hash() {
     vm_free(other);
 }
 
-/// The base snapshot of an instance (D2252): decoded at its first use, or injected by a
+/// The base image of an instance (D2252): decoded at its first use, or injected by a
 /// host that decoded it in another instance. Each test thread is a fresh "instance"
 /// (the state is thread-local).
 fn in_instance<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {

@@ -20,7 +20,7 @@ where determinism ends.
 ## Why it matters
 
 A run can stop between any two instructions and continue, in the same VM or from a
-[snapshot](persistence.md), and the host hands it inputs and reads results
+[snapshot](snapshots.md), and the host hands it inputs and reads results
 without the VM doing any I/O ([the JavaScript interface](js-api.md)). Determinism is
 what makes that useful:
 
@@ -254,8 +254,8 @@ Some things are deliberately outside the guarantee:
 - **Other builds.** Journals and canonical hashes are tied to the build hash, which
   covers the engine's sources (its math library's included) and features: a different
   build may run the same script in a different number of steps. Images load only into
-  the build that made them ([images](snapshots.md#what-an-image-depends-on)); a run
-  loaded from a [snapshot](persistence.md) into another build goes on with that build's
+  the build that made them ([images](images.md#what-an-image-depends-on)); a run
+  loaded from a [snapshot](snapshots.md) into another build goes on with that build's
   code for every function it does not wait in, and a re-run in another build is checked
   by its calls, not by hashes.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock

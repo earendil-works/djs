@@ -338,7 +338,7 @@ date	commit	machine	benchmark	value	unit
 2026-11-01T03:00:40Z	b8cd6ec98f-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 500k-numbers	13.08	ms
 2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new from base	466.2	ns/op
 2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	73381	ns/op
-2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/base snapshot size	35768	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/base image size	35768	bytes
 2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm file	229447	bytes
 2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm without custom sections	186822	bytes
 2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm gzip -9	87767	bytes
@@ -370,7 +370,7 @@ date	commit	machine	benchmark	value	unit
 2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 500k-numbers	12.58	ms
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new from base	482.5	ns/op
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	74454	ns/op
-2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/base snapshot size	35768	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/base image size	35768	bytes
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm file	229447	bytes
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm without custom sections	186822	bytes
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm gzip -9	87767	bytes
@@ -511,7 +511,7 @@ date	commit	machine	benchmark	value	unit
 2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	wire/stringify 500k-numbers	7.133	ms
 2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	startup/vm_new from base	2211	ns/op
 2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	5757681	ns/op
-2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	startup/base snapshot size	186376	bytes
+2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	startup/base image size	186376	bytes
 2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	engine/qjs/empty	1.757	ms
 2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	engine/qjs/arrays	91.37	ms
 2026-11-05T12:30:32Z	7167411f0f	Mac17,7-aarch64-18cpu	engine/qjs/calls	30.95	ms
@@ -700,7 +700,7 @@ date	commit	machine	benchmark	value	unit
 2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	wire/stringify 500k-numbers	7.207	ms
 2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	startup/vm_new from base	2280	ns/op
 2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	5865050	ns/op
-2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	startup/base snapshot size	186376	bytes
+2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	startup/base image size	186376	bytes
 2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	engine/qjs/empty	1.796	ms
 2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	engine/qjs/arrays	93.14	ms
 2026-11-05T14:44:39Z	35ed5ab789	Mac17,7-aarch64-18cpu	engine/qjs/calls	31.65	ms
@@ -925,7 +925,7 @@ date	commit	machine	benchmark	value	unit
 2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	wire/stringify 500k-numbers	6.948	ms
 2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	startup/vm_new from base	2311	ns/op
 2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	5774100	ns/op
-2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	startup/base snapshot size	190920	bytes
+2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	startup/base image size	190920	bytes
 2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	engine/qjs/empty	1.837	ms
 2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	engine/qjs/arrays	92.65	ms
 2026-11-21T07:48:32Z	7989df32e2	Mac17,7-aarch64-18cpu	engine/qjs/calls	31.17	ms
@@ -1079,7 +1079,7 @@ date	commit	machine	benchmark	value	unit
 2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	wire/stringify 500k-numbers	14.07	ms
 2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	startup/vm_new from base	3480	ns/op
 2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	9569451	ns/op
-2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	startup/base snapshot size	190920	bytes
+2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	startup/base image size	190920	bytes
 2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	engine/qjs/empty	4.075	ms
 2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	engine/qjs/arrays	215.8	ms
 2026-11-21T18:34:05Z	ab471c4906	Mac17,7-aarch64-18cpu	engine/qjs/calls	66.58	ms

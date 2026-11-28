@@ -1,4 +1,4 @@
-//! [`Snapshot`]: a VM image after the host's setup, compiled once and shared.
+//! [`Image`]: a VM image after the host's setup, compiled once and shared.
 
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ pub struct Source {
 pub enum SourceKind {
     /// A classic script: its top-level declarations become globals
     Script,
-    /// An ES module: its name is its key, its imports go through the snapshot's
+    /// An ES module: its name is its key, its imports go through the image's
     /// [`Loader`] and synthetic modules, and its exports are read with
     /// [`crate::Instance::export`] and called with [`crate::Instance::start_export`]
     Module,
@@ -45,7 +45,7 @@ impl Source {
     }
 
     /// An ES module with key `name` (a policy module that exports `onRequest`). Setup loads
-    /// it and the modules it imports, links and evaluates them; the snapshot holds the
+    /// it and the modules it imports, links and evaluates them; the image holds the
     /// evaluated graph. The loader is not asked for `name` itself.
     pub fn module(name: impl Into<String>, text: impl Into<String>) -> Source {
         Source {
@@ -121,7 +121,7 @@ impl HostFn {
     }
 }
 
-/// Builds a [`Snapshot`]: host functions and data globals are defined first, then the
+/// Builds an [`Image`]: host functions and data globals are defined first, then the
 /// sources run in order, each to completion.
 #[derive(Clone, Debug)]
 pub struct Builder {
@@ -205,14 +205,14 @@ impl Builder {
         self
     }
 
-    /// Runs the setup and takes the snapshot. Setup sources must not call host functions:
-    /// the snapshot has no host to answer them ([`Error::Usage`]).
-    pub fn build(self) -> Result<Snapshot, Error> {
+    /// Runs the setup and takes the image. Setup sources must not call host functions:
+    /// the image has no host to answer them ([`Error::Usage`]).
+    pub fn build(self) -> Result<Image, Error> {
         let opts = vm_options(self.memory, self.frozen_builtins);
         let mut vm = guard_vm(|| djs_prelude::new_vm(opts))?.map_err(|_| Error::OutOfMemory)?;
-        let image = guard_vm(|| self.setup(&mut vm))??;
-        Ok(Snapshot(Arc::new(Inner {
-            image,
+        let bytes = guard_vm(|| self.setup(&mut vm))??;
+        Ok(Image(Arc::new(Inner {
+            bytes,
             frozen_builtins: self.frozen_builtins,
             host_fns: self.host_fns,
             modules: self.modules,
@@ -383,7 +383,7 @@ pub(crate) fn load_error(vm: &mut Vm, name: &str, e: Raw) -> Error {
     }
 }
 
-/// The options of every VM of a snapshot: reaching the heap cap is never catchable.
+/// The options of every VM of an image: reaching the heap cap is never catchable.
 pub(crate) fn vm_options(memory: usize, frozen_builtins: bool) -> VmOptions {
     VmOptions {
         memory_limit: memory,
@@ -401,20 +401,20 @@ pub(crate) fn vm_options(memory: usize, frozen_builtins: bool) -> VmOptions {
 /// Images live in this process only: there is no way to save one, and none is needed,
 /// since building one from the sources is the same thing.
 #[derive(Clone)]
-pub struct Snapshot(Arc<Inner>);
+pub struct Image(Arc<Inner>);
 
 struct Inner {
-    image: Vec<u8>,
+    bytes: Vec<u8>,
     frozen_builtins: bool,
     host_fns: Vec<HostFn>,
     modules: Vec<SyntheticModule>,
     loader: Option<SharedLoader>,
 }
 
-impl std::fmt::Debug for Snapshot {
+impl std::fmt::Debug for Image {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Snapshot")
-            .field("image_len", &self.0.image.len())
+        f.debug_struct("Image")
+            .field("size", &self.0.bytes.len())
             .field("host_fns", &self.0.host_fns)
             .finish()
     }
@@ -422,22 +422,22 @@ impl std::fmt::Debug for Snapshot {
 
 const _: () = {
     const fn shareable<T: Send + Sync>() {}
-    shareable::<Snapshot>();
+    shareable::<Image>();
 };
 
-impl Snapshot {
+impl Image {
     pub fn builder() -> Builder {
         Builder::default()
     }
 
-    /// A new VM in the snapshot's state. Copies the image (no compile, no setup run).
+    /// A new VM in the image's state. Copies the image (no compile, no setup run).
     pub fn instantiate(&self, limits: Limits) -> Result<Instance, Error> {
         Instance::new(self.clone(), limits)
     }
 
     /// The image's size in `bytes`: what each instance copies.
-    pub fn image_len(&self) -> usize {
-        self.0.image.len()
+    pub fn size(&self) -> usize {
+        self.0.bytes.len()
     }
 
     /// The host functions, as declared.
@@ -459,8 +459,8 @@ impl Snapshot {
         }
     }
 
-    pub(crate) fn image(&self) -> &[u8] {
-        &self.0.image
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.0.bytes
     }
 
     pub(crate) fn frozen_builtins(&self) -> bool {
@@ -468,10 +468,10 @@ impl Snapshot {
     }
 
     /// A buffer of the image with room for the heap to start growing in.
-    pub(crate) fn image_buffer(&self, memory: usize) -> Vec<u8> {
-        let image = self.image();
-        let mut v = Vec::with_capacity(Heap::image_capacity(image.len(), memory));
-        v.extend_from_slice(image);
+    pub(crate) fn buffer(&self, memory: usize) -> Vec<u8> {
+        let bytes = self.bytes();
+        let mut v = Vec::with_capacity(Heap::image_capacity(bytes.len(), memory));
+        v.extend_from_slice(bytes);
         v
     }
 }

@@ -1,6 +1,6 @@
 //! Status numbers for `gen:status` regions (D2101): counts that follow from the
 //! repository are computed here (test262 groups and ratchets, corpus cases, the base
-//! snapshot, builtin tags, engine tables); numbers that need a build or a benchmark are
+//! image, builtin tags, engine tables); numbers that need a build or a benchmark are
 //! read from `tests/scores/status.tsv`, which `scripts/status.py` writes. Nothing here
 //! measures, so `check` gives the same answer on every machine. Besides the regions,
 //! prose can carry single numbers inline (`<!--n KEY FMT-->...<!--/n-->`, [`value`]).
@@ -529,7 +529,7 @@ fn size(st: &Status) -> Result<String, String> {
     Ok(wrap(
         &format!(
             "`djs_wasm.wasm`, the one module djs ships, is {} ({} gzip, {} brotli): {} of code, \
-             {} of data, and the base snapshot (the initialized realm with all builtins, {}) \
+             {} of data, and the base image (the initialized realm with all builtins, {}) \
              coded to {} in a custom section. Module sizes {}.",
             kb(v[0]),
             kb(v[1]),
@@ -1167,7 +1167,7 @@ fn inventory(st: &Status) -> String {
         ("of them `@native` (also compiled to Rust)", st.native),
         ("of them `@fast` (a Rust leaf entry)", st.fast),
         ("difftest corpus cases", st.corpus_cases),
-        ("base snapshot, bytes", st.base_bytes),
+        ("base image, bytes", st.base_bytes),
     ];
     for (k, n) in rows {
         let _ = writeln!(s, "| {k} | {} |", thousands(n));

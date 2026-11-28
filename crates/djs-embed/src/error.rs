@@ -1,4 +1,4 @@
-//! [`Error`]: every way a snapshot build or a call can fail.
+//! [`Error`]: every way an image build or a call can fail.
 
 use std::fmt;
 
@@ -32,7 +32,7 @@ pub enum Error {
     /// The host used the API wrongly: no such function, an unknown or answered host call, a
     /// second call while one is in progress, a host call during setup
     Usage(String),
-    /// djs panicked (a bug in djs). The instance is poisoned; the snapshot and every other
+    /// djs panicked (a bug in djs). The instance is poisoned; the image and every other
     /// instance are unaffected.
     Panicked(String),
     /// The instance panicked earlier, or its reset failed: drop it and instantiate a new one

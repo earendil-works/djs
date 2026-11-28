@@ -6,21 +6,21 @@ mod calls;
 mod data;
 mod example;
 mod failures;
+mod image;
 mod modules;
-mod snapshot;
 
-use djs_embed::{Data, Error, Instance, Limits, Snapshot, Source};
+use djs_embed::{Data, Error, Image, Instance, Limits, Source};
 
-/// A snapshot of one script, without host functions.
-pub fn snapshot(src: &str) -> Snapshot {
-    Snapshot::builder()
+/// An image of one script, without host functions.
+pub fn image(src: &str) -> Image {
+    Image::builder()
         .source(Source::script("t.js", src))
         .build()
         .unwrap_or_else(|e| panic!("{e}"))
 }
 
 pub fn instance(src: &str) -> Instance {
-    snapshot(src).instantiate(Limits::default()).unwrap()
+    image(src).instantiate(Limits::default()).unwrap()
 }
 
 /// Calls `path` without host functions.

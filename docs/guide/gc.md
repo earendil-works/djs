@@ -84,7 +84,7 @@ build on, together with collection points that don't depend on slicing.
 ## The old region
 
 Most of a fresh VM's heap is the base image: the realm and the compiled builtins, nearly
-all of it live for the VM's whole life ([the base snapshot](snapshots.md#the-base-snapshot)).
+all of it live for the VM's whole life ([the base image](images.md#the-base-image)).
 A program that allocates a lot of short-lived data collects every few hundred kilobytes,
 and a full collection would trace that whole base every time.
 

@@ -75,7 +75,7 @@ the same answers however the calls are ordered or split across runs.
 
 Idle points are numbered from 1: every stop where the run has only host calls open,
 before an answer is given. At any of them the CLI can write the run as a
-[snapshot](persistence.md): its state as data, the CLI's own `tools`, `console` and
+[snapshot](snapshots.md): its state as data, the CLI's own `tools`, `console` and
 host functions named, not written.
 
 - `djs run --snapshot-after K OUT file.js` writes the run as a snapshot to `OUT` at idle
@@ -236,7 +236,7 @@ given, as a host delivers results.
 
 ### Snapshots and `debugger;` in the REPL
 
-`.snapshot s.snapshot` writes the session as a [snapshot](persistence.md): its
+`.snapshot s.snapshot` writes the session as a [snapshot](snapshots.md): its
 globals and everything in flight (open calls, suspended functions, waiting inputs), and
 `.restore s.snapshot` replaces the VM with a fresh one that loaded it, with the open calls
 under their ids and the waiting inputs back under their labels:
@@ -315,7 +315,7 @@ an element, `~name` for a captured variable, `<frame>.x` for a suspended functio
 local, `<proto>`, `handle[n]` for the host's handles, and the layout's field names in
 brackets for internal cells (`<atoms><entries>`).
 
-[Images and the base snapshot](snapshots.md#inspecting-a-heap) explains how the report
+[Images and the base image](images.md#inspecting-a-heap) explains how the report
 matches a heap against the base.
 
 ## Where to look

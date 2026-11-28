@@ -216,7 +216,7 @@ fn outbound_refuses_what_is_not_plain_data() {
         }
     }
     // An exponential sharing blowup is bounded by the memory limit, as a tree and as wire.
-    let mut i = crate::snapshot(
+    let mut i = crate::image(
         "function f() { let v = [1]; for (let i = 0; i < 40; i++) v = [v, v]; return v; }",
     )
     .instantiate(djs_embed::Limits {

@@ -3,7 +3,7 @@
 //! boundary datasets as JSON and reads the script's TSV output:
 //! - `wasm/decode` and `wasm/parse_json`: wire, and JSON text through the VM's `JSON.parse`, into a fresh VM;
 //! - `wasm/readValue` and `wasm/json_stringify` (the VM's `JSON.stringify`): the two ways out;
-//! - `wasm/instantiate`, `wasm/vm_new` (from the base snapshot) and `wasm/vm_new compiling
+//! - `wasm/instantiate`, `wasm/vm_new` (from the base image) and `wasm/vm_new compiling
 //!   the prelude`: startup. This module is built with `compiled-prelude`, whose data
 //!   segment (what building the realm needs) dominates its instantiation;
 //!   `wasm/instantiate shipped` is the shipped module's (0224).

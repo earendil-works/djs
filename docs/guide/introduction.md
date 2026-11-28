@@ -76,7 +76,7 @@ models read those messages and the hosts' tests expect them.
 - The **garbage collector** compacts the arena in place, which keeps it small and makes
   the heap of a run a deterministic function of the run.
 - The **builtins** (`Array.prototype.map`, `JSON.parse`, ...) are written in a strict
-  subset of TypeScript and compiled twice: to bytecode that ships in the base snapshot,
+  subset of TypeScript and compiled twice: to bytecode that ships in the base image,
   and, for the hot ones, to Rust state machines that can suspend in the middle.
 - **Snapshots** write a waiting run as data: its objects, its functions stopped at their
   `await`s and its open tool calls, by kind and field names. Loading one compiles the
@@ -112,7 +112,7 @@ this one call to runs that are suspended into a snapshot and continued in anothe
 
 The first part, *Using djs*, describes what a user of djs sees: the
 [language](language.md) and its [TypeScript](typescript.md) support, the [JavaScript
-interface](js-api.md) for hosts, [snapshots](persistence.md), [limits](limits.md) on
+interface](js-api.md) for hosts, [snapshots](snapshots.md), [limits](limits.md) on
 fuel, memory and depth, [determinism](determinism.md), and [the command line and the
 REPL](cli.md). The last page of the part shows how [one agent host](pi.md) wires djs up.
 

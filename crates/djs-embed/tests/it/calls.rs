@@ -1,13 +1,13 @@
 //! E3/E4: host functions (sync and async), typed arguments and results, the async entry.
 
-use djs_embed::{Data, Error, ErrorKind, HostFn, Limits, Snapshot, Source, Step, Throw, Value};
+use djs_embed::{Data, Error, ErrorKind, HostFn, Image, Limits, Source, Step, Throw, Value};
 
 const ECHO: u32 = 1;
 const READ: u32 = 2;
 const FAIL: u32 = 3;
 
-fn snapshot(src: &str) -> Snapshot {
-    Snapshot::builder()
+fn image(src: &str) -> Image {
+    Image::builder()
         .host_fn(HostFn::sync(ECHO, "echo"))
         .host_fn(HostFn::asynchronous(READ, "read"))
         .host_fn(HostFn::sync(FAIL, "fail"))
@@ -18,13 +18,13 @@ fn snapshot(src: &str) -> Snapshot {
 
 #[test]
 fn sync_host_calls_with_typed_arguments() {
-    let snap = snapshot(
+    let img = image(
         "function f() {\n\
            return [echo('ascii'), echo('héllo €'), echo(new Uint8Array([1, 2, 3])), echo(2.5),\n\
                    echo(true), echo(null), echo(), echo({ a: [1, { b: 'c' }] })];\n\
          }",
     );
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let mut seen = Vec::new();
     let out = i
         .call("f", &[], |c| {
@@ -73,14 +73,14 @@ fn sync_host_calls_with_typed_arguments() {
 
 #[test]
 fn typed_results() {
-    let snap = snapshot(
+    let img = image(
         "function f() {\n\
            const b = echo(0);\n\
            return [typeof echo(1), echo(2), echo(3) instanceof Uint8Array && echo(3).length,\n\
                    echo(4).k[1], b, echo(5), echo(6)];\n\
          }",
     );
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let data = Data::object([("k", Data::Array(vec![Data::Null, Data::from("v")]))]);
     let wire = Data::from("from wire").to_wire();
     let out = i
@@ -114,13 +114,13 @@ fn typed_results() {
 
 #[test]
 fn host_errors_are_thrown_at_the_call() {
-    let snap = snapshot(
+    let img = image(
         "function f() {\n\
            try { fail(); } catch (e) { return [e instanceof RangeError, e.message]; }\n\
          }\n\
          function g() { fail(); }",
     );
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let out = i
         .call("f", &[], |c| {
             c.reply(Err(Throw::new(ErrorKind::RangeError, "too far")))
@@ -138,7 +138,7 @@ fn host_errors_are_thrown_at_the_call() {
 
 #[test]
 fn async_entry_settles_with_async_host_calls() {
-    let snap = snapshot(
+    let img = image(
         "async function f(name) {\n\
            const [a, b] = await Promise.all([read(name + '1'), read(name + '2')]);\n\
            echo('between');\n\
@@ -146,7 +146,7 @@ fn async_entry_settles_with_async_host_calls() {
            return { a, b, c };\n\
          }",
     );
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     i.start("f", &["x".into()]).unwrap();
     let mut waits = Vec::new();
     loop {
@@ -187,17 +187,17 @@ fn async_entry_settles_with_async_host_calls() {
 
 #[test]
 fn a_rejected_promise_is_an_exception() {
-    let snap = snapshot("async function f() { await read('x'); throw new Error('late'); }");
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = image("async function f() { await read('x'); throw new Error('late'); }");
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let e = i.call("f", &[], |c| c.reply(Ok(Value::Null))).unwrap_err();
     assert!(
         matches!(&e, Error::Exception(x) if x.message == "Error: late"),
         "{e:?}"
     );
     // An async host call answered with an error rejects its promise.
-    let snap =
-        snapshot("async function f() { try { await read('x'); } catch (e) { return e.message; } }");
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img =
+        image("async function f() { try { await read('x'); } catch (e) { return e.message; } }");
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let out = i
         .call("f", &[], |c| c.reply(Err(Throw::error("io"))))
         .unwrap();
@@ -207,8 +207,8 @@ fn a_rejected_promise_is_an_exception() {
 #[test]
 fn settling_drops_what_the_call_left() {
     // A fire-and-forget async call is dropped when the entry settles.
-    let snap = snapshot("function f() { read('ignored'); return 1; }");
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = image("function f() { read('ignored'); return 1; }");
+    let mut i = img.instantiate(Limits::default()).unwrap();
     i.start("f", &[]).unwrap();
     assert_eq!(i.step().unwrap(), Step::Done);
     assert_eq!(i.result().unwrap().as_number(), Some(1.0));
@@ -218,8 +218,8 @@ fn settling_drops_what_the_call_left() {
 
 #[test]
 fn methods_get_their_object_as_this() {
-    let snap = snapshot("var hooks = { n: 4, get() { return this.n; } };");
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = image("var hooks = { n: 4, get() { return this.n; } };");
+    let mut i = img.instantiate(Limits::default()).unwrap();
     assert_eq!(i.call("hooks.get", &[], |_| Ok(())).unwrap(), 4.into());
     for bad in ["nope", "hooks.n", "hooks.missing.x"] {
         let e = i.call(bad, &[], |_| Ok(())).unwrap_err();
@@ -229,8 +229,8 @@ fn methods_get_their_object_as_this() {
 
 #[test]
 fn one_call_at_a_time() {
-    let snap = snapshot("function f() { return echo(); }");
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = image("function f() { return echo(); }");
+    let mut i = img.instantiate(Limits::default()).unwrap();
     i.start("f", &[]).unwrap();
     assert!(matches!(i.step().unwrap(), Step::HostCall(_)));
     assert!(matches!(i.start("f", &[]), Err(Error::Usage(_))));
@@ -247,10 +247,10 @@ fn one_call_at_a_time() {
 
 #[test]
 fn a_host_error_in_the_driver_ends_the_call() {
-    let snap = snapshot(
+    let img = image(
         "var after = 0; function f() { echo(); after = 1; }\nfunction get() { return after; }",
     );
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let e = i.call("f", &[], |_| Err(Error::Usage("host gave up".into())));
     assert_eq!(e, Err(Error::Usage("host gave up".into())));
     assert_eq!(i.step(), Err(Error::Usage("the call is over".into())));

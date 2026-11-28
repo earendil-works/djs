@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 djs-core = { path = "../djs-core" }
-# Examples run in a VM made from the base snapshot, as `djs run` does.
+# Examples run in a VM made from the base image, as `djs run` does.
 djs-prelude = { path = "../djs-prelude" }
 # Status numbers (D2101): test262 grouping, as the runner classifies tests.
 djs-test262 = { path = "../djs-test262" }

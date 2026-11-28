@@ -1372,7 +1372,7 @@ language (bgen) for P2. Proposal: P1 adds a minimal **privileged mode** in the c
 (`%Name(args)` intrinsic calls in primary position, where `%` cannot otherwise start
 an expression, compiled to `call_intrinsic`) and a small hand-written `prelude.js`
 compiled at VM creation. bgen later produces the same kind of code, and the base
-snapshot replaces compile-at-startup.
+image replaces compile-at-startup.
 
 ### 7.4 Exceptions
 

@@ -1,14 +1,14 @@
-//! E2: snapshots, instances and reset.
+//! E2: images, instances and reset.
 
-use djs_embed::{Data, Error, HostFn, Limits, Snapshot, Source};
+use djs_embed::{Data, Error, HostFn, Image, Limits, Source};
 
-use crate::{call, instance, snapshot};
+use crate::{call, image, instance};
 
 #[test]
-fn instances_start_in_the_snapshot_state_and_share_nothing() {
-    let snap = snapshot("let n = 0; function bump() { return ++n; }");
-    let mut a = snap.instantiate(Limits::default()).unwrap();
-    let mut b = snap.instantiate(Limits::default()).unwrap();
+fn instances_start_in_the_image_state_and_share_nothing() {
+    let img = image("let n = 0; function bump() { return ++n; }");
+    let mut a = img.instantiate(Limits::default()).unwrap();
+    let mut b = img.instantiate(Limits::default()).unwrap();
     assert_eq!(call(&mut a, "bump").unwrap(), 1.into());
     assert_eq!(call(&mut a, "bump").unwrap(), 2.into());
     assert_eq!(call(&mut b, "bump").unwrap(), 1.into());
@@ -17,13 +17,13 @@ fn instances_start_in_the_snapshot_state_and_share_nothing() {
 }
 
 #[test]
-fn snapshots_are_shared_across_threads() {
-    let snap = snapshot("function f(x) { return x * 2; }");
+fn images_are_shared_across_threads() {
+    let img = image("function f(x) { return x * 2; }");
     let handles: Vec<_> = (0..4)
         .map(|t| {
-            let snap = snap.clone();
+            let img = img.clone();
             std::thread::spawn(move || {
-                let mut i = snap.instantiate(Limits::default()).unwrap();
+                let mut i = img.instantiate(Limits::default()).unwrap();
                 i.call("f", &[(t as f64).into()], |_| Ok(())).unwrap()
             })
         })
@@ -47,7 +47,7 @@ fn instances_move_between_threads() {
 
 #[test]
 fn setup_order_globals_and_frozen_builtins() {
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .host_fn(HostFn::sync(7, "hostLog"))
         .global("config", Data::object([("limit", Data::from(3))]))
         .source(Source::script("a.js", "var fromA = typeof hostLog + ':' + config.limit;"))
@@ -55,13 +55,13 @@ fn setup_order_globals_and_frozen_builtins() {
              function patch() { try { Array.prototype.push = null; } catch (e) { return e.name; } }"))
         .build()
         .unwrap();
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     assert_eq!(call(&mut i, "get").unwrap(), "function:3".into());
     // Frozen builtins: the assignment is refused.
     assert_eq!(call(&mut i, "patch").unwrap(), "TypeError".into());
-    assert_eq!(snap.host_fns(), [HostFn::sync(7, "hostLog")]);
-    assert!(snap.image_len() > 10_000);
-    let open = Snapshot::builder()
+    assert_eq!(img.host_fns(), [HostFn::sync(7, "hostLog")]);
+    assert!(img.size() > 10_000);
+    let open = Image::builder()
         .frozen_builtins(false)
         .source(Source::script(
             "b.js",
@@ -76,7 +76,7 @@ fn setup_order_globals_and_frozen_builtins() {
 #[test]
 fn setup_failures() {
     let err = |src: &str| {
-        Snapshot::builder()
+        Image::builder()
             .host_fn(HostFn::sync(1, "h"))
             .source(Source::script("bad.js", src))
             .build()
@@ -94,7 +94,7 @@ fn setup_failures() {
         e => panic!("{e:?}"),
     }
     assert!(matches!(err("h()"), Error::Usage(_)));
-    let spin = Snapshot::builder()
+    let spin = Image::builder()
         .fuel(10_000)
         .source(Source::script("spin.js", "for (;;) {}"))
         .build();
@@ -111,20 +111,20 @@ fn the_clock_is_the_hosts() {
 
 #[test]
 fn reset_keeps_the_grown_heap_until_shrunk() {
-    let snap = snapshot(
+    let img = image(
         "function big(n) { return 'x'.repeat(n).split('').length; }\n\
          function small() { return 1; }",
     );
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let mut i = img.instantiate(Limits::default()).unwrap();
     let fresh = i.heap_size();
     assert!(i.heap_used() <= fresh);
-    assert_eq!(i.heap_used(), snap.image_len());
+    assert_eq!(i.heap_used(), img.size());
     let out = i.call("big", &[(1u32 << 20).into()], |_| Ok(())).unwrap();
     assert_eq!(out, Data::from(f64::from(1u32 << 20)));
     i.reset().unwrap();
     let grown = i.heap_size();
     assert!(grown > 4 << 20, "{grown}");
-    assert_eq!(i.heap_used(), snap.image_len());
+    assert_eq!(i.heap_used(), img.size());
     i.shrink_heap(0).unwrap();
     assert!(i.heap_size() < grown / 4, "{} of {grown}", i.heap_size());
     assert!(i.heap_size() >= i.heap_used());

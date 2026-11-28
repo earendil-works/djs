@@ -202,7 +202,7 @@ impl Vm {
 
     /// Compiles the generated prelude in privileged mode and runs it (D1172, D1281): it
     /// installs the builtin methods and registers the `@intrinsic` builtins. Compiled at
-    /// every VM creation until there is a base snapshot (ARCH G2).
+    /// every VM creation until there is a base image (ARCH G2).
     #[cfg(djs_prelude)]
     fn install_prelude(&mut self) -> Result<(), HeapError> {
         use crate::compiler::{CompileErrorKind, CompileOptions};
@@ -298,7 +298,7 @@ impl Vm {
         Ok(())
     }
 
-    /// A new VM from a base snapshot: the image of an idle VM with its prelude installed,
+    /// A new VM from a base image: the image of an idle VM with its prelude installed,
     /// made at build time (`djs-prelude`, D1321). Creating a VM is then a copy, with no
     /// compile. The image is trusted (its cells are not verified: it was verified when it
     /// was built), but its header and build hash are checked.

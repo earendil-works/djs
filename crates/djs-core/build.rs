@@ -6,7 +6,7 @@
 //! image loads into, D3641).
 //!
 //! Test files (`*tests.rs`) are left out, so editing a test does not rebuild the library
-//! and the base snapshot. Line endings are normalized, so a CRLF checkout hashes the same.
+//! and the base image. Line endings are normalized, so a CRLF checkout hashes the same.
 //!
 //! Behavior also depends on something outside the sources (D1750): the enabled cargo
 //! features (`\p{..}` is a SyntaxError without `regexp-unicode-props`). They are hashed
@@ -47,7 +47,7 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 
 /// The enabled features of this crate, sorted, without `default` and `unicode` (which only
 /// name others) and `unsafe-heap`, which changes how the arena is accessed but no
-/// result or image (D2520): the base snapshot, built by a host build without it, loads into
+/// result or image (D2520): the base image, built by a host build without it, loads into
 /// a build with it, and images move freely between the two. Nor `prelude`
 /// (D3094): it only decides whether a wasm build can run the prelude source. Nor
 /// `intrinsic-names` (D3340): names in messages and listings. Nor `cold-unicode` (D3350):

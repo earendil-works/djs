@@ -5,7 +5,7 @@ README.md and the guide show them through `djs-docs` generated regions (`gen:sta
 which only read the file: numbers that need a build, a benchmark or another repository
 are measured here, on request, and checked in with the commit they were measured at.
 Counts that follow from the repository (test262 groups, ratchets, corpus cases, the base
-snapshot) are computed by djs-docs itself and need no recording.
+image) are computed by djs-docs itself and need no recording.
 
 usage:
   scripts/status.py size              build the shipped module and record its sizes: bytes,
@@ -115,7 +115,7 @@ def section_sizes(b):
     return out.get(10, 0), out.get(11, 0)
 
 
-# The base snapshot of a module: decoded (an instance's `djs_base_len`) and coded (the
+# The base image of a module: decoded (an instance's `djs_base_len`) and coded (the
 # `djs_base` custom section), and the operations of its one export (D3320), as `decoded coded
 # ops`.
 BASE_JS = """

@@ -57,7 +57,7 @@
 <text class="small" x="57" y="149" text-anchor="middle">offset 0</text>
 <rect class="cell" x="94" y="108" width="150" height="54"/>
 <text x="169" y="132" text-anchor="middle">atoms, realm, builtins</text>
-<text class="small" x="169" y="149" text-anchor="middle">from the base snapshot</text>
+<text class="small" x="169" y="149" text-anchor="middle">from the base image</text>
 <rect class="cell" x="244" y="108" width="40" height="54"/>
 <rect class="cell" x="284" y="108" width="70" height="54"/>
 <text x="319" y="139" text-anchor="middle">Object</text>

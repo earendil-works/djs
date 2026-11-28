@@ -10,7 +10,7 @@ one VM, so sandboxes share nothing and a fault in one cannot touch another.
 > Host functions are given by name in the options and bound as globals or imports.
 > Errors are `SandboxError`s with a `kind`. For runs that wait on tools, `begin` hands
 > every call to the host, which settles it and advances the run; an idle run can be
-> written as a [snapshot](persistence.md) and loaded into another sandbox, and a
+> written as a [snapshot](snapshots.md) and loaded into another sandbox, and a
 > deterministic one can be run again from its script and its results.
 
 ## Installing
@@ -22,7 +22,7 @@ npm install @earendil-works/djs
 The package has no dependencies and carries the wasm module itself: one module,
 <!--n wasm/bytes mb-->1.2 MB<!--/n-->, <!--n wasm/gzip kb-->498 KB<!--/n--> with gzip, which every host uses, the
 ones that persist runs and the ones that never do, because it has
-[snapshots](persistence.md). It runs in node 20 or newer, Bun, Deno, browsers and web
+[snapshots](snapshots.md). It runs in node 20 or newer, Bun, Deno, browsers and web
 workers: the module has no imports, so it runs in any wasm runtime. The package has one
 entry point, `@earendil-works/djs`, which exports the whole API. The wire encoder and the
 heap reader the `Sandbox` uses are internal and not exported.
@@ -503,7 +503,7 @@ again. What the options and methods do:
   `misuse` error. `djs describe file.snapshot` describes a snapshot file.
 
 A snapshot is trusted input: load only snapshots you wrote. [Snapshots: keeping a waiting
-run](persistence.md) explains what a snapshot holds, what a later build of djs can load,
+run](snapshots.md) explains what a snapshot holds, what a later build of djs can load,
 and why.
 
 ## Deterministic runs

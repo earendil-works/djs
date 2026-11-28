@@ -56,9 +56,9 @@ impl ModuleSource {
 
 /// Where module sources come from. Specifiers and keys are opaque strings: djs gives them
 /// no URL or path meaning, and does no I/O. A key names one module: an instance loads each
-/// key once (per snapshot state) and keeps it. Called synchronously, while building the
-/// snapshot (static imports) and inside [`crate::Instance::step`] (an `import()`), so it
-/// must not block for long; the snapshot keeps it, hence `Send + Sync`.
+/// key once (per image state) and keeps it. Called synchronously, while building the
+/// image (static imports) and inside [`crate::Instance::step`] (an `import()`), so it
+/// must not block for long; the image keeps it, hence `Send + Sync`.
 pub trait Loader: Send + Sync {
     /// The key of the module `specifier` names when the module (or script) `referrer`
     /// imports it; `None` for a setup [`crate::Source`]'s own name. An error becomes an
@@ -168,7 +168,7 @@ pub(crate) enum Export {
 /// and plain data. Scripts and modules import it by its key, verbatim (`import { allowHosts }
 /// from "@sdk/net"`, `import("@sdk/net")`), without the [`Loader`]: its key wins over
 /// anything the loader would resolve the same specifier to. It has no code to run; its
-/// exports are set when the snapshot is built.
+/// exports are set when the image is built.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SyntheticModule {
     pub(crate) key: String,
@@ -190,7 +190,7 @@ impl SyntheticModule {
         self
     }
 
-    /// Exports plain data under `name` (a fresh copy in every instance, as the snapshot
+    /// Exports plain data under `name` (a fresh copy in every instance, as the image
     /// left it).
     pub fn data(mut self, name: impl Into<String>, value: Data) -> SyntheticModule {
         self.exports.push(Export::Data(name.into(), value));
@@ -202,7 +202,7 @@ impl SyntheticModule {
     }
 }
 
-/// A [`Loader`] the snapshot shares with its instances.
+/// A [`Loader`] the image shares with its instances.
 #[derive(Clone)]
 pub(crate) struct SharedLoader(pub std::sync::Arc<dyn Loader>);
 
@@ -212,7 +212,7 @@ impl std::fmt::Debug for SharedLoader {
     }
 }
 
-/// djs-core's loader over the snapshot's: synthetic module keys first, then a setup
+/// djs-core's loader over the image's: synthetic module keys first, then a setup
 /// source's own text, then the host's [`Loader`].
 pub(crate) struct Adapter<'a> {
     pub loader: Option<&'a dyn Loader>,
@@ -239,7 +239,7 @@ impl ModuleLoader for Adapter<'_> {
         match self.loader {
             Some(l) => l.resolve(specifier, referrer),
             None => Err(format!(
-                "cannot find module '{specifier}' (the snapshot has no module loader)"
+                "cannot find module '{specifier}' (the image has no module loader)"
             )),
         }
     }

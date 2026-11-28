@@ -107,7 +107,7 @@ A body that imports is still a body, not a module:
 - `import()` is not an import of a host module: it returns a rejected promise, as below;
 - import attributes (`with { type: "json" }`) are not supported.
 
-A run that imported functions is [snapshotted](persistence.md) like any other: an
+A run that imported functions is [snapshotted](snapshots.md) like any other: an
 imported function is named as the host function it is, a namespace as the host's
 object, and the script is the one the run started with, imports included.
 
@@ -141,7 +141,7 @@ are ordinary frames, so they can wait on host calls, run out of fuel and continu
 error a module throws stays its result for later evaluations. Imports are live bindings
 (an importer sees the exporter's binding, not a copy), cycles work as the specification
 says, namespace objects behave as specified, and the module records live in the VM's heap,
-so a [snapshot](snapshots.md) taken after evaluation carries the evaluated graph: a VM
+so a [snapshot](images.md) taken after evaluation carries the evaluated graph: a VM
 made from it reads the same exports. The host reads a module's exports and namespace
 directly.
 
@@ -277,7 +277,7 @@ class MyError extends Error {
 ```
 
 Frozen builtins protect the host's helpers from a script that patches a prototype, and
-they keep a run one a [snapshot](persistence.md) can hold: a snapshot names the builtins
+they keep a run one a [snapshot](snapshots.md) can hold: a snapshot names the builtins
 instead of writing them, so it refuses a run that changed one, and with frozen builtins
 the script fails at the write instead. The mode is chosen when the sandbox is created
 and stays with it.

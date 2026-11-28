@@ -10,7 +10,7 @@ can use.
 > **In short.** Hand-written Rust never calls back into JavaScript: it only provides
 > *leaf intrinsics*, operations that cannot run user code. Every builtin that might run
 > user code is written in a strict subset of TypeScript, and djs-bgen compiles each one
-> exactly one way: to bytecode, which runs once at build time to make the base snapshot;
+> exactly one way: to bytecode, which runs once at build time to make the base image;
 > to a resumable Rust state machine (`@native`); or, for hot builtins that can only meet
 > user code while converting their arguments, to straight-line Rust (`@rust`). A few
 > bytecode builtins also have a hand-written Rust entry for everyday arguments (`@fast`).
@@ -131,7 +131,7 @@ builtin compiled to Rust has no bytecode body: the prelude keeps an empty functi
 it, so that the function object, its name and its length exist, and the interpreter runs
 the Rust whenever it is called. The TypeScript stays the one source of every builtin.
 
-### Bytecode: the prelude and the base snapshot
+### Bytecode: the prelude and the base image
 
 For the bytecode backend, djs-bgen erases the types and writes
 [`builtins/gen/prelude.js`](../../builtins/gen/prelude.js): plain JavaScript with
@@ -192,9 +192,9 @@ function StringPrototypeConcat(...args) {
 > speed depended on more inlining run as Rust), and the prelude reads less like the
 > TypeScript it comes from.
 
-The prelude runs once, at build time, when the base snapshot is made: the realm with
+The prelude runs once, at build time, when the base image is made: the realm with
 every builtin installed and compiled, collected, compacted and embedded in the engine
-([the base snapshot](snapshots.md#the-base-snapshot)). Every VM starts as a copy of that
+([the base image](images.md#the-base-image)). Every VM starts as a copy of that
 image, so no VM ever compiles the prelude, and creating one is a copy of bytes
 ([fast startup in wasm](goals.md#fast-startup-in-wasm)). Privileged templates keep no
 line tables or local names, which keeps that image small.
@@ -511,7 +511,7 @@ the other methods that create their result through the array's constructor norma
 check that `Array.prototype.constructor` and `Array[Symbol.species]` are still the
 originals; when both objects are frozen builtins, that check is the offset compare.
 
-**Snapshots and changed builtins.** A [snapshot](persistence.md) does not copy the
+**Snapshots and changed builtins.** A [snapshot](snapshots.md) does not copy the
 builtins: it names each builtin the run refers to by its path, and the loading VM finds
 its own. That is only right if the run left the builtins as the base has them. The heap
 notes the first write into the builtin prefix, in either mode, and a snapshot of a run
@@ -547,7 +547,7 @@ next snapshot.
   the generated straight-line builtins, called by `own_call` in
   [`crates/djs-core/src/interp/run/fastpath.rs`](../../crates/djs-core/src/interp/run/fastpath.rs).
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): runs the prelude
-  and writes the base snapshot.
+  and writes the base image.
 - [`crates/djs-core/src/interp/run/native.rs`](../../crates/djs-core/src/interp/run/native.rs):
   native frames, their fuel and their safepoints.
 - [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs):

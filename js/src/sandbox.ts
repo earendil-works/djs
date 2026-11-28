@@ -472,7 +472,7 @@ interface Exports {
   djs_snapshot_describe?(len: number): number;
   djs_elastic_stack(on: number): void;
   djs_stack(len: number): number;
-  /** The base snapshot (D1321), coded in the module (D2252). */
+  /** The base image (D1321), coded in the module (D2252). */
   djs_base_ptr(): number;
   djs_base_len(): number;
   djs_base_inject_ptr(len: number): number;

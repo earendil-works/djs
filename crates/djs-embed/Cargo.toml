@@ -5,7 +5,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "Embed djs in a Rust host: compiled snapshots, typed host functions, async calls, budgets."
+description = "Embed djs in a Rust host: compiled images, typed host functions, async calls, budgets."
 
 [lib]
 # No doctests (scripts/gate.py `targets` fails if one appears): the examples in the docs

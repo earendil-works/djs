@@ -30,7 +30,7 @@ unicode = ["djs-prelude/unicode", "djs-wasm/unicode", "djs-test262/unicode"]
 
 [dependencies]
 djs-core = { path = "../djs-core", default-features = false }
-# The base snapshot: VMs start as a copy, not a prelude compile (D1321).
+# The base image: VMs start as a copy, not a prelude compile (D1321).
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw"] }
 # The wasm export layer, driven natively by djs-abidrive to compare images with the wasm
 # build (0072).

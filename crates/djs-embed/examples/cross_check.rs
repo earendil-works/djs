@@ -5,7 +5,7 @@
 //! build script on the build machine) with the one this target makes itself. Every target
 //! must print the same lines.
 
-use djs_embed::{Data, Error, HostFn, Limits, Snapshot, Source, Step, Value};
+use djs_embed::{Data, Error, HostFn, Image, Limits, Source, Step, Value};
 
 const LOG: u32 = 1;
 const FETCH: u32 = 2;
@@ -38,12 +38,12 @@ fn fnv(bytes: &[u8]) -> u64 {
 }
 
 fn main() -> Result<(), Error> {
-    let snapshot = Snapshot::builder()
+    let image = Image::builder()
         .host_fn(HostFn::sync(LOG, "log"))
         .host_fn(HostFn::asynchronous(FETCH, "fetchText"))
         .source(Source::script("policy.js", POLICY))
         .build()?;
-    let mut vm = snapshot.instantiate(Limits::default())?;
+    let mut vm = image.instantiate(Limits::default())?;
     let req = Data::object([("url", Data::from("https://example.com/"))]);
     vm.start("onRequest", &[Value::Data(&req)])?;
     let result = loop {
@@ -70,7 +70,7 @@ fn main() -> Result<(), Error> {
         println!("{key}: {:?}", result.get(key));
     }
     println!("fuel used: {}", vm.fuel_used());
-    println!("snapshot image: {} bytes", snapshot.image_len());
+    println!("image: {} bytes", image.size());
 
     // The embedded base and the one this target makes: the same bytes, or a cross build
     // embeds an image its target would not have made.

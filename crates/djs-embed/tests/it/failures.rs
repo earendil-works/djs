@@ -2,9 +2,9 @@
 
 use std::time::Duration;
 
-use djs_embed::{Error, HostFn, Limits, Snapshot, Source, Step, Value};
+use djs_embed::{Error, HostFn, Image, Limits, Source, Step, Value};
 
-use crate::{call, snapshot};
+use crate::{call, image};
 
 /// The script tries to swallow everything; the last global shows whether a handler ran.
 const SWALLOW: &str = "var ran = 'nothing';\n\
@@ -24,13 +24,13 @@ const SWALLOW: &str = "var ran = 'nothing';\n\
 
 #[test]
 fn fuel_runs_out_in_slices() {
-    let snap = snapshot(SWALLOW);
+    let img = image(SWALLOW);
     let limits = Limits {
         fuel: 1_000_000,
         slice: 100_000,
         ..Limits::default()
     };
-    let mut i = snap.instantiate(limits).unwrap();
+    let mut i = img.instantiate(limits).unwrap();
     i.start("spin", &[]).unwrap();
     let mut yields = 0;
     let e = loop {
@@ -49,21 +49,21 @@ fn fuel_runs_out_in_slices() {
 
 #[test]
 fn the_deadline_is_checked_between_slices() {
-    let snap = snapshot(SWALLOW);
+    let img = image(SWALLOW);
     let limits = Limits {
         fuel: u64::MAX,
         slice: 10_000,
         deadline: Some(Duration::from_millis(20)),
         ..Limits::default()
     };
-    let mut i = snap.instantiate(limits).unwrap();
+    let mut i = img.instantiate(limits).unwrap();
     assert!(i.deadline().is_none());
     let t = std::time::Instant::now();
     assert_eq!(call(&mut i, "spin"), Err(Error::Deadline));
     assert!(t.elapsed() < Duration::from_secs(5));
     assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into());
     // While waiting for async host work too: the host reads the deadline.
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .host_fn(HostFn::asynchronous(1, "slow"))
         .source(Source::script(
             "t.js",
@@ -71,7 +71,7 @@ fn the_deadline_is_checked_between_slices() {
         ))
         .build()
         .unwrap();
-    let mut i = snap.instantiate(limits).unwrap();
+    let mut i = img.instantiate(limits).unwrap();
     i.start("f", &[]).unwrap();
     let Step::Wait(ids) = i.step().unwrap() else {
         panic!()
@@ -84,12 +84,12 @@ fn the_deadline_is_checked_between_slices() {
 
 #[test]
 fn the_memory_cap_cannot_be_caught() {
-    let snap = snapshot(SWALLOW);
+    let img = image(SWALLOW);
     let limits = Limits {
         memory: 4 << 20,
         ..Limits::default()
     };
-    let mut i = snap.instantiate(limits).unwrap();
+    let mut i = img.instantiate(limits).unwrap();
     assert_eq!(call(&mut i, "hog"), Err(Error::OutOfMemory));
     // Neither the catch nor the finally ran.
     assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into());
@@ -101,8 +101,8 @@ fn the_memory_cap_cannot_be_caught() {
 
 #[test]
 fn a_promise_that_never_settles() {
-    let snap = snapshot(SWALLOW);
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = image(SWALLOW);
+    let mut i = img.instantiate(Limits::default()).unwrap();
     assert_eq!(call(&mut i, "never"), Err(Error::NeverSettles));
     assert_eq!(call(&mut i, "neverAsync"), Err(Error::NeverSettles));
     assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into());
@@ -110,8 +110,8 @@ fn a_promise_that_never_settles() {
 
 #[test]
 fn a_bad_return_is_a_data_error() {
-    let snap = snapshot(SWALLOW);
-    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let img = image(SWALLOW);
+    let mut i = img.instantiate(Limits::default()).unwrap();
     assert_eq!(
         call(&mut i, "bad"),
         Err(Error::Data("cannot encode a function at $.f".into()))
@@ -119,14 +119,14 @@ fn a_bad_return_is_a_data_error() {
 }
 
 #[test]
-fn a_small_instance_cannot_load_a_big_snapshot() {
-    let snap = snapshot("var big = Array.from({ length: 50000 }, (_, i) => 'item ' + i);");
-    assert!(snap.image_len() > 1 << 20);
+fn a_small_instance_cannot_load_a_big_image() {
+    let img = image("var big = Array.from({ length: 50000 }, (_, i) => 'item ' + i);");
+    assert!(img.size() > 1 << 20);
     let small = Limits {
         memory: 1 << 20,
         ..Limits::default()
     };
-    assert_eq!(snap.instantiate(small).err(), Some(Error::OutOfMemory));
+    assert_eq!(img.instantiate(small).err(), Some(Error::OutOfMemory));
 }
 
 #[test]
@@ -141,13 +141,13 @@ fn every_error_displays() {
 /// over, whatever the cap (whether a collection was due when the cap was hit varies).
 #[test]
 fn the_next_call_after_the_cap_has_its_memory_back() {
-    let snap = snapshot(SWALLOW);
+    let img = image(SWALLOW);
     for mb in [3usize, 4, 5, 6, 8] {
         let limits = Limits {
             memory: mb << 20,
             ..Limits::default()
         };
-        let mut i = snap.instantiate(limits).unwrap();
+        let mut i = img.instantiate(limits).unwrap();
         assert_eq!(call(&mut i, "hog"), Err(Error::OutOfMemory), "{mb} MiB");
         assert_eq!(
             call(&mut i, "ranWhat").unwrap(),

@@ -20,7 +20,7 @@ of pi's sits in the VM, so none is in a snapshot.
 
 - **One module.** pi's code mode (the coding agent's, rollups) and its durable code mode
   load the same file, the package's one module: it has
-  [snapshots](persistence.md), so the durable mode writes its snapshots in the VM the
+  [snapshots](snapshots.md), so the durable mode writes its snapshots in the VM the
   script runs in, and the other modes carry them unused.
 - **Tools and globals are async host functions** with identities such as `tools.read`,
   `searchTools` or `@mcp/github#search_issues`, bound as the `tools` namespace, as
@@ -53,7 +53,7 @@ of pi's sits in the VM, so none is in a snapshot.
   functions and the imported modules are named in the snapshot and are the resuming
   sandbox's own, and the fuel used travels with it. djs's tests move every harvested
   script of pi's through a snapshot at each of its idle points in this setup. [Later
-  builds](persistence.md#later-builds) says what a snapshot relies on: an upgrade of djs
+  builds](snapshots.md#later-builds) says what a snapshot relies on: an upgrade of djs
   that compiles a waiting function differently refuses the snapshots waiting in it, with
   the reason. For that case a run can be made deterministic and its results kept with
   its snapshots, so that a refused snapshot's run is begun again from its script and
@@ -116,7 +116,7 @@ An agent host that wants djs for its codemode builds on the `Sandbox`:
 5. **Persistence.** Drive the run yourself, as pi's durable code mode does: when the
    agent must wait long (a person, a slow job), write the idle run as a snapshot with
    the open calls' state, and load it later with `loadSnapshot`
-   ([snapshots](persistence.md)). Make it deterministic and keep its deliveries too, and
+   ([snapshots](snapshots.md)). Make it deterministic and keep its deliveries too, and
    a snapshot a newer djs refuses can be run again from its script
    ([determinism](determinism.md#when-a-snapshot-is-refused)).
 6. **Values at the boundary.** `jsonBoundary` gives tools JSON, as a prelude that

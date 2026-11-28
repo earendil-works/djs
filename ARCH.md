@@ -66,7 +66,7 @@ Each goal follows from this:
 - **G1:** the host can read sandbox values (especially strings) straight out of wasm linear
   memory without a serialization step, because the heap layout is a documented format.
 - **G2:** builtins and the realm are set up once at build time and shipped as a base
-  snapshot. Creating a VM means copying that snapshot into a fresh arena. Builtins written
+  image. Creating a VM means copying that image into a fresh arena. Builtins written
   in JS are precompiled into it, so we pay no compile cost for them at runtime.
 
 Native code is never referenced by pointer from the heap. Native builtins are stored as `u16`
@@ -106,7 +106,7 @@ djs/
                     D1170): checks the builtin TS subset, emits the prelude JS for every
                     builtin and Rust state machines for `@native` ones.
     djs-prelude/    build.rs compiles bgen's JS output with djs-core and emits the base
-                    snapshot (include_bytes!, D1321).
+                    image (include_bytes!, D1321).
     djs-wasm/       wasm32-unknown-unknown cdylib: the integer ABI (D1230), std with its
                     dlmalloc (D1231), panic hook.
     djs-cli/        std binary `djs`: run, resume, describe, repl, disasm, strip-types
@@ -403,7 +403,7 @@ Builtins are written in a **strict subset of TypeScript**, in the spirit of V8's
 Each builtin is compiled by exactly one of three backends (D3261):
 
 1. **Bytecode backend (the default).** djs-bgen erases types and emits plain JS with
-   `%Intrinsic` calls. djs compiles it in privileged mode into the base snapshot (D1172).
+   `%Intrinsic` calls. djs compiles it in privileged mode into the base image (D1172).
    Privileged mode unlocks `%Name(...)` intrinsic calls (`call_intrinsic`, D1270); the
    proposal's privileged-only opcodes (unchecked element access, int32 loop counters,
    direct slot access) were not needed: the leaf intrinsics and the interpreter's fast
@@ -673,7 +673,7 @@ objects up to 9x on one big string inbound, and the reader by 3x to 130x outboun
 
 ### Images and snapshots (G4)
 
-A waiting run persists as a snapshot (D3700, D3730; the guide's persistence.md); heap
+A waiting run persists as a snapshot (D3700, D3730; the guide's snapshots.md); heap
 images are the in-process mechanism (D2700).
 
 - **Images:** an image is the arena bytes after a compacting GC; the roots and the
@@ -683,7 +683,7 @@ images are the in-process mechanism (D2700).
   tools and stress modes verify every image they load (D1056); the wasm module checks only
   the header and the build hash, since its images come from its own process (D2700).
   Everything is little-endian, which matches wasm and the usual native targets.
-- **Base snapshot:** the initialized realm and the precompiled builtins (about 190 KB,
+- **Base image:** the initialized realm and the precompiled builtins (about 190 KB,
   compacted before it is collected, D1431). djs-prelude produces it at build time and it
   is embedded in the wasm. `vm_new` copies it into the arena; that copy *is* startup
   (microseconds).
@@ -715,7 +715,7 @@ numbers, generated, D2101; D016 says why wasm numbers come first):
 | Metric | Target | Measured |
 | --- | --- | --- |
 | wasm size (release, after `wasm-opt`) | gzip within 1.5x of quickjs-wasi (D020; the original target was < 400 KB raw) | 1,515 KB without wasm-opt (code 935 KB, data 576 KB of which the base image is 398 KB); 531 KB gzip -9, 426 KB brotli |
-| `vm_new` from the base snapshot | < 100 µs | about 40 µs in wasm, mostly the copy of the base (D1990); `Sandbox.create` ~60-140 µs, mostly instantiation |
+| `vm_new` from the base image | < 100 µs | about 40 µs in wasm, mostly the copy of the base (D1990); `Sandbox.create` ~60-140 µs, mostly instantiation |
 | compile throughput | > 50 MB/s of source on native builds | not tracked as a target; startup of a codemode script is µs |
 | interpreter speed | within 1.5x of QuickJS-wasm (stretch: parity) | wasm instructions vs quickjs-wasi: plain loops and property access 0.55-0.65x, strings and arrays 0.55-0.8x, JSON 0.5-0.6x; calls 1.3x, builtin-heavy code (higher-order, forEach) 2-4x, pi-like 1.5x |
 | host string out, 1 MiB | ~memcpy speed | yes (the reader, docs/guide/host.md) |

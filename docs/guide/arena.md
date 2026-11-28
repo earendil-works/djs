@@ -49,7 +49,7 @@ created (`SHAPES`), the end of the builtin prefix (`BASE_END`), the key of the V
 string hash (`HASH_KEY`) and a few flags. `VERSION` (the layout hash) and `BUILD` (the
 engine build hash) say which engine the image is for, so that it never loads into one
 that would read its bytecode or its records differently ([what an image depends
-on](snapshots.md#what-an-image-depends-on)).
+on](images.md#what-an-image-depends-on)).
 
 ## Cells, back to back
 
@@ -64,7 +64,7 @@ garbage collector, the image verifier and the host all do. On the docs site, the
 tab of a live example walks the arena of the wasm VM in your browser this way, in a
 short loop of JavaScript, and counts the cells by kind. It separates what the example
 allocated from what every VM starts with, the few thousand cells of the base realm
-(builtins, their code and their names) copied from the base snapshot:
+(builtins, their code and their names) copied from the base image:
 
 ```js live
 const rows = [];
@@ -82,7 +82,7 @@ console.log(rows.length, "rows,", text.length, "characters");
 Those base cells come in two parts. The first, the **builtin prefix**, holds the builtin
 objects, their code and their names. Using the builtins never writes there, no
 collection moves or frees it, and every VM of a build has the same bytes at the same
-offsets in it ([the base snapshot](snapshots.md#the-base-snapshot)). After it comes a
+offsets in it ([the base image](images.md#the-base-image)). After it comes a
 short **tail** of the cells every VM writes: the realm record, the global object, the
 atom table with room for the VM's own atoms, the value stack.
 
@@ -185,7 +185,7 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
    Creating a VM from the base image, suspending one, or moving one between two wasm
    modules needs no serializer to keep in step with the object model: a restore is a
    copy and a check, with no fixups, because there is nothing to fix up
-   ([images](snapshots.md)).
+   ([images](images.md)).
 2. **The host can read values in place.** A tool result that the script turned into an
    array of objects is read by walking cells in wasm memory, with a reader generated
    from the same layout table ([the reader](host.md#values-out-the-reader)).

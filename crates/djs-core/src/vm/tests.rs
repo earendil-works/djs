@@ -1203,7 +1203,7 @@ fn vm_new_cost() {
             per * 1e6
         );
     }
-    // What a base snapshot costs: the image after a collect, restored with full
+    // What a base image costs: the image after a collect, restored with full
     // verification, and a plain copy.
     let mut vm = Vm::new(VmOptions::default()).unwrap();
     vm.collect().unwrap();

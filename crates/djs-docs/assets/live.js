@@ -127,7 +127,7 @@ function heapHtml(before, after) {
     }
     h += `</table>`;
   }
-  h += `<p class="muted">The base realm before it (the builtins, their code and names, which every VM starts with as a copy of the base snapshot): ${before.cells} cells, ${kb(before.len)}. Arena in total: ${after.cells} cells, ${kb(after.len)}. Counted by walking the arena cell by cell, with the layout the engine exports. Garbage stays until the next collection, which slides the program's live cells together: <button class="live-gc">Collect now</button></p>`;
+  h += `<p class="muted">The base realm before it (the builtins, their code and names, which every VM starts with as a copy of the base image): ${before.cells} cells, ${kb(before.len)}. Arena in total: ${after.cells} cells, ${kb(after.len)}. Counted by walking the arena cell by cell, with the layout the engine exports. Garbage stays until the next collection, which slides the program's live cells together: <button class="live-gc">Collect now</button></p>`;
   return h;
 }
 

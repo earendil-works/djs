@@ -2,7 +2,7 @@
 
 Where djs stands, in numbers that cannot go stale: every number on this page is
 generated. Counts that follow from the repository (test262's grouping and
-ratchet, the difftest corpus, the base snapshot, the builtin tags, the engine's tables)
+ratchet, the difftest corpus, the base image, the builtin tags, the engine's tables)
 are recomputed whenever the guide is regenerated, which the merge flow does on every
 merge. Measurements that need a build or a benchmark (the wasm module's size, the speed
 against quickjs-wasi, an agent's codemode test suite) are recorded in `tests/scores/status.tsv` by
@@ -57,7 +57,7 @@ Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 
 <!-- gen:status size -->
 `djs_wasm.wasm`, the one module djs ships, is 1,161 KB (498 KB gzip, 418 KB brotli): 986
-KB of code, 79 KB of data, and the base snapshot (the initialized realm with all
+KB of code, 79 KB of data, and the base image (the initialized realm with all
 builtins, 191 KB) coded to 45 KB in a custom section. Module sizes measured at
 0f27ab975f, 2026-11-28.
 <!-- /gen -->
@@ -74,7 +74,7 @@ builtins, 191 KB) coded to 45 KB in a custom section. Module sizes measured at
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 50 |
 | difftest corpus cases | 665 |
-| base snapshot, bytes | 190,576 |
+| base image, bytes | 190,576 |
 <!-- /gen -->
 
 ## Every recorded measurement

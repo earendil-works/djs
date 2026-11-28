@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use djs_embed::{Data, HostFn, Limits, Snapshot, Source, Value};
+use djs_embed::{Data, HostFn, Image, Limits, Source, Value};
 
 /// A shim-sized setup: helper classes the call uses, and a policy over a request head.
 const SETUP: &str = r#"
@@ -55,7 +55,7 @@ fn time(n: usize, mut f: impl FnMut()) -> f64 {
 #[test]
 #[ignore]
 fn bench() {
-    let snap = Snapshot::builder()
+    let img = Image::builder()
         .host_fn(HostFn::sync(1, "log"))
         .source(Source::script("policy.js", SETUP))
         .build()
@@ -80,9 +80,9 @@ fn bench() {
     ]);
     let wire = head.to_wire();
     let n = 2000;
-    println!("snapshot image: {} KiB", snap.image_len() / 1024);
-    let instantiate = time(n, || drop(snap.instantiate(Limits::default()).unwrap()));
-    let mut inst = snap.instantiate(Limits::default()).unwrap();
+    println!("image: {} KiB", img.size() / 1024);
+    let instantiate = time(n, || drop(img.instantiate(Limits::default()).unwrap()));
+    let mut inst = img.instantiate(Limits::default()).unwrap();
     let reset = time(n, || inst.reset().unwrap());
     let empty = time(n, || {
         inst.call("empty", &[], |_| Ok(())).unwrap();
@@ -101,7 +101,7 @@ fn bench() {
         policy(&mut inst);
     });
     let fresh = time(n, || {
-        let mut i = snap.instantiate(Limits::default()).unwrap();
+        let mut i = img.instantiate(Limits::default()).unwrap();
         policy(&mut i);
     });
     println!(

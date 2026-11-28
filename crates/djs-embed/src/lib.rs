@@ -1,21 +1,21 @@
 //! Embed djs, a small JavaScript engine, in a Rust program.
 //!
-//! The host compiles its setup once into a [`Snapshot`]: the host functions the scripts may
+//! The host compiles its setup once into an [`Image`]: the host functions the scripts may
 //! call, plain-data globals, and setup sources (a shim, a policy script) that run to
-//! completion. Each [`Instance`] is a VM in that state, made by copying the snapshot's
-//! image; it calls one JS function at a time, and [`Instance::reset`] puts it back into the
-//! snapshot's state. Values cross the boundary as typed arguments and results ([`Value`]
+//! completion. Each [`Instance`] is a VM in that state, made by copying the image;
+//! it calls one JS function at a time, and [`Instance::reset`] puts it back into the
+//! image's state. Values cross the boundary as typed arguments and results ([`Value`]
 //! in, [`ValueRef`] out) or as plain data ([`Data`], or its byte form, the wire format),
 //! never as JSON text. Every call has budgets a script cannot catch: fuel, memory and a
 //! wall-clock deadline ([`Limits`]).
 //!
 //! ```ignore
-//! use djs_embed::{Data, HostFn, Limits, Snapshot, Source, Step, Throw, Value};
+//! use djs_embed::{Data, HostFn, Limits, Image, Source, Step, Throw, Value};
 //!
 //! const LOG: u32 = 1;
 //! const FETCH: u32 = 2;
 //!
-//! let snapshot = Snapshot::builder()
+//! let image = Image::builder()
 //!     .host_fn(HostFn::sync(LOG, "log"))
 //!     .host_fn(HostFn::asynchronous(FETCH, "fetchText"))
 //!     .global("config", Data::object([("greeting", Data::from("hello"))]))
@@ -28,7 +28,7 @@
 //!     "#))
 //!     .build()?;
 //!
-//! let mut vm = snapshot.instantiate(Limits::default())?;
+//! let mut vm = image.instantiate(Limits::default())?;
 //! let req = Data::object([("url", Data::from("https://example.com/"))]);
 //! vm.start("onRequest", &[Value::Data(&req)])?;
 //! let decision = loop {
@@ -54,14 +54,14 @@
 //!     }
 //! };
 //! assert_eq!(decision.get("allow"), Some(&Data::Bool(true)));
-//! vm.reset()?; // ready for the next call, in the snapshot's state
+//! vm.reset()?; // ready for the next call, in the image's state
 //! ```
 //!
 //! [`Instance::call`] is the same loop for hosts that answer every host call at once.
 //!
-//! # Snapshots
+//! # Images
 //!
-//! [`Snapshot::builder`] defines the host functions ([`HostFn::sync`],
+//! [`Image::builder`] defines the host functions ([`HostFn::sync`],
 //! [`HostFn::asynchronous`]) and data globals ([`Builder::global`]) as non-enumerable
 //! globals, then runs each [`Source`] in order with a fuel budget of its own. A syntax
 //! error (or a module's link error) is [`Error::Syntax`], a module the loader cannot
@@ -72,7 +72,7 @@
 //! `Send + Sync`. Images exist only in memory: rebuilding from the sources is how a host
 //! gets one again.
 //!
-//! [`Snapshot::instantiate`] copies the image into a new VM: no compile, no setup code.
+//! [`Image::instantiate`] copies the image into a new VM: no compile, no setup code.
 //! [`Instance::reset`] copies it into the instance's existing heap allocation instead,
 //! which saves the allocation and the page faults of a fresh one. A fresh or reset
 //! instance shares nothing with earlier calls; an instance used for many calls without a
@@ -107,19 +107,19 @@
 //!
 //! A setup source can be an ES module ([`Source::module`], [`Source::typescript_module`]):
 //! setup loads it and everything it imports, links and evaluates the graph, so the
-//! snapshot holds the evaluated modules and instances start with them, no module code run
-//! again. Imports resolve through the snapshot's [`Loader`] ([`Builder::loader`]; a
+//! image holds the evaluated modules and instances start with them, no module code run
+//! again. Imports resolve through the image's [`Loader`] ([`Builder::loader`]; a
 //! [`ModuleMap`] is the in-memory one, with `./` and `../` relative to the importer's key)
 //! and its [`SyntheticModule`]s ([`Builder::module`]): modules without source whose exports
 //! are host functions and plain data, imported by their exact key. Specifiers and keys are
 //! opaque strings; djs does no I/O.
 //!
 //! ```ignore
-//! use djs_embed::{Data, HostFn, Limits, ModuleMap, Snapshot, Source, SyntheticModule, Value};
+//! use djs_embed::{Data, HostFn, Limits, ModuleMap, Image, Source, SyntheticModule, Value};
 //!
 //! const ALLOW: u32 = 1;
 //!
-//! let snapshot = Snapshot::builder()
+//! let image = Image::builder()
 //!     .module(
 //!         SyntheticModule::new("@sdk/net")
 //!             .host_fn(HostFn::sync(ALLOW, "allowHosts"))
@@ -135,7 +135,7 @@
 //!     "#))
 //!     .build()?;
 //!
-//! let mut vm = snapshot.instantiate(Limits::default())?;
+//! let mut vm = image.instantiate(Limits::default())?;
 //! let req = Data::object([("host", Data::from("Example.com"))]);
 //! let decision = vm.call_export("policy.js", "onRequest", &[Value::Data(&req)], |call| {
 //!     let ok = call.arg(0).as_str().is_some_and(|h| h == "example.com");
@@ -207,14 +207,14 @@
 //!
 //! Every entry into djs runs under `catch_unwind`. A panic is a bug in djs; it poisons
 //! only that instance (every later use returns [`Error::Poisoned`]: drop it), never the
-//! snapshot or other instances: djs keeps no global mutable state, everything a VM has
+//! image or other instances: djs keeps no global mutable state, everything a VM has
 //! lives in its own heap. This needs the default `panic = "unwind"`; with
 //! `panic = "abort"` a djs bug ends the process. The panic hook still runs (and prints,
 //! with the default hook).
 //!
 //! # Threads
 //!
-//! [`Snapshot`] is `Send + Sync`: share one across threads. An [`Instance`] is `Send`:
+//! [`Image`] is `Send + Sync`: share one across threads. An [`Instance`] is `Send`:
 //! it can move between threads (an async task that awaits host work between steps) but
 //! serves one call at a time. Parallel calls take one instance each.
 //!
@@ -243,7 +243,7 @@
 //! - **Git checkouts.** The crates read files elsewhere in the repository at build time
 //!   (the builtins' compiled JavaScript in `builtins/gen/`); cargo's git checkout is the
 //!   whole repository, so they resolve. The build script of djs-prelude makes the base
-//!   image (the realm every snapshot starts from) on the build machine.
+//!   image (the realm every image of a setup starts from) on the build machine.
 //! - **Cross builds.** djs-embed builds for any target djs-core does, with nothing but a
 //!   linker for it: no C code, no target-specific build step. The base image a cross build
 //!   embeds is byte for byte the one the target makes itself (heap cells are little-endian
@@ -254,9 +254,9 @@
 
 mod data;
 mod error;
+mod image;
 mod instance;
 mod module;
-mod snapshot;
 mod value;
 
 #[cfg(test)]
@@ -264,9 +264,9 @@ mod tests;
 
 pub use data::Data;
 pub use error::{Error, ErrorKind, Exception, Throw};
+pub use image::{Builder, HostFn, Image, Source, SourceKind};
 pub use instance::{CallId, HostCall, Instance, Limits, Step};
 pub use module::{Loader, ModuleMap, ModuleSource, SyntheticModule};
-pub use snapshot::{Builder, HostFn, Snapshot, Source, SourceKind};
 pub use value::{Value, ValueRef};
 
 const _: () = {

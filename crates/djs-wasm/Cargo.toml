@@ -17,7 +17,7 @@ default = ["unicode"]
 # djs-core's Unicode tables.
 unicode = ["djs-prelude/unicode"]
 # Exports `vm_new_compiled` (Vm::new: builds the realm and compiles the prelude), for
-# checking the base snapshot in wasm. Off by default, so release modules do not carry
+# checking the base image in wasm. Off by default, so release modules do not carry
 # the prelude source next to its compiled base. The gate's debug build turns it on.
 compiled-prelude = ["djs-core/prelude"]
 # Exports `djs_alloc_stats`: live and peak bytes of Rust heap allocations and their count,
@@ -39,8 +39,8 @@ cold-unicode = ["djs-core/cold-unicode"]
 [dependencies]
 # Logical snapshots (D3700): every module has `vm_snapshot` and `vm_load_snapshot`.
 djs-core = { path = "../djs-core", default-features = false, features = ["snapshot"] }
-# The base snapshot: vm_new copies it (D1321).
-# The base snapshot, coded (D2252): vm_new copies it after a decode once per instance.
+# The base image: vm_new copies it (D1321).
+# The base image, coded (D2252): vm_new copies it after a decode once per instance.
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["packed"] }
 
 # On wasm32 the crate is no_std (D2332): std's allocator for that target, named directly,

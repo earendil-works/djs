@@ -1,13 +1,13 @@
 //! The crate docs' example (src/lib.rs), run as written there.
 
-use djs_embed::{Data, Error, HostFn, Limits, Snapshot, Source, Step, Throw, Value};
+use djs_embed::{Data, Error, HostFn, Image, Limits, Source, Step, Throw, Value};
 
 const LOG: u32 = 1;
 const FETCH: u32 = 2;
 
 #[test]
 fn the_crate_example_runs() -> Result<(), Error> {
-    let snapshot = Snapshot::builder()
+    let image = Image::builder()
         .host_fn(HostFn::sync(LOG, "log"))
         .host_fn(HostFn::asynchronous(FETCH, "fetchText"))
         .global("config", Data::object([("greeting", Data::from("hello"))]))
@@ -23,7 +23,7 @@ fn the_crate_example_runs() -> Result<(), Error> {
         ))
         .build()?;
 
-    let mut vm = snapshot.instantiate(Limits::default())?;
+    let mut vm = image.instantiate(Limits::default())?;
     let req = Data::object([("url", Data::from("https://example.com/"))]);
     vm.start("onRequest", &[Value::Data(&req)])?;
     let decision = loop {
@@ -49,7 +49,7 @@ fn the_crate_example_runs() -> Result<(), Error> {
         }
     };
     assert_eq!(decision.get("allow"), Some(&Data::Bool(true)));
-    vm.reset()?; // ready for the next call, in the snapshot's state
+    vm.reset()?; // ready for the next call, in the image's state
     assert_eq!(decision.get("length"), Some(&Data::from(28)));
     Ok(())
 }
@@ -59,7 +59,7 @@ fn the_module_example_runs() -> Result<(), Error> {
     use djs_embed::{ModuleMap, SyntheticModule};
     const ALLOW: u32 = 1;
 
-    let snapshot = Snapshot::builder()
+    let image = Image::builder()
         .module(
             SyntheticModule::new("@sdk/net")
                 .host_fn(HostFn::sync(ALLOW, "allowHosts"))
@@ -81,7 +81,7 @@ fn the_module_example_runs() -> Result<(), Error> {
         ))
         .build()?;
 
-    let mut vm = snapshot.instantiate(Limits::default())?;
+    let mut vm = image.instantiate(Limits::default())?;
     let req = Data::object([("host", Data::from("Example.com"))]);
     let decision = vm.call_export("policy.js", "onRequest", &[Value::Data(&req)], |call| {
         let ok = call.arg(0).as_str().is_some_and(|h| h == "example.com");

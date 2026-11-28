@@ -331,7 +331,7 @@ then, and every function's template exists from the start.
 > codemode scripts are small and nearly all their callbacks run, so it would parse them
 > twice. One way to compile also means one layout of the code: a waiting function's
 > bytecode is the same in every build and host, which is what lets
-> [snapshots](persistence.md) compare it by hash.
+> [snapshots](snapshots.md) compare it by hash.
 
 ## What the missing tree costs
 

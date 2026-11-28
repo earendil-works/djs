@@ -1,4 +1,4 @@
-// The base snapshot inside wasm (D1321): it is made by a host build of djs-core at build
+// The base image inside wasm (D1321): it is made by a host build of djs-core at build
 // time, so check that it equals the realm a wasm build compiles itself (no pointer-width
 // or platform dependence), and that VMs from it are independent.
 

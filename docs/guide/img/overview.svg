@@ -88,7 +88,7 @@
   <text class="small" x="551" y="177" text-anchor="middle">every call</text>
   <rect class="cell" x="620" y="140" width="118" height="50" rx="4"/>
   <text x="679" y="160" text-anchor="middle">realm, builtins</text>
-  <text class="small" x="679" y="177" text-anchor="middle">the base snapshot</text>
+  <text class="small" x="679" y="177" text-anchor="middle">the base image</text>
   <rect class="cell" x="236" y="200" width="118" height="50" rx="4"/>
   <text x="295" y="220" text-anchor="middle">job queue</text>
   <text class="small" x="295" y="237" text-anchor="middle">promise reactions</text>

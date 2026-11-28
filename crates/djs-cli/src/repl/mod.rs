@@ -1381,7 +1381,7 @@ fn load_history(path: Option<&std::path::Path>) -> Vec<String> {
     lines[skip..].to_vec()
 }
 
-/// The REPL's VM: the base snapshot, the wall clock, and `console.log` (`info`, `warn`,
+/// The REPL's VM: the base image, the wall clock, and `console.log` (`info`, `warn`,
 /// `error`, `debug` too) as a host function printing with the REPL's printer.
 fn new_vm(gc_stress: bool, frozen_builtins: bool, debugger: bool) -> Vm {
     let opts = VmOptions {

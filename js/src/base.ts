@@ -1,4 +1,4 @@
-// The module's base snapshot (D1321) on the host side: the module ships it coded in its
+// The module's base image (D1321) on the host side: the module ships it coded in its
 // custom section `djs_base` (D2252, D2541), every instance needs it decoded before its
 // first VM, and decoding takes a few ms. So the host hands each fresh instance the coded
 // section, or the bytes an earlier instance of the same module decoded (checked by the
@@ -41,7 +41,7 @@ export function provideCodedBase(module: WebAssembly.Module, exports: BaseExport
 }
 
 /**
- * Gives a fresh instance of `module` the base snapshot an earlier instance of it decoded
+ * Gives a fresh instance of `module` the base image an earlier instance of it decoded
  * (D2252): the module ships the base coded, and an instance decodes it at its first use
  * (a few ms) unless the host provides it. Call right after instantiating, before anything
  * that creates a VM or reads the base; and `rememberBase` once a VM exists, so that later
@@ -73,6 +73,6 @@ export function rememberBase(module: WebAssembly.Module, exports: BaseExports): 
   // The pointer first: an instance decodes its base at the first use (D2252), which may
   // grow (and detach) its memory buffer.
   const at = exports.djs_base_ptr();
-  if (at === 0) throw new Error("djs-wasm has no base snapshot (no djs_base section?)");
+  if (at === 0) throw new Error("djs-wasm has no base image (no djs_base section?)");
   bases.set(module, new Uint8Array(exports.memory.buffer, at, exports.djs_base_len()).slice());
 }

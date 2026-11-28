@@ -57,6 +57,6 @@ unicode-normalization = ["djs-prelude/unicode-normalization"]
 unsafe-heap = []
 
 [dev-dependencies]
-# e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,
+# e2e tests start from the base image like the embedders (a dev-dependency cycle,
 # which cargo allows: integration tests link the same djs-core).
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw"] }

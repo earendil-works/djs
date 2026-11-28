@@ -267,7 +267,7 @@ impl Heap {
     }
 
     /// Like [`Heap::from_bytes`] but checks only the header, not every cell: for images
-    /// that cannot be corrupt, such as the base snapshot embedded at build time (verified
+    /// that cannot be corrupt, such as the base image embedded at build time (verified
     /// when it was built). Restoring the 36 KB base takes 8 µs with verification and
     /// 1 µs without (D1321). Still memory safe: a bad cell is a panic, not UB.
     pub fn from_bytes_trusted(bytes: alloc::vec::Vec<u8>, limit: usize) -> Result<Heap, LoadError> {

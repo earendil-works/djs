@@ -35,7 +35,7 @@ an image, and a fresh VM restored from that image in the same process continues 
 where the old one stopped. The stress tests rely on it: they stop runs every few
 instructions and continue each in a VM restored from its image ([how djs is
 tested](testing.md)). A host has no need to: a stopped run goes on in the same VM, and one
-that must outlive the process is written as a [snapshot](persistence.md). Every output
+that must outlive the process is written as a [snapshot](snapshots.md). Every output
 on these pages comes from a VM that was stopped every 50 units of fuel and continued; on
 the docs site, the *Suspend* tab of a live example shows the slices of a run in your
 browser.
@@ -264,10 +264,10 @@ middle, but they are bounded by their input and charge fuel for it.
 Suspension costs nothing inside a process, but an image is a poor way to keep a run
 beyond it: it holds the engine's own numbering (cell layouts, opcodes, internal ids),
 so it restores only into a djs that numbers everything the same way, and that numbering
-changes between builds ([images](snapshots.md#what-an-image-depends-on)). A run that
+changes between builds ([images](images.md#what-an-image-depends-on)). A run that
 waits minutes for a tool or a person must survive restarts. That is
 [persistence](goals.md#persistence), and it uses a different form: a
-[**snapshot**](persistence.md), the run's state as records with named fields, the
+[**snapshot**](snapshots.md), the run's state as records with named fields, the
 builtins by name and the functions by their place in the script, checked by their
 bytecode hash when the loading engine compiles the script again.
 
@@ -276,7 +276,7 @@ and no frame is on the stack. There, every suspended piece of the run is an asyn
 function or generator stopped at an `await` or `yield`, whose frame is a record in the
 heap, as this chapter showed, and whose code the loading engine finds again by its span
 of source text. A run in the middle of a computation has frames on the stack, which a
-snapshot does not hold; [idle points](persistence.md#idle-points) says what a host does
+snapshot does not hold; [idle points](snapshots.md#idle-points) says what a host does
 about that.
 
 On the docs site, a `debugger;` statement in a live example makes such an idle point:

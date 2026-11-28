@@ -4,10 +4,10 @@ djs never runs on its own. A host (an agent's codemode, a test runner, a browser
 loads the djs-wasm module, gives it a script and the tools the script may call, and reads
 the result. This chapter is about the boundary between the two at the level of the
 module's operations: how a VM is made and driven, how host calls are reported and answered,
-how values cross in each direction, how the base snapshot gets into the module, and which
+how values cross in each direction, how the base image gets into the module, and which
 builds of the module exist. Most hosts never see this level: the `Sandbox` of [the
 JavaScript interface](js-api.md) wraps it, and persists runs as
-[snapshots](persistence.md).
+[snapshots](snapshots.md).
 
 > **In short.** djs-wasm is a WebAssembly module with no imports and an ABI of integer
 > operations behind one exported function. Data crosses through a staging buffer (in) and
@@ -130,7 +130,7 @@ The shipped module has <!--n wasm/ops-->57<!--/n--> operations. By area:
 | area | operations |
 | --- | --- |
 | buffers and build | `djs_staging`, `djs_out_ptr`, `djs_out_len`, `djs_abi_version`, `djs_has`, `djs_build_hash`, `djs_panic_ptr`, `djs_panic_len`, `djs_debug_panic`; the stack: `djs_elastic_stack`, `djs_stack`; the Unicode tables: `djs_tables_ptr`, `djs_tables_set`, `vm_tables_need` ([above](#a-module-that-needs-nothing)) |
-| the base snapshot | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
+| the base image | `djs_base_coded_ptr`, `djs_base_inject_ptr`, `djs_base_inject`, `djs_base_ptr`, `djs_base_len` ([below](#the-base-in-the-module)) |
 | VMs | `vm_new` (a heap cap, flag 1: frozen builtins), `vm_free`; the arena: `vm_arena_ptr`, `vm_arena_len`, `vm_collect` |
 | code | `vm_compile_file` (a Script, or a codemode body with parameter names, under the file name stack traces show; option bits for TypeScript and `debugger;` pauses) |
 | values in | `vm_decode_wire`, `vm_string_reserve`, `vm_global`, `vm_new_object`, `vm_define`, `vm_new_error` |
@@ -251,7 +251,7 @@ results, which is what [deterministic runs](determinism.md) build on.
 
 ## The base in the module
 
-A VM created with `vm_new` is a copy of the [base snapshot](snapshots.md#the-base-snapshot),
+A VM created with `vm_new` is a copy of the [base image](images.md#the-base-image),
 so creating one is a memory copy, not an initialization. The module carries the base
 coded with djs's own small compressor (<!--n wasm/base-coded kb-->45 KB<!--/n--> for the full build's <!--n base/bytes kb-->191 KB<!--/n-->), in a
 custom section named `djs_base`. A custom section is outside the instance's linear
