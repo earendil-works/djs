@@ -56,6 +56,23 @@ Keep and strengthen (the fallback):
 - [ ] Guide pages rewritten; decisions recorded (superseding D2771, D2972, the hook parts of
       D2770/D3722, etc.); what pi must change listed in the Result.
 
+## Notes
+Consumers to check every change against (all in ~/Development/pi-mono-djs, branch
+djs-durable; only packages/codemode imports djs, but it serves all of them):
+- packages/codemode: src/run.ts (Sandbox options, host-driven runs, snapshot/loadSnapshot,
+  fuelUsed, dropped, RunExit, SandboxError kinds), script-values.ts (Opaque), wasm.ts
+  (loadModule), cloudflare.ts (`@earendil-works/djs/wasm/djs.wasm`), runtime/execution.ts
+  (`execute()` on the same runs), runtime/remote.ts (Cloudflare/Durable Objects: a
+  stateless RPC per step that loads and saves a snapshot every step), examples/cloudflare.
+- packages/durable: src/codemode/call.ts (saves before launches and parks, resumes after
+  restarts and wakes), the remote stepper for Durable Objects.
+- packages/coding-agent: extensions/codemode/execute.ts (in-thread execute()), the Bun
+  binary's wasm path (src/bun/runtime-setup.ts, config.ts).
+- apps/p2: plugins/codemode (durable code mode on the session worker thread; resume after a
+  worker kill, test/p2/codemode.test.ts), plugins/rollups (execute() with a custom global).
+- apps/p3: code mode planned ("replay after restart"), on durable: relies on the
+  determinism fallback.
+
 ## Log
 
 ## Follow-ups
