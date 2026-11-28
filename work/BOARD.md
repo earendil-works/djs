@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0308 | Docs and tooling cleanup after the dump removal | pclean | .worktrees/pclean |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -45,12 +44,14 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | 0294 follow-ups: re-record stale status.tsv rows (startup, heap, bounds, pi bench, engines, bridge) on a quiet machine; untrack scripts/__pycache__/*.pyc | ready |
 | - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
 | - | Snapshot follow-ups (0302-0304): positional class constants left (iterator kinds, RegExp/Proxy/TextCodec flags, typed array kinds, frame header, resource kinds, module trap ops); IteratorHelper slot 0 duplicates the header kind; the types section is most of a small snapshot (share the schema per build: owner/format); `djs resume --explain`; live.js browser test; a snapshot-cost table for engines.md and re-recorded engines/* numbers; corpus provenance comments + frame-pin regen; an elastic retry in the snapshot loader (-64 KiB per instance) | ready |
+| - | 0305-0308 follow-ups: the elastic stack protocol may be dead (every module has 128 KiB); canonical hash of a loaded VM differs from the original's (layout) and re-snapshotting a loaded run is not always byte-identical (h002: +1 string): load+snapshot should be idempotent; decisions-index 'Not yet sorted' (~560 entries) into topics; codemode-feature-usage.md, bloat-audit and size-vs-quickjs cite removed things | ready |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
 
 ## Done
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0308 | Docs and tooling cleanup after the dump removal | 9de44719 (agent pclean; D3753-D3755; docs/cli.md, docs/host.md folded into the guide; dump research deleted; decisions index pruned; unsafe-heap difftest leg 38 -> 0.7 CPU-s) |
 | 0307 | Shipped-module trims; legacy decorators gone | ca3fcd14 (agent pclean; D3750-D3752; ABI 14; 509,843 -> 498,108 B gz; describe/callSite docs-only; strip-types feature) |
 | 0306 | One run driver; determinism as the snapshot fallback (Run.deliveries, begin({deliveries}), diverged) | fedf4616 (agent pclean; D3745-D3747; ABI 13; re-run equivalence on 1,164 harvest idle points) |
 | 0305 | Lazy compilation and the dump removal's dead code removed | adbec3a1 (agent pclean; D3740-D3744; ABI 12; registry without ids; test262 leg 174 -> 89 CPU-s; the test-only fast_step tier stays (D3741: raw-image equality needs it)) |
