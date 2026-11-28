@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0305 | Remove lazy compilation and the dead code the dump removal left (then 0306-0308, same agent) | pclean | .worktrees/pclean |
+| 0306 | One way to drive a run; determinism kept as the fallback for refused snapshots (then 0307, 0308) | pclean | .worktrees/pclean |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -20,7 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0306 | One way to drive a run; determinism kept as the fallback for refused snapshots | 0305 |
 | 0307 | Shipped-module trims; legacy decorators go | 0306 |
 | 0308 | Docs and tooling cleanup after the dump removal | 0307 |
 | - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
@@ -54,6 +53,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0305 | Lazy compilation and the dump removal's dead code removed | adbec3a1 (agent pclean; D3740-D3744; ABI 12; registry without ids; test262 leg 174 -> 89 CPU-s; the test-only fast_step tier stays (D3741: raw-image equality needs it)) |
 | 0304 | Continuation dumps removed; snapshots the only persistence format | 644b850c (agent psnap; D3730-D3734; -62.6k lines; shipped module 785,187 -> 510,652 B gz, ceiling 511,676; ABI 11; guide persistence.md) |
 | 0303 | Snapshots for hosts: Sandbox API, pi's setup, CLI/REPL, docs pauses, sleep-snapshot example | a87745f2 (agent psnap; D3720-D3723; ABI 10; host-mode snapshots name host values at any depth) |
 | 0302 | Named records for builtin closure kinds and state constants | 9d6dad60 (agent psnap; D3710-D3713; 34 record kinds; full-only gate leg snapshot perturbation) |
