@@ -14852,3 +14852,20 @@ the doc comments in crates/djs-wasm/src/lib.rs, and docs/host.md's measurements 
 superseded by guide/benchmarks.md. Code comments point at the guide pages. The dump
 research archive (docs/suspension-design-review.md, work/research/0188, 0199, 0207, 0215,
 0216) is deleted (git history keeps it).
+
+## D3756: One meaning per word: an image is a VM's memory, a snapshot is a run
+date: 2026-11-28 · by: pname · issue: 0309
+"Snapshot" named two things: the persisted form of a waiting run (vm/snapshot,
+`Run.snapshot`, `loadSnapshot`, D3700) and in-process images of a VM's memory (the base
+snapshot, djs-embed's `Snapshot` of a host's setup). The owner: one meaning per word. A
+**snapshot** is now only the run's persisted form; an **image** is the arena's bytes inside
+one process and build (D2700, D3641), the **base image** the one every VM starts from. The
+guide's persistence.md became snapshots.md ("Snapshots: keeping a waiting run") and its
+snapshots.md became images.md ("Images and the base image"). djs-embed renames without
+an alias (D3640): `Snapshot` -> `Image` (module `image`), `Instance::snapshot()` ->
+`Instance::image()`, `Snapshot::image_len()` -> `Image::size()`; `Builder`, `instantiate`,
+`host_fns` and `modules` keep their names. The bench metric "startup/base snapshot size"
+is "startup/base image size", renamed in tests/scores/bench.tsv too, so its series goes
+on. Other senses of the word go as well: the compiler's expected disassembly files are
+listings (src/compiler/listings, `DJS_UPDATE_LISTINGS=1`), and for-in copies its keys.
+The decision log, work/ and the dated research notes in docs/ keep the word as they used it.

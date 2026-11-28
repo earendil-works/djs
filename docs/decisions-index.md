@@ -822,6 +822,7 @@ topics when the index is next reorganized.
 - D3753: The unchecked release difftest runs the corpus without the stress variants
 - D3754: The CLI, the REPL and the docs runner slice in the same VM
 - D3755: docs/cli.md and docs/host.md are folded into the guide
+- D3756: One meaning per word: an image is a VM's memory, a snapshot is a run
 
 ## Embedding in Rust hosts (Gondolin)
 
