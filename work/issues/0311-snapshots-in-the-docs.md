@@ -1,6 +1,6 @@
 # 0311: Snapshots in the docs: see what suspends, copy it, restore it
 
-status: open
+status: in-progress
 agent: pview2
 branch: issue/0311-snapshots-in-the-docs
 depends-on: 0310
