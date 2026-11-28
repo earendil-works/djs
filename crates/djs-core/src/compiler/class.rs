@@ -272,7 +272,7 @@ impl Parser<'_, '_> {
             if self.ts && self.ts_skip_class_member()? {
                 b.pending = None;
                 // ts-blank-space erases them with the member.
-                if let (Some(d), Some(e)) = (dec_start, &mut self.erased)
+                if let (Some(d), Some(e)) = (dec_start, self.erased_mut())
                     && let Some(r) = e.iter_mut().rev().find(|r| r.0 == member)
                 {
                     r.0 = d;
@@ -505,7 +505,7 @@ impl Parser<'_, '_> {
         let key_tok = self.tok;
         if key_tok.kind == TokenKind::LBracket
             && !has_decs
-            && let (Some(i), Some(e)) = (first_modifier, &mut self.erased)
+            && let (Some(i), Some(e)) = (first_modifier, self.erased_mut())
         {
             // ts-blank-space: `private [k]` must not join the line before (decorators
             // separate them).

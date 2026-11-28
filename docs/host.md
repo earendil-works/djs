@@ -184,7 +184,8 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
   boundary's converting functions; the loading sandbox must give the same names, and a
   missing one is a `misuse` error before anything loads (`djs_snapshot_needs`). A refused
   load leaves the sandbox unusable. `describeSnapshot(snap)` describes one; `callSite(id)`
-  says where the run waits on an open call (`vm_call_site`, D3054).
+  says where the run waits on an open call (`vm_call_site`, D3054); both only with the docs
+  module (D3751).
 - **Re-runs** (D3745): in a deterministic sandbox `run.deliveries` lists the results the
   run applied (call id, function, arguments, outcome, clock), and `begin(code, params, {
   deliveries })` runs the script again to where the run was after them, checking each
@@ -317,8 +318,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_snapshot(vm, len) -> n/-1` | a snapshot of the host's run in idle VM `vm` (D3700, D3720), with the scripts' texts, in out, its length; -1: refused, the reasons in out. staging[0..len]: its functions (count, then id and identity each), its values (count, then handle and name each) and its data |
 | `vm_load_snapshot(vm, len) -> 0/1` | loads the snapshot of a host's run into `vm`, a fresh VM of the host's. staging: the snapshot (length and bytes), the host functions (count, then id, handle and identity each) and the host values (count, then handle and name each). 0: out holds the open calls' ids and the host's data; 1: the reasons in out, and the VM is to be freed |
 | `djs_snapshot_needs(len) -> 0/1` | what loading the snapshot in staging needs: the host values and functions it names (`snapshot::needs`); 1 for a snapshot that stores a script by hash only |
-| `djs_snapshot_describe(len) -> 0/1` | the snapshot in staging described for people (`snapshot::describe`) in out |
-| `vm_call_site(vm, id) -> len` | where the run waits on open call `id`: `line:col:file` in out, its length; 0 when nothing waits on it at a known position (D3054) |
+| `djs_snapshot_describe(len) -> 0/1` | the snapshot in staging described for people (`snapshot::describe`) in out; `docs` feature only (D3751) |
+| `vm_call_site(vm, id) -> len` | where the run waits on open call `id`: `line:col:file` in out, its length; 0 when nothing waits on it at a known position (D3054); `docs` feature only (D3751) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |

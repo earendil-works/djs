@@ -254,8 +254,9 @@ def jobs():
         J("no_std/wasm build of djs-core",
           "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
           cls="rust", group="target/wasm-dev"),
+        # With `docs`: the js tests reach describeSnapshot and callSite (D3751).
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
-          " --features compiled-prelude --quiet", group="target/wasm-dev", build=True),
+          " --features compiled-prelude,docs --quiet", group="target/wasm-dev", build=True),
 
         # --- The shipped module: LTO, one codegen unit, one core
         # each, and unchecked arena access, as scripts/build-wasm.sh builds it (D3100).

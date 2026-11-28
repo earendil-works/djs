@@ -276,15 +276,18 @@ The run goes on; the host can snapshot it at a later idle point, when the value 
 
 ## Describing a snapshot
 
-`sandbox.describeSnapshot(snapshot)` (and `djs describe file.snapshot`) describes one for
-people, as above: its size and sections, the scripts, the host values it names, the
-host's data (the open calls' states and the fuel used), the builtins and functions it
-refers to (those it holds frames of marked `bytecode`), and its records by kind.
+`djs describe file.snapshot` (and, with the docs module,
+`sandbox.describeSnapshot(snapshot)`) describes one for people, as above: its size and
+sections, the scripts, the host values it names, the host's data (the open calls' states
+and the fuel used), the builtins and functions it refers to (those it holds frames of
+marked `bytecode`), and its records by kind.
 
 `sandbox.callSite(id)` says where the run waits on open call `id`: the file, line and
 column of the `await` of the innermost activation waiting on it, directly or through
 `Promise.all` and the like, in the script the run started with, also after any number of
-loads. The live examples' pause lines come from it.
+loads. The live examples' pause lines come from it. Both are in the docs module only
+([the module builds](host.md#the-module-builds)): the shipped module, which hosts persist
+runs with, leaves out what only people read.
 
 ## Pauses at `debugger;`
 

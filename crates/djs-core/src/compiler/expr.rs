@@ -1354,7 +1354,7 @@ impl Parser<'_, '_> {
             TokenKind::Super => self.parse_super(),
             // strip-types parses modules: `import(...)` and `import.meta` compile to
             // placeholders there.
-            TokenKind::Import if self.strip => {
+            TokenKind::Import if self.stripping() => {
                 self.next()?;
                 if self.eat(TokenKind::Dot)? {
                     // `import.meta`, `import.defer(...)`

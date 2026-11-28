@@ -14,7 +14,7 @@ doctest = false
 djs-libm = { path = "../djs-libm" }
 
 [features]
-default = ["unicode", "embed", "snapshot"]
+default = ["unicode", "embed", "snapshot", "strip-types"]
 # Logical snapshots (0300, 0301, D3700): `Vm::snapshot`/`Vm::from_snapshot`, a waiting VM
 # as a graph of named-field records keyed by bytecode hashes: djs's persistence format.
 # Code only (not in the build hash).
@@ -26,6 +26,9 @@ snapshot = ["intrinsic-names"]
 # (D020). An image feature: the base of a build without it leaves out the builtins tagged
 # `// @embed-only` (builtins/gen/prelude-noembed.js).
 embed = ["djs-prelude/embed"]
+# `compiler::strip_types` (D3752): TypeScript erasure as ts-blank-space, for `djs
+# strip-types` and its oracle tests. Off in djs-wasm's modules. Code only.
+strip-types = []
 # Running the prelude source in wasm (D3094): `Vm::new` with `VmOptions::prelude` and the
 # `%Install*` intrinsics the prelude calls. Native builds always have it; wasm modules
 # start from the base image and leave it out unless they need it (djs-wasm's

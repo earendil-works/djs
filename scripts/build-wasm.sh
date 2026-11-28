@@ -6,7 +6,8 @@
 # (names, producers) for shipping (D1575); --keep-names keeps the name section, for
 # profiling and size attribution (scripts/wasm-funcs.py). Switching rebuilds the module.
 # --docs builds the docs site's module (the `docs` feature: `djs_disasm` for the live
-# examples' bytecode; snapshots serve their `debugger;` pauses, D3050, D3720) into
+# examples' bytecode, `djs_snapshot_describe` and `vm_call_site` for their `debugger;`
+# pauses, D3050, D3720, D3751) into
 # its own target directory, target/docs-wasm, so it never replaces the shipping module.
 # The shipped module (and --keep-names, the shipped one with names) reads and writes
 # the arena unchecked (`unsafe-heap`, D3100): the wasm instance is the sandbox. The docs

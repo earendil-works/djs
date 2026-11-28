@@ -281,6 +281,24 @@ fn syntax_error(pos: u32, msg: impl Into<Cow<'static, str>>) -> PErr {
 }
 
 impl<'a, 'h> Parser<'a, 'h> {
+    /// strip-types is on: never in builds without the `strip-types` feature, so the
+    /// optimizer drops its paths (the shipped module has none, D3752).
+    #[inline(always)]
+    pub(super) fn stripping(&self) -> bool {
+        crate::STRIP_TYPES && self.strip
+    }
+
+    /// The erased type ranges being recorded (strip-types only; `None` without the
+    /// feature, which drops the recording).
+    #[inline(always)]
+    pub(super) fn erased_mut(&mut self) -> Option<&mut Erased> {
+        if crate::STRIP_TYPES {
+            self.erased.as_mut()
+        } else {
+            None
+        }
+    }
+
     pub fn new(
         heap: &'h mut Heap,
         src: &'a [u8],
@@ -398,9 +416,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         let using = self.begin_using_list(
             self.f.kind == FuncKind::AsyncBody
                 || (crate::EMBED && self.f.kind == FuncKind::Module)
-                || self.strip,
+                || self.stripping(),
         );
-        if self.f.kind == FuncKind::AsyncBody && !self.strip {
+        if self.f.kind == FuncKind::AsyncBody && !self.stripping() {
             self.skip_body_imports()?;
         }
         while self.tok.kind != TokenKind::Eof {
@@ -660,7 +678,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         if matches!(self.tok.kind, TokenKind::RBrace | TokenKind::Eof) || self.tok.newline_before()
         {
-            if self.erased.is_some() {
+            if self.erased_mut().is_some() {
                 self.ts_stmt_end_asi();
             }
             return Ok(());

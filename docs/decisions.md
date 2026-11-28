@@ -14795,3 +14795,27 @@ and 8 (`debugger` moves from 16 to 4; ABI 14), the CLI's `--experimental-decorat
 four corpus cases. A parameter decorator stays a syntax error with qjs's message ("only
 supported with experimentalDecorators"), for parity with the oracle; strip-types keeps
 parameter decorators unerased as ts-blank-space does. Supersedes D1651.
+
+## D3751: describeSnapshot and callSite are in the docs module only
+date: 2026-11-28 · by: pclean · issue: 0307
+`djs_snapshot_describe` (op 61) and `vm_call_site` (op 20) are exports of djs-wasm's `docs`
+feature, beside `djs_disasm`: only the docs site's live examples use them (a pause's
+description and its line), and pi calls neither. The shipped module drops about 4 KB gzip
+(`snapshot::describe`, `Vm::call_site` and the two exports). The Sandbox's
+`describeSnapshot` and `callSite` throw a `misuse` SandboxError on a module without the
+operation (`djs_has`); the CLI describes natively (`djs describe`). The gate's dev module
+(the js tests', `build:wasm`) has `docs`, so their tests run; on the shipped module
+(npm-test.sh js-tests) the tests check the refusal instead (js/test/docs-module.ts). The
+sleep-snapshot example no longer describes its snapshot itself: its README shows
+`djs describe` on the file. Narrows D3054 and D3723's "in the shipped module".
+
+## D3752: strip-types is a djs-core feature, off in the wasm modules
+date: 2026-11-28 · by: pclean · issue: 0307
+`compiler::strip_types` (ts-blank-space's erasure for `djs strip-types` and its oracle
+tests) needs the `strip-types` feature: djs-core's defaults and djs-cli turn it on,
+djs-wasm does not. The parser reads the mode through `Parser::stripping()` and records
+erased ranges through `erased_mut()`, both constant-false without the feature
+(`crate::STRIP_TYPES`, as `crate::EMBED`), so the shipped module drops the strip-only paths
+(about 1.8 KB gzip) while every build type-checks the same code. The feature is code only:
+not in the build hash. A codemode body's leading imports (D3597) are skipped by the same
+`strip_import`, which stays.

@@ -233,10 +233,10 @@ impl Parser<'_, '_> {
             _ => {}
         }
         // `export <declaration>`: a type-only one is erased from the `export`.
-        let mark = self.erased.as_ref().map_or(0, |e| e.len());
+        let mark = self.erased_mut().map_or(0, |e| e.len());
         self.parse_statement_list_item()?;
         let type_only = self.ts_type_only;
-        if type_only && let Some(e) = &mut self.erased {
+        if type_only && let Some(e) = self.erased_mut() {
             for r in &mut e[mark..] {
                 if r.0 == tok.start {
                     r.0 = start;
@@ -265,7 +265,7 @@ impl Parser<'_, '_> {
                     // An overload signature of the default export.
                     let s = self.tok.start;
                     self.ts_statement()?;
-                    if let Some(e) = &mut self.erased
+                    if let Some(e) = self.erased_mut()
                         && let Some(r) = e.iter_mut().rev().find(|r| r.0 == s)
                     {
                         r.0 = start;

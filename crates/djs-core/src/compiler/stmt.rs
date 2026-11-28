@@ -62,7 +62,9 @@ impl Parser<'_, '_> {
             TokenKind::At => return self.parse_decorated_statement(),
             TokenKind::Ident if self.at_using(false) => self.parse_using_declaration(false)?,
             TokenKind::Ident if self.at_await_using() => self.parse_using_declaration(true)?,
-            TokenKind::Import | TokenKind::Export if self.strip && self.strip_at_module_item() => {
+            TokenKind::Import | TokenKind::Export
+                if self.stripping() && self.strip_at_module_item() =>
+            {
                 return self.strip_module_item();
             }
             TokenKind::Import | TokenKind::Export
@@ -129,7 +131,7 @@ impl Parser<'_, '_> {
                 self.expect_semicolon()
             }
             TokenKind::With => syntax(tok.start, "invalid keyword: with"),
-            TokenKind::Import | TokenKind::Export if self.strip => {
+            TokenKind::Import | TokenKind::Export if self.stripping() => {
                 if self.strip_at_module_item() {
                     return self.strip_module_item();
                 }

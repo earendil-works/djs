@@ -89,40 +89,12 @@ sleep) are new calls, without a state.
 
 ## What the output looks like
 
-In one process (`run.sh`); `[vm]` lines are the script's `console.log`, and the `|` lines
-are what the host prints about the snapshot it wrote (`sandbox.describeSnapshot`):
+In one process (`run.sh`); `[vm]` lines are the script's `console.log`:
 
 ```
 host: starting sleep.js with ms = 1000
   [vm] first sleeps 1000 ms
-host: snapshotted the run into examples/sleep-snapshot/out/sleep.snapshot (2884 bytes) and dropped the sandbox; it holds:
-  | types          1813 bytes
-  | strings         291 bytes
-  | builtins          9 bytes
-  | intrinsics        1 bytes
-  | host              7 bytes
-  | scripts         406 bytes
-  | functions        29 bytes
-  | records         249 bytes
-  | vm               72 bytes
-  | 18 strings (272 bytes of text), 8 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
-  | builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% %ArrayIteratorPrototype%.next Array.prototype.push Function.prototype Array.prototype %ArrayIteratorPrototype%
-  | flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-  | script 0: sleep.js, parameters ms (399 bytes of source)
-  | host values: console tools tools.sleep() (and 0 members)
-  | host data: {"states":[[2,{"due":1795813233385}]],"fuelUsed":110}
-  | function 0:1..139 (bytecode)
-  | function 0:0..399 (bytecode)
-  |        1 HostCall
-  |        2 Object.Array
-  |        1 Object.ArrayIterator
-  |        2 Object.Function
-  |        2 Object.Generator
-  |        3 Object.Promise
-  |        1 Patch.Global
-  |        1 Patch.GlobalLex
-  |        1 Patch.SymbolRegistry
-  |        7 ValueArray
+host: snapshotted the run into examples/sleep-snapshot/out/sleep.snapshot (2882 bytes) and dropped the sandbox
 host: resuming examples/sleep-snapshot/out/sleep.snapshot in a new sandbox
   [vm] second sleeps 1000 ms
   [vm] done after at least 2000 ms: first: slept 1000 ms, second: slept 1000 ms
@@ -133,6 +105,41 @@ The first sandbox printed only `first sleeps`; the `[vm]` lines after `resuming`
 the second one, which never ran the start of the script. It takes two seconds in all: the
 loaded first sleep waits only for the rest of its deadline. With `--restart` the halves
 are two node processes, and the snapshot travels as a file.
+
+`djs describe` (the command line) says what the snapshot holds, here after `run.sh
+--restart`'s first half (`node examples/sleep-snapshot/sleep-snapshot.ts start`), which
+leaves the file:
+
+```
+$ djs describe examples/sleep-snapshot/out/sleep.snapshot
+types          1813 bytes
+strings         291 bytes
+builtins          9 bytes
+intrinsics        1 bytes
+host              7 bytes
+scripts         406 bytes
+functions        29 bytes
+records         249 bytes
+vm               70 bytes
+18 strings (272 bytes of text), 8 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
+builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% %ArrayIteratorPrototype%.next Array.prototype.push Function.prototype Array.prototype %ArrayIteratorPrototype%
+flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
+script 0: sleep.js, parameters ms (399 bytes of source)
+host values: console tools tools.sleep() (and 0 members)
+host data: {"states":[[2,{"due":1795813233385}]],"fuelUsed":110}
+function 0:1..139 (bytecode)
+function 0:0..399 (bytecode)
+       1 HostCall
+       2 Object.Array
+       1 Object.ArrayIterator
+       2 Object.Function
+       2 Object.Generator
+       3 Object.Promise
+       1 Patch.Global
+       1 Patch.GlobalLex
+       1 Patch.SymbolRegistry
+       7 ValueArray
+```
 
 ## What the snapshot holds
 

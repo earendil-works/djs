@@ -161,7 +161,7 @@ impl Parser<'_, '_> {
     /// After decorators: the current token must start the decorated class.
     pub(super) fn expect_decorated_class(&mut self, allow_export: bool) -> PResult<()> {
         let ok = self.is(TokenKind::Class)
-            || (allow_export && self.strip && self.is(TokenKind::Export))
+            || (allow_export && self.stripping() && self.is(TokenKind::Export))
             || (allow_export
                 && self.ts
                 && self.tok.is_contextual(Kw::Abstract)
@@ -466,7 +466,7 @@ impl Parser<'_, '_> {
     /// Parameter decorators at `@` (after a parameter's `this` check, before its
     /// modifiers): kept by strip-types, a syntax error otherwise (the message is qjs's).
     pub(super) fn parse_param_decorators(&mut self) -> PResult<()> {
-        if !self.strip {
+        if !self.stripping() {
             return syntax(
                 self.tok.start,
                 "parameter decorators are only supported with experimentalDecorators",

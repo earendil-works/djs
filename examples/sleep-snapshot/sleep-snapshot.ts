@@ -39,15 +39,14 @@ export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)):
 type Sleep = { due: number };
 
 /** Starts the script and snapshots it at its first idle point: the first sleep is open. */
-export async function suspend(ms: number, opts = options()): Promise<{ snapshot: Uint8Array; described: string }> {
+export async function suspend(ms: number, opts = options()): Promise<Uint8Array> {
   const sandbox = await Sandbox.create(opts);
   const run = sandbox.begin(SCRIPT, { ms }, { filename: "sleep.js" });
   const states: Record<number, Sleep> = {};
   for (const call of run.calls) states[call.id] = { due: Date.now() + Number(call.args[0]) };
   const snapshot = run.snapshot({ states });
-  const described = sandbox.describeSnapshot(snapshot);
   sandbox.dispose();
-  return { snapshot, described };
+  return snapshot;
 }
 
 /**
@@ -76,11 +75,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const file = fileURLToPath(new URL("out/sleep.snapshot", import.meta.url));
   if (mode !== "resume") {
     console.log(`host: starting sleep.js with ms = ${ms}`);
-    const { snapshot, described } = await suspend(Number(ms));
+    const snapshot = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, snapshot);
-    console.log(`host: snapshotted the run into ${relative(".", file)} (${snapshot.length} bytes) and dropped the sandbox; it holds:`);
-    console.log(described.trimEnd().replace(/^/gm, "  | "));
+    console.log(`host: snapshotted the run into ${relative(".", file)} (${snapshot.length} bytes) and dropped the sandbox`);
   }
   if (mode !== "start") {
     console.log(`host: resuming ${relative(".", file)} in a new sandbox`);

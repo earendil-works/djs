@@ -15,6 +15,6 @@ default = ["unicode"]
 unicode = ["djs-prelude/unicode"]
 
 [dependencies]
-djs-core = { path = "../djs-core", default-features = false, features = ["snapshot"] }
+djs-core = { path = "../djs-core", default-features = false, features = ["snapshot", "strip-types"] }
 # The base snapshot: VMs start as a copy, not a prelude compile (D1321).
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw"] }

@@ -168,7 +168,7 @@ impl<'a> Parser<'a, '_> {
     pub(super) fn ts_erase_kind(&mut self, start: u32, end: u32, kind: u8) {
         if self.spec == 0
             && start < end
-            && let Some(e) = &mut self.erased
+            && let Some(e) = self.erased_mut()
         {
             e.push_out((start, end, kind));
         }
@@ -179,7 +179,7 @@ impl<'a> Parser<'a, '_> {
     pub(super) fn ts_stmt_end_asi(&mut self) {
         let end = self.prev_end;
         let next_semi = self.src.get(end as usize) == Some(&b';');
-        if let Some(e) = &mut self.erased
+        if let Some(e) = self.erased_mut()
             && let Some(last) = e.last_mut()
             && last.2 == ER_AS
             && last.1 == end
@@ -1561,7 +1561,7 @@ impl<'a> Parser<'a, '_> {
             let start = self.tok.start;
             self.next()?;
             if first.is_none() {
-                first = self.erased.as_ref().map(|e| e.len());
+                first = self.erased_mut().map(|e| e.len());
             }
             self.ts_erase(start);
         }
@@ -1714,6 +1714,7 @@ pub(super) const ER_CLOSE_PAREN: u8 = 4;
 
 /// The source with the erased `ranges` blanked like ts-blank-space: one space per
 /// UTF-16 unit, line feeds and carriage returns kept.
+#[cfg(feature = "strip-types")]
 pub(super) fn blank(src: &[u8], mut ranges: super::parser::Erased) -> Vec<u8> {
     crate::sort::sort_by(&mut ranges, |a, b| a.0 < b.0);
     let mut out = crate::buf::vec_with_capacity(src.len());

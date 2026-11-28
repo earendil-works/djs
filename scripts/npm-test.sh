@@ -52,7 +52,7 @@ for what in "$@"; do
         esac
         cp "$f" js/test/
       done
-      cp "$repo/js/test/pi-setup.ts" js/test/
+      cp "$repo/js/test/pi-setup.ts" "$repo/js/test/docs-module.ts" js/test/
       # The sources' relative imports become the package's entry points.
       node -e '
         const fs = require("fs");

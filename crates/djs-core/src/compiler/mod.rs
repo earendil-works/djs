@@ -484,7 +484,8 @@ pub fn compile_dynamic_function(
 /// TypeScript erasure for the strip-types oracle (TESTING.md): compiles `src` with the
 /// TypeScript grammar and returns it with every erased type range blanked (spaces;
 /// line breaks stay, so positions do not move). The heap only holds the compiled
-/// template, which the caller drops.
+/// template, which the caller drops. Only with the `strip-types` feature.
+#[cfg(feature = "strip-types")]
 pub fn strip_types(
     heap: &mut Heap,
     src: &[u8],

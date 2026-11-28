@@ -498,6 +498,9 @@ again. What the options and methods do:
   column }` of the `await` of the innermost activation waiting on it, directly or through
   `Promise.all` and the like, in the script the run started with, also after any number
   of loads. It returns `undefined` when nothing waits on the call.
+- Those two are tools for people and need the docs module
+  ([the module builds](host.md#the-module-builds)); with the shipped module they throw a
+  `misuse` error. `djs describe file.snapshot` describes a snapshot file.
 
 A snapshot is trusted input: load only snapshots you wrote. [Snapshots: keeping a waiting
 run](persistence.md) explains what a snapshot holds, what a later build of djs can load,

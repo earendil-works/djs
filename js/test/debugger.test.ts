@@ -5,7 +5,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadModule, type Run, Sandbox, type SandboxOptions } from "../src/sandbox.ts";
+import { loadModule, type Run, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
+import { docsModule } from "./docs-module.ts";
 
 function host(module: WebAssembly.Module, extra: Partial<SandboxOptions> = {}) {
   const lines: string[] = [];
@@ -93,6 +94,12 @@ test("callSite: where a pause waits, in the body, also after a load (D3054)", as
   const run = sb.begin(LOOP, {}, { filename: "loop.js" });
   const [call] = run.calls;
   assert.equal(call.fn, "debugger");
+  if (!(await docsModule())) {
+    // Only the docs module has callSite (D3751).
+    assert.throws(() => sb.callSite(call.id), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
+    sb.dispose();
+    return;
+  }
   assert.deepEqual(sb.callSite(call.id), { file: "loop.js", line: 6, column: 3 });
   assert.equal(sb.callSite(call.id + 100), undefined);
   // Continued from a snapshot, the run is in the same script: the next pause's position.

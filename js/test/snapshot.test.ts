@@ -7,6 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadModule, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
+import { docsModule } from "./docs-module.ts";
 import { answer, piOptions, piRun } from "./pi-setup.ts";
 
 test("a loaded run goes on with the call ids and random numbers of the uninterrupted one", async () => {
@@ -53,9 +54,14 @@ test("a snapshot stores its script; describe tells what it holds", async () => {
   run.settle(run.calls[0].id, { ok: true, value: 41 });
   await run.advance();
   assert.equal(run.value, 42);
-  assert.match(again.describeSnapshot(snap), /records/);
-  assert.match(again.describeSnapshot(snap), /job-7\.js/);
-  assert.throws(() => again.describeSnapshot(new Uint8Array([1, 2, 3])), /not a snapshot/);
+  if (await docsModule()) {
+    assert.match(again.describeSnapshot(snap), /records/);
+    assert.match(again.describeSnapshot(snap), /job-7\.js/);
+    assert.throws(() => again.describeSnapshot(new Uint8Array([1, 2, 3])), /not a snapshot/);
+  } else {
+    // The shipped module has no describe (D3751).
+    assert.throws(() => again.describeSnapshot(snap), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
+  }
   again.dispose();
 });
 

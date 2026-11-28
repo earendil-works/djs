@@ -423,8 +423,8 @@ interface Exports {
   __stack_pointer: WebAssembly.Global;
   djs_debug_panic(): void;
   vm_new(memoryLimit: number, flags: number): number;
-  /** `line:col:file` of the activation waiting on a call, in the out buffer (D3054). */
-  vm_call_site(vm: number, callId: number): number;
+  /** `line:col:file` of the activation waiting on a call, in the out buffer (D3054). Docs module only (D3751). */
+  vm_call_site?(vm: number, callId: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
@@ -467,7 +467,8 @@ interface Exports {
   vm_snapshot(vm: number, len: number): number;
   vm_load_snapshot(vm: number, len: number): number;
   djs_snapshot_needs(len: number): number;
-  djs_snapshot_describe(len: number): number;
+  /** Docs module only (D3751). */
+  djs_snapshot_describe?(len: number): number;
   djs_elastic_stack(on: number): void;
   djs_stack(len: number): number;
   /** The base snapshot (D1321), coded in the module (D2252). */
@@ -788,11 +789,15 @@ export class Sandbox {
   /**
    * A snapshot described for people: its sections and sizes, record types, builtins,
    * functions and the run's state. Any sandbox of the module that wrote it can read it.
+   * Only the docs module (djs-wasm's `docs` feature) has it; the shipped module throws
+   * `misuse` (`djs describe` reads snapshots natively).
    */
   describeSnapshot(snapshot: Uint8Array): string {
     const x = this.x;
+    const describe = x.djs_snapshot_describe;
+    if (describe === undefined) throw new SandboxError("misuse", "describeSnapshot needs the docs module");
     this.stage(snapshot);
-    if (x.djs_snapshot_describe(snapshot.length) !== 0) throw new SandboxError("misuse", `not a snapshot: ${outText(x)}`);
+    if (describe(snapshot.length) !== 0) throw new SandboxError("misuse", `not a snapshot: ${outText(x)}`);
     return outText(x);
   }
 
@@ -1647,12 +1652,15 @@ export class Sandbox {
    * innermost suspended activation waiting on the call, directly or through promise
    * combinators. `file` is the name the code was compiled as: the run's `filename` for
    * the code it started with. Undefined when the call is not open or nothing waits on it
-   * at a known position.
+   * at a known position. Only the docs module (djs-wasm's `docs` feature) has it; the
+   * shipped module throws `misuse`.
    */
   callSite(id: number): CallSite | undefined {
     this.alive();
     const x = this.x;
-    const n = this.guard(() => x.vm_call_site(this.vm, id));
+    const callSite = x.vm_call_site;
+    if (callSite === undefined) throw new SandboxError("misuse", "callSite needs the docs module");
+    const n = this.guard(() => callSite(this.vm, id));
     if (n === 0) return undefined;
     const m = /^(\d+):(\d+):(.*)$/s.exec(outText(x));
     return m ? { file: m[3], line: Number(m[1]), column: Number(m[2]) } : undefined;

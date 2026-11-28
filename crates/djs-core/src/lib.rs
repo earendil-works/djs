@@ -16,6 +16,11 @@ extern crate alloc;
 /// one can't reach.
 pub const EMBED: bool = cfg!(feature = "embed");
 
+/// Whether this build has `compiler::strip_types` (the `strip-types` feature, D3752): the
+/// CLI's and the tests' TypeScript erasure. A constant where the parser's strip-types
+/// paths are cut, as [`EMBED`].
+pub const STRIP_TYPES: bool = cfg!(feature = "strip-types");
+
 /// Whether this build has the Unicode tables (`\p{..}` in regular expressions and full
 /// normalization: the `unicode` feature, D2411).
 pub const UNICODE: bool = cfg!(all(

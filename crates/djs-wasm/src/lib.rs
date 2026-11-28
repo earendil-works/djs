@@ -815,7 +815,9 @@ pub extern "C" fn vm_compile_file(
 /// Where the run in `vm` waits on open call `call_id` (D3054, `Vm::call_site`): the out
 /// buffer holds `line:col:file` (the script's name as compiled: the host's for its
 /// body). Returns its length, 0 when nothing
-/// waits on the call at a known position. For the docs site's pauses.
+/// waits on the call at a known position. For the docs site's pauses: only with the
+/// `docs` feature (D3751).
+#[cfg(feature = "docs")]
 pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
     with(|s| {
         let text = s
@@ -1515,7 +1517,7 @@ ops! {
     17 vm_arena_len(a);
     18 vm_collect(a);
     19 vm_compile_file(a, b, c, d, e);
-    20 vm_call_site(a, b);
+    #[cfg(feature = "docs")] 20 vm_call_site(a, b);
     #[cfg(feature = "docs")] 21 djs_disasm(a, b, c);
     22 vm_global(a);
     23 vm_new_object(a, b);
@@ -1556,7 +1558,7 @@ ops! {
     58 vm_snapshot(a, b);
     59 vm_load_snapshot(a, b);
     60 djs_snapshot_needs(a);
-    61 djs_snapshot_describe(a);
+    #[cfg(feature = "docs")] 61 djs_snapshot_describe(a);
 }
 
 // ---- Logical snapshots (D3700, D3720) ---------------------------------
@@ -1751,7 +1753,9 @@ pub extern "C" fn djs_snapshot_needs(len: usize) -> u32 {
 }
 
 /// The snapshot in staging[0..len] described for people (`snapshot::describe`), in the
-/// out buffer: 0, or 1 with the reason it cannot be read.
+/// out buffer: 0, or 1 with the reason it cannot be read. For the docs site: only with the
+/// `docs` feature (D3751; the CLI describes natively).
+#[cfg(feature = "docs")]
 pub extern "C" fn djs_snapshot_describe(len: usize) -> u32 {
     with(
         |s| match djs_core::vm::snapshot::describe(&s.staging[..len]) {
