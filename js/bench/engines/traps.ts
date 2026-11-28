@@ -145,7 +145,7 @@ function classify(msg: string): { error: string; cause: string } {
   const m = msg.replace(/^(caught |ERROR |wasm trap: |aborted: |fuel: |memory: |error: |fatal-error: )+/, "");
   const causes: [RegExp, string][] = [
     [/interrupted|aborted|timed out|time limit|timeout/i, "time"],
-    [/out of memory|MemoryError|memory limit/i, "memory"],
+    [/out of memory|no memory|MemoryError|memory limit/i, "memory"],
     [/maximum depth/i, "depth"],
     [/stack|recursion/i, "stack"],
     [/string length|too long/i, "length"],
