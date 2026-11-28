@@ -10,7 +10,7 @@ export const OPS = [
   "djs_abi_version", "djs_build_hash", "djs_base_ptr", "djs_base_inject_ptr",
   "djs_base_inject", "djs_base_coded_ptr", "djs_base_len", "djs_staging", "djs_out_ptr",
   "djs_out_len", "djs_panic_ptr", "djs_panic_len", "djs_debug_panic", "vm_new",
-  "vm_frozen_builtins", "vm_new_compiled", "vm_free", "vm_arena_ptr", "vm_arena_len",
+  "vm_new_compiled", "vm_free", "vm_arena_ptr", "vm_arena_len",
   "vm_collect", "vm_compile_file", "vm_call_site", "djs_disasm", "vm_global",
   "vm_new_object", "vm_new_host_function", "vm_new_async_host_function", "vm_define",
   "vm_decode_wire", "vm_string_reserve", "vm_new_error", "vm_handle_bits", "vm_handle_free",

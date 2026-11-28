@@ -3973,17 +3973,6 @@ fn sealed_vms_collect_minor_and_stay_deterministic() {
 }
 
 #[test]
-fn reserved_bases_start_with_room() {
-    let base = base_image();
-    let plain = Vm::from_base(&base, VmOptions::default()).unwrap();
-    let big = Vm::from_base_reserved(&base, VmOptions::default(), 4 << 20).unwrap();
-    assert!(plain.heap().arena().capacity() < 4 << 20);
-    // 4 MiB live grows by 1 MiB and half of the rest past the knee (D3293).
-    assert!(big.heap().arena().capacity() >= 6 << 20);
-    assert_eq!(plain.bytes(), big.bytes());
-}
-
-#[test]
 fn seal_puts_the_first_grown_cells_last() {
     // D2057: after a seal, the atom entries are the last cell, and a session's first atoms
     // and globals leave everything before the moved cells in place, through a full

@@ -83,7 +83,7 @@ impl BaseInfo {
     /// base, which a VM took as its arena): no copy kept, so it serves snapshots and loads
     /// into a host's VM ([`Vm::load_snapshot`]), not [`Vm::from_snapshot`].
     pub fn from_owned(image: Vec<u8>, opts: VmOptions) -> Result<BaseInfo, String> {
-        let vm = Vm::from_base_vec(image, opts, 0).map_err(|e| alloc::format!("{e:?}"))?;
+        let vm = Vm::from_base_vec(image, opts).map_err(|e| alloc::format!("{e:?}"))?;
         Ok(BaseInfo::of(&vm, opts))
     }
 

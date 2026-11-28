@@ -95,7 +95,7 @@ fn base_sample(b: &[u8]) -> u64 {
 /// Fails only if the memory limit is smaller than the base.
 #[cfg(feature = "raw")]
 pub fn new_vm(opts: VmOptions) -> Result<Vm, HeapError> {
-    match Vm::from_base_reserved(BASE, opts, 0) {
+    match Vm::from_base(BASE, opts) {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         // Made by this build's build.rs and verified there: anything else is a build bug.
@@ -104,13 +104,9 @@ pub fn new_vm(opts: VmOptions) -> Result<Vm, HeapError> {
 }
 
 /// A new VM whose arena is `base`, this build's base image in a buffer the caller owns
-/// (D2060): no copy. With the arena capacity of a heap of `live` bytes.
-pub fn new_vm_owned(
-    base: alloc::vec::Vec<u8>,
-    opts: VmOptions,
-    live: usize,
-) -> Result<Vm, HeapError> {
-    match Vm::from_base_vec(base, opts, live) {
+/// (D2060): no copy.
+pub fn new_vm_owned(base: alloc::vec::Vec<u8>, opts: VmOptions) -> Result<Vm, HeapError> {
+    match Vm::from_base_vec(base, opts) {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         Err(e) => panic!("the embedded base snapshot does not load: {e}"),

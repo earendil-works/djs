@@ -25,7 +25,7 @@ interface X {
   memory: WebAssembly.Memory;
   djs_staging(len: number): number;
   djs_out_ptr(): number;
-  vm_new(limit: number, live?: number, flags?: number): number;
+  vm_new(limit: number, flags?: number): number;
   vm_new_compiled?: (limit: number) => number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
@@ -140,7 +140,7 @@ const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(
   }
   // Batches of 100: one copy of the base is close to the timer's resolution.
   const vmNewNs = ns(() => {
-    for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0, 0, 0));
+    for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0, 0));
   }) / 100;
   rows.push(`wasm/vm_new\t${vmNewNs.toFixed(0)}\tns/op`);
   if (x.vm_new_compiled !== undefined) {
@@ -170,7 +170,7 @@ for (const name of names) {
   const jsonLen = jsonIn(value);
 
   // Inbound.
-  const fresh = () => x.vm_new(0, 0, 0);
+  const fresh = () => x.vm_new(0, 0);
   const free = (vm: number) => x.vm_free(vm);
   const tEncode = time(() => 0, () => void encodeIn(value));
   const tStringify = time(() => 0, () => void jsonIn(value));
@@ -196,7 +196,7 @@ for (const name of names) {
   );
 
   // Outbound: the value lives in a VM.
-  const vm = x.vm_new(0, 0, 0);
+  const vm = x.vm_new(0, 0);
   const stringify = fnIn(vm, "(v) => JSON.stringify(v)");
   encodeIn(value);
   const h = x.vm_decode_wire(vm, wireLen);
@@ -230,10 +230,10 @@ const imageRows: string[] = [];
 for (const [name, value] of images) {
   const tEnc = time(() => 0, () => void encodeIn(value));
   const len = encodeIn(value);
-  const tDecode = time(() => x.vm_new(0, 0, 0), (vm) => {
+  const tDecode = time(() => x.vm_new(0, 0), (vm) => {
     if (x.vm_decode_wire(vm, len) === 0) throw new Error("decode failed");
   }, (vm) => x.vm_free(vm));
-  const vm = x.vm_new(0, 0, 0);
+  const vm = x.vm_new(0, 0);
   encodeIn(value);
   const vb = bits(vm, x.vm_decode_wire(vm, len));
   const tRead = time(() => 0, () => void readValue(arena(vm), vb));

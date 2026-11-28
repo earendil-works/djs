@@ -175,9 +175,7 @@ Images are the engine's in-process mechanism:
   every script (helpers, a frozen realm) seals the heap after it (`Vm::seal`: a full
   collection that makes everything live old) and keeps that image as a snapshot, then
   starts each later script from a copy instead of running the setup again ([the Rust
-  interface](rust-api.md)). A wasm host that knows how big its heap will get can create
-  its VM with room for it (`vm_new`'s second argument), because growing the arena moves
-  it, and in wasm its old block stays behind as a hole.
+  interface](rust-api.md)).
 - **The stress tests and the determinism checks** stop a run every few instructions,
   restore it from its image and compare images byte for byte
   ([determinism](determinism.md)).

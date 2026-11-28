@@ -59,7 +59,7 @@ fn display(vm: u32, h: u32) -> String {
 
 #[test]
 fn compile_and_run() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     assert_ne!(vm, 0);
     let f = compile_body(vm, "", "return 6 * 7");
     assert_ne!(f, 0, "{}", out_text());
@@ -78,7 +78,7 @@ fn compile_and_run() {
 
 #[test]
 fn syntax_errors() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     assert_eq!(compile_body(vm, "", "return )"), 0);
     assert!(out_text().starts_with("SyntaxError"), "{}", out_text());
     vm_free(vm);
@@ -86,7 +86,7 @@ fn syntax_errors() {
 
 #[test]
 fn host_calls_and_fuel() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     stage(b"log");
     let log = vm_new_host_function(vm, 7, 3);
     let console = vm_new_object(vm, 0);
@@ -135,7 +135,7 @@ fn host_calls_and_fuel() {
 
 #[test]
 fn define_flags_enumerable_and_freeze() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let ns = vm_new_object(vm, 0);
     let one = vm_new_object(vm, 0);
     stage(b"a");
@@ -162,7 +162,7 @@ fn define_flags_enumerable_and_freeze() {
 
 #[test]
 fn define_read_only_and_null_prototype_objects() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     // vm_new_object's bit 0: a null prototype; vm_define's bit 2: non-writable and
     // non-configurable (0296, D3621, D3623).
     let ns = vm_new_object(vm, 1);
@@ -186,7 +186,7 @@ fn define_read_only_and_null_prototype_objects() {
 
 #[test]
 fn host_errors_are_thrown() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     stage(b"f");
     let hf = vm_new_host_function(vm, 1, 1);
     // (No try/catch in the compiler yet: the error propagates out of the call.)
@@ -212,7 +212,7 @@ fn host_errors_are_thrown() {
 
 #[test]
 fn wire_values_and_images() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     // [1, "x"] in the wire format (docs/wire.md).
     stage(&[b'D', b'J', b'W', 1, 0x20, 2, 0x07, 1, 0x10, 1, 1, b'x']);
     let v = vm_decode_wire(vm, 12);
@@ -235,7 +235,7 @@ fn wire_values_and_images() {
 
 #[test]
 fn out_of_memory_is_a_thrown_error() {
-    let vm = vm_new(4 << 20, 0, 0);
+    let vm = vm_new(4 << 20, 0);
     assert_ne!(vm, 0);
     let f = compile_body(vm, "", "let s = 'x'; for (;;) s += s; return s");
     call(vm, f, &[]);
@@ -254,12 +254,12 @@ fn out_of_memory_is_a_thrown_error() {
     );
     vm_free(vm);
     // A cap too small for the realm.
-    assert_eq!(vm_new(1024, 0, 0), 0);
+    assert_eq!(vm_new(1024, 0), 0);
 }
 
 #[test]
 fn strings_written_in_place() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let text = format!("{{\"k\": \"{}\"}}", "x".repeat(3000));
     let h = vm_string_reserve(vm, text.len() as u32);
     assert_ne!(h, 0);
@@ -289,7 +289,7 @@ fn strings_written_in_place() {
 
 #[test]
 fn abort_after_out_of_fuel() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let f = compile_body(vm, "", "for (;;) {}");
     assert_ne!(f, 0);
     call(vm, f, &[]);
@@ -309,7 +309,7 @@ fn abort_after_out_of_fuel() {
 /// is full and resets `Roots::MINORS`, D2045), which is why the test with one failed.
 #[test]
 fn base_equals_a_compiled_realm() {
-    let base = vm_new(0, 0, 0);
+    let base = vm_new(0, 0);
     let mut compiled = Vm::new(options(0)).unwrap();
     compiled.prepare_base_image().unwrap();
     assert!(with(|s| s.slot(base).vm.bytes() == compiled.bytes()));
@@ -318,7 +318,7 @@ fn base_equals_a_compiled_realm() {
 
 #[test]
 fn async_host_calls() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     stage(b"tool");
     let tool = vm_new_async_host_function(vm, 3, 4);
     assert_ne!(tool, 0);
@@ -356,7 +356,7 @@ fn async_host_calls() {
 /// D1670: async results wait in the inbox and apply one at a time with their own clock.
 #[test]
 fn host_results_with_a_clock() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     stage(b"tool");
     let tool = vm_new_async_host_function(vm, 3, 4);
     let f = compile_body(
@@ -380,7 +380,7 @@ fn host_results_with_a_clock() {
 /// D1730: the canonical hash, unchanged by a collection, and the VM untouched by it.
 #[test]
 fn canonical_hash() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let f = compile_body(
         vm,
         "",
@@ -404,7 +404,7 @@ fn canonical_hash() {
 #[test]
 fn weak_ref_modes() {
     for (mode, want) in [(0, "function,1"), (1, "function,1")] {
-        let vm = vm_new(0, 0, 0);
+        let vm = vm_new(0, 0);
         assert_eq!(vm_set_weak_refs(vm, mode), 0);
         let f = compile_body(
             vm,
@@ -418,14 +418,14 @@ fn weak_ref_modes() {
         assert_eq!(display(vm, r), want, "mode {mode}");
         vm_free(vm);
     }
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     assert_eq!(vm_set_weak_refs(vm, 2), -1);
     vm_free(vm);
 }
 
 #[test]
 fn host_clock() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     vm_set_now(vm, 1_646_177_400_000.0);
     vm_set_time_zone_offset(vm, 120);
     let f = compile_body(
@@ -443,7 +443,7 @@ fn host_clock() {
 
 #[test]
 fn unhandled_rejections() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let f = compile_body(
         vm,
         "",
@@ -462,7 +462,7 @@ fn unhandled_rejections() {
 /// 0048: goal bit 2 compiles TypeScript; without it, types are syntax errors.
 #[test]
 fn typescript_goal() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let src = "enum E { A = 2 } const x: number = E.A as number; return x * 21";
     stage(src.as_bytes());
     assert_eq!(vm_compile_file(vm, 1, 0, 0, src.len()), 0);
@@ -484,7 +484,7 @@ fn typescript_goal() {
 /// `Math.random` reproducibly; `djs_build_hash` is the image build hash.
 #[test]
 fn file_names_seeds_and_build_hash() {
-    let vm = vm_new(0, 0, 0);
+    let vm = vm_new(0, 0);
     let (name, src) = ("codemode.js", "\nreturn new Error('x').stack");
     let mut b = name.as_bytes().to_vec();
     b.extend_from_slice(src.as_bytes());
@@ -524,7 +524,7 @@ fn file_names_seeds_and_build_hash() {
     };
     vm_set_random_seed(vm, 7, 1);
     let first = draw(vm);
-    let other = vm_new(0, 0, 0);
+    let other = vm_new(0, 0);
     vm_set_random_seed(other, 7, 1);
     assert_eq!(draw(other), first);
     vm_set_random_seed(other, 8, 1);
@@ -562,7 +562,7 @@ fn base_is_decoded_or_injected() {
         unsafe { std::ptr::copy_nonoverlapping(copy.as_ptr(), p as *mut u8, copy.len()) };
         let ok = djs_base_inject();
         assert!(BASE.with(|b| b.borrow().is_some()));
-        let vm = vm_new(0, 0, 0);
+        let vm = vm_new(0, 0);
         assert!(BASE.with(|b| b.borrow().is_none()), "taken by the VM");
         (ok, vm)
     });
@@ -592,9 +592,9 @@ fn vms_take_the_decoded_base_as_their_arena() {
     let expect = in_instance(base_copy);
     in_instance(move || {
         djs_base_ptr();
-        let a = vm_new(0, 0, 0);
+        let a = vm_new(0, 0);
         assert!(BASE.with(|b| b.borrow().is_none()), "taken by the VM");
-        let b = vm_new(0, 0, 0);
+        let b = vm_new(0, 0);
         assert_ne!(b, 0);
         assert_ne!(vm_arena_ptr(b), vm_arena_ptr(a));
         // From the second VM on, the instance keeps a decoded base and copies it.
@@ -608,9 +608,7 @@ fn vms_take_the_decoded_base_as_their_arena() {
             assert_eq!(bytes, &expect[..]);
         }
         assert_eq!(base_copy(), expect);
-        let c = vm_new(0, 1 << 20, 0);
-        assert_ne!(c, 0);
-        for vm in [a, b, c] {
+        for vm in [a, b] {
             vm_free(vm);
         }
     });
@@ -626,9 +624,8 @@ fn frozen_builtins_flag() {
         (0, "false,own,added"),
         (VM_FROZEN_BUILTINS, "true,own,TypeError"),
     ] {
-        let vm = vm_new(0, 0, flags);
+        let vm = vm_new(0, flags);
         assert_ne!(vm, 0);
-        assert_eq!(vm_frozen_builtins(vm), flags);
         let f = compile_body(vm, "", src);
         call(vm, f, &[]);
         let st = vm_run(vm, 1_000_000);
@@ -637,7 +634,7 @@ fn frozen_builtins_flag() {
         assert_eq!(display(vm, r), want, "flags {flags}");
         vm_free(vm);
     }
-    assert_eq!(vm_new(0, 0, 2), 0);
+    assert_eq!(vm_new(0, 2), 0);
 }
 
 #[test]

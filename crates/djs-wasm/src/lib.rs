@@ -40,7 +40,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 11;
+pub const ABI_VERSION: u32 = 12;
 
 /// `vm_run` results.
 pub mod status {
@@ -260,7 +260,7 @@ mod wasm {
     }
 }
 
-/// A buffer with the capacity a VM's arena starts with (`Heap::restore_capacity` at the
+/// A buffer with the capacity a VM's arena starts with (`Heap::image_capacity` at the
 /// default cap), for the base to be decoded into when a VM needs it at once.
 fn base_buffer() -> Vec<u8> {
     Vec::with_capacity(base_capacity())
@@ -338,12 +338,12 @@ fn take_base() -> Option<Vec<u8>> {
 }
 
 /// A VM from the base snapshot, or the reason there is none.
-fn new_from_base(opts: VmOptions, live: u32) -> Result<Vm, &'static str> {
+fn new_from_base(opts: VmOptions) -> Result<Vm, &'static str> {
     let base = take_base().ok_or(
         "no base snapshot: the host must hand over the module's djs_base section \
          (djs_base_coded_ptr) or inject a decoded base",
     )?;
-    djs_prelude::new_vm_owned(base, opts, live as usize).map_err(|e| e.as_str())
+    djs_prelude::new_vm_owned(base, opts).map_err(|e| e.as_str())
 }
 
 /// Natively, a panic hook records the message (and the default hook still prints). On
@@ -721,13 +721,10 @@ fn options(memory_limit: u32) -> VmOptions {
 pub const VM_FROZEN_BUILTINS: u32 = 1;
 
 /// A new VM with a heap cap of `memory_limit` bytes (0: the default): a copy of the base
-/// snapshot (djs-prelude, D1321). `live` gives the arena the capacity a heap of `live`
-/// bytes gets (its next GC threshold and slack) from the start, for a host that knows how
-/// big the heap will be after its setup (0: none): growing later would move the arena and
-/// leave its old block behind as a hole in wasm memory. `flags`: [`VM_FROZEN_BUILTINS`].
-/// Returns its number, or 0 if the cap is too small for the realm or a flag is unknown
-/// (the reason in the out buffer).
-pub extern "C" fn vm_new(memory_limit: u32, live: u32, flags: u32) -> u32 {
+/// snapshot (djs-prelude, D1321). `flags`: [`VM_FROZEN_BUILTINS`]. Returns its number, or
+/// 0 if the cap is too small for the realm or a flag is unknown (the reason in the out
+/// buffer).
+pub extern "C" fn vm_new(memory_limit: u32, flags: u32) -> u32 {
     if flags & !VM_FROZEN_BUILTINS != 0 {
         return with(|s| {
             s.set_out(b"unknown vm_new flags");
@@ -738,12 +735,7 @@ pub extern "C" fn vm_new(memory_limit: u32, live: u32, flags: u32) -> u32 {
         frozen_builtins: flags & VM_FROZEN_BUILTINS != 0,
         ..options(memory_limit)
     };
-    add_new_vm(new_from_base(opts, live))
-}
-
-/// Whether the builtins of `vm` are frozen (`vm_new`'s flag, D2304): 1 or 0.
-pub extern "C" fn vm_frozen_builtins(vm: u32) -> u32 {
-    with(|s| s.slot(vm).vm.frozen_builtins() as u32)
+    add_new_vm(new_from_base(opts))
 }
 
 /// Like `vm_new`, but builds the realm and compiles the prelude instead of copying the
@@ -1521,56 +1513,55 @@ ops! {
     10 djs_panic_ptr();
     11 djs_panic_len();
     12 djs_debug_panic();
-    13 vm_new(a, b, c);
-    14 vm_frozen_builtins(a);
-    #[cfg(feature = "compiled-prelude")] 15 vm_new_compiled(a);
-    16 vm_free(a);
-    17 vm_arena_ptr(a);
-    18 vm_arena_len(a);
-    19 vm_collect(a);
-    20 vm_compile_file(a, b, c, d, e);
-    21 vm_call_site(a, b);
-    #[cfg(feature = "docs")] 22 djs_disasm(a, b, c);
-    23 vm_global(a);
-    24 vm_new_object(a, b);
-    25 vm_new_host_function(a, b, c);
-    26 vm_new_async_host_function(a, b, c);
-    27 vm_define(a, b, c, d, e);
-    28 vm_decode_wire(a, b);
-    29 vm_string_reserve(a, b);
-    30 vm_new_error(a, b, c);
-    31 vm_handle_bits(a, b);
-    32 vm_handle_free(a, b);
-    33 vm_display(a, b);
-    34 vm_call(a, b, c, d);
-    35 vm_run(a, b);
-    36 vm_fuel_used(a);
-    37 vm_set_now(a, t);
-    38 vm_canonical_hash(a);
-    39 vm_set_weak_refs(a, b);
-    40 vm_set_random_seed(a, b, c);
-    41 vm_set_time_zone_offset(a, b);
-    42 vm_abort(a);
-    43 vm_result(a);
-    44 vm_outcome(a);
-    45 vm_host_call(a);
-    46 vm_host_call_info(a, b);
-    47 vm_new_host_calls(a);
-    48 vm_take_unhandled_rejections(a);
-    49 vm_promise_state(a, b);
-    50 vm_resolve_host_call(a, b, c, d);
-    51 vm_resolve_host_call_at(a, b, c, d, t);
-    52 djs_elastic_stack(a);
-    53 djs_stack(a);
-    #[cfg(feature = "alloc-stats")] 54 djs_alloc_stats(a);
-    55 djs_has(a);
-    #[cfg(feature = "cold-unicode")] 56 djs_tables_ptr(a, b);
-    #[cfg(feature = "cold-unicode")] 57 djs_tables_set();
-    58 vm_tables_need(a);
-    #[cfg(feature = "snapshot")] 59 vm_snapshot(a, b);
-    #[cfg(feature = "snapshot")] 60 vm_load_snapshot(a, b);
-    #[cfg(feature = "snapshot")] 61 djs_snapshot_needs(a);
-    #[cfg(feature = "snapshot")] 62 djs_snapshot_describe(a);
+    13 vm_new(a, b);
+    #[cfg(feature = "compiled-prelude")] 14 vm_new_compiled(a);
+    15 vm_free(a);
+    16 vm_arena_ptr(a);
+    17 vm_arena_len(a);
+    18 vm_collect(a);
+    19 vm_compile_file(a, b, c, d, e);
+    20 vm_call_site(a, b);
+    #[cfg(feature = "docs")] 21 djs_disasm(a, b, c);
+    22 vm_global(a);
+    23 vm_new_object(a, b);
+    24 vm_new_host_function(a, b, c);
+    25 vm_new_async_host_function(a, b, c);
+    26 vm_define(a, b, c, d, e);
+    27 vm_decode_wire(a, b);
+    28 vm_string_reserve(a, b);
+    29 vm_new_error(a, b, c);
+    30 vm_handle_bits(a, b);
+    31 vm_handle_free(a, b);
+    32 vm_display(a, b);
+    33 vm_call(a, b, c, d);
+    34 vm_run(a, b);
+    35 vm_fuel_used(a);
+    36 vm_set_now(a, t);
+    37 vm_canonical_hash(a);
+    38 vm_set_weak_refs(a, b);
+    39 vm_set_random_seed(a, b, c);
+    40 vm_set_time_zone_offset(a, b);
+    41 vm_abort(a);
+    42 vm_result(a);
+    43 vm_outcome(a);
+    44 vm_host_call(a);
+    45 vm_host_call_info(a, b);
+    46 vm_new_host_calls(a);
+    47 vm_take_unhandled_rejections(a);
+    48 vm_promise_state(a, b);
+    49 vm_resolve_host_call(a, b, c, d);
+    50 vm_resolve_host_call_at(a, b, c, d, t);
+    51 djs_elastic_stack(a);
+    52 djs_stack(a);
+    #[cfg(feature = "alloc-stats")] 53 djs_alloc_stats(a);
+    54 djs_has(a);
+    #[cfg(feature = "cold-unicode")] 55 djs_tables_ptr(a, b);
+    #[cfg(feature = "cold-unicode")] 56 djs_tables_set();
+    57 vm_tables_need(a);
+    #[cfg(feature = "snapshot")] 58 vm_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 59 vm_load_snapshot(a, b);
+    #[cfg(feature = "snapshot")] 60 djs_snapshot_needs(a);
+    #[cfg(feature = "snapshot")] 61 djs_snapshot_describe(a);
 }
 
 // ---- Logical snapshots (D3700, D3720) ---------------------------------

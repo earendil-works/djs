@@ -307,44 +307,22 @@ impl Vm {
     /// and the compiled prelude. Nothing per VM: no handles, no host functions, no
     /// pending calls. Per-VM state is set up after the copy (see `after_copy`).
     pub fn from_base(base: &[u8], opts: VmOptions) -> Result<Vm, LoadError> {
-        Vm::from_base_reserved(base, opts, 0)
-    }
-
-    /// [`Vm::from_base`] with the arena capacity a heap of `live` bytes would get (its
-    /// next GC threshold plus the slack): for an embedder that knows how big the heap
-    /// gets, such as pi's cold start, which runs its prelude next (D2043). Growing later
-    /// would reallocate the arena, and in wasm the old block stays behind as a hole.
-    pub fn from_base_reserved(base: &[u8], opts: VmOptions, live: usize) -> Result<Vm, LoadError> {
         Vm::check_image(base)?;
         // Copied into a buffer with the arena's capacity, so the heap does not reallocate
         // it right away (D1942).
         let mut bytes = Vec::new();
         bytes
-            .try_reserve_exact(Heap::start_capacity(
-                base.len(),
-                Heap::image_base_end(base),
-                live,
-                opts.memory_limit,
-            ))
+            .try_reserve_exact(Heap::image_capacity(base.len(), opts.memory_limit))
             .map_err(|_| LoadError::TooLarge)?;
         bytes.extend_from_slice(base);
-        Vm::from_base_vec(bytes, opts, live)
+        Vm::from_base_vec(bytes, opts)
     }
 
-    /// [`Vm::from_base_reserved`] on a buffer the caller owns, which becomes the arena:
-    /// no copy (D2060). A wasm instance decodes or receives the base straight into it.
-    pub fn from_base_vec(
-        mut bytes: Vec<u8>,
-        opts: VmOptions,
-        live: usize,
-    ) -> Result<Vm, LoadError> {
+    /// [`Vm::from_base`] on a buffer the caller owns, which becomes the arena: no copy
+    /// (D2060). A wasm instance decodes or receives the base straight into it.
+    pub fn from_base_vec(mut bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
         Vm::check_image(&bytes)?;
-        let cap = Heap::start_capacity(
-            bytes.len(),
-            Heap::image_base_end(&bytes),
-            live,
-            opts.memory_limit,
-        );
+        let cap = Heap::image_capacity(bytes.len(), opts.memory_limit);
         bytes
             .try_reserve_exact(cap.saturating_sub(bytes.len()))
             .map_err(|_| LoadError::TooLarge)?;
@@ -649,12 +627,6 @@ impl Vm {
     /// tables, which costs time and, against a reference image, snapshot size.
     pub fn set_random_seed(&mut self, seed: u64) {
         crate::builtins::number::set_seed(&mut self.heap, seed);
-    }
-
-    /// Reseeds `Math.random` alone, keeping the hash key: for an embedder that keyed the
-    /// VM once (pi keys its prelude image and reseeds every session from it, D2433).
-    pub fn set_math_random_seed(&mut self, seed: u64) {
-        crate::builtins::number::set_math_state(&mut self.heap, seed);
     }
 
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {

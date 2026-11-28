@@ -411,7 +411,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 11;
+const ABI_VERSION = 12;
 /** `vm_new`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
@@ -498,8 +498,7 @@ interface Exports {
   djs_panic_len(): number;
   __stack_pointer: WebAssembly.Global;
   djs_debug_panic(): void;
-  vm_new(memoryLimit: number, live: number, flags: number): number;
-  vm_frozen_builtins(vm: number): number;
+  vm_new(memoryLimit: number, flags: number): number;
   /** `line:col:file` of the activation waiting on a call, in the out buffer (D3054). */
   vm_call_site(vm: number, callId: number): number;
   vm_free(vm: number): void;
@@ -972,7 +971,7 @@ export class Sandbox {
     // (D2060).
     provideBase(module, x);
     rememberBase(module, x);
-    const vm = x.vm_new(opts.memoryLimit ?? 0, 0, opts.frozenBuiltins ? VM_FROZEN_BUILTINS : 0);
+    const vm = x.vm_new(opts.memoryLimit ?? 0, opts.frozenBuiltins ? VM_FROZEN_BUILTINS : 0);
     if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     this.x = x;
     this.module = module;

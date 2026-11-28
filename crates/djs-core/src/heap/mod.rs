@@ -157,14 +157,6 @@ fn reserve_for(limit: u32) -> u32 {
     (limit / 32).min(1 << 20) & !7
 }
 
-/// The arena capacity for a GC threshold `t` (D1990): the threshold plus a slack for
-/// what is allocated between crossing it and the next safepoint, where the collection
-/// runs. Without it that overshoot reallocated the whole arena, and in wasm the moved
-/// block left its old place behind as a hole during the collection.
-fn capacity_target(t: u32) -> u32 {
-    t.saturating_add((t / 16).max(64 << 10))
-}
-
 /// The default memory cap: the whole `u32` offset space.
 pub const DEFAULT_LIMIT: usize = arena::MAX_ARENA as usize;
 
@@ -305,27 +297,6 @@ impl Heap {
         const PAGE: usize = 64 << 10;
         let hard = (limit.min(arena::MAX_ARENA as usize) & !7).max(image_len);
         image_len.next_multiple_of(PAGE).min(hard)
-    }
-
-    /// The arena capacity of a VM made from an image of `image_len` bytes for a host that
-    /// expects `live` bytes (`Vm::from_base_reserved`; 0: no hint, [`Heap::image_capacity`]).
-    pub fn start_capacity(image_len: usize, base_end: u32, live: usize, limit: usize) -> usize {
-        if live == 0 {
-            Heap::image_capacity(image_len, limit)
-        } else {
-            Heap::restore_capacity(image_len.max(live), base_end, limit)
-        }
-    }
-
-    /// The arena capacity for a heap of `image_len` bytes that is expected to grow on: its
-    /// first GC threshold plus the slack (D1990), `base_end` of the bytes its builtin
-    /// prefix ([`Heap::image_base_end`]). The prefix must be the image's, or the first
-    /// threshold (D2442) is past the capacity and the arena grows at once.
-    pub fn restore_capacity(image_len: usize, base_end: u32, limit: usize) -> usize {
-        let hard = (limit.min(arena::MAX_ARENA as usize) as u32) & !7;
-        let len = u32::try_from(image_len).unwrap_or(u32::MAX);
-        let t = gc::next_threshold(len, base_end.min(len), hard - reserve_for(hard));
-        (capacity_target(t) as usize).max(image_len)
     }
 
     /// The builtin prefix (`Roots::BASE_END`) of a heap image: 0 without one.

@@ -39,7 +39,7 @@ const fnv = (b) => {
   return (h >>> 0).toString(16).padStart(8, "0");
 };
 
-const vm = x.vm_new(0, 0, 0);
+const vm = x.vm_new(0, 0);
 x.vm_set_now(vm, 1_700_000_000_000);
 x.vm_set_time_zone_offset(vm, 90);
 const g = x.vm_global(vm);

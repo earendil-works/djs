@@ -339,8 +339,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 
 | export | does |
 | --- | --- |
-| `vm_new(limit, live, flags) -> vm` | a new VM: a copy of the base snapshot (D1321); `limit` = heap cap in bytes, 0 = default; `live` = the heap size to reserve room for (0: none). Flags: 1 = frozen builtins (D2304); 0 with a message for an unknown flag |
-| `vm_frozen_builtins(vm) -> 0/1` | whether the VM's builtins are frozen (part of the image) |
+| `vm_new(limit, flags) -> vm` | a new VM: a copy of the base snapshot (D1321); `limit` = heap cap in bytes, 0 = default. Flags: 1 = frozen builtins (D2304); 0 with a message for an unknown flag |
 | `vm_new_compiled(limit) -> vm` | builds the realm and compiles the prelude instead (only with the `compiled-prelude` feature; tests) |
 | `vm_free(vm)` | drop the VM |
 | `vm_arena_ptr(vm)`, `vm_arena_len(vm)` | the arena (the image, and the reader's view) |

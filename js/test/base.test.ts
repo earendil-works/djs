@@ -22,7 +22,7 @@ test("the base equals a realm compiled in wasm", (t) => {
     return;
   }
   const arena = (vm: number) => new Uint8Array(x.memory.buffer, x.vm_arena_ptr(vm), x.vm_arena_len(vm)).slice();
-  const base = x.vm_new(0, 0, 0);
+  const base = x.vm_new(0, 0);
   const compiled = x.vm_new_compiled(0);
   assert.notEqual(compiled, 0);
   assert.equal(x.vm_collect(compiled), 0);
@@ -45,7 +45,7 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   // The coded base is a custom section, outside the instance's memory (D2541): without it
   // handed over, there is no base and no VM.
   assert.equal(first.djs_base_ptr(), 0);
-  assert.equal(first.vm_new(0, 0, 0), 0);
+  assert.equal(first.vm_new(0, 0), 0);
   assert.equal(first.djs_base_coded_ptr(5), 0, "not the section's length");
   assert.ok(provideCodedBase(module, first));
   assert.ok(!provideCodedBase(module, first), "it has the coded base");
@@ -56,13 +56,13 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   const arena = (x: any, vm: number) => new Uint8Array(x.memory.buffer, x.vm_arena_ptr(vm), x.vm_arena_len(vm)).slice();
   const base = read(first);
   const baseAt = first.djs_base_ptr();
-  const vm1 = first.vm_new(0, 0, 0);
+  const vm1 = first.vm_new(0, 0);
   // The decoded bytes became the VM's arena, grown in place: no second copy (D2060).
   assert.equal(first.vm_arena_ptr(vm1), baseAt, "the decoded base is the arena");
   // The coded base went with it (D3360): a second VM here needs it handed over again.
   assert.equal(first.djs_base_ptr(), 0);
   assert.ok(provideCodedBase(module, first));
-  const vm1b = first.vm_new(0, 0, 0);
+  const vm1b = first.vm_new(0, 0);
   assert.notEqual(vm1b, 0);
   first.vm_free(vm1b);
   // An instance given the bytes takes them and creates the same VM.
@@ -73,7 +73,7 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   assert.equal(second.djs_base_inject(), 1);
   assert.equal(second.djs_base_ptr(), at, "the injected copy is the base");
   assert.equal(second.djs_base_inject_ptr(base.length), 0, "a base is set: no more room");
-  const vm2 = second.vm_new(0, 0, 0);
+  const vm2 = second.vm_new(0, 0);
   assert.equal(second.vm_arena_ptr(vm2), at, "the injected base is the arena");
   assert.ok(Buffer.from(arena(first, vm1)).equals(Buffer.from(arena(second, vm2))));
   // The base was given up: reading it again needs the coded base, decodes a fresh copy,
@@ -81,7 +81,7 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   assert.equal(second.djs_base_ptr(), 0);
   assert.ok(provideCodedBase(module, second));
   assert.ok(Buffer.from(read(second)).equals(Buffer.from(base)));
-  const vm2b = second.vm_new(0, 0, 0);
+  const vm2b = second.vm_new(0, 0);
   assert.ok(Buffer.from(arena(second, vm2b)).equals(Buffer.from(arena(second, vm2))));
   // Another base (or the wrong length) is refused, and the instance decodes its own. The
   // check is of identity, by a sample of the bytes (D3271): here a byte of the roots.
@@ -94,6 +94,6 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   assert.equal(third.djs_base_inject(), 0);
   provideCodedBase(module, third);
   assert.ok(Buffer.from(read(third)).equals(Buffer.from(base)));
-  const vm3 = third.vm_new(0, 0, 0);
+  const vm3 = third.vm_new(0, 0);
   assert.ok(Buffer.from(arena(first, vm1)).equals(Buffer.from(arena(third, vm3))));
 });
