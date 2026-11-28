@@ -50,7 +50,6 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1347: A stressed difftest run that only times out is reported, not failed
 - D1530: difftest `no-stress`; a stressed timeout is a failure again
 - D1540: D013 in practice: which overflows are RangeErrors; `djs-expect` in difftest
-- D1635: Both backends are tested
 
 ## Testing: determinism, journals and benchmarks
 
@@ -119,8 +118,6 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1340: The prelude keeps no source text
 - D1430: Privileged code keeps no line tables or local names
 - D1433: Prelude closures carry no `length`, `name` or `prototype`
-- D1495: pi adapter: reuse the VM image taken after the prelude
-- D1890: pi adapter: snapshot() and the prelude image collect first
 - D3700: Logical snapshots are djs's persistence format (with D3701-D3723)
 - D3730: Continuation dumps are removed; snapshots are djs's only persistence format
 - D3731: The REPL's `--debugger` makes `debugger;` a pause; `--frozen` only freezes the builtins
@@ -214,7 +211,6 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1393: Builtin constructors do not read newTarget.prototype in the interpreter
 - D1631: Native frames are ordinary frame records with a header bit
 - D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
-- D1633: Fuel per transition; the backend is part of the engine's identity
 - D1634: Code size: the native API is out of line in wasm
 - D1803: bgen: try/finally and constructors in `@native`
 - D1850: Leaf fast paths for everyday builtins (`@fast`)
@@ -300,7 +296,6 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1901: JSON.stringify: plain subtrees and Dates in the fast path
 - D1110: Annex B regex grammar in non-unicode mode
 - D1111: Regex engine design
-- D1112: `\p{...}` is not supported yet
 - D1113: Where the regex parser deliberately differs from qjs
 - D1332: RegExp objects, suspendable matching and regex literals
 - D1500: Unicode property escapes, on by default
@@ -333,7 +328,6 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1484: Parameter properties follow useDefineForClassFields
 - D1485: strip-types parses module syntax; djs still has no modules
 - D1650: Decorators after qjs, the runtime in builtins/decorators.ts
-- D1651: TypeScript legacy decorators behind a compile flag, as thunks
 
 ## Embedding: wire format, reader, wasm ABI, determinism
 
@@ -347,16 +341,6 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1491: djs-wasm exports for embedders: file names, random seed, build hash
 - D1680: Deterministic mode: weak references collected, strong or absent; the Sandbox's deterministic option
 - D1642: `Vm::run_metered` and `Vm::backtrace`
-
-## The pi adapter
-
-- D1490: pi codemode on djs: an adapter for pi's `startVm` contract, pi's prelude unmodified
-- D1492: pi adapter: 10,000 fuel per interrupt poll
-- D1493: pi adapter: deterministic `Math.random` matches quickjs-wasi
-- D1494: pi adapter: quickjs-wasi's host globals in JS, before the prelude
-- D1495: pi adapter: reuse the VM image taken after the prelude
-- D1660: pi adapter: the prelude is not polled; the fingerprint hashes the host globals
-- D1890: pi adapter: snapshot() and the prelude image collect first
 
 ## CLI and REPL
 
@@ -380,10 +364,16 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
   and D1831 (shapes).
 - D1783 appears twice in the log with two titles (fast paths for appends, strict equality
   and insert2/3; `put_elem` appends): both are the same decision.
-- D2520 (`unsafe-heap` optional, not shipped) is amended by D3100 (the shipped and slim
-  wasm modules build with it; native, dump and test builds keep the checks).
+- D2520 (`unsafe-heap` optional, not shipped) is amended by D3100 (the shipped wasm
+  module builds with it; native and test builds keep the checks).
 - Every continuation-dump decision (D2352-D3660, listed in D3730) is superseded by D3730:
-  dumps are removed and runs persist as snapshots (D3700).
+  dumps are removed and runs persist as snapshots (D3700, D3720). The index lists none of
+  them; those that only part of D3730 replaced (D2561, D2770, D2971, D3050, D3600) stay.
+- The pi adapter (js/pi: D1490-D1495, D1660, D1890, D2650-D2653, D2772) and the compile
+  cache (D3040) were removed by D3640; the slim build (D025, D2411-D2413) by D3642; the
+  image dependency descriptor (D026, D2265-D2268) by D3641; lazy compilation (D2990,
+  D2991, D2995) by D3740; Tasks and explicit bindings (D2771, D2972) by D3745; legacy
+  decorators (D1651) by D3750. Those entries are gone from the index.
 
 ## Not yet sorted by topic
 
@@ -432,16 +422,12 @@ topics when the index is next reorganized.
 - D2280: The harvested codemode corpus
 - D2281: Redaction of harvested scripts: arguments scrubbed, unknown words renamed
 - D2250: JSON without per-key allocations, escapes by runs; two-byte filter in one-byte search
-- D2260: Snapshots are compact containers: collected, zstd against a reference, pinned to the build
-- D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
-- D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 - D2263: Sandbox.bytes() collects first
 - D2282: Difftest ratchet reasons are an excerpt around the first difference
 - D2283: Harvested cases with structured tool results
 - D2284: Extra redaction for structured-result harvests
 - D2041: An old region that minor collections neither trace nor move
 - D2042: Full collections do not promote; only seal points make cells old
-- D2043: pi's later cold starts size the arena for the sealed prelude heap
 - D2044: No card table and write barrier (old-generation phase 2) for now
 - D2251: The base image is ordered by cell kind
 - D2252: The wasm module ships the base image coded; hosts decode it once per module
@@ -491,10 +477,8 @@ topics when the index is next reorganized.
 - D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
 - D2064: Collections never move or free the builtin prefix
 - D2065: A debug write barrier below BASE_END, armed by frozen builtins or one option
-- D2066: Session images: the roots cell, a canonical prefix diff and the session region
 - D023: Notes superseding parts of D2304 after 0147
 - D024: No compatibility with unreleased formats
-- D2400: One snapshot container format, session images only
 - D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
 - D2410: The harvester reads p2 session databases from a read-only copy
 - D2430: The base image stores each flat string once
@@ -510,28 +494,18 @@ topics when the index is next reorganized.
 - D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
 - D2309: instr.py patches by checked anchors and splits user code from bytecode builtins
 - D2443: Short opcode forms and shortened jumps, a recorded trade
-- D025: The slim build's feature is `full`
-- D026: Image compatibility keyed on what an image depends on
 - D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
 - D3100: The shipped and slim wasm modules read the arena unchecked (amends D2520)
 - D2550: Fuel stays per instruction; charging only at safepoints measured, not adopted
 - D2551: Large ASCII host strings are copied straight into a reserved heap string
-- D2411: The slim build: the `full` and `unicode` features, cut by a constant
-- D2412: The registry lists what the slim build lacks
-- D2413: Testing the slim build: its own legs in the gate
 - D2444: Code inline in the template, the rest of a user function in FuncInfo
 - D2310: A twin stays only where it pays its bytes
-- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
-- D2266: RECORDS_HASH: the id tables images store numbers of, read from the sources
-- D2267: Cargo features are classified as image features or image-neutral
-- D2268: When to bump COMPAT_VERSION
 - D2521: Vec pushes out of line outside the hot loops (`PushOut::push_out`)
 - D2445: A closure's length and name come from its template until changed
 - D2540: A 128 KiB wasm stack; parser nesting limit 550
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 - D2522: `Vec::with_capacity` out of line (`buf::vec_with_capacity`)
 - D2552: reduce by argument count, its accumulator in the dense loop's state
-- D2433: Keyed string hashing for the VM's own atoms and Map/Set
 - D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
 - D2543: A wasm stack overflow is reported as one
 - D2544: GC thresholds count their pages from the prefix's end
@@ -543,66 +517,27 @@ topics when the index is next reorganized.
 - D2448: A closure's template in its ELEMENTS field
 - D2449: No direct native binding for thin builtins (L1, L2)
 - D2450: The base's property table indexes at a load of three quarters
-- D2352: djs-wasm leaves the dumper out by default (+32.4 KB gzip)
-- D2353: Dumps are Scripts: format version 1 and the promise that later builds load it
-- D2354: A wasm host dumps from the heap bytes in TypeScript; the Rust dumper is the reference
-- D2355: A dump is checked by compiling it: every function keeps the bindings it read
-- D2560: A waiting session persists as a continuation dump; heap images stay inside a process
 - D2561: Dumps are taken only at idle points
 - D2562: In-flight builtin state is re-enacted; a few privileged loader primitives
-- D2563: The compiler's suspension maps are a pinned contract
-- D2564: One dumper, in Rust; the TypeScript dumper is dropped
 - D2565: djs builds pi's future prelude shape in its own adapter first
 - D2590: Corpus tool calls are idle points: `host.later`
 - D2600: The CLI's `tools`: a Proxy that makes one async host function per name
 - D2601: Scripted tool answers: by arguments, else in order
 - D2570: Suspension maps from a role stack the parser keeps
-- D2580: While a dump loads, static initializers skip static fields and blocks
-- D2581: Format 2 is a Script run by `Vm::load_dump` with the loader's `$dump`
-- D2582: Classes and private fields in dumps
-- D2583: The format 2 promise, concretely
-- D2584: `$dump.resume` builds the frame from the map of the dump's own text
 - D2585: A load's open calls, handles and call ids
 - D2602: The CLI's host globals `later` and `print`
-- D2603: Resuming dumps in the CLI
 - D2610: The exporter writes what is in flight as the calls that make it
 - D2611: Variables of one name in several scopes get nested factories
 - D2612: Re-enactments of iterators and for-await state
-- D2613: The gate dumps at every idle point of the corpus
-- D2614: The dumper's size in the dump module
-- D2615: A dump holding TypeScript functions is TypeScript
-- D2616: Where activations stopped is reported, not written as comments
-- D2640: The dump format marker is the directive `"djs-dump 2";`
-- D2641: Dumps carry no comments; `djs resume --explain` explains them
-- D2617: A codemode body is dumped as the async function it runs as
-- D2618: A script binding with a host name is the script's
-- D2604: Dump commands in the CLI: idle points numbered by answers
-- D2619: Golden format 2 dumps change only with a decision
 - D2630: Host-driven Sandbox runs, the first piece of the Sandbox run API
-- D2631: The dump exports carry the host's function names both ways; changed in place
 - D2632: Dotted host function names make a namespace object
 - D2620: A codemode body's frame is an async function's
-- D2633: A dump names the run's result without a handle; `vm_outcome` removed
 - D2634: `run`, `runAsync` and `replay` are built on the host-driven run
-- D2635: Both dumper packagings, chosen by the host; the image moves between modules
 - D2621: A class's hidden bindings in a waiting frame are dead; private names are the class's
-- D2622: Format 2 dumps carry no helper code; the helpers are loader primitives
-- D2623: Computed keys the dump would evaluate again are refused
-- D2624: A dump carries Math.random's state
-- D2625: The golden dumps are rewritten for D2622 and D2624
-- D2650: pi's future shape in the adapter: prelude-next, `next` mode, session dumps
-- D2651: `dumpEveryIdle`: the next mode's stress mode
 - D2652: prelude-next has no lockdown; the next mode has frozen builtins
-- D2653: The pi adapter counts fuel across sync host calls
 - D2700: Heap images are no longer a persistence format; what was removed
-- D2701: The dump module's instance and VM are kept between dumps
 - D2702: The Sandbox's `maxFuel` counts fuel across sync host calls
-- D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
-- D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
 - D2201: The guide's site follows Elanor d3184572: its retuned type scale
-- D2626: A dump's builtin names are walked once per VM, and walked faster
-- D2627: Subroutine return addresses in dumps are gosub indexes; case tests keep their discriminant
-- D2628: Dumps write using Records, destructuring, for-in and builtin iterators from their state
 - D2660: The gate is legs and builds in scripts/gate.py
 - D2661: Every build configuration builds at once in its own target directory
 - D2662: Gate legs are cached by input hash
@@ -618,124 +553,64 @@ topics when the index is next reorganized.
 - D2721: Slot names are construct@span; states keep kind#N
 - D2722: Open host calls carry host JSON state; save/resume hooks; the Sandbox keeps the bookkeeping
 - D2730: Slot names: offsets from the function's start of the element or the construct; pins list them
-- D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
-- D2771: Tasks: the Sandbox drives the run and the open calls' hooks
 - D2731: Slots name every frame index; the operand stack stays in memory (refines D2720)
-- D2772: The pi adapter's open calls carry their pi ids as call states
 - D2790: No doctests, no empty test binaries, no bgen program in the gate; guarded
 - D2791: One integration-test binary per package
 - D2792: Builds end when cargo does; first runs overlap the legs
 - D2732: Construct temporaries: statement state in named locals, listed where live
 - D2733: Finally completions in temporaries; gosub/ret and return-address indexes gone
 - D2734: No role vocabulary: stack values are named by construct; class sites refused by a marker
-- D2735: One compile per load: the loader records the maps in the compile that runs the dump
 - D2800: String and number constants are not deduplicated per function while parsing
-- D2801: With the dumper, pattern scans stop at a literal element
-- D2802: One dump-module sandbox per module and memory limit in the process
-- D2830: Continuation dumps become plain JavaScript
-- D2831: The plain dump is written by the Rust exporter
 - D2832: Open host calls and Math.random's state are restored through host functions
-- D2833: Re-dumps use origin tracking
 - D2850: Suspension maps carry the syntax around each site
-- D2890: Plain dumps load as a Script with `$djs.resume`/`$djs.seed`; open calls keep their ids
-- D2891: Hosts load plain dumps themselves; sync host functions run meanwhile
-- D2892: The size ceilings rise for plain-dump loading in the shipped module
 - D2851: Site syntax: member targets split, recording only in async functions and generators, pinned
-- D2893: pi's next mode names its host functions `$djs.bridge`/`$djs.call` in plain dumps
 - D2894: The CLI's open calls carry their origin and the answers file's counts as state
 - D2852: Destructuring patterns are site-syntax nodes
 - D2853: TypeScript expressions are transparent on site paths
-- D2895: Several handles in a plain dump: a null-prototype object as the completion value
 - D2896: The gate clears a corrupt incremental cache and runs the job once more
 - D2860: The plain exporter writes format 2's lines and an IR, and rewrites them
-- D2861: Plain dumps are checked over every corpus idle point, in djs and in node
 - D2870: Origin tracking reads a continuation's frame as its origin's
-- D2897: `$djs.seed(lo, hi, next)`: call ids go on after a plain load as in the uninterrupted run
-- D2898: The Sandbox writes plain dumps by default
 - D2871: Plain continuations of methods that use `super` are methods of the home's prototype
 - D2872: `for await` in plain continuations: a loop over the saved record, the iteration in flight before it
 - D2873: Origin tracking inside a continuation's rewritten statement, case tests, finally by jumps
 - D2874: Destructuring around a continuation's site is written as a pattern again
-- D2834: Plain dumps are mostly self-contained: the code to continue is in the dump, the host provides `$djs`
-- D2835: The dump's first line is `"djs-dump";`
-- D2900: A plain dump's `$djs` record leaves default fields out
-- D2901: The plain dump size score
-- D2902: Anonymous closures in a scope factory are written as `key: (0, f)`
 - D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
-- D2836: Plain dumps are written only for VMs with frozen builtins
-- D2903: The plain dump runtime: the format's helpers are members of `$djs`
 - D2876: `using` in plain continuations: the resources added again, a disposal as a scope of K
-- D2877: Iterator helpers in plain dumps are made again by their public methods
-- D2878: Plain dumps refuse instances that carry private names
-- D2904: The hosts' plain-dump paths run with frozen builtins
-- D2879: TypeScript plain dumps are written as JavaScript where the TypeScript is only types
 - D2880: Sites in loop heads, `var` declarations, catch parameters and more literals
-- D2881: Classes in a scope a waiting frame shares go into the continuation's block
-- D2883: Classes that name themselves dump plainly; a class's own static private fields
 - D2960: Exception handlers in unreachable code are dropped
-- D2884: Re-dumps through loops, finally blocks and `using` scopes
-- D2940: A seeded fuzzer of codemode-like programs checks plain dumps from every idle point
-- D2941: `difftest: plain-xfail <reason>` marks a known plain-dump bug in a corpus case
-- D2885: Re-dumps inside K's own operators, templates, callees and assignments; helper classes in bodies
-- D2905: A continuation reads an evaluated operand again where that is exact
-- D2906: The dump size score is per case
 - D2907: A continuation's callback runs in parts, at the ends of the blocks it needs
-- D2920: Format 2 is retired; plain dumps are the only format, and the goldens are plain dumps
 - D2921: The `jump_if_loading` opcode is removed
 - D2908: A for-of or for-in goes on after the rest of its iteration, where nothing tells
 - D2909: A continuation is a function called with the frame's values
 - D2910: A continuation reads a value of the callback only after the part that makes it
-- D2882: `$djs.source(name, hash, params)`: a dump names the codemode body it continues
-- D2951: Objects the dump runtime made are written as its helper calls again
-- D2950: Plain dumps write class text with its static code blanked
 - D2911: A continuation leaves out the frame's bindings nothing in it reads
-- D2942: The plain-dump fuzzer's second round generates wider values and TypeScript bodies
-- D2886: `$djs.source(name, hash, params, 1)`: the one function a host's wrapper script makes
 - D2912: A continuation writes origin records only where it can stop again, and less text
 - D2970: A host function is identified by a host-chosen string, one object per identity
 - D2971: Dumps refer to host values by `$djs.host(name)`, never by where they are bound
 - D2973: pi's next mode names its host functions `bridge` and `call`
-- D2887: a `yield*` awaiting its inner `return()`: K primed, the request delivered again
-- D2972: Hosts bind host functions explicitly: globals, namespaces and body bindings
 - D2913: A continuation's record makes its layout again: `{f, at, h, r}`
 - D2914: Literal operands, object literals, left operands and substitutions are read again
 - D2915: Positional origin records; a generator's prototype is its function's
-- D2888: The dump's check compiles the plain text a host loads; `DumpOptions::check`
-- D2889: The dump's check resolves names without generating code
-- D2916: The host deletes `$djs` and `$dump`; the completion value is the last statement
 - D2917: Loops go on as written: builtin iterators as they are, `while` and `for` after the rest
 - D2918: Assignments around the site are written as the original's
 - D2919: String temporaries are literals again; a number substitution is read again
 - D3000: A placeholder loop's first iteration is a scope of its own for liveness
-- D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
-- D2991: Eager and lazy compiles give a function the same code
 - D2992: A Script keeps its source as UTF-8 bytes
-- D2993: The dump module compiles lazily; the dumper reads lazy templates
 - D3001: Values used once are written where they are used
-- D3020: Dumps take the base's builtin names from the build, not from a walk of the base
-- D2994: A lazy VM loads a plain dump lazily; maps of other functions on demand
-- D2995: Functions that run at once stay eager: call arguments, parenthesized, async
 - D3021: Array.fromAsync in flight is written as the runtime's `fromAsync`
 - D3022: Amends D2896: the gate also cleans djs-core and djs-prelude after incremental corruption
 - D3023: pi's adapter reuses disposed wasm instances, made as new before reuse
 - D3002: A continuation's site takes its value from its callback; effectful values in a run
 - D3003: Closures and continuations a continuation's blocks make are written where they are used
-- D3040: A compile cache across VMs that replays the compile
-- D3041: Suspension maps travel from one VM's dump to the next VM
 - D3024: A waiting frame's `this`, `arguments` and `new.target` that its arrows share are K's
 - D3004: A reopened host call read once waits for its reader
 - D3005: A hole the reader finds by reading the value is left out of the record
 - D3006: Arguments in place outside K, functions movable, values nothing reads dropped
-- D2837: The seed is written only when the run used Math.random before the dump
-- D2838: pi leaves out a reopened call's state when it equals the call id
-- D2839: Source references keep the script's name and use a 32-bit hash
-- D2840: Dumps carry no "use strict"; hosts compile them strict
 - D2841: Settled by the owner on 0216's review
 - D3007: Host calls go into the callback part that reads them all; a factory's continuation takes its site's value
 - D3008: How D2837–D2840 are carried out
 - D3050: `debugger;` can be a pause: an await of the host's `debugger`, in dump builds only
 - D3051: The guide cites no decisions, tells no history and names pi on one page
-- D3025: A block's placed code waits for the late binding it reads; a re-dumped method's home is its function's
 - D3060: `debugger;` pauses in the CLI: `djs repl --frozen` and `--debugger OUT`
 - D3026: Late bindings and subclasses wait for the block's own declarations; keys keep lone surrogates
 - D3052: goals.md holds every goal; links to a page's section must exist
@@ -785,7 +660,6 @@ topics when the index is next reorganized.
 - D3128: `+` of a string and a primitive, and `arr.push(x)`, finish in the hot loop's decline path
 - D3129: Array.from from %Array% skips Construct; join reads slices in place
 - D3126: Amends D3022: any undefined symbol from our crates' objects is incremental corruption
-- D3150: A block's dump code and late bindings go in the order what they read needs
 - D3151: A subclass outside its base's factory names the base by its location
 - D3152: plain-node reads node's "Invalid time value" as djs's "Date value is NaN"
 - D3155: Builtin closures keep `length` and `name` lazy
@@ -800,6 +674,154 @@ topics when the index is next reorganized.
 - D3164: Size of 0236; the size ceiling rises by what it measured
 - D3165: The bridge benchmark: each engine's best path, one operation timed
 - D3166: Charts are generated with their table, from status.tsv
+- D3260: The leaf backend: `@rust` builtins become straight-line Rust, user code at conversion sites
+- D3261: One implementation per builtin; the bytecode backend option is gone
+- D3262: The bytecode prelude's inlining budget drops to 40 characters
+- D3263: Size of 0251; the ceilings rise
+- D3264: Generated builtins call their conversions out of line
+- D3265: A separate call instruction for builtins: measured, not adopted
+- D3266: Size of 0252; the ceilings drop
+- D3267: Number formatting and small allocations take short paths
+- D3270: A new hash key rewrites only what lies above the builtin prefix
+- D3271: The injected base is checked for identity, not hashed, and not zeroed first
+- D3272: Fresh arena pages are zeroed as before: measured, not adopted
+- D3273: The JS host draws seeds from an entropy pool
+- D3280: An elastic shadow stack: 64 KiB linked, a larger block for deep compiles
+- D3281: dlmalloc's first segment starts in the static data's last page
+- D3282: Size of 0257; the ceiling rises
+- D3283: Size offsets for 0257; the ceiling drops back
+- D3320: djs-wasm exports one function, `djs(op, a, b, c, d, e, f, t)`
+- D3321: Sandbox setup: the elastic wrapper in place, short names encoded in place
+- D3322: A rope compares to a flat string chunk by chunk
+- D3310: Byte kernels share one SWAR module; JSON strings scan and decode a word at a time
+- D3311: Size offsets in JSON for 0260
+- D3340: The intrinsics' names only where something reads them
+- D3312: The held byte kernels of 0260; the ceiling rises 12 B
+- D3313: D3312's ceiling raise undone
+- D3341: The stack checker walks in code order
+- D3342: A bump zone for compile allocations: measured, not adopted
+- D3343: String literals without copies
+- D3330: A comparator sort runs its comparisons in one reused frame (EachDense's sort mode)
+- D3331: Object.fromEntries of an Array of entry arrays in one leaf
+- D3332: Object spread into a fresh literal shares the source's shape
+- D3360: An instance drops the coded base when its first VM takes the decoded one
+- D3361: The compile zone after all (supersedes D3342)
+- D3290: The ROOT_PREFIX_WRITTEN latch; collections skip an unwritten builtin prefix
+- D3291: Past the GC target the arena grows by half its overshoot
+- D3362: dlmalloc's first segment has a floor
+- D3350: The Unicode tables leave the shipped module's memory; the host hands them over
+- D3300: Known builtins: `Math.floor`, `String`, `Number.isInteger` without the lookup
+- D3301: Builtin calls: what was measured and not adopted (0259)
+- D3292: No allowance retune and no survivor-only string discount for now
+- D3293: Growth past 1 MiB counts half
+- D3294: A fixed nursery without a barrier: measured, not built
+- D3370: new Error without four frames and two trips through `step`; the trace from heap strings
+- D3363: The collector's side tables in the arena's tail: measured, not adopted
+- D3364: The collector's side tables in the arena's tail after all (supersedes D3363)
+- D3365: Array.prototype.join's two-byte result straight into the arena: measured, not adopted
+- D3366: dlmalloc's floor drops to 87 KiB
+- D3367: The gate checks the codemode rows' memory
+- D3390: The tier-0 loop checks the end of the code where the frame changes
+- D3391: Why edits to run_hot move the whole loop, and how to measure it (0268)
+- D3368: A compile's peak memory: the parse's tables go before the resolver, the
+- D3400: Joins and substrings copy rope leaves straight into the result
+- D3401: @fast replace/replaceAll; slice views from one kind read
+- D3369: The stack checker reads an op's table entry once and does not queue fallthroughs
+- D3380: A regexp literal run is one node
+- D3402: String-key element access without interning or leaving the leaf
+- D3403: substr as a generated leaf; short substrings of slices copy from the parent
+- D3430: EachDense's per-element step reads its state once; reduce's box at the end
+- D3420: The base image's global table keeps room for 16 globals
+- D3404: Rounding the arena's growth step down waits for the smaller base
+- D3405: Base-atom keys stay on the base hash
+- D3392: Arm-local costs in run_hot; a second loop around it measured and not adopted (0268)
+- D3393: Property and element hits are read from the tier-0 loop's slice; string keys through the heap's helpers; the ceilings rise
+- D3431: The callback's return inside the tier-0 loop: measured, not landed
+- D3406: Ropes of many small leaves are flattened by the first join or substring
+- D3440: test262 under GC stress is a full-only gate leg
+- D3450: pi's prelude image key names the prelude by a number
+- D3451: djs_image_staging leaves the bytes the host writes to the host
+- D3452: A pooled instance leaves the image's bytes to the image
+- D3394: The general path: where its cost is, template literals outside `step`, call_intrinsic 8 KB smaller
+- D3410: Class constructors leave the tier-0 loop once per construct (parked)
+- D3411: Map and Set iteration without a result object per value; new Set/Map of an array in Rust
+- D3412: Date.parse reads the string's flat view; one wire transcode
+- D3480: localeCompare of one-byte strings by bytes, as a generated leaf
+- D3481: `a + b` of two short flat one-byte strings copies twice, without the walk
+- D3482: One helper for one-byte copies of contiguous strings
+- D3460: A pristine RegExp from the builtins latch; String.prototype.match/replace call the leaves
+- D3461: The matcher's memory kept between matches: measured, not landed
+- D3462: create_data_property's quick insert takes arrays too
+- D3463: JSON.parse's parser starts with room for a small document
+- D3490: for-in reads only enumerable keys and interns nothing per step
+- D3491: Object rest without the builtin loop (parked)
+- D3470: Cache kinds for absent properties and for accessors; a getter is called from the loop's exit
+- D3471: `exec` and `json_regexp_intrinsic` read their operands once
+- D3472: `typeof`, string comparisons and string equality without `step`
+- D3500: status records state the load they were taken at
+- D3510: The size budget gets 2 KB more (owner)
+- D3520: The matcher's memory kept between matches: not landed (a new Heap field costs ~300 B gz)
+- D3521: A new RegExp's lastIndex is added directly
+- D3511: The construct path lands (D3410)
+- D3512: Object rest lands (D3491)
+- D3530: Fast entries for builtin getters, run inside the loop; typed arrays' named keys in the caches
+- D3531: The loop off and the loop on leave the same bytes for string keys and getters; a test that stops after every instruction
+- D3540: A fast keyed hash instead of SipHash-1-3 (owner)
+- D3560: One-unit ASCII strings from a per-VM cache that every collection drops
+- D3550: A primitive's builtin method from the cache slot; the first write to a builtin changes the epoch
+- D3551: A `@fast` builtin's call without leaving the loop; the fused call measured and dropped
+- D3570: for-of over strings without a trip through `step`
+- D3580: A trace frame is named by the function's own string `name`; `$djs.k` copies the origin's
+- D3590: Builtins charge fuel for their work: a work counter in the heap
+- D3591: The size budget gets 1 KB more for the fuel fix (owner)
+- D3592: Host errors carry their data; `values` are host data a dump names
+- D3593: The JSON boundary: converting functions in the VM, made by the Sandbox
+- D3594: `RunExit`: a host function ends the run uncatchably
+- D3595: Bounded steps of host-driven runs
+- D3597: Codemode bodies import host modules: leading imports, bound as parameters
+- D3600: One wasm module, with the dumper; packaging B goes
+- D3602: The npm package has one entry point (0.2.0)
+- D3610: Errors, Dates, Maps and Sets cross to the host as data
+- D3611: Namespaces are frozen, enumerable, with aliases and a missing-member hook
+- D3612: A run ends when its body's result settles; open calls are dropped
+- D3613: The JSON boundary per function: `jsonBoundary: { except }`
+- D3614: `maxFuel` spans a host-driven run's steps and is exact
+- D3620: An argument a host function cannot read is a TypeError at the call
+- D3621: The globals the sandbox binds are read-only and non-configurable
+- D3622: An Error's name and message are coerced as `String()` would
+- D3623: Namespace objects have a null prototype
+- D3624: The reader takes an Error's own `stack` before its recorded trace
+- D3640: No compatibility code (D024, owner 2026-11-23); what 0297 removed
+- D3641: A VM image loads only into the build that made it; the dependency descriptor goes
+- D3642: The slim build goes; djs has one feature set of builtins
+- D3644: The builtin registry is a current table, not an append-only one
+- D3645: djs-embed has no version promise of its own
+- D3701: One slot table for the object classes
+- D3702: Snapshot bytes are trusted host input, validated for robustness
+- D3703: The snapshot gate leg and its negative control
+- D3704: The corpus's waiting functions' bytecode is pinned
+- D3705: The size ceiling rises by the snapshot module until the dumper goes
+- D3710: Builtin records and state constants have named schemas
+- D3711: The bytecode hash names `get_builtin` slots
+- D3712: A perturbed build continues the corpus's snapshots
+- D3713: The size ceiling rises by the named records
+- D3720: A host's run is snapshotted with its host values named, and loads into the host's VM
+- D3721: Snapshots of lazily compiled VMs
+- D3723: The size ceiling rises by host snapshots
+- D3740: Lazy function compilation is removed
+- D3741: The test-only fast tier stays the reference of the tier-0 loop
+- D3742: ABI 12: `vm_new(limit, flags)`, no `vm_frozen_builtins`
+- D3743: Builtin registry entries are paths without ids
+- D3744: Every djs-wasm module has snapshots and a 128 KiB stack
+- D3745: One driver: run and runAsync are loops over the host-driven run
+- D3746: Deterministic re-runs are the fallback for refused snapshots
+- D3747: ABI 13: snapshot operations without host handles or hashed scripts
+- D3750: TypeScript legacy decorators and emitDecoratorMetadata are removed
+- D3751: describeSnapshot and callSite are in the docs module only
+- D3752: strip-types is a djs-core feature, off in the wasm modules
+- D3753: The unchecked release difftest runs the corpus without the stress variants
+- D3754: The CLI, the REPL and the docs runner slice in the same VM
+- D3755: docs/cli.md and docs/host.md are folded into the guide
 
 ## Embedding in Rust hosts (Gondolin)
 

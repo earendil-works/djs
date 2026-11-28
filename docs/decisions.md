@@ -14819,3 +14819,36 @@ erased ranges through `erased_mut()`, both constant-false without the feature
 (about 1.8 KB gzip) while every build type-checks the same code. The feature is code only:
 not in the build hash. A codemode body's leading imports (D3597) are skipped by the same
 `strip_import`, which stays.
+
+## D3753: The unchecked release difftest runs the corpus without the stress variants
+date: 2026-11-28 · by: pclean · issue: 0308
+The gate's "unsafe-heap difftest" ran the release build of the unchecked accessors with
+`--ratchet --suspend-every 97 --gc-stress`. The checked `difftest` leg runs both stresses
+with bounds-asserting accessors, and "unsafe-heap tests" runs it/e2e in debug with
+`unsafe-heap`, so the stressed release run mostly repeated their work. Measured on the
+0307 gate (target/gate/times/difftest-unsafe.tsv): suspend-every 22.3 CPU-s, gc-stress
+14.7, the plain run 1.1; the leg now runs the plain corpus with the ratchet, about 37
+CPU-s less per Rust gate. The risk accepted: an out-of-bounds access that shows only
+under stress and only without debug assertions surfaces later. Amends D2520's gate legs.
+
+## D3754: The CLI, the REPL and the docs runner slice in the same VM
+date: 2026-11-28 · by: pclean · issue: 0308
+`djs run`/`resume --suspend-every N`, the REPL's `.suspend-every` and djs-docs' example
+runner (every 50 fuel) rebuilt the VM from its image at every stop
+(`Vm::from_bytes(vm.image())`), showing off a mid-run image restore that no host performs:
+images stay inside a process (D2700) and a run that outlives it is a snapshot (D3700). They
+now stop and go on in the same VM; the outputs are unchanged. difftest's
+`--suspend-every` and the e2e stress modes still continue through images: that is the
+heap-consistency stress, and byte-identical images stay a development check (owner).
+
+## D3755: docs/cli.md and docs/host.md are folded into the guide
+date: 2026-11-28 · by: pclean · issue: 0308
+The guide's cli.md, js-api.md and host.md said the same as docs/cli.md and docs/host.md,
+and every CLI or Sandbox change edited both, while only the guide is checked (djs-docs
+check). The REPL's details (input rules, the top-level await rewrite and its gaps, the
+heap report's paths, the line editor's trade-off) moved into guide/cli.md, the wasm32 cap
+and the regexp progress-record caveat into guide/limits.md; the ABI table's contracts are
+the doc comments in crates/djs-wasm/src/lib.rs, and docs/host.md's measurements are
+superseded by guide/benchmarks.md. Code comments point at the guide pages. The dump
+research archive (docs/suspension-design-review.md, work/research/0188, 0199, 0207, 0215,
+0216) is deleted (git history keeps it).
