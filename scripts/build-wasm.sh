@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # Builds djs-wasm with the `wasm` profile: target/wasm32-unknown-unknown/wasm/djs_wasm.wasm,
 # the one module djs ships (the npm package's wasm/djs.wasm) and the default module location
-# of js/src/sandbox.ts. It has logical snapshots (`snapshot`, D3700), so every host
+# of js/src/sandbox.ts. Every module has logical snapshots (D3700), so every host
 # suspends and resumes runs with the module it runs (D3600). The profile strips the custom sections
 # (names, producers) for shipping (D1575); --keep-names keeps the name section, for
 # profiling and size attribution (scripts/wasm-funcs.py). Switching rebuilds the module.
 # --docs builds the docs site's module (the `docs` feature: `djs_disasm` for the live
-# examples' bytecode; and `snapshot`, for their `debugger;` pauses, D3050, D3720) into
+# examples' bytecode; snapshots serve their `debugger;` pauses, D3050, D3720) into
 # its own target directory, target/docs-wasm, so it never replaces the shipping module.
 # The shipped module (and --keep-names, the shipped one with names) reads and writes
 # the arena unchecked (`unsafe-heap`, D3100): the wasm instance is the sandbox. The docs
 # module keeps the checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-features=(--features unsafe-heap,cold-unicode,snapshot)
+features=(--features unsafe-heap,cold-unicode)
 target=target
 case "${1:-}" in
   --keep-names) export CARGO_PROFILE_WASM_STRIP=false ;;
-  --docs) features=(--features docs,snapshot); target=target/docs-wasm ;;
+  --docs) features=(--features docs); target=target/docs-wasm ;;
   "") ;;
   *) echo "usage: scripts/build-wasm.sh [--keep-names | --docs]" >&2; exit 2 ;;
 esac

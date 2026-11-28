@@ -240,28 +240,27 @@ def jobs():
 
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
         # with only `unicode` (no `snapshot` or `embed`), and the shipped wasm module
-        # in release (with snapshots, D3600, and unchecked, D3100). Libraries only: the tests
+        # in release (unchecked, D3100). Libraries only: the tests
         # build in the default combination.
         J("clippy (djs-core feature combinations)", "CARGO_TARGET_DIR=target/clippy-combos cargo clippy"
           " -p djs-core --no-default-features --features unicode --lib --quiet -- -D warnings",
           cls="rust", group="target/clippy-combos"),
         J("clippy (wasm main module in release)",
           "CARGO_TARGET_DIR=target/clippy-wasm-main cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
-          " --release --features unsafe-heap,cold-unicode,snapshot --quiet -- -D warnings",
+          " --release --features unsafe-heap,cold-unicode --quiet -- -D warnings",
           cls="rust", group="target/clippy-wasm-main"),
 
-        # --- wasm32 dev builds: djs-core no_std, and the module the js tests load (0023),
-        # with snapshots as the shipped module (D3600).
+        # --- wasm32 dev builds: djs-core no_std, and the module the js tests load (0023).
         J("no_std/wasm build of djs-core",
           "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
           cls="rust", group="target/wasm-dev"),
         J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
-          " --features compiled-prelude,snapshot --quiet", group="target/wasm-dev", build=True),
+          " --features compiled-prelude --quiet", group="target/wasm-dev", build=True),
 
-        # --- The shipped module, with snapshots (D3600): LTO, one codegen unit, one core
+        # --- The shipped module: LTO, one codegen unit, one core
         # each, and unchecked arena access, as scripts/build-wasm.sh builds it (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode,snapshot --quiet",
+          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap,cold-unicode --quiet",
           group="target/size", build=True),
 
         # --- Unit and integration tests of the workspace (through scripts/test-runner.sh,

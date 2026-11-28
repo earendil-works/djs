@@ -37,12 +37,10 @@ formatting code, to stay small: its standard library is built so that a panic is
 `unreachable` trap, and the `Sandbox` reports such a trap as an engine panic. A debug or
 native build of the engine reproduces the real message. Every sandbox gets its own instance, so one trap cannot affect another.
 
-The stack can be small and grow for one call. A module without snapshots links a 64 KiB
-shadow stack at the bottom of memory, enough for any compile short of deep nesting; the
-parser's full nesting limits need about 128 KiB ([limits](limits.md#nesting-in-source)).
-The shipped module links those 128 KiB from the start: loading a snapshot compiles the
-run's scripts again inside one operation, which cannot stop halfway for a larger stack.
-A host that turns the elastic stack on (`djs_elastic_stack(1)`) gets a compile that
+The modules link a 128 KiB shadow stack at the bottom of memory: the parser's full
+nesting limits need about that much ([limits](limits.md#nesting-in-source)), and loading a
+snapshot compiles the run's scripts again inside one operation, which cannot stop halfway
+for a larger stack. The stack can also grow for one call. A host that turns the elastic stack on (`djs_elastic_stack(1)`) gets a compile that
 would nest deeper back before it has any effect: `vm_compile` returns `-1` (`u32::MAX`),
 `vm_run` the status NEED_STACK. The host then takes a block with `djs_stack(len)`, which
 returns its end, sets the exported `__stack_pointer` there, makes the same call again
@@ -61,11 +59,9 @@ access, and never calls into that instance again. On the larger block an overflo
 not wrap; the nesting limits, which leave about a tenth of it to spare, are what keeps
 it there.
 
-> **Trade-off.** A small stack that a host moves for deep compiles, over a stack large
-> enough for any of them. Every instance of a module without snapshots saves 64 KiB; the
-> cost is a protocol for hosts (one wrapper) and a compile run twice for code that nests
-> deeper than scripts do. The shipped module gives the 64 KiB back for snapshot loads,
-> which would otherwise need the same protocol inside the loader.
+> **Trade-off.** A stack large enough for every compile, over a small one that a host
+> moves for deep compiles. A 64 KiB stack would save that much per instance, but loading
+> a snapshot compiles inside the loader, which would then need the same protocol.
 
 Rarely used tables come the same way. The Unicode property tables of `\p{…}` in regular
 expressions (25 KB) and the normalization tables (23 KB) are not in the shipped module's

@@ -26,9 +26,6 @@ alloc-stats = []
 # Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
 # Off by default: the shipping module does not carry the disassembler.
 docs = ["djs-core/intrinsic-names"]
-# Logical snapshots (D3700): `vm_snapshot`, `vm_from_snapshot`. The shipped module has them
-# (scripts/build-wasm.sh).
-snapshot = ["djs-core/snapshot"]
 # Unchecked arena field access in djs-core (D2520). The shipped module turns it on
 # (scripts/build-wasm.sh, D3100); native builds, the docs module and the tests don't.
 unsafe-heap = ["djs-core/unsafe-heap"]
@@ -39,7 +36,8 @@ unsafe-heap = ["djs-core/unsafe-heap"]
 cold-unicode = ["djs-core/cold-unicode"]
 
 [dependencies]
-djs-core = { path = "../djs-core", default-features = false }
+# Logical snapshots (D3700): every module has `vm_snapshot` and `vm_load_snapshot`.
+djs-core = { path = "../djs-core", default-features = false, features = ["snapshot"] }
 # The base snapshot: vm_new copies it (D1321).
 # The base snapshot, coded (D2252): vm_new copies it after a decode once per instance.
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["packed"] }
