@@ -14675,3 +14675,54 @@ the dump writer did. Also from 0304: djs-docs' `gen:dump [N]` region is `gen:sna
 [N]`, the description of the snapshot at the block's Nth pause (`snapshot::describe`); the
 dump test programs moved from tests/dump to tests/snapshot/programs (golden/combinators to
 combinators-2.src.js), run by `snapshot_programs` and the CLI's tests.
+
+## D3740: Lazy function compilation is removed
+date: 2026-11-28 · by: pclean · issue: 0305
+No product compiled lazily (the wasm modules, djs-cli and djs-embed are eager, D3732), but
+the feature was in djs-core's defaults, so every native test ran per-function constant
+pools the shipped module never has (D2991), the gate ran test262, the snapshot corpus and
+the full gc-stress leg twice, and djs-abidrive needed a build of its own. Gone:
+compiler/lazy.rs, interp/run/lazy.rs, the `lazy` op (`super_call_frame`/`_forward` move
+down to 213/214), lazy capture attributes, `VmOptions::lazy_functions`,
+`Vm::compile_lazy_templates` and seal's pass, the resolver's unit plan (a unit has two
+pools again: the top level's and one for the rest, D2446), the snapshot interface hash's
+synthetic-number stripping (D3721's lazy part), and the `--lazy`/`DJS_LAZY` flags. Native
+builds now lay out pools as the module does: the frame bytecode pin changed for one
+function (h164-load.js's top level), which is what the module always had. D2992 (source
+kept as UTF-8) stays: toString and snapshots slice it. Supersedes D2990, D2991, D2993's
+remains, D2994, D2995, D3721's lazy part and D3732's native caveat.
+
+## D3741: The test-only fast tier stays the reference of the tier-0 loop
+date: 2026-11-28 · by: pclean · issue: 0305
+`fast_step`/`fast_more` (interp/run.rs, `#[cfg(test)]`) are not a third copy that tests
+could drop for `step_once`: with `hot_loop: false` going straight to `step_once`,
+`hot_loop_is_invisible` and `hot_loop_paths_are_invisible_at_every_stop` see other raw
+images. `step_once` never consults an inline cache (`lookup_ic` looks up and refills, so it
+rewrites a slot that the loop's hit keeps), and it gives an array's `length` as an f64
+where the fast paths give an int32. Equal raw images at every stop are the point of those
+tests (0282 found a dead-slot bug with them), so the tier stays; comparing canonical hashes
+instead would weaken them.
+
+## D3742: ABI 12: `vm_new(limit, flags)`, no `vm_frozen_builtins`
+date: 2026-11-28 · by: pclean · issue: 0305
+`vm_new`'s `live` (D2043, for pi's old cold start) was 0 at every caller; it goes with
+`Vm::from_base_reserved`, `Heap::start_capacity`/`restore_capacity` and the `live` of
+`djs_prelude::new_vm_owned`/`Vm::from_base_vec`. `vm_frozen_builtins` had no caller but its
+own test. The operations after it move down by one. `Vm::set_math_random_seed` (reseed
+without rekeying, D2433's pi adapter) goes: `set_random_seed` is the one entry. No
+compatibility (D3640). Supersedes D2043.
+
+## D3743: Builtin registry entries are paths without ids
+date: 2026-11-28 · by: pclean · issue: 0305
+Since D3644 an id was only a position, read by djs-prelude's `registry` module (base
+offsets by id) and its own test. tests/builtins/registry.tsv has two columns now (kind,
+path); `Registry::name_cells` maps cells to paths; djs-prelude's `registry` feature,
+`BASE_OFFSETS` and its build step go. The heap analyzer names the builtins of the prefix by
+their canonical paths. The committed list, its check and `reachable_names` (which
+snapshots use) stay.
+
+## D3744: Every djs-wasm module has snapshots and a 128 KiB stack
+date: 2026-11-28 · by: pclean · issue: 0305
+Every module build turned djs-wasm's `snapshot` feature on, so it is merged into the crate
+(djs-core's `snapshot` stays optional: djs-embed builds without it). With it goes D3733's
+64 KiB stack for modules without snapshots. Supersedes D3733's 64 KiB branch.
