@@ -8,7 +8,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
-| 0312 | Psychoscript in the engine benchmarks | ppsycho | .worktrees/ppsycho |
 
 ## Open (ready)
 
@@ -47,12 +46,14 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Snapshot follow-ups (0302-0304): positional class constants left (iterator kinds, RegExp/Proxy/TextCodec flags, typed array kinds, frame header, resource kinds, module trap ops); IteratorHelper slot 0 duplicates the header kind; the types section is most of a small snapshot (share the schema per build: owner/format); `djs resume --explain`; live.js browser test; a snapshot-cost table for engines.md and re-recorded engines/* numbers; corpus provenance comments + frame-pin regen; an elastic retry in the snapshot loader (-64 KiB per instance) | ready |
 | - | 0305-0308 follow-ups: the elastic stack protocol may be dead (every module has 128 KiB); canonical hash of a loaded VM differs from the original's (layout) and re-snapshotting a loaded run is not always byte-identical (h002: +1 string): load+snapshot should be idempotent; decisions-index 'Not yet sorted' (~560 entries) into topics; codemode-feature-usage.md, bloat-audit and size-vs-quickjs cite removed things | ready |
 | - | 0310/0311 follow-ups: snapshot panel at phone width; Copy/Link need navigator.clipboard (https/localhost); 'halfway through' wording is an operand-stack heuristic (calls, for-of) | ready |
+| - | 0312 follow-ups: re-record the QuickJS (Bellard) rows (build changed: stack check, malloc_usable_size; `status.py engines --engines quickjs`) on a quiet machine; Psychoscript rejects a self-chaining promise loop at once with 'can never settle' (upstream?); a djs-only traps.ts smoke leg if wanted | ready |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
 
 ## Done
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0312 | Psychoscript in the engine benchmarks; runaway-script outcomes for every engine (traps.ts) | f9c3de7f (agent ppsycho; D3762, D3763; status.py --engines a,b records one engine; QuickJS release build: stack check and malloc_usable_size fixed) |
 | 0311 | Snapshots in the docs: Snapshot tab (JS-terms view, hover identity, layers, bytes), copy/download/link, restore box, page rewritten | 0dbb275c (agent pview2; D3761; tabs Output/Bytecode/Memory/Snapshot; docs-live stub-DOM test) |
 | 0310 | Inspecting a snapshot: what suspended, in JavaScript terms (describe, --json, inspectSnapshot) | 706d2a64 (agent pview2; D3760; ABI 15; feature `inspect` off the shipped module; parameter names in debug info; shipped +102 B gz) |
 | 0309 | One meaning per word: images and snapshots | a5c3aa1d (agent pname; D3756; guide snapshots.md (run) / images.md; base image; djs-embed Image (Gondolin renames listed in the issue)) |
