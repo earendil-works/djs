@@ -1,22 +1,30 @@
 # Benchmarks
 
 How fast does djs start and run the scripts an agent writes, and what does it cost
-in download and memory, next to the QuickJS builds a host would otherwise embed? This
-page compares them on workloads modeled on real agent codemode sessions, all in
-WebAssembly, the way a host runs them, and says how to re-run every number.
+in download and memory, next to the engines a host would otherwise embed? This page
+compares them on workloads modeled on real agent codemode sessions, in WebAssembly the
+way a host runs them (and one engine written in JavaScript), shows how each copes with
+scripts that never end or exhaust memory, and says how to re-run every number.
 
-> **In short.** Seven engines (djs, four QuickJS builds of both QuickJS lines, and monty,
-> a Python subset) run nine codemode workloads in wasm in one node process, each run in a
-> fresh VM, and must all return the same result. djs starts a VM fastest and has the
-> lowest run time over the set; it is ahead where scripts move JSON, strings and tool
-> results, and behind on the smallest bodies and on some single string and number builtins. Passing
-> data through the host bridge, each engine its best way, djs takes values in about twice
-> as fast and reads them out six to nine times as fast; it is behind on bytes coming in and
-> on many tiny calls. Its
-> module is the largest of the JavaScript engines, it takes about a tenth more memory
-> than the QuickJS releases built here over the set. `scripts/bench-engines.sh` fetches,
-> builds and runs everything; the tables and charts are generated from the recorded
-> results.
+> **In short.** Eight engines run nine codemode workloads in one node process, each run
+> in a fresh VM, and must all return the same result: djs, four QuickJS builds of both
+> QuickJS lines and monty, a Python subset, all in wasm, and Psychoscript, an interpreter
+> written in JavaScript that runs in the host's own engine. djs starts a VM fastest of
+> the wasm engines and has the lowest run time over the set; it is ahead where scripts
+> move JSON, strings and tool results, and behind on the smallest bodies and on some
+> single string and number builtins. Passing data through the host bridge, each engine
+> its best way, djs takes values in about twice as fast as the QuickJS builds and reads
+> them out six to nine times as fast; it is behind on bytes coming in and on many tiny
+> calls, and Psychoscript, which shares the host's strings, passes strings without a copy.
+> Its module is the largest of the JavaScript engines in wasm, and it takes about a tenth
+> more memory than the QuickJS releases built here over the set. Under a one-second
+> budget and a 64 MiB heap cap, djs and the other wasm engines end every runaway script
+> they were given and go on with a fresh VM (two builds overshoot the heap cap);
+> Psychoscript, which has no memory limit and cannot interrupt a regular expression
+> match, lets a growing array take <!--n traps/psychoscript/grow/rss mib.0-->1,430 MiB<!--/n-->
+> of the host's memory and blocks its host on a backtracking pattern until it is killed.
+> `scripts/bench-engines.sh` fetches, builds and runs everything; the tables and charts
+> are generated from the recorded results.
 
 ## What is measured, and why this way
 
@@ -25,9 +33,12 @@ commands, reshapes their output and prints a summary. The engine's own work is s
 what a host pays is mostly starting a VM, passing tool results in and out, parsing the
 body and assembling strings. The comparison measures exactly that, as an embedder sees it:
 
-- **Everything in wasm, in one host.** Every engine is a wasm module run by node: the
-  build a host would ship, not a native binary. Each module is compiled once per process,
-  as a host keeps a compiled module.
+- **Everything in wasm, in one host.** Every engine but one is a wasm module run by node:
+  the build a host would ship, not a native binary. Each module is compiled once per
+  process, as a host keeps a compiled module. Psychoscript is the exception: it is
+  JavaScript, so node's own engine compiles and runs it, with its JIT and its garbage
+  collector, and it has no module and no linear memory of its own. The columns about the
+  module and its memory say what they mean for it.
 - **A fresh VM per run.** Every run gets a new instance and VM, isolated from the others,
   as a host gives each tool call its own sandbox. *New VM* is the time to get one ready;
   *run* is the time from handing it the script to having the result string.
@@ -42,7 +53,9 @@ body and assembling strings. The comparison measures exactly that, as an embedde
 - **The same answer.** Every engine's result must be the string node computes for the same
   script, or the run fails.
 - **Memory** is the instance's linear memory after the run. Wasm memory never shrinks, so
-  that is the run's high-water mark, allocator overhead included.
+  that is the run's high-water mark, allocator overhead included. Psychoscript's values
+  live in the host's heap among the host's own, where no measure would compare, so it has
+  no memory numbers (except where a runaway script makes the host's memory grow).
 
 Times depend on the machine and its load; the tables say when and at what load they were
 taken. Instruction counts would not compare across engines with different hosts, so the
@@ -59,12 +72,20 @@ page gives wall-clock medians.
 | quickjs-emscripten | the popular emscripten build, version 0.32.0, of Bellard's QuickJS 2025-09-13 | the npm variant `@jitl/quickjs-wasmfile-release-sync` |
 | quickjs-emscripten (NG) | the same package with QuickJS-NG 0.12.1 | the npm variant `@jitl/quickjs-ng-wasmfile-release-sync` |
 | monty | pydantic's Python subset for code written by models, version 1.3.0 | the npm package's wasm component |
+| Psychoscript | anomaly's "confined, resumable JavaScript interpreter", version 0.4.0: a strict-mode subset of JavaScript compiled to bytecode and run by a VM written in JavaScript | the npm package as published, no wasm, run by node's engine |
 
 The two latest QuickJS releases are built by the script with one compiler, the same flags
 and the same small embedding ([`js/bench/engines/driver.c`](../../js/bench/engines/driver.c)):
 a runtime, a context, an evaluation that runs the job queue dry, and a result string.
 monty runs the workloads translated to Python by hand; its component is instantiated on
 the calling thread with no filesystem, environment or network, as its own worker does.
+Psychoscript runs the codemode bodies as given, top-level `await` and `return` included,
+with a fresh `Runtime` for every run: the tool answers go in as a binding, the result
+string comes back as the run's value. Everything the workloads use is in its subset;
+TypeScript it gets with the types stripped by the host, as the QuickJS builds do. Its
+isolation is of another kind than the others': a program reaches only the host functions
+it is given, but it runs on the host's thread and in the host's heap, where the wasm
+engines keep everything inside their instance's memory.
 
 ## The workloads
 
@@ -119,7 +140,9 @@ end and the base image of an initialized realm (every builtin object, coded to
 quickjs-wasi and the emscripten builds are optimized for size; the two releases built
 here use `-O2`, as djs's module is optimized for speed. monty's module is a different
 order of size altogether: a Python interpreter with its standard library subset and a
-type checker.
+type checker. Psychoscript ships no wasm: what a host downloads is its JavaScript, the
+package's modules with its prelude's bytecode and the acorn parser, unminified as
+published; a bundler's minifier would make it smaller.
 
 ## Starting a VM
 
@@ -154,6 +177,12 @@ running the code that builds every builtin (the [images page](images.md) says
 how). Its idle memory equals QuickJS-NG's and is one 64 KiB page above QuickJS's: the
 base image is larger than the heap a fresh QuickJS context allocates. The emscripten
 builds start at 16 MiB, emscripten's initial heap, whatever runs in them.
+
+Psychoscript's two numbers mean something else. Its *compile* is importing its
+JavaScript, which node parses and compiles as it goes. Its *new VM* is creating a
+`Runtime`, an object that holds the options: the realm of a run is built when the run
+starts, so that cost is part of its run times below, and it has no memory of its own to
+show.
 
 ## Run time
 
@@ -195,6 +224,13 @@ beforehand, outside the timing. monty is fast on `heavy`, whose string splitting
 regular expressions are native in its Rust implementation, and slower on the rest; its
 times include the same JSON bridge in Python.
 
+Psychoscript comes out at about the speed of quickjs-wasi over the set, with a different
+profile. It is second to djs on `fanout`, `media` and `loop`: it is JavaScript that node's
+JIT has compiled after the warm-up runs, and its regular expressions run on the host
+engine's own matcher. It is behind the QuickJS releases on the bodies that do the most
+work in the interpreter itself, `json`, `ts` and `heavy`, and on the shortest ones,
+where building the realm of every run shows.
+
 ## Memory
 
 The instance's linear memory after the run: what the run cost, since wasm memory does not
@@ -230,6 +266,11 @@ heap when the allocation since the last collection crosses a threshold, about as
 again as what survived, so garbage stays until then; QuickJS counts references and frees
 most garbage the moment it is dropped. `heavy`, which allocates a few megabytes of
 short-lived lines and strings, shows it most.
+
+Psychoscript has no column of numbers here: its objects are the host's JavaScript
+objects in the host's heap, collected by the host's collector, and the only measure,
+the growth of the whole process's heap, would mix them with the host's own allocation
+and depend on when node's collector ran.
 
 ## Operation by operation
 
@@ -312,6 +353,7 @@ compares the bridges: each engine gets the best path its embedding offers
 | quickjs-wasi | JSON text parsed by `JSON.parse` in the VM, or its handle walk (`hostToHandle`) | `JSON.stringify` in the VM, or its handle walk (`dump`) | `newFunction` with the same conversions |
 | quickjs-emscripten | JSON text parsed in the VM, or objects built through handles | `dump`, which is `JSON.stringify` in the VM and `JSON.parse` on the host | `newFunction` with the same conversions |
 | monty | JSON text and `json.loads`, or its value arena, which the component model lowers into the module | `json.dumps`, or the value arena lifted out | an external function: the run stops, the host answers with a value arena |
+| Psychoscript | a host function's result (`Host.fn`), copied into the interpreter's values; strings are the host's own strings and are not copied | a run's result, copied out; bytes cannot cross out, so they come out as base64 text the host decodes | a sync `Host.fn`: the argument copied out, the result copied in |
 
 Where an engine has two paths, each number below is the faster one's: the handle walks of
 quickjs-wasi and quickjs-emscripten win on arrays of numbers, whose decimal text is slow
@@ -320,9 +362,17 @@ anything larger than call arguments. The payloads: call
 arguments; a search tool's result as an object, of 1 KB, 100 KB, 1 MB and 10 MB of JSON;
 source text of 1 MB and 10 MB (ASCII) and 1 MB of prose with accented letters, dashes and
 CJK; 100,000 floating-point numbers; a 1 MiB `Uint8Array`; and objects nested 100 deep
-(monty's `json.loads` stops at about 200). Every value must read back equal to what went
-in. Each time is the median of one operation in fresh VMs; small payloads repeat within
-a sample.
+(monty's `json.loads` stops at about 200, and Psychoscript copies values at most 32
+levels deep). Every value must read back equal to what went in. Each time is the median
+of one operation in fresh VMs; small payloads repeat within a sample.
+
+Psychoscript keeps no VM between runs: a value crosses only as a host function's result
+or a run's result, so each of its operations is a whole run. Its *in* is a run that takes
+the value from a host function less the same run with nothing to take, its *out* a run
+that returns the value less the run that only takes it in, each timed alone and
+alternating, the medians subtracted. Its strings show as *no copy*: they cross as the
+host's own strings, and what is left of their time is the noise of two runs. Its times
+are differences rather than operations, so the geometric means leave it out.
 
 ### In
 
@@ -367,6 +417,12 @@ into the staging buffer, then into the VM's own bytes, three copies where the ot
 make two. The emscripten builds pay the most for strings, because their glue
 encodes them to UTF-8 in JavaScript, byte by byte.
 
+Psychoscript copies a 1 MB search result in in
+<!--n engines/bridge/psychoscript/json-1m/in-ms .1-->4.7<!--/n--> ms, between djs and the
+QuickJS builds: the copy is a walk over the host's objects that builds the interpreter's,
+with no text in between. Strings cost it nothing, as they are the host's own, and bytes
+are one copy within the host's heap.
+
 ### Out
 
 <!-- gen:status bridge-out -->
@@ -402,6 +458,12 @@ result comes out of djs in <!--n engines/bridge/djs/json-1m/out-ms .2-->1.24<!--
 memory copy, since its characters are already in the form a host string needs. A
 `Uint8Array` is copied out in all of them; the reader's copy costs a few hundredths of a
 millisecond more than reading the bytes in place by a pointer.
+
+Psychoscript's copy out is level with djs's reader for a 1 MB result
+(<!--n engines/bridge/psychoscript/json-1m/out-ms .2-->1.22<!--/n--> ms) and falls behind
+for 10 MB (<!--n engines/bridge/psychoscript/json-10m/out-ms .0-->33<!--/n--> ms against
+<!--n engines/bridge/djs/json-10m/out-ms .0-->13<!--/n--> ms), where the copy's garbage
+is the host's to collect. Its bytes come out slowest of all, as base64 text.
 
 ### Throughput and memory
 
@@ -483,11 +545,123 @@ while the C embedding calls the host function from inside the interpreter (the o
 QuickJS builds do too, but every value crosses through their JavaScript glue, and they
 are slower than djs). monty stops and resumes its run for every call, which costs it <!--n engines/bridge/monty/e2e/calls-1000-ms .0-->20<!--/n--> ms.
 
+Psychoscript is fastest on two of the three cases: a thousand calls take it
+<!--n engines/bridge/psychoscript/e2e/calls-1000-ms .1-->1.7<!--/n--> ms, as a host
+function is called in the host's own engine, and the edited file is the host's string
+both ways, <!--n engines/bridge/psychoscript/e2e/edit-1m-ms .2-->0.17<!--/n--> ms. The
+field of a 1 MB result costs it what copying the result in does.
+
 In short, djs's two halves pay off differently. The wire format makes the way in about
 twice as fast as JSON text for structured data and a single copy for long ASCII strings.
 The reader makes the way out six to nine times as fast for structured data and more for
 strings, because no engine work and no text happen in between. Bytes coming in and many tiny calls are the places where the
 simpler paths of the C embedding are still ahead.
+
+## Runaway scripts
+
+A host runs scripts it did not write, and some of them never end, or allocate until
+memory runs out, by mistake or on purpose. What matters then is whether the engine stops
+them, how soon, whether the script can catch what stopped it, and whether the host can go
+on. [`js/bench/engines/traps.ts`](../../js/bench/engines/traps.ts) runs nine such scripts
+on every engine, each in a child process of its own with a hard kill after 10 s and a
+memory guard of 4 GiB resident, so that a crash or a hang cannot take the harness down.
+Every engine gets the same budget through its own documented limits: one second of run
+time and a 64 MiB heap. Each script runs inside a `try` that returns what it caught, and
+afterwards the same process creates a fresh VM and runs a small script in it. How djs's
+limits work is on the [limits page](limits.md).
+
+| engine | time | memory | stack |
+| --- | --- | --- | --- |
+| djs | an `AbortSignal` that times out, which the run checks between fuel slices | `memoryLimit` | its frames live in the heap: a fixed depth limit |
+| quickjs-wasi | `interruptHandler` with a deadline | `memoryLimit` | `maxStackSize`, 48 KiB |
+| QuickJS, QuickJS-NG | an interrupt handler with a deadline (`JS_SetInterruptHandler`) | `JS_SetMemoryLimit` | `JS_SetMaxStackSize`, 48 KiB |
+| quickjs-emscripten | `setInterruptHandler(shouldInterruptAfterDeadline(...))` | `setMemoryLimit` | `setMaxStackSize`, 48 KiB |
+| monty | `maxFeedDurationSecs` | `maxMemory` | its default recursion limit |
+| Psychoscript | `timeoutMs` | none: it has no memory limit | its own, and fixed caps: strings of 2^24 characters, arrays of ten million elements, values 32 levels deep across the boundary |
+
+The stack limit is the same 48 KiB in every QuickJS build, because the releases built
+here have a 64 KiB stack. With the npm packages' default of 1 MiB, a deep recursion or
+a deeply nested `JSON.parse` exhausts the host's own native stack first, which every wasm
+call frame also uses, and the run ends in a wasm trap: node's `RangeError` thrown out of
+the module instead of an error inside the script.
+
+| case | what the script does |
+| --- | --- |
+| endless loop | `for (;;) {}` |
+| endless promise jobs | a promise job that queues itself again, while the run awaits a promise that never settles |
+| growing an array | pushes small objects until memory runs out |
+| a 1 GiB string | `"x".repeat(2 ** 30)` |
+| a doubling string | `s += s` until it fails |
+| unbounded recursion | a function that calls itself |
+| `JSON.parse`, 10⁶ deep | arrays nested a million deep |
+| `JSON.stringify`, 10⁵ deep | objects nested a hundred thousand deep |
+| `/(a+)+$/` backtracking | the pattern on forty `a`s and a `!`: exponential for a backtracking matcher |
+
+monty runs the same scripts in Python.
+
+<!-- gen:status traps -->
+| case | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| endless loop | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s |
+| endless promise jobs | stopped (time), 1.0 s | stopped (time), 1.0 s | no result, 1.0 s | stopped (time), 1.0 s | no result, 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s |
+| growing an array | caught InternalError (memory), 0.2 s | caught InternalError (memory), 0.2 s | caught (memory), 0.1 s | caught `null`, 0.1 s | caught InternalError (memory), 0.6 s | caught InternalError (memory), 0.7 s | stopped (memory), 0.2 s | stopped (time), 1.0 s |
+| a 1 GiB string | caught RangeError (length), 0.01 s | caught RangeError (length), 0.00 s | caught RangeError (length), 0.00 s | caught RangeError (length), 0.01 s | caught RangeError (length), 0.00 s | caught RangeError (length), 0.00 s | stopped (memory), 0.01 s | caught RangeError (length), 0.02 s |
+| a doubling string | caught RangeError (length), 0.01 s | caught InternalError (length), 0.00 s | caught InternalError (length), 0.00 s | stopped (length), 0.00 s | caught InternalError (length), 0.00 s | caught InternalError (length), 0.00 s | stopped (memory), 0.02 s | caught RangeError (length), 0.02 s |
+| unbounded recursion | caught RangeError (stack), 0.01 s | caught RangeError (stack), 0.00 s | caught InternalError (stack), 0.00 s | caught RangeError (stack), 0.01 s | caught InternalError (stack), 0.00 s | caught RangeError (stack), 0.00 s | caught RecursionError (stack), 0.02 s | caught RangeError (stack), 0.03 s |
+| `JSON.parse`, 10⁶ deep | caught SyntaxError (stack), 0.01 s | caught RangeError (stack), 0.01 s | caught SyntaxError (stack), 0.01 s | caught RangeError (stack), 0.01 s | caught SyntaxError (stack), 0.01 s | caught RangeError (stack), 0.01 s | caught JSONDecodeError (stack), 0.02 s | caught RangeError (stack), 0.07 s |
+| `JSON.stringify`, 10⁵ deep | caught RangeError (stack), 0.02 s | caught RangeError (stack), 0.03 s | caught InternalError (stack), 0.03 s | caught RangeError (stack), 0.03 s | caught InternalError (stack), 0.04 s | caught RangeError (stack), 0.05 s | caught RecursionError (stack), 0.06 s | caught RangeError (depth), 0.04 s |
+| `/(a+)+$/` backtracking | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | stopped (time), 1.0 s | completed, 0.02 s | hangs, killed at 10.1 s |
+
+What ended each run and when, under a 1 s time budget and a 64 MiB heap cap, by each
+engine's own mechanisms; caught: the script caught the error; stopped: the engine ended
+the run, the script could not catch it; measured at 08a272dbba, 2026-11-28, load 4.0.
+<!-- /gen -->
+
+<!-- gen:status traps-memory -->
+| case | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript, host RSS |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| endless loop | 0.5 | 1.3 | 0.3 | 0.4 | 16.0 | 16.0 | 5.0 | 8.6 |
+| endless promise jobs | 0.8 | 1.3 | 0.3 | 0.4 | 16.0 | 16.0 | 5.0 | 69.8 |
+| growing an array | 62.1 | 65.2 | 64.2 | 64.8 | 357.5 | 357.5 | 72.3 | 1430.3 |
+| a 1 GiB string | 0.5 | 1.3 | 0.3 | 0.4 | 16.0 | 16.0 | 5.0 | 10.7 |
+| a doubling string | 0.5 | 1.3 | 0.3 | 0.4 | 16.0 | 16.0 | 68.5 | 11.3 |
+| unbounded recursion | 15.2 | 1.3 | 0.4 | 0.4 | 16.0 | 16.0 | 5.0 | 9.4 |
+| `JSON.parse`, 10⁶ deep | 3.2 | 5.3 | 4.1 | 4.4 | 16.0 | 16.0 | 9.8 | 164.4 |
+| `JSON.stringify`, 10⁵ deep | 8.2 | 8.6 | 7.6 | 7.7 | 16.0 | 16.0 | 32.7 | 59.3 |
+| `/(a+)+$/` backtracking | 0.5 | 1.3 | 0.3 | 0.4 | 16.0 | 16.0 | 5.0 | - |
+
+MiB: linear memory after the run (Psychoscript: the growth of the host process's peak
+resident size during it); - where the process was killed; measured at 08a272dbba,
+2026-11-28, load 4.0.
+<!-- /gen -->
+
+Every engine stops the endless loop and the endless promise jobs at the budget, and all
+but two stop the backtracking expression there too; none of these stops can be caught by
+the script. Bellard's QuickJS, in both builds, ends an interrupted run by rejecting its
+promise; an interrupted promise job is dropped, and the run ends without a result.
+monty's regular expression matcher finishes the backtracking case at once. Psychoscript's
+cannot be stopped, as its documentation says: a match runs on the host engine's own
+matcher, outside its interpreter's time checks, so the host's thread stays blocked until
+the outer kill, and nothing else in that process runs meanwhile.
+
+Out of memory differs most. djs reaches its cap with a catchable
+`InternalError: out of memory`, and the reserve it holds back lets the handler run.
+quickjs-wasi does the same; QuickJS-NG and Bellard's QuickJS throw `null`, and in
+Bellard's QuickJS the handler itself has no room left, so that only a handler that
+allocates nothing gets to report it. The emscripten builds overshoot their limit: they
+reach out of memory at <!--n traps/quickjs-emscripten/grow/memory mib.0-->358 MiB<!--/n-->
+of linear memory under the 64 MiB limit. monty ends the run, uncatchably, when its limit
+is passed. Psychoscript has no memory limit: the growing array takes
+<!--n traps/psychoscript/grow/rss mib.0-->1,430 MiB<!--/n--> of the host's memory before
+the time budget ends the run, and with a longer budget it would take what the host has.
+
+The single huge allocations are refused before they happen, as a catchable error, except
+in monty, whose memory limit ends the run, and in QuickJS-NG, where the doubling string's
+`string too long` ends the run without the script seeing it. Recursion and deep nesting are
+a catchable error everywhere: a stack overflow, or in Psychoscript the 32 levels to which it
+copies values (its `JSON.stringify` keeps to them too). Every engine that ended its run
+created and ran a fresh VM in the same process afterwards; only a host blocked by a match
+it cannot interrupt could not.
 
 ## Re-running
 
@@ -496,6 +670,8 @@ scripts/bench-engines.sh          # fetch and build the engines, run, print the 
 scripts/bench-engines.sh --setup  # fetch and build only
 scripts/status.py engines         # three runs; record the medians for this page
 scripts/status.py bridge          # only the bridge benchmark
+scripts/status.py engines --engines psychoscript  # one engine's numbers, the rest kept
+scripts/status.py traps           # the runaway scripts (node js/bench/engines/traps.ts)
 cargo run -q -p djs-docs -- regen # rewrite the tables
 ```
 
@@ -515,6 +691,8 @@ below about 4.
 - [`js/bench/engines/bridge.ts`](../../js/bench/engines/bridge.ts): the bridge benchmark, its
   payloads and end-to-end cases; [`driver.c`](../../js/bench/engines/driver.c): the C embedding
   of the two QuickJS releases
+- [`js/bench/engines/traps.ts`](../../js/bench/engines/traps.ts): the runaway scripts, each
+  engine's limits (`limited` in engines.ts) and the child processes that contain them
 - [`js/bench/engines/prelude.js`](../../js/bench/engines/prelude.js),
   [`prelude.py`](../../js/bench/engines/prelude.py): the stub tools inside the engines
 - [`tests/bench/codemode/`](../../tests/bench/codemode/): the workloads, their Python

@@ -14931,3 +14931,39 @@ the text description of the first pause. The test is js/test/docs-live.test.ts: 
 and snapview.js on a small stub DOM (js/test/stub-dom.ts) with the docs module, through
 `globalThis.djsLiveImports`, the one hook live.js has for it. Alternative considered: a
 headless browser in the gate; not every gate machine has one.
+
+## D3762: Psychoscript on the benchmarks page: a JavaScript engine among wasm ones
+date: 2026-11-28 · by: ppsycho · issue: 0312
+Psychoscript (npm `psychoscript` 0.4.0) is the page's eighth engine although it is not
+wasm: it runs in node's own engine. It runs the codemode bodies and the prelude as
+given (`__DATA` as a binding), a fresh `Runtime` per run. What does not compare is not
+faked: its size row is its JavaScript (the package's dist without the Effect API, and
+acorn's ES module, as published) in the glue column, wasm "none"; *compile* is the
+import; *new VM* is `Runtime.make` (its realm is built in every `execute`, so in the run
+time); its memory cells are "n/a" (no linear memory; a V8 heap delta would mix in the
+host's allocation and its collector's timing). In the bridge benchmark a value crosses
+only as a host function's result or a run's result, so each put and get is a whole run:
+`BridgeVm.overhead` names the rest of that run, which bridge.ts times alone, alternating,
+and subtracts (difference of medians, floored at 0). Its strings are the host's own and
+show as "no copy"; its bridge numbers stay out of the geometric means (differences, not
+operations), which keep the rows the wasm engines all have. `status.py engines|bridge
+--engines a,b` records one engine's keys, its load as `<prefix>/<engine>/load` (the
+tables name it), so an engine joins without re-recording the others.
+
+## D3763: Runaway scripts: each engine's own limits, one child process per case
+date: 2026-11-28 · by: ppsycho · issue: 0312
+js/bench/engines/traps.ts runs nine hostile cases on every engine of the page, each in a
+child process with a 10 s kill and a 4 GiB resident guard, under 1 s and 64 MiB through
+each engine's documented mechanism (`Engine.limited`): djs `memoryLimit` and an
+`AbortSignal.timeout` checked between fuel slices (`advance` with `yieldMs`, so a timer
+can fire); QuickJS interrupt handlers with a deadline and memory limits; monty's
+ResourceLimits; Psychoscript's `timeoutMs` (no memory limit). Every QuickJS build gets
+`maxStackSize` 48 KiB: the releases built here have a 64 KiB C stack, and with the
+packages' 1 MiB default the host's native stack overflows first (a wasm trap). The body
+runs in a `try` whose handler survives a full heap (a literal when building the message
+fails). Outcomes, not timings: one run, recorded as `traps/<engine>/<case>/...` strings
+and numbers. Bellard's QuickJS build stops disabling CONFIG_STACK_CHECK (the WASI sed
+caught that `#if` along with CONFIG_ATOMICS) and uses wasi-libc's malloc_usable_size (it
+had 0, so the memory limit and the GC's allocation count saw only per-block overhead);
+driver.c sets the 48 KiB stack limit always, as the check needs it. Run times measured
+with the changed build were within noise of the recorded ones.
