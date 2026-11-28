@@ -34,8 +34,9 @@ mod hash;
 #[cfg(test)]
 mod host_tests;
 mod import;
+#[cfg(feature = "inspect")]
 mod inspect;
-#[cfg(test)]
+#[cfg(all(test, feature = "inspect"))]
 mod inspect_tests;
 mod schema;
 #[cfg(test)]
@@ -52,6 +53,7 @@ use crate::value::Value;
 use wire::Writer;
 
 pub use import::{SnapshotStats, needs};
+#[cfg(feature = "inspect")]
 pub use inspect::{Inspection, describe, inspect};
 
 /// The format version: bumped whenever the encoding changes.

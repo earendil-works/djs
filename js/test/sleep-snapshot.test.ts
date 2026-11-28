@@ -22,13 +22,17 @@ test("examples/sleep-snapshot: snapshot while the tool sleeps, load, continue", 
     // script with its text, the host's values by name (the README's description).
     const sb = await Sandbox.create(options(log));
     const described = sb.describeSnapshot(snapshot);
+    const i = sb.inspectSnapshot(snapshot);
     sb.dispose();
-    const m = /host data: \{"states":\[\[2,\{"due":(\d+)\}\]\],"fuelUsed":\d+\}/.exec(described);
-    assert.ok(m, described);
-    assert.ok(Number(m[1]) >= t0 + 50 && Number(m[1]) <= Date.now() + 50, described);
-    assert.equal(described.match(/^function .* \(bytecode\)$/gm)?.length, 2, described);
-    assert.match(described, /^script 0: sleep\.js, parameters ms \(\d+ bytes of source\)$/m);
-    assert.match(described, /^host values: console tools tools\.sleep\(\)/m);
+    const data = i.vm.fields.hostData as { v: string };
+    const m = /^\{"states":\[\[2,\{"due":(\d+)\}\]\],"fuelUsed":\d+\}$/.exec(data.v);
+    assert.ok(m, data.v);
+    assert.ok(Number(m[1]) >= t0 + 50 && Number(m[1]) <= Date.now() + 50, data.v);
+    assert.deepEqual(i.functions.filter((f) => f.hashKind === "bytecode").map((f) => f.label), ["step", "the body"]);
+    assert.deepEqual([i.scripts[0].name, i.scripts[0].params], ["sleep.js", ["ms"]]);
+    assert.deepEqual(i.host.map((h) => h.name), ["console", "tools", "tools.sleep"]);
+    assert.match(described, /step\(label = "first", ms = 50\) is waiting for tools\.sleep\(50\)/);
+    assert.match(described, /inside a for…of loop over \["first", "second"\], at item 1 of 2/);
   }
   const result = await resume(snapshot, options(log));
   assert.deepEqual(result, ["first: slept 50 ms", "second: slept 50 ms"]);

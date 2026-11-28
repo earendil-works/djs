@@ -1027,18 +1027,15 @@ fn emit_function(
             }
             let mut all_names = names.clone();
             all_names.extend_from_slice(&f.capture_names);
-            // Then the simple parameters by index (they live in the frame's argument
+            // Then the simple parameters, in order (they live in the frame's argument
             // slots, which no local name covers): what a snapshot's reader names a
             // waiting frame's arguments by. After the captures, so local and capture
             // indexes, and the hashes, stay as they are.
             if f.simple_params {
-                let first = all_names.len();
-                for v in f.vars.iter().filter(|v| v.kind == VarKind::Param) {
-                    let at = first + usize::from(v.param);
-                    if all_names.len() <= at {
-                        all_names.resize(at + 1, Atom::NULL);
+                for v in &f.vars {
+                    if v.kind == VarKind::Param {
+                        all_names.push(v.name);
                     }
-                    all_names[at] = v.name;
                 }
             }
             (lt.finish(), all_names)

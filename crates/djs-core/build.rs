@@ -51,8 +51,8 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// a build with it, and images move freely between the two. Nor `prelude`
 /// (D3094): it only decides whether a wasm build can run the prelude source. Nor
 /// `intrinsic-names` (D3340): names in messages and listings. Nor `cold-unicode` (D3350):
-/// where the property tables come from. Nor `strip-types` (D3752): a CLI tool's code
-/// path that no run reaches. `embed` counts (D3175): its
+/// where the property tables come from. Nor `strip-types` (D3752) and `inspect` (D3760):
+/// tools' code paths that no run reaches. `embed` counts (D3175): its
 /// base has builtins the others leave out.
 fn features() -> Vec<String> {
     enabled_features()
@@ -68,6 +68,7 @@ fn features() -> Vec<String> {
                 && f != "snapshot"
                 && f != "cold-unicode"
                 && f != "strip-types"
+                && f != "inspect"
         })
         .collect()
 }

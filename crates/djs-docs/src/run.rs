@@ -207,9 +207,12 @@ mod tests {
     fn examples_snapshot_at_debugger() {
         let src = "let n = 0;\nfor (const x of [1, 2]) {\n  n += x;\n  debugger;\n}\nreturn n;\n";
         let d = snapshot(src, 1, false);
-        assert!(d.contains("open call 1: debugger()"), "{d}");
-        assert!(d.contains("the body waits at 4:3"), "{d}");
-        assert!(d.contains("n = 1"), "{d}");
+        assert!(d.contains("a pause at debugger; (open call 1)"), "{d}");
+        assert!(
+            d.contains("the body is stopped at `debugger;` (line 4)"),
+            "{d}"
+        );
+        assert!(d.contains("n = 1, x = 1"), "{d}");
         assert!(snapshot(src, 2, false).contains("n = 3"));
         assert_eq!(snapshot(src, 3, false), "(the run ended without pausing)\n");
     }

@@ -14,7 +14,6 @@
 //! within one snapshot, not across snapshots.
 
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -145,7 +144,7 @@ pub struct Inspection<'a> {
     others_view: Vec<Node>,
     /// A role sentence per record the tree explains (the promise a call returned, a
     /// frame), for the records' notes.
-    roles: BTreeMap<u32, String>,
+    roles: ById<String>,
 }
 
 /// A snapshot inspected: the model [`Inspection::text`] and [`Inspection::json`] render.
@@ -163,7 +162,7 @@ pub fn inspect(bytes: &[u8]) -> Result<Inspection<'_>, Refusal> {
         others: Vec::new(),
         view: Vec::new(),
         others_view: Vec::new(),
-        roles: BTreeMap::new(),
+        roles: ById::default(),
         snap,
     };
     i.held_by = i.holders();
@@ -227,11 +226,13 @@ fn debug_info(s: &Snap<'_>) -> Vec<FnDebug> {
             continue;
         };
         let h = &heap;
-        let mut spans: BTreeMap<(u32, u32), Vec<u32>> = BTreeMap::new();
+        // (Not a map: its generic code would be shared with the loader's, and the shipped
+        // module's inlining would change though this code is not in it.)
+        let mut spans: Vec<(u32, u32, u32)> = Vec::new();
         let mut stack = alloc::vec![root.0];
         while let Some(t) = stack.pop() {
             let d = crate::bytecode::template::debug_info(h, t);
-            spans.entry((d.src_start, d.src_end)).or_default().push(t);
+            spans.push((d.src_start, d.src_end, t));
             for c in 0..crate::bytecode::template::child_count(h, t) {
                 if let Some(c) = crate::bytecode::template::child(h, t, c).and_then(|r| r.get()) {
                     stack.push(c);
@@ -243,13 +244,16 @@ fn debug_info(s: &Snap<'_>) -> Vec<FnDebug> {
             if script as usize != k {
                 continue;
             }
-            let Some(ts) = spans.get(&(start, end)) else {
-                continue;
-            };
+            let ts: Vec<u32> = spans
+                .iter()
+                .filter(|x| (x.0, x.1) == (start, end))
+                .map(|x| x.2)
+                .collect();
             // Two templates of one span (a class's field initializers): the interface hash
             // tells them apart. (Not the bytecode hash: it names builtins through the
             // realm, which this heap has not.)
             let t = match ts.as_slice() {
+                [] => continue,
                 [t] => *t,
                 _ => ts
                     .iter()
@@ -323,6 +327,57 @@ fn line_col(src: &[u8], starts: &[usize], pos: usize) -> (u32, u32) {
     let col = core::str::from_utf8(&src[from..pos.min(src.len()).max(from)])
         .map_or(pos - from, |s| s.chars().count());
     (line as u32, col as u32 + 1)
+}
+
+/// A set of record ids. (Not a `BTreeSet`: its generic code would be shared with the
+/// loader's, and the shipped module's inlining would change though this code is not in
+/// it.)
+#[derive(Default)]
+pub(super) struct Marks(Vec<bool>);
+
+impl Marks {
+    /// Marks `r`; whether it was not marked yet.
+    pub fn insert(&mut self, r: u32) -> bool {
+        let r = r as usize;
+        if self.0.len() <= r {
+            self.0.resize(r + 1, false);
+        }
+        !core::mem::replace(&mut self.0[r], true)
+    }
+
+    pub fn contains(&self, r: u32) -> bool {
+        self.0.get(r as usize).copied().unwrap_or(false)
+    }
+}
+
+/// Something per record id (a map from ids, kept as a list for the reason of [`Marks`]).
+pub(super) struct ById<T>(Vec<Option<T>>);
+
+impl<T> Default for ById<T> {
+    fn default() -> Self {
+        ById(Vec::new())
+    }
+}
+
+impl<T> ById<T> {
+    pub fn get(&self, r: u32) -> Option<&T> {
+        self.0.get(r as usize).and_then(|x| x.as_ref())
+    }
+
+    pub fn insert(&mut self, r: u32, v: T) {
+        let r = r as usize;
+        if self.0.len() <= r {
+            self.0.resize_with(r + 1, || None);
+        }
+        self.0[r] = Some(v);
+    }
+
+    /// Sets `r` unless it has a value.
+    pub fn insert_new(&mut self, r: u32, v: impl FnOnce() -> T) {
+        if self.get(r).is_none() {
+            self.insert(r, v());
+        }
+    }
 }
 
 /// Record type names of the run's structure.
@@ -538,10 +593,10 @@ impl<'a> Inspection<'a> {
     fn holders(&self) -> Vec<Vec<u32>> {
         let mut by = alloc::vec![Vec::new(); self.snap.records.len()];
         let mut add = |from: u32, fs: &[F]| {
-            let mut refs = BTreeSet::new();
-            walk_refs(fs, &mut |r| {
-                refs.insert(r);
-            });
+            let mut refs = Vec::new();
+            walk_refs(fs, &mut |r| refs.push(r));
+            refs.sort_unstable();
+            refs.dedup();
             for r in refs {
                 if let Some(v) = by.get_mut(r as usize) {
                     v.push(from);
@@ -556,8 +611,8 @@ impl<'a> Inspection<'a> {
     }
 
     fn tree(&mut self) {
-        let mut seen = BTreeSet::new();
-        let mut shown = BTreeSet::new();
+        let mut seen = Marks::default();
+        let mut shown = Marks::default();
         let mut calls = Vec::new();
         let list = self.root_field("hostCalls").and_then(|f| match f {
             F::V(v) => Some(*v),
@@ -598,7 +653,7 @@ impl<'a> Inspection<'a> {
         let mut others = Vec::new();
         for r in 0..self.snap.records.len() as u32 {
             if self.type_name(r) == GENERATOR
-                && !shown.contains(&r)
+                && !shown.contains(r)
                 && matches!(self.value(r, "frame"), Some(V::Rec(..)))
             {
                 let f = self.frame(r, &mut seen, &mut shown, 0);
@@ -610,13 +665,7 @@ impl<'a> Inspection<'a> {
     }
 
     /// What waits on promise `p`.
-    fn waiters(
-        &self,
-        p: u32,
-        seen: &mut BTreeSet<u32>,
-        shown: &mut BTreeSet<u32>,
-        depth: usize,
-    ) -> Vec<Link> {
+    fn waiters(&self, p: u32, seen: &mut Marks, shown: &mut Marks, depth: usize) -> Vec<Link> {
         if !seen.insert(p) || depth > CHAIN {
             return alloc::vec![Link::Seen { promise: p }];
         }
@@ -627,11 +676,10 @@ impl<'a> Inspection<'a> {
         let mut out = Vec::new();
         for t in reactions.chunks(3) {
             let (cap, on) = (t[0], t.get(1).copied().unwrap_or(V::Imm(Value::UNDEFINED)));
-            let next =
-                |s: &Self, seen: &mut BTreeSet<u32>, shown: &mut BTreeSet<u32>, q: Option<u32>| {
-                    q.map(|q| s.waiters(q, seen, shown, depth + 1))
-                        .unwrap_or_default()
-                };
+            let next = |s: &Self, seen: &mut Marks, shown: &mut Marks, q: Option<u32>| {
+                q.map(|q| s.waiters(q, seen, shown, depth + 1))
+                    .unwrap_or_default()
+            };
             match Self::rec(on).map(|r| (r, self.type_name(r))) {
                 Some((g, GENERATOR)) => out.push(Link::Activation(Box::new(
                     self.frame(g, seen, shown, depth),
@@ -705,13 +753,7 @@ impl<'a> Inspection<'a> {
     }
 
     /// Activation `g`'s frame, read, and what waits on its promise.
-    fn frame(
-        &self,
-        g: u32,
-        seen: &mut BTreeSet<u32>,
-        shown: &mut BTreeSet<u32>,
-        depth: usize,
-    ) -> Frame {
+    fn frame(&self, g: u32, seen: &mut Marks, shown: &mut Marks, depth: usize) -> Frame {
         shown.insert(g);
         let slots = self
             .value(g, "frame")

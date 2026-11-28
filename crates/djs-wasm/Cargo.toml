@@ -23,10 +23,11 @@ compiled-prelude = ["djs-core/prelude"]
 # Exports `djs_alloc_stats`: live and peak bytes of Rust heap allocations and their count,
 # through a counting wrapper around the system allocator (memory accounting, 0094).
 alloc-stats = []
-# Exports `djs_disasm` (bytecode listings), `vm_call_site` and `djs_snapshot_describe` for
-# the docs site's live examples (0113, D3751). Off by default: the shipping module does not
-# carry them. The gate's dev module (the js tests') turns it on.
-docs = ["djs-core/intrinsic-names"]
+# Exports `djs_disasm` (bytecode listings), `vm_call_site`, `djs_snapshot_describe` and
+# `djs_snapshot_inspect` for the docs site's live examples (0113, D3751, D3760). Off by
+# default: the shipping module does not carry them. The gate's dev module (the js tests')
+# turns it on.
+docs = ["djs-core/intrinsic-names", "djs-core/inspect"]
 # Unchecked arena field access in djs-core (D2520). The shipped module turns it on
 # (scripts/build-wasm.sh, D3100); native builds, the docs module and the tests don't.
 unsafe-heap = ["djs-core/unsafe-heap"]

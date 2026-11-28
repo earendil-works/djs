@@ -55,12 +55,27 @@ test("a snapshot stores its script; describe tells what it holds", async () => {
   await run.advance();
   assert.equal(run.value, 42);
   if (await docsModule()) {
-    assert.match(again.describeSnapshot(snap), /records/);
-    assert.match(again.describeSnapshot(snap), /job-7\.js/);
+    const text = again.describeSnapshot(snap);
+    assert.match(text, /^job-7\.js, waiting for the host to answer 1 call/);
+    assert.match(text, /the body is waiting for sleep\(1\), at `await sleep\(1\)` \(line 1\)/);
     assert.throws(() => again.describeSnapshot(new Uint8Array([1, 2, 3])), /not a snapshot/);
+    // The same as data: the view in JavaScript terms, and every record.
+    const i = again.inspectSnapshot(snap);
+    assert.equal(i.bytes, snap.length);
+    assert.equal(i.scripts[0].name, "job-7.js");
+    assert.equal(i.scripts[0].source, code);
+    const call = i.view.calls[0];
+    assert.equal(call.kind, "call");
+    assert.equal(call.children[0].kind, "frame");
+    assert.equal(call.children[0].source?.line, 1);
+    assert.equal(i.run.calls[0].function, "sleep");
+    assert.ok(i.records.every((r) => r.end > r.start && typeof r.label === "string" && typeof r.note === "string"));
+    assert.equal(i.sizes.reduce((n, s) => n + s.bytes, 0), snap.length);
+    assert.throws(() => again.inspectSnapshot(new Uint8Array([1, 2, 3])), /not a snapshot/);
   } else {
     // The shipped module has no describe (D3751).
     assert.throws(() => again.describeSnapshot(snap), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
+    assert.throws(() => again.inspectSnapshot(snap), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
   }
   again.dispose();
 });

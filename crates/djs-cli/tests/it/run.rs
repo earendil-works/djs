@@ -312,7 +312,11 @@ main().then((t) => console.log('total', t));
         )
     );
     let d = djs_cmd(&["describe", &snap]);
-    assert!(d.1.contains(" debugger() "), "{d:?}");
+    assert!(d.1.contains("a pause at debugger; (open call "), "{d:?}");
+    assert!(d.1.contains(" is stopped at `debugger;` (line 6)"), "{d:?}");
+    let j = djs_cmd(&["describe", "--json", &snap]);
+    assert!(j.1.starts_with("{\"format\":"), "{j:?}");
+    assert!(j.1.contains("\"kind\":\"call\""), "{j:?}");
     // The loop's next `debugger;` pauses again, at the same place in the script.
     let r = djs_cmd(&["resume", "--debugger", &snap, &snap]);
     assert_eq!(

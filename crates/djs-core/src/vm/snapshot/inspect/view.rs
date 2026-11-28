@@ -3,7 +3,6 @@
 //! has it; the storage details (record ids, kinds, pcs, frame layouts) after them. Built
 //! once: `describe` renders it as text, the JSON carries it for the docs site.
 
-use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -93,7 +92,7 @@ pub(super) const VALUE_NOTES: &[(&str, &str)] = &[
 
 impl Inspection<'_> {
     pub(super) fn build_view(&mut self) {
-        let mut roles = BTreeMap::new();
+        let mut roles = ById::default();
         let calls: Vec<Node> = (0..self.calls.len())
             .map(|k| self.call_node(k, &mut roles))
             .collect();
@@ -107,7 +106,7 @@ impl Inspection<'_> {
         self.roles = roles;
     }
 
-    fn call_node(&self, k: usize, roles: &mut BTreeMap<u32, String>) -> Node {
+    fn call_node(&self, k: usize, roles: &mut ById<String>) -> Node {
         let c = &self.calls[k];
         let args: Vec<String> = c.args.iter().map(|&a| self.short(a)).collect();
         let call = format!("{}({})", c.function, args.join(", "));
@@ -158,12 +157,7 @@ impl Inspection<'_> {
 
     /// The node of link `l`; `waits_for`: what it awaits, in words (`None`: the pause
     /// itself; `Some("")`: nothing named).
-    fn link_node(
-        &self,
-        l: &Link,
-        waits_for: Option<String>,
-        roles: &mut BTreeMap<u32, String>,
-    ) -> Node {
+    fn link_node(&self, l: &Link, waits_for: Option<String>, roles: &mut ById<String>) -> Node {
         match l {
             Link::Activation(f) => self.frame_node(f, waits_for, roles),
             Link::Element {
@@ -314,12 +308,7 @@ impl Inspection<'_> {
         }
     }
 
-    fn frame_node(
-        &self,
-        f: &Frame,
-        waits_for: Option<String>,
-        roles: &mut BTreeMap<u32, String>,
-    ) -> Node {
+    fn frame_node(&self, f: &Frame, waits_for: Option<String>, roles: &mut ById<String>) -> Node {
         let generator = matches!(
             self.constant(f.record, "kind").as_str(),
             "generator" | "asyncGenerator"
@@ -360,7 +349,7 @@ impl Inspection<'_> {
             }
         }
         // A parameter captured by a closure is a local too (its box): shown once.
-        let named: BTreeSet<String> = b.iter().map(|x| x.name.clone()).collect();
+        let named: Vec<String> = b.iter().map(|x| x.name.clone()).collect();
         let mut bindings: Vec<Binding> = f
             .args
             .iter()
@@ -370,9 +359,9 @@ impl Inspection<'_> {
                     .map(|n| self.binding(n, *v))
             })
             .collect();
-        let params: BTreeSet<&str> = f.args.iter().filter_map(|(n, _)| n.as_deref()).collect();
+        let params: Vec<&str> = f.args.iter().filter_map(|(n, _)| n.as_deref()).collect();
         for x in &mut b {
-            x.param = params.contains(x.name.as_str());
+            x.param = params.contains(&x.name.as_str());
         }
         for x in &mut bindings {
             x.param = true;
@@ -413,9 +402,9 @@ impl Inspection<'_> {
         }
         for x in bindings.iter().chain(&captured) {
             if let Some(bx) = x.boxed {
-                roles
-                    .entry(bx)
-                    .or_insert_with(|| format!("the box of {}, shared with closures", x.name));
+                roles.insert_new(bx, || {
+                    format!("the box of {}, shared with closures", x.name)
+                });
             }
         }
         let mut detail = alloc::vec![format!(
@@ -734,7 +723,7 @@ impl Inspection<'_> {
             }
             _ => "Data of the run: its kind and its fields by name.",
         };
-        match self.roles.get(&r) {
+        match self.roles.get(r) {
             Some(role) => format!("{}{}. {kind}", role[..1].to_uppercase(), &role[1..]),
             None => kind.to_string(),
         }
@@ -817,7 +806,7 @@ fn snippet(line: &str, col: u32) -> String {
 /// it was first seen (`same as page.items`).
 pub(super) struct Js<'i, 'a> {
     i: &'i Inspection<'a>,
-    pub paths: Option<BTreeMap<u32, String>>,
+    pub paths: Option<ById<String>>,
     /// Records on the path being rendered (a cycle).
     open: Vec<u32>,
 }
@@ -834,7 +823,7 @@ impl<'i, 'a> Js<'i, 'a> {
     pub fn tracking(i: &'i Inspection<'a>) -> Self {
         Js {
             i,
-            paths: Some(BTreeMap::new()),
+            paths: Some(ById::default()),
             open: Vec::new(),
         }
     }
@@ -965,7 +954,7 @@ impl<'i, 'a> Js<'i, 'a> {
             return String::from("[Circular]");
         }
         if let Some(paths) = &mut self.paths {
-            match paths.get(&r) {
+            match paths.get(r) {
                 Some(p) if !p.is_empty() => return format!("(same as {p})"),
                 Some(_) => {}
                 None => {
@@ -1562,9 +1551,9 @@ impl Text<'_, '_> {
                 fields
             };
             // What the text above called it.
-            let known = match self.js.paths.as_ref().and_then(|p| p.get(&(r as u32))) {
+            let known = match self.js.paths.as_ref().and_then(|p| p.get(r as u32)) {
                 Some(p) if !p.is_empty() => p.clone(),
-                _ => i.roles.get(&(r as u32)).map_or_else(
+                _ => i.roles.get(r as u32).map_or_else(
                     || i.held_as(r as u32),
                     |s| s.split([':', ',']).next().unwrap_or("").to_string(),
                 ),
