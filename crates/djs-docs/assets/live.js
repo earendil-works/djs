@@ -30,10 +30,9 @@ function lib() {
   ]).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => ({
     Sandbox,
     module,
-    // The docs build has snapshots (`vm_snapshot`), which a `debugger;` pause needs. The
-    // instance's operations by name (the module has one export, `djs`) serve the Bytecode
-    // tab.
-    snapshots: "vm_snapshot" in (disasmExports = djsExports(module)),
+    // The instance's operations by name (the module has one export, `djs`) serve the
+    // Bytecode tab.
+    ops: (disasmExports = djsExports(module)),
     kindNames: Object.fromEntries(Object.entries(LAYOUT.cells).map(([n, c]) => [c.kind, n])),
     classNames: Object.fromEntries(Object.entries(LAYOUT.objectClasses).map(([n, c]) => [c, n])),
   }));
@@ -321,16 +320,17 @@ async function gzipSize(bytes) {
 }
 
 /**
- * A run with `debugger;` pauses (D3050) as part of the normal Run: a task whose `debugger`
- * host function makes the run idle at the statement, so the page suspends it into a
- * snapshot there (D3720). Run turns into Continue, which resumes the run from that
- * snapshot in a fresh sandbox, on to the next pause or the end. The output of all of them
- * is one transcript, with a line at each pause; the current snapshot's description is one
- * click away below it. A run that cannot be snapshotted (a value the snapshot refuses)
- * says why and continues in the same sandbox.
+ * A run with `debugger;` pauses (D3050) as part of the normal Run: a host-driven run in
+ * which `debugger;` is an open call of the async host function `debugger`, so the run is
+ * idle at the statement and the page writes it out as a snapshot there (D3720). Run turns
+ * into Continue, which loads that snapshot into a fresh sandbox, settles the pause and
+ * runs on to the next pause or the end. The output of all of them is one transcript, with
+ * a line at each pause; the current snapshot's description is one click away below it. A
+ * run that cannot be snapshotted (a value the snapshot refuses) says why and continues in
+ * the same sandbox.
  *
  * Each pause line says where the run stopped (`Sandbox.callSite`, D3054): a line and
- * column of the example, in every part of the run (a resumed run is in the same script).
+ * column of the example, in every part of the run (a loaded run is in the same script).
  */
 async function runPausing(ex, l, id) {
   const { el } = ex;
@@ -363,22 +363,22 @@ async function runPausing(ex, l, id) {
     box.scrollIntoView({ block: "nearest" });
   };
   const snapLink = (i) => `<a href="#" class="live-snap-link" data-snap="${i}">snapshot ${i + 1}</a>`;
+  const pausesOf = (run) => run.calls.filter((c) => c.fn === "debugger");
   /** Where the run waits at its open pauses, as text: lines and columns of the example. */
-  const where = (task) => {
+  const where = (sb, run) => {
     const sites = [];
-    for (const c of task.calls) {
-      if (c.fn !== "debugger") continue;
-      const at = task.sandbox.callSite(c.id);
+    for (const c of pausesOf(run)) {
+      const at = sb.callSite(c.id);
       if (at && !sites.some((s) => s.line === at.line && s.column === at.column)) sites.push(at);
     }
     if (sites.length === 0) return "debugger;";
     return `line${sites.length > 1 ? "s" : ""} ${sites.map((s) => `${s.line}:${s.column}`).join(", ")}`;
   };
-  // The pause may come while `start` or `resume` still runs, before `step` waits for it.
-  let paused = false;
-  let wake = null;
-  // Continues a pause in the same sandbox (after a refused snapshot).
-  let release = null;
+  /** Settles the run's pauses and runs on to the next idle point or the end. */
+  const goOn = async (run) => {
+    for (const c of pausesOf(run)) run.settle(c.id, { ok: true, value: undefined });
+    await run.advance();
+  };
   const opts = {
     module,
     typescript: ex.ts,
@@ -386,16 +386,8 @@ async function runPausing(ex, l, id) {
     fuelSlice: FUEL_SLICE,
     maxFuel: MAX_FUEL,
     now: 0,
-    // The pause: the run is idle while this call is open, so the task can be snapshotted.
-    debugger: {
-      call() {
-        paused = true;
-        wake?.();
-        return new Promise((r) => (release = r));
-      },
-      // Continued from a snapshot: the run goes on at once.
-      resume() {},
-    },
+    // The pause: the run is idle while this call is open, so it can be snapshotted.
+    debugger: true,
   };
   let pauses = 0;
   let resumes = 0;
@@ -403,18 +395,13 @@ async function runPausing(ex, l, id) {
     ex.cont = null;
     setRunLabel(ex, false);
   };
-  // `from`: the index of the snapshot this part continued from, -1 for the example.
-  const step = async (task, from) => {
-    const atPause = paused ? Promise.resolve() : new Promise((r) => (wake = r));
-    const end = task.result.then(
-      (v) => ({ done: true, v }),
-      (e) => ({ done: true, e }),
-    );
-    const first = await Promise.race([atPause.then(() => ({ done: false })), end]);
-    if (id !== ex.runs) return task.sandbox.dispose();
-    if (first.done) {
-      task.sandbox.dispose();
-      const failure = first.e ? describe(first.e, src, false) : null;
+  // `run` is idle or ended in sandbox `sb`; `from`: the index of the snapshot this part
+  // continued from, -1 for the example.
+  const step = async (sb, run, from) => {
+    if (id !== ex.runs) return sb.dispose();
+    if (run.state !== "idle" || pausesOf(run).length === 0) {
+      sb.dispose();
+      const failure = run.state === "threw" ? describe(run.error, src, false) : null;
       if (failure) lines.push(`<span class="live-error">${esc(failure.text)}</span>`);
       showOut();
       setStatus(failure ? "threw" : resumes ? `ran to the end, continued ${resumes}× from a snapshot` : "ran to the end");
@@ -422,39 +409,34 @@ async function runPausing(ex, l, id) {
       done();
       return;
     }
-    paused = false;
-    wake = null;
     pauses++;
-    const at = where(task);
+    const at = where(sb, run);
     let snap;
     let text;
     try {
-      snap = await task.suspend();
-      text = task.sandbox.describeSnapshot(snap);
+      snap = run.snapshot();
+      text = sb.describeSnapshot(snap);
     } catch (e) {
-      if (id !== ex.runs) return task.sandbox.dispose();
       // Not snapshottable here: say why, and let Continue go on in this sandbox.
       marker(`⏸ paused at ${esc(at)}, but the run cannot be snapshotted here:`);
       lines.push(`<span class="live-error">${esc(String(e?.message ?? e).replace(/^cannot snapshot the run:\s*/, "").trimEnd())}</span>`);
       showOut();
       box.hidden = true;
       setStatus(`paused at ${at} (pause ${pauses}), not snapshottable`);
-      ex.cont = () => {
+      ex.cont = async () => {
         ex.cont = null;
         lines.push(`<span class="live-pause">▶ continued in the same sandbox</span>`);
         showOut();
         setRunLabel(ex, false);
-        const r = release;
-        release = null;
-        r?.();
-        step(task, from);
+        await goOn(run).catch(() => {});
+        step(sb, run, from);
       };
       setRunLabel(ex, true);
       return;
     }
-    task.sandbox.dispose();
-    if (id !== ex.runs) return;
+    sb.dispose();
     const gz = await gzipSize(snap);
+    if (id !== ex.runs) return;
     const n = snaps.push({ text, size: `${size(snap.length)}${gz === null ? "" : `, ${size(gz)} gzipped`}` }) - 1;
     marker(`⏸ paused at ${esc(at)}: the run is now ${snapLink(n)} (${esc(size(snap.length))}), and its sandbox is gone`);
     showOut();
@@ -467,9 +449,14 @@ async function runPausing(ex, l, id) {
       lines[lines.length - 1] = `<span class="live-pause">⏸ paused at ${esc(at)}: continued from ${snapLink(n)} (${esc(size(snap.length))}) in a fresh sandbox</span>`;
       showOut();
       setStatus("continuing…");
+      let sb2;
       try {
-        await step(await Sandbox.resume(snap, opts), n);
+        sb2 = new Sandbox(opts);
+        const loaded = sb2.loadSnapshot(snap);
+        await goOn(loaded).catch(() => {});
+        await step(sb2, loaded, n);
       } catch (e) {
+        sb2?.dispose();
         setStatus(`could not continue: ${e.message}`);
         done();
       }
@@ -478,7 +465,15 @@ async function runPausing(ex, l, id) {
   };
   box.hidden = true;
   showOut();
-  await step(new Sandbox(opts).start(src, {}, { filename: "example.js" }), -1);
+  const sb = new Sandbox(opts);
+  let run;
+  try {
+    run = sb.begin(src, {}, { filename: "example.js" });
+  } catch (e) {
+    sb.dispose();
+    throw e;
+  }
+  await step(sb, run, -1);
 }
 
 /** The Run button: "Continue" while a run is paused at `debugger;`. */
@@ -504,10 +499,10 @@ async function run(ex) {
       ex.cont = null;
       setRunLabel(ex, false);
     }
-    if (l.snapshots && hasDebugger(src)) {
+    if (hasDebugger(src)) {
       pane("bytecode").textContent = disasm(module, src, ex.ts) ?? ex.listing;
       pane("heap").innerHTML = `<p class="muted">This run pauses at <code>debugger;</code>: each part of it runs in a sandbox of its own, which is gone once the run is a snapshot.</p>`;
-      pane("suspend").innerHTML = `<p class="muted">At each <code>debugger;</code> the run is suspended into a snapshot; see the Output tab.</p>`;
+      pane("suspend").innerHTML = `<p class="muted">At each <code>debugger;</code> the run is written out as a snapshot; see the Output tab.</p>`;
       select(ex, "out");
       await runPausing(ex, l, id);
       return;
