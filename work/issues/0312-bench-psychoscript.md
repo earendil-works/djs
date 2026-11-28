@@ -4,7 +4,7 @@ status: in-progress
 agent: ppsycho
 branch: issue/0312-bench-psychoscript
 depends-on: -
-touches: js/bench/engines/ (engines.ts, run.ts, bridge.ts, ops.ts if it fits, package.json, package-lock.json, prelude.js only if a workload needs it), scripts/bench-engines.sh, scripts/status.py, tests/scores/status.tsv, crates/djs-docs (status.rs gen:status tables/charts, only as needed for a new engine column), docs/guide/benchmarks.md, docs/decisions.md
+touches: js/bench/engines/ (engines.ts, run.ts, bridge.ts, ops.ts if it fits, package.json, package-lock.json, prelude.js only if a workload needs it, driver.c for the QuickJS releases' limits, a new traps.ts), scripts/bench-engines.sh, scripts/status.py, tests/scores/status.tsv, crates/djs-docs (status.rs gen:status tables/charts, only as needed for a new engine column), docs/guide/benchmarks.md, docs/decisions.md
 guide: docs/guide/benchmarks.md
 
 ## Goal (owner)
@@ -46,6 +46,33 @@ timers, TypeScript syntax, Intl.
       or "n/a") must say so in the table notes and the prose. Its isolation model differs
       (same heap as the host) and belongs in one sentence, without judging.
 - [ ] `cargo run -q -p djs-docs -- check` clean; the gate's codemode leg still runs only djs.
+
+### Scope addition (owner): runaway scripts
+- [ ] A separate script (js/bench/engines/traps.ts, not part of the timed run.ts) runs about
+      eight hostile/runaway cases on every engine of the page: a sync endless loop
+      (`for(;;){}`); an endless async/microtask loop (a promise chain that never settles the
+      run); growing an array/object until memory runs out; one huge allocation
+      (`"x".repeat(2**30)` or `new Array(2**30).fill(0)`); a string that doubles until it
+      fails; deep recursion (stack overflow); deep nesting into JSON.parse/JSON.stringify;
+      catastrophic regexp backtracking (`/(a+)+$/` on a long non-matching string). Others only
+      if they show a real difference.
+- [ ] Every engine with its best documented limit mechanism, configured the same where
+      possible (1 s time budget, 64 MiB memory cap): djs's fuel/memory limits
+      (docs/guide/limits.md); QuickJS interrupt handler + JS_SetMemoryLimit + max stack size
+      in driver.c for the two releases; quickjs-emscripten's setInterruptHandler /
+      setMemoryLimit / setMaxStackSize; quickjs-wasi's equivalents; monty's limits;
+      Psychoscript's timeoutMs/maxOutputBytes and fixed caps (no memory limit; a regexp
+      match runs on the host engine, not interrupted). No mechanism: say so, don't invent one.
+- [ ] Per engine x case: what happened (stopped by a limit / catchable error in the script /
+      uncatchable termination / host process crash or hang / ran until the outer kill), time
+      until it stopped, memory high-water (linear memory; Psychoscript: the host process's
+      RSS/heap, labelled), and whether the same host process can create and run a fresh VM
+      afterwards.
+- [ ] Each engine x case in its own child process with a hard outer timeout (~10 s) and a
+      memory guard, so a crash or OOM doesn't take the harness down.
+- [ ] benchmarks.md gets a "Runaway scripts" section: one table of outcomes (short cells,
+      details in notes), generated from recorded results if practical, else a dated table
+      with the command to re-run it. Factual, djs's weaknesses included; links limits.md.
 
 ## Notes
 - Precedent: monty (0229/0238) is a non-QuickJS, non-JS-in-wasm engine already on the
