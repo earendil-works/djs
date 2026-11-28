@@ -63,10 +63,13 @@ fetch "https://bellard.org/quickjs/quickjs-$QJS.tar.xz" "quickjs-$QJS.tar.xz" "$
 fetch "https://github.com/quickjs-ng/quickjs/releases/download/v$NG/quickjs-amalgam.zip" "quickjs-ng-$NG-amalgam.zip" "$NG_SHA"
 
 # Both releases build the same way: -O2, a WASI reactor, js/bench/engines/driver.c as the
-# embedding. Bellard's sources need three changes for WASI (no threads for Atomics, no
-# malloc_usable_size, an unused setjmp.h); QuickJS-NG builds as released.
+# embedding. Bellard's sources need three changes for WASI: no threads for Atomics (only
+# that `#if`: the stack check stays on, as on native), wasi-libc's malloc_usable_size (as
+# on Linux; the memory limit and the GC's allocation count depend on it), an unused
+# setjmp.h. QuickJS-NG builds as released.
 CFLAGS=(--target=wasm32-wasip1 -O2 -mexec-model=reactor -Wl,--strip-all)
-stamp="$WASI_SDK ${CFLAGS[*]} $(shasum -a 256 js/bench/engines/driver.c | cut -d' ' -f1)"
+# The stamp: the compiler, the flags, the embedding and this script (its source changes).
+stamp="$WASI_SDK ${CFLAGS[*]} $(cat js/bench/engines/driver.c scripts/bench-engines.sh | shasum -a 256 | cut -d' ' -f1)"
 build() { # name version src... (in the current directory)
   local out="$V/build/$1.wasm" name=$1 version=$2
   shift 2
@@ -76,8 +79,8 @@ build() { # name version src... (in the current directory)
 }
 (
   cd "$V/build" && rm -rf "quickjs-$QJS" && tar -xJf "$V/dl/quickjs-$QJS.tar.xz" && cd "quickjs-$QJS"
-  sed -i.orig -e 's/^#if !defined(__EMSCRIPTEN__)$/#if !defined(__EMSCRIPTEN__) \&\& !defined(__wasi__)/' \
-    -e 's/^#elif defined(__EMSCRIPTEN__)$/#elif defined(__EMSCRIPTEN__) || defined(__wasi__)/' quickjs.c
+  perl -0pi.orig -e 's/#if !defined\(__EMSCRIPTEN__\)\n#define CONFIG_ATOMICS/#if !defined(__EMSCRIPTEN__) && !defined(__wasi__)\n#define CONFIG_ATOMICS/' quickjs.c
+  perl -pi -e 's/^#elif defined\(__linux__\) \|\| defined\(__GLIBC__\)$/#elif defined(__linux__) || defined(__GLIBC__) || defined(__wasi__)/' quickjs.c
   sed -i.orig -e 's/^#include <setjmp.h>$//' dtoa.c
   build quickjs "$QJS" -DCONFIG_VERSION="\"$QJS\"" quickjs.c libregexp.c libunicode.c cutils.c dtoa.c
   echo "QuickJS $QJS (bellard.org), wasi-sdk $WASI_SDK -O2" > "$V/build/quickjs.wasm.version"

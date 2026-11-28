@@ -55,6 +55,23 @@ export interface BridgeVm {
   dispose(): void;
 }
 
+/** The limits of the runaway-script test (js/bench/engines/traps.ts), the same for every engine where it has them. */
+export interface Limits {
+  /** Time budget of a run, ms. */
+  ms: number;
+  /** Heap cap, bytes. */
+  memory: number;
+}
+/** A run's end: its result string, or the error that ended it outside the script. */
+export type Outcome = { ok: true; value: string } | { ok: false; error: string };
+/** A VM under `Limits`, with the engine's own mechanisms (`Engine.limited`). */
+export interface LimitedVm {
+  /** Runs `Engine.trapProgram`'s output. */
+  run(program: string): Promise<Outcome>;
+  memory(): number | null;
+  dispose(): void;
+}
+
 export interface Engine {
   name: string;
   /** What it is and how it is built, for the page. */
@@ -75,11 +92,27 @@ export interface Engine {
   bridgePaths?: string[];
   /** The source for a bridge body (JavaScript with `return`, or Python whose last expression is the result). */
   bridgeProgram?(body: string): string;
+  /** A fresh VM under `limits`, by the engine's own mechanisms; `limitsUsed` says which. */
+  limited?(limits: Limits): LimitedVm | Promise<LimitedVm>;
+  limitsUsed?: string;
+  /** The source for a runaway-script body (a codemode body, or Python whose last expression is the result). */
+  trapProgram?(body: string): string;
 }
 
 /** A script that runs a body and leaves its result in `__result`. */
 const resultScript = (body: string) => `globalThis.__result = (function () {\n${body}\n})();`;
 const silent = { log() {}, info() {}, warn() {}, error() {} };
+/** A codemode body as a script whose result string lands in `__result` once its promise settles. */
+const asyncResultScript = (body: string) =>
+  `(async () => {\n${body}\n})().then((v) => { globalThis.__result = String(v); }, (e) => { globalThis.__result = "ERROR " + e; });`;
+/**
+ * QuickJS's stack limit under `Limits`, the same in every QuickJS build: what driver.c's
+ * 64 KiB stack allows. With the packages' default (1 MiB of their larger stacks) a deep
+ * recursion or JSON nesting exhausts the host's own native stack first, which every wasm
+ * call frame also uses, and the run ends in a wasm trap (the host's RangeError).
+ */
+const QJS_STACK = 48 * 1024;
+const errorText = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
 
 const tail = 'const __r = await (async () => {\n%BODY%\n})();\nreturn __out.join("\\n") + "\\n=> " + __s(__r);';
 /** A codemode body (top-level await and return): djs runs it as given. */
@@ -136,6 +169,27 @@ export function djs(wasm = process.env.DJS_WASM ?? join(root, "target/wasm32-unk
       };
     },
     bridgeProgram: (body) => body,
+    limitsUsed: "memoryLimit; an AbortSignal that times out, checked between fuel slices (advance with yieldMs)",
+    limited(l) {
+      const sb = new Sandbox({ module, memoryLimit: l.memory, console: silent });
+      return {
+        async run(program) {
+          const run = sb.begin(program, {}, { start: false });
+          try {
+            await run.advance({ signal: AbortSignal.timeout(l.ms), yieldMs: 5 });
+          } catch (e) {
+            return { ok: false, error: `${(e as { kind?: string }).kind ?? "?"}: ${errorText(e)}` };
+          }
+          if (run.state === "done") return { ok: true, value: String(run.value) };
+          if (run.state === "threw") return { ok: false, error: `${run.error?.kind}: ${run.error?.message}` };
+          return { ok: false, error: "the run waits on nothing and ended without a result" };
+        },
+        // biome-ignore lint: the instance's exports are internal to the Sandbox
+        memory: () => (sb as unknown as { x: { memory: WebAssembly.Memory } }).x.memory.buffer.byteLength,
+        dispose: () => sb.dispose(),
+      };
+    },
+    trapProgram: (body) => body,
   };
 }
 
@@ -233,6 +287,36 @@ export function quickjsWasi(): Engine {
       };
     },
     bridgeProgram: resultScript,
+    limitsUsed: "memoryLimit, maxStackSize (48 KiB) and interruptHandler (a deadline) of QuickJS.create",
+    async limited(l) {
+      let deadline = 0;
+      const vm = await QuickJS.create({ wasm: module, memoryLimit: l.memory, maxStackSize: QJS_STACK, interruptHandler: () => deadline !== 0 && Date.now() > deadline });
+      return {
+        async run(program) {
+          deadline = Date.now() + l.ms;
+          try {
+            vm.evalCode(program).dispose();
+            while (vm.executePendingJobs() > 0);
+          } catch (e) {
+            const trap = e instanceof WebAssembly.RuntimeError || (e instanceof RangeError && /call stack/.test(e.message));
+            return { ok: false, error: `${trap ? "wasm trap: " : ""}${errorText(e)}` };
+          }
+          const k = vm.newString("__result");
+          const r = vm.getProp(vm.global, k);
+          k.dispose();
+          const v = vm.dump(r);
+          r.dispose();
+          return { ok: true, value: String(v) };
+        },
+        memory: () => vm.exports.memory.buffer.byteLength,
+        dispose: () => {
+          try {
+            vm.dispose();
+          } catch {}
+        },
+      };
+    },
+    trapProgram: asyncResultScript,
   };
 }
 
@@ -380,6 +464,55 @@ export function quickjsEmscripten(flavor: "bellard" | "ng"): Engine {
       };
     },
     bridgeProgram: resultScript,
+    limitsUsed: "runtime.setMemoryLimit, setMaxStackSize (48 KiB), setInterruptHandler(shouldInterruptAfterDeadline)",
+    async limited(l) {
+      const m = await api.newQuickJSWASMModuleFromVariant(variant);
+      const rt = m.newRuntime();
+      rt.setMemoryLimit(l.memory);
+      rt.setMaxStackSize(QJS_STACK);
+      const ctx = rt.newContext();
+      return {
+        async run(program) {
+          rt.setInterruptHandler(api.shouldInterruptAfterDeadline(Date.now() + l.ms));
+          try {
+            return runIn(program);
+          } catch (e) {
+            // A wasm trap (the module's stack ran out): the module is in an unknown state.
+            return { ok: false, error: `wasm trap: ${errorText(e)}` };
+          }
+        },
+        memory: () => m.getWasmMemory().buffer.byteLength,
+        dispose: () => {
+          try {
+            ctx.dispose();
+            rt.dispose();
+          } catch {}
+        },
+      };
+      function runIn(program: string): Outcome {
+          const r = ctx.evalCode(program);
+          if (r.error) {
+            const e = ctx.dump(r.error);
+            r.error.dispose();
+            return { ok: false, error: typeof e === "object" && e ? `${e.name}: ${e.message}` : String(e) };
+          }
+          r.value.dispose();
+          for (;;) {
+            const j = rt.executePendingJobs();
+            if (j.error) {
+              const e = ctx.dump(j.error);
+              j.error.dispose();
+              return { ok: false, error: typeof e === "object" && e ? `${e.name}: ${e.message}` : String(e) };
+            }
+            if (j.value === 0) break;
+          }
+          const v = ctx.getProp(ctx.global, "__result");
+          const out = ctx.dump(v);
+          v.dispose();
+          return { ok: true, value: String(out) };
+      }
+    },
+    trapProgram: asyncResultScript,
   };
 }
 
@@ -492,6 +625,33 @@ export function quickjsBuilt(flavor: "bellard" | "ng"): Engine {
       };
     },
     bridgeProgram: resultScript,
+    limitsUsed: "JS_SetMemoryLimit, an interrupt handler with a deadline, JS_SetMaxStackSize (48 KiB, of its 64 KiB stack), in driver.c",
+    async limited(l) {
+      const { x, put } = await instantiate();
+      x.bench_set_limits(l.memory, l.ms);
+      return {
+        async run(program) {
+          const [pp, pl] = put(program);
+          let ok: number;
+          try {
+            ok = x.bench_eval(pp, pl);
+          } catch (e) {
+            // A wasm trap: the instance is in an unknown state.
+            return { ok: false, error: `wasm trap: ${errorText(e)}` };
+          }
+          x.free(pp);
+          const s = dec.decode(new Uint8Array(x.memory.buffer, x.bench_result_ptr(), x.bench_result_len()));
+          return ok === 0 ? { ok: true, value: s } : { ok: false, error: s };
+        },
+        memory: () => x.memory.buffer.byteLength,
+        dispose: () => {
+          try {
+            x.bench_free();
+          } catch {}
+        },
+      };
+    },
+    trapProgram: asyncResultScript,
   };
 }
 
@@ -594,10 +754,33 @@ export function monty(): Engine {
       };
     },
     bridgeProgram: (body) => body,
+    limitsUsed: "its ResourceLimits: maxFeedDurationSecs and maxMemory; its default recursion limit",
+    async limited(l) {
+      const { dispatch, memories } = await instantiateMonty({ maxFeedDurationMicros: BigInt(l.ms * 1000), maxMemoryBytes: BigInt(l.memory) });
+      return {
+        async run(program) {
+          let r: any;
+          try {
+            r = dispatch({ tag: "feed", val: { code: program, inputs: [], values: { nodes: [] }, skipTypeCheck: true, cwd: "/" } });
+          } catch (e) {
+            return { ok: false, error: `wasm trap: ${errorText(e)}` };
+          }
+          const bad = r.events.find((e: any) => e.tag === "error" || e.tag === "fatal-error");
+          if (bad) return { ok: false, error: `${bad.tag}: ${typeof bad.val === "string" ? bad.val : (bad.val.message ?? bad.val.traceback)}` };
+          const done = r.events.find((e: any) => e.tag === "complete");
+          if (!done) return { ok: false, error: `stopped with ${r.events.map((e: any) => e.tag).join(", ")}` };
+          const node = done.val.values.nodes[done.val.value];
+          return { ok: true, value: node.tag === "text" ? node.val : JSON.stringify(node) };
+        },
+        memory: () => memories.reduce((s, m) => s + m.buffer.byteLength, 0),
+        dispose() {},
+      };
+    },
+    trapProgram: (body) => body,
   };
   return engine;
 
-  async function instantiateMonty() {
+  async function instantiateMonty(limits?: Record<string, bigint>) {
     const memories: WebAssembly.Memory[] = [];
     const core = async (m: WebAssembly.Module, imports: WebAssembly.Imports) => {
       const i = await WebAssembly.instantiate(m, imports);
@@ -617,7 +800,7 @@ export function monty(): Engine {
       if (bad) throw new Error(typeof bad.val === "string" ? bad.val : bad.val.traceback || bad.val.message);
       return r;
     };
-    ok(dispatch({ tag: "configure", val: { scriptName: "bench.py", typeCheck: false, typeCheckFormat: "concise", typeCheckColor: false } }));
+    ok(dispatch({ tag: "configure", val: { scriptName: "bench.py", typeCheck: false, typeCheckFormat: "concise", typeCheckColor: false, ...(limits ? { limits } : {}) } }));
     return { dispatch, ok, memories };
   }
 }
@@ -707,6 +890,23 @@ export function psychoscript(): Engine {
       };
     },
     bridgeProgram: (body) => body,
+    limitsUsed: "limits.timeoutMs; its fixed caps (strings of 2^24 characters, arrays of 10 million elements, 32 levels across the host boundary); it has no memory limit",
+    limited(l) {
+      const rt = api.Runtime.make({ limits: { timeoutMs: l.ms } });
+      return {
+        async run(program) {
+          try {
+            const r = await rt.execute(program);
+            return r.ok ? { ok: true, value: String(r.value) } : { ok: false, error: `${r.error.kind}: ${r.error.message}` };
+          } catch (e) {
+            return { ok: false, error: errorText(e) };
+          }
+        },
+        memory: () => null,
+        dispose() {},
+      };
+    },
+    trapProgram: (body) => body,
   };
 }
 

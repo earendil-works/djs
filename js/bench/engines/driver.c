@@ -11,9 +11,15 @@
  * reads in place, or a typed array's bytes by pointer. And a sync host function `tool`
  * that passes its argument out as JSON and takes its result back as JSON or a string
  * through the import `env.bench_host`.
+ *
+ * For the runaway-script test (js/bench/engines/traps.ts), bench_set_limits applies
+ * QuickJS's own limits: JS_SetMemoryLimit and an interrupt handler that stops an
+ * evaluation past its time budget. Without that call neither is set; the stack limit
+ * (JS_SetMaxStackSize) always is, to fit the module's stack.
  */
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "quickjs.h"
 
 static JSRuntime *rt;
@@ -47,12 +53,42 @@ static JSValue tool(JSContext *c, JSValueConst this_val, int argc, JSValueConst 
 __attribute__((export_name("bench_new"))) int bench_new(void) {
   rt = JS_NewRuntime();
   if (!rt) return 1;
+  /* The module's whole C stack is 64 KiB (wasm-ld's default), below QuickJS's default
+   * limit of 1 MiB: with that, a deep recursion runs off the stack instead of throwing. */
+  JS_SetMaxStackSize(rt, 48 * 1024);
   ctx = JS_NewContext(rt);
   if (!ctx) return 1;
   JSValue g = JS_GetGlobalObject(ctx);
   JS_SetPropertyStr(ctx, g, "tool", JS_NewCFunction(ctx, tool, "tool", 1));
   JS_FreeValue(ctx, g);
   return 0;
+}
+
+/* The current evaluation's deadline in ns of CLOCK_MONOTONIC, 0 for none. */
+static long long budget_ns, deadline_ns;
+
+static long long now_ns(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (long long)t.tv_sec * 1000000000 + t.tv_nsec;
+}
+
+/* QuickJS-NG passes the context, Bellard's QuickJS the runtime. */
+#ifdef QJS_VERSION_MAJOR
+static int interrupt(JSContext *r, void *opaque) {
+#else
+static int interrupt(JSRuntime *r, void *opaque) {
+#endif
+  (void)r;
+  (void)opaque;
+  return deadline_ns != 0 && now_ns() > deadline_ns;
+}
+
+/* `memory` bytes of heap, `ms` per bench_eval; 0: no limit. */
+__attribute__((export_name("bench_set_limits"))) void bench_set_limits(size_t memory, int ms) {
+  if (memory) JS_SetMemoryLimit(rt, memory);
+  budget_ns = (long long)ms * 1000000;
+  if (ms) JS_SetInterruptHandler(rt, interrupt, NULL);
 }
 
 __attribute__((export_name("bench_free"))) void bench_free(void) {
@@ -89,6 +125,7 @@ static int fail(void) {
 
 /* `p` is NUL-terminated at `n` (JS_Eval needs it). */
 __attribute__((export_name("bench_eval"))) int bench_eval(const char *p, size_t n) {
+  deadline_ns = budget_ns ? now_ns() + budget_ns : 0;
   JSValue v = JS_Eval(ctx, p, n, "<bench>", JS_EVAL_TYPE_GLOBAL);
   if (JS_IsException(v)) return fail();
   JS_FreeValue(ctx, v);

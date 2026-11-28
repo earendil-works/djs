@@ -30,12 +30,18 @@ usage:
                                       times over the codemode workload set; per engine module
                                       sizes, compile time, idle memory and startup, per workload
                                       run time and memory (medians of the 3 runs)
+  scripts/status.py engines --engines a,b
+                                      the same for these engines only (run.ts names or keys):
+                                      their keys, their load as engines/<engine>/load, no ops
+                                      and bridge for the others; to add an engine without
+                                      re-recording the rest
   scripts/status.py ops               js/bench/engines/ops.ts three times (djs and the two QuickJS
                                       releases): per operation djs's time and the best QuickJS
                                       build's (medians); `engines` runs it too
   scripts/status.py bridge            js/bench/engines/bridge.ts three times: per payload and engine
                                       the time and memory of passing it in and out, per end-to-end
-                                      case the run time (medians); `engines` runs it too
+                                      case the run time (medians); `engines` runs it too;
+                                      --engines a,b as for `engines`
   scripts/status.py all               size, speed, startup, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
@@ -302,8 +308,9 @@ def bench():
     return list(groups.items())
 
 
-def engines():
-    """`engines/...` keys from three runs of js/bench/engines/run.ts (medians)."""
+def engines(only=None):
+    """`engines/...` keys from three runs of js/bench/engines/run.ts (medians); `only`: a
+    comma-separated list of engines, whose load goes to `engines/<engine>/load`."""
     import json
     subprocess.run([os.path.join(ROOT, "scripts/bench-engines.sh"), "--setup"], cwd=ROOT, check=True)
     out = os.path.join(ROOT, "work/scratch/status-engines")
@@ -311,7 +318,8 @@ def engines():
     runs = []
     for i in range(3):
         f = os.path.join(out, f"run{i}.json")
-        r = subprocess.run(["node", "js/bench/engines/run.ts", "--json", f], cwd=ROOT, capture_output=True, text=True)
+        sel = ["--engines", only] if only else []
+        r = subprocess.run(["node", "js/bench/engines/run.ts", "--json", f, *sel], cwd=ROOT, capture_output=True, text=True)
         # Exit 1: an engine's result differs from node's: a broken comparison, not a number.
         if r.returncode != 0:
             sys.exit(f"status.py: js/bench/engines/run.ts failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
@@ -320,12 +328,17 @@ def engines():
     vals = {}
 
     def put(k, v):
-        vals.setdefault(k, []).append(v)
+        # None: a number the engine has not (psychoscript's linear memory).
+        if v is not None:
+            vals.setdefault(k, []).append(v)
     slug = lambda name: re.sub(r"-$", "", re.sub(r"[^a-z0-9]+", "-", name.lower()))
     for run in runs:
-        put("engines/load", run["load"][0])
+        if not only:
+            put("engines/load", run["load"][0])
         for e in run["engines"]:
             k = f"engines/{slug(e['name'])}"
+            if only:
+                put(f"{k}/load", run["load"][0])
             for part in ("wasm", "glue"):
                 for m in ("bytes", "gzip", "brotli"):
                     put(f"{k}/{part}-{m}", e[part][m])
@@ -338,9 +351,10 @@ def engines():
     new = {}
     for k, xs in vals.items():
         v = median(xs)
-        new[k] = round(v, 1) if k == "engines/load" else round(v, 3) if k.endswith("-ms") else int(v)
-    new.update(ops())
-    new.update(bridge())
+        new[k] = round(v, 1) if k.endswith("/load") else round(v, 3) if k.endswith("-ms") else int(v)
+    if not only:
+        new.update(ops())
+    new.update(bridge(only))
     return new
 
 
@@ -371,29 +385,35 @@ def ops():
     return {k: round(median(xs), 1 if k.endswith("load") else 3) for k, xs in vals.items()}
 
 
-def bridge():
+def bridge(only=None):
     """`engines/bridge/...` keys from three runs of js/bench/engines/bridge.ts (medians):
     per engine and payload `in-ms`, `out-ms`, `in-memory`, `out-memory` (each its best
-    path's), per case `e2e/<case>-ms`, the payloads' sizes and the load."""
+    path's), per case `e2e/<case>-ms`, the payloads' sizes and the load (with `only`, a
+    comma-separated list of engines: their keys, the load as `engines/bridge/<engine>/load`)."""
     import json
     f = os.path.join(ROOT, "work/scratch/status-engines/bridge.json")
     os.makedirs(os.path.dirname(f), exist_ok=True)
     vals = {}
 
     def put(k, v):
-        vals.setdefault(k, []).append(v)
+        if v is not None:
+            vals.setdefault(k, []).append(v)
     slug = lambda name: re.sub(r"-$", "", re.sub(r"[^a-z0-9]+", "-", name.lower()))
     for _ in range(3):
-        r = subprocess.run(["node", "js/bench/engines/bridge.ts", "--json", f], cwd=ROOT, capture_output=True, text=True)
+        sel = ["--engines", only] if only else []
+        r = subprocess.run(["node", "js/bench/engines/bridge.ts", "--json", f, *sel], cwd=ROOT, capture_output=True, text=True)
         # Exit 1: a value read back differs, or a case's result: a broken comparison.
         if r.returncode != 0:
             sys.exit(f"status.py: js/bench/engines/bridge.ts failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
         run = json.load(open(f))
-        put("engines/bridge/load", run["load"])
-        for p in run["payloads"]:
-            put(f"engines/bridge/payload/{p['name']}/bytes", p["bytes"])
+        if not only:
+            put("engines/bridge/load", run["load"])
+            for p in run["payloads"]:
+                put(f"engines/bridge/payload/{p['name']}/bytes", p["bytes"])
         for e in run["engines"]:
             k = f"engines/bridge/{slug(e['name'])}"
+            if only:
+                put(f"{k}/load", run["load"])
             put(f"{k}/idle-memory", e["idleMemory"])
             for p, cells in e["payloads"].items():
                 if cells is None:
@@ -417,6 +437,15 @@ def loaded(new, group):
 
 
 START_LOAD = os.getloadavg()[0]
+
+
+def only_engines(args):
+    """`--engines a,b` after a subcommand, or None."""
+    if len(args) == 3 and args[1] == "--engines":
+        return args[2]
+    if len(args) != 1:
+        sys.exit(__doc__)
+    return None
 
 
 def main():
@@ -443,13 +472,13 @@ def main():
         for at, new in bench():
             save(rows, new, at)
     elif args[0] == "engines":
-        save(rows, engines())
+        save(rows, engines(only_engines(args)))
     elif args[0] == "ops":
         build()
         save(rows, ops())
     elif args[0] == "bridge":
         subprocess.run([os.path.join(ROOT, "scripts/bench-engines.sh"), "--setup"], cwd=ROOT, check=True)
-        save(rows, bridge())
+        save(rows, bridge(only_engines(args)))
     elif args[0] == "all":
         save(rows, size(rows))
         save(rows, loaded(speed(3), "speed"))
