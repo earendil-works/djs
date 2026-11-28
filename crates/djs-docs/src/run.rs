@@ -10,7 +10,7 @@ use djs_core::bytecode::template::disasm_template;
 use djs_core::compiler::{CompileOptions, compile};
 use djs_core::heap::Heap;
 use djs_core::value::Value;
-use djs_core::vm::{Status, Vm, VmOptions};
+use djs_core::vm::{Status, VmOptions};
 
 const CONSOLE_LOG: u32 = 1;
 
@@ -40,9 +40,9 @@ pub fn run(src: &str, ts: bool) -> String {
     let this = Value::object(vm.global());
     vm.call(main, this, &[]).expect("the VM is idle");
     let mut out = String::new();
-    // Suspend every SLICE units of fuel and resume in a new VM from the heap image, like
-    // the gate's stress mode: an example also proves that it survives suspension.
-    // Examples are small; MAX_FUEL only stops a runaway loop.
+    // Stop every SLICE units of fuel and go on: an example also shows that its output does
+    // not depend on where a run stops. Examples are small; MAX_FUEL only stops a runaway
+    // loop.
     const SLICE: u64 = 50;
     const MAX_FUEL: u64 = 1_000_000;
     let mut spent = 0;
@@ -50,11 +50,7 @@ pub fn run(src: &str, ts: bool) -> String {
         match vm.run(SLICE) {
             Status::Done(_) | Status::Idle => break,
             Status::OutOfFuel if spent >= MAX_FUEL => return out + "(out of fuel)\n",
-            Status::OutOfFuel => {
-                spent += SLICE;
-                let o = vm.options();
-                vm = Vm::from_bytes(vm.image().to_vec(), o).expect("a valid heap image");
-            }
+            Status::OutOfFuel => spent += SLICE,
             Status::Threw(e) => {
                 out.push_str(&format!("Uncaught {}\n", vm.display(e)));
                 return out;

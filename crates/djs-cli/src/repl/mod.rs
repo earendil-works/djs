@@ -1,5 +1,5 @@
-//! `djs repl`: an interactive REPL for debugging the engine and scripts (issue 0064,
-//! docs/cli.md). Built only on the public `Vm` API.
+//! `djs repl`: an interactive REPL for debugging the engine and scripts (issue 0064, the
+//! guide's cli.md). Built only on the public `Vm` API.
 //!
 //! Every input runs in fuel slices; between slices the REPL checks for Ctrl-C, the fuel
 //! limit and `.suspend-every`. With stdin not a terminal it reads lines without prompts
@@ -28,7 +28,8 @@ use term::{Input, Terminal};
 const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--frozen]\n\
                 [--debugger] [--tools answers.json]\n\
   --ts            parse inputs as TypeScript (.ts toggles it)\n\
-  --tools FILE    answer tools.x(...) calls from FILE (docs/cli.md); others wait for .resolve\n\
+  --tools FILE    answer tools.x(...) calls from FILE (docs/guide/cli.md); others wait\n\
+                  for .resolve\n\
   --gc-stress     collect garbage at every safepoint\n\
   --no-history    do not read or write the history file ($DJS_HISTORY, ~/.djs_history)\n\
   --frozen        the VMs have frozen builtins (D2304)\n\
@@ -42,8 +43,7 @@ const HELP: &str = "\
 .disasm <code>        bytecode: of the function a code expression evaluates to, or of
                       the code itself (compiled, not run) when it is not an expression
 .fuel [n|off]         fuel used by the last input; with n, a fuel limit per input
-.suspend-every [n|off] run in slices of n fuel; at every stop, show where, and continue
-                      in a fresh VM restored from the heap image
+.suspend-every [n|off] run in slices of n fuel; at every stop, show where, and go on
 .step [n|off]         pause every n fuel (default 1000) with a step> prompt: Enter
                       runs the next slice, c continues to the end, bt shows the
                       frames, fuel the fuel so far, q stops the input
@@ -674,9 +674,6 @@ impl Repl {
                         let bt = self.vm.backtrace();
                         let at = bt.lines().next().unwrap_or("").trim();
                         println!("[suspended, {used} fuel] {at}");
-                        let opts = self.vm.options();
-                        self.vm = Vm::from_bytes(self.vm.image().to_vec(), opts)
-                            .expect("a valid heap image");
                     }
                 }
                 Status::HostCall {

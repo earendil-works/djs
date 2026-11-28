@@ -28,10 +28,9 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--gc-stress] [--suspend-eve
                      --tools under ID like a tool (repeatable)\n\
   --ts               parse as TypeScript (the default for .ts files)\n\
   --gc-stress        collect garbage at every safepoint\n\
-  --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
-                     restored from the heap image\n\
+  --suspend-every N  run N fuel at a time, stopping and going on after each slice\n\
   --tools FILE       answer `tools.x()` calls from FILE, one at a time whenever the\n\
-                     run is idle (docs/cli.md)\n\
+                     run is idle (docs/guide/cli.md)\n\
   --snapshot-after K OUT\n\
                      write the run as a snapshot (D3720) to OUT at idle point K (from\n\
                      1) and stop; `djs resume OUT` continues it\n\
@@ -471,11 +470,8 @@ fn drive(
                 }
                 return 1;
             }
-            Status::OutOfFuel => {
-                // Everything is in the heap: continue in a fresh VM built from the image.
-                let o = vm.options();
-                vm = Vm::from_bytes(vm.image().to_vec(), o).expect("valid heap image");
-            }
+            // A slice ended (--suspend-every): the run goes on in the same VM.
+            Status::OutOfFuel => {}
             Status::HostCall {
                 call_id,
                 fn_id: MAKE_TOOL,

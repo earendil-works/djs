@@ -7,7 +7,7 @@
 //! `tools` is a Proxy over an object of made functions, keyed by identity. Reading a new
 //! name `read` calls the sync host function `make("tools.read")`, which creates an async
 //! host function with a fresh id; the Proxy keeps it. So a tool's id and identity live in
-//! the heap, and survive images.
+//! the heap, and travel with snapshots.
 //!
 //! Next to it, two globals of the test programs and the corpus's idle points (D2602):
 //! `print(...)`, a sync host call printed like `console.log`, and `later(v, rejected)`,
