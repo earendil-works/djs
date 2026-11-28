@@ -67,7 +67,7 @@ builtins, 191 KB) coded to 45 KB in a custom section. Module sizes measured at
 <!-- gen:status inventory -->
 | | count |
 | --- | ---: |
-| opcodes ([reference](ref-opcodes.md)) | 216 |
+| opcodes ([reference](ref-opcodes.md)) | 215 |
 | cell kinds ([reference](ref-cells.md)) | 26 |
 | intrinsics ([reference](ref-intrinsics.md)) | 473 |
 | builtins in `builtins/*.ts` | 458 |
@@ -92,7 +92,6 @@ instructions.
 | `bounds/instructions-max-pct` | 31.4 | 9041ad864d, 2026-11-21 |
 | `bounds/instructions-median-pct` | 23.5 | 9041ad864d, 2026-11-21 |
 | `bounds/load` | 3.3 | 9041ad864d, 2026-11-21 |
-| `compile/typescript-lazy-time-pct` | 57 | ab471c4906, 2026-11-21 |
 | `fuel/slice-us` | 8.6 | 211ecfb72c, 2026-11-21 |
 | `heap/append-10m-memory` | 33947648 | 51646c9e90, 2026-11-21 |
 | `heap/json5/dictionary` | 152.0 | 51646c9e90, 2026-11-21 |

@@ -274,7 +274,6 @@ def heap():
 # status key -> (numerator, denominator); the time of the first over that of the second, or
 # for throughputs (MB/s) the second's over the first's.
 BENCH = {
-    "compile/typescript-lazy-time-pct": ("compile/typescript.js lazy", "compile/typescript.js"),
     "wire/decode-vs-json-objects": ("wasm/parse_json 10k-objects", "wasm/decode 10k-objects"),
     "wire/decode-vs-json-string": ("wasm/parse_json 1mib-string", "wasm/decode 1mib-string"),
     "wire/read-vs-json-objects": ("wasm/json_stringify 10k-objects", "wasm/readValue 10k-objects"),

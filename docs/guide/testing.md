@@ -178,8 +178,6 @@ stops happen everywhere:
   restore changed something ([determinism](determinism.md)). The plain run also compiles
   each case through the compile cache, and the cached and the direct compile must leave
   the same heap.
-- **Lazy and eager compilation.** The stressed corpus runs with functions compiled at
-  their first call; test262 runs both lazily and eagerly, side by side.
 - **Native and wasm**: [`scripts/determinism/native-vs-wasm.sh`](../../scripts/determinism/native-vs-wasm.sh)
   runs the same programs in a native build and in djs-wasm and compares their images and
   fuel stop for stop ([wasm32 first](goals.md#wasm32-first)).
@@ -213,7 +211,7 @@ of tests hold it to that:
   binary data, cycles) to every idle point, snapshots it there, loads the snapshot into
   a fresh VM and goes on, both from each idle point alone and in a chain through all of
   them. The transcript must equal the uninterrupted run's, and nothing may be refused.
-  It runs once with eager and once with lazy compilation. The command line's tests run
+  The command line's tests run
   the same programs through its snapshot files, and the host package's tests suspend and
   resume runs through the `Sandbox`.
 - **A negative control.** A loader made to lose an array's elements must make that

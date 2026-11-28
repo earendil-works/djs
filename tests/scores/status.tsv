@@ -5,7 +5,6 @@ bounds/gzip	9222	9041ad864d	2026-11-21
 bounds/instructions-max-pct	31.4	9041ad864d	2026-11-21
 bounds/instructions-median-pct	23.5	9041ad864d	2026-11-21
 bounds/load	3.3	9041ad864d	2026-11-21
-compile/typescript-lazy-time-pct	57	ab471c4906	2026-11-21
 engines/bridge/djs/args/in-memory	393216	d0bc2eef16	2026-11-21
 engines/bridge/djs/args/in-ms	0.0023	d0bc2eef16	2026-11-21
 engines/bridge/djs/args/out-memory	393216	d0bc2eef16	2026-11-21

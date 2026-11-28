@@ -103,7 +103,6 @@ The call instructions all end in one routine that looks at the callee's object c
 | callee | what happens |
 | --- | --- |
 | a closure of bytecode | a frame is pushed and the loop continues at its first instruction |
-| a lazy closure | the same; its only instruction, `lazy`, compiles the body and continues in the same frame ([lazy functions](compiler.md#lazy-functions)) |
 | a builtin with a `@fast` entry | the entry runs in Rust and either completes the call or declines, and the call goes on as below |
 | a `@rust` builtin | its generated Rust function runs without a frame; at a conversion site it has the interpreter run `ToPrimitive` or `Get` in a frame and is called again ([builtins](builtins.md#rust-rust-straight-line-builtins)) |
 | a `@native` builtin | a **native frame** is pushed: a Rust state machine runs in it |

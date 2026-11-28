@@ -222,7 +222,6 @@ with them.
 | `jump8` | 210 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
 | `jump_if_false8` | 211 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
 | `jump_if_true8` | 212 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
-| `lazy` | 213 | – | 1 | 0 → 0 | Alloc | The whole code of a lazy template: compiles the function at its first call and continues in the compiled template, in the same frame. |
-| `super_call_frame` | 214 | Argc | 3 | imm0 → 1 | Call | `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments that run no code: constructs the active function's [[Prototype]] with the frame's new.target. |
-| `super_call_forward` | 215 | – | 1 | 0 → 1 | Call | `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with the frame's own arguments (no array). |
+| `super_call_frame` | 213 | Argc | 3 | imm0 → 1 | Call | `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments that run no code: constructs the active function's [[Prototype]] with the frame's new.target. |
+| `super_call_forward` | 214 | – | 1 | 0 → 1 | Call | `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with the frame's own arguments (no array). |
 <!-- /gen -->

@@ -13,8 +13,7 @@ never run are kept cheap, and what the missing tree costs.
 > scanning ahead or rewinding the lexer, never by undoing emitted code. Names are
 > emitted as placeholders and resolved in one pass after the whole unit is parsed, when
 > every declaration is known, and the result is one function template cell per function
-> in the heap. With lazy functions, a function's body is parsed at load but turned into
-> its final bytecode only at its first call.
+> in the heap.
 
 ## The pipeline
 
@@ -321,59 +320,18 @@ interpreter](interpreter.md#making-it-fast) fills.
 > in parse order. The cost is instruction count, which the peepholes, the interpreter's
 > fast paths and inline caches win back where it matters.
 
-## Lazy functions
+## Every function compiles at load
 
-Most of a compile is the second phase: resolving names, the re-emit with its peepholes,
-short forms and stack check, and writing the template. A function that never runs does
-not need any of it. A library defines many functions of which few are called, so djs can
-defer that phase to a function's first call.
+A script's functions are all compiled when it loads, the ones that never run too. The
+whole compile is the two phases above, once per script: every early error is reported
+then, and every function's template exists from the start.
 
-**What stays at load.** The whole unit is still parsed, with phase-1 code for every
-function. So every early error is reported when the script loads, never later, and
-resolution still sees every function: it knows which bindings inner functions capture,
-which therefore live in boxes, and the enclosing code is the same as in an eager
-compile. Only the second phase of a lazy function is skipped. Its template is a **lazy
-template**: the real flags, name, `length`, parameter count and capture descriptors,
-and as its code the single instruction `lazy`. Creating closures of it, and their
-`name`, `length` and `toString`, work as on any template.
-
-**What stays eager.** A function that is likely to run soon would only be parsed twice,
-so it is compiled with its unit: the top level, a function called where it is defined,
-a function or arrow passed straight to a call (`items.map(x => x.id)`), a parenthesized
-one (`(function () { ... })`, the usual hint for "runs soon"), async functions and
-generators, class constructors, a function that uses a name resolved through
-TypeScript declarations (a `const enum` member, a namespace member), and every builtin.
-
-**The first call.** The call enters a frame for the lazy template as usual and runs
-`lazy`. It parses the function's own source text again, as a unit of its own, with a
-stand-in for the enclosing function that binds one variable per capture, runs the second
-phase, switches the closure to the compiled template and continues in the same frame.
-Only the function's text is read, so the cost is proportional to the function, not to
-the script; the instruction charges fuel for it, one unit per 32 bytes of source. The
-compiled template is kept on the lazy one, so later closures of the same function pay a
-check, not a compile. Since the load already reported every error, nothing can fail at
-that point except memory.
-
-A function's code is the same whether it is compiled with its unit or at its first
-call. That matters for [snapshots](persistence.md): the loading VM compiles the run's
-scripts again, eagerly or lazily as its options say, and checks the code against the
-hashes the snapshot carries. So in a build with lazy functions, every function that may compile lazily has a
-constant pool of its own in every compile, and the rule for what is lazy looks only at
-the function and its parent's text, which a compile of the function alone sees too.
-
-**Where it is on.** Lazy compilation is a build feature and a per-VM option, off by
-default. Native builds have the feature, so an embedder can turn it on per VM; the wasm
-modules leave it out. An image that a host seals as a prelude, to start many runs from,
-compiles all its lazy functions first, so no run pays for them.
-
-> **Trade-off.** Parse twice over keeping a tree. Keeping the first parse's state for
-> later would need a second code format in the heap, which images would then have to
-> carry. Parsing again needs nothing stored: the source is kept anyway, for `toString`
-> and stack traces. The cost: a function that runs is parsed twice, so it costs more
-> than an eager compile, while a function that never runs costs well under one. Lazy
-> compilation wins where most functions never run (libraries: TypeScript's own
-> compiler, a single 9 MB file, loads in <!--n compile/typescript-lazy-time-pct .0-->57<!--/n-->% of the time) and loses on codemode
-> scripts, whose callbacks nearly all run, which is why the wasm modules leave it out.
+> **Trade-off.** Eager over deferring a function's second phase to its first call.
+> Deferring would make libraries load faster, where most functions never run, but
+> codemode scripts are small and nearly all their callbacks run, so it would parse them
+> twice. One way to compile also means one layout of the code: a waiting function's
+> bytecode is the same in every build and host, which is what lets
+> [snapshots](persistence.md) compare it by hash.
 
 ## What the missing tree costs
 
@@ -411,13 +369,9 @@ tests, and a Module goal for the [ES modules](language.md#modules) that native h
 - [`crates/djs-core/src/compiler/scan.rs`](../../crates/djs-core/src/compiler/scan.rs):
   the token scans that decide arrows and destructuring.
 - [`crates/djs-core/src/compiler/resolve.rs`](../../crates/djs-core/src/compiler/resolve.rs):
-  resolution, storage, the re-emit, constant pools and which functions are lazy;
+  resolution, storage, the re-emit and constant pools;
   [`compiler/peephole.rs`](../../crates/djs-core/src/compiler/peephole.rs): the
   peepholes.
-- [`crates/djs-core/src/compiler/lazy.rs`](../../crates/djs-core/src/compiler/lazy.rs):
-  compiling a lazy function at its first call;
-  [`interp/run/lazy.rs`](../../crates/djs-core/src/interp/run/lazy.rs): the `lazy`
-  instruction.
 - [`crates/djs-core/src/compiler/ts.rs`](../../crates/djs-core/src/compiler/ts.rs): the
   type skipper.
 - [`crates/djs-core/src/bytecode/ops.rs`](../../crates/djs-core/src/bytecode/ops.rs):
