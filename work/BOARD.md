@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0310 | Inspecting a snapshot: what suspended, as a tree (then 0311, same agent) | pview2 | .worktrees/pview2 |
+| 0311 | Snapshots in the docs: see what suspends, copy it, restore it | pview2 | .worktrees/pview2 |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -20,7 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0311 | Snapshots in the docs: see what suspends, copy it, restore it | 0310 |
 | - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
@@ -53,6 +52,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0310 | Inspecting a snapshot: what suspended, in JavaScript terms (describe, --json, inspectSnapshot) | 706d2a64 (agent pview2; D3760; ABI 15; feature `inspect` off the shipped module; parameter names in debug info; shipped +102 B gz) |
 | 0309 | One meaning per word: images and snapshots | a5c3aa1d (agent pname; D3756; guide snapshots.md (run) / images.md; base image; djs-embed Image (Gondolin renames listed in the issue)) |
 | 0308 | Docs and tooling cleanup after the dump removal | 9de44719 (agent pclean; D3753-D3755; docs/cli.md, docs/host.md folded into the guide; dump research deleted; decisions index pruned; unsafe-heap difftest leg 38 -> 0.7 CPU-s) |
 | 0307 | Shipped-module trims; legacy decorators gone | ca3fcd14 (agent pclean; D3750-D3752; ABI 14; 509,843 -> 498,108 B gz; describe/callSite docs-only; strip-types feature) |
