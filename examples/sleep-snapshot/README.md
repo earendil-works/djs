@@ -1,16 +1,16 @@
-# sleep-snapshot: suspend a run while a host tool sleeps, continue it somewhere else
+# sleep-snapshot: snapshot a run while a host tool sleeps, continue it somewhere else
 
 A host (node) gives a script one tool, `tools.sleep(ms)`, which waits on the host side. The
 script calls it twice, 1000 ms each, from a helper inside a loop. While the first call is
-open, the VM has nothing to do: it is **idle**, and the host suspends the run into a
+open, the VM has nothing to do: it is **idle**, and the host writes the run as a
 **snapshot**: the run's state as data, the functions stopped in the middle of running
 included, with the open call and the host's own state of it (here: when the sleep is due).
-The host then throws the sandbox away (or exits), and resumes the snapshot in a new
-sandbox (or a new process), which sleeps only what is left of the first second. The
-script continues after its `await` as if nothing had happened.
+The host then throws the sandbox away (or exits), and loads the snapshot into a new
+sandbox (or a new process), which settles the sleep when what is left of the first second
+has passed. The script continues after its `await` as if nothing had happened.
 
 ```sh
-examples/sleep-snapshot/run.sh              # one process: suspend, drop the sandbox, resume
+examples/sleep-snapshot/run.sh              # one process: snapshot, drop the sandbox, load
 examples/sleep-snapshot/run.sh --restart    # two processes: the first writes out/sleep.snapshot and exits
 examples/sleep-snapshot/run.sh 300          # a shorter sleep
 ```
@@ -39,7 +39,7 @@ console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 
 return results;
 ```
 
-When the host suspends it, during the first sleep, three things are in the middle of
+When the host snapshots it, during the first sleep, three things are in the middle of
 running:
 
 - `step("first", 1000)`, stopped at its `await tools.sleep(ms)`;
@@ -54,52 +54,38 @@ running:
 All of it, besides the script and the argument handling:
 
 ```ts
-const sleep = {
-  async call(ms) {
-    const due = Date.now() + Number(ms);
-    this.state = { due };                    // the call's state: a snapshot keeps it
-    await until(due, this.signal);
-    return `slept ${ms} ms`;
-  },
-  async resume({ due }, call) {              // after a load, with the state it was saved with
-    await until(due, call.signal);
-    return `slept ${call.args[0]} ms`;
-  },
-} satisfies AsyncHostFunction<{ due: number }>;
-// The snapshot names the script it continues by name and hash; `sources` gives it back to
-// a process that did not run it.
-const options = {
-  asyncFunctions: { "tools.sleep": sleep },
-  sources: (name) => (name === "sleep.js" ? SCRIPT : undefined),
-};
+// `tools.sleep` is an async host function the host settles itself: the run lists its calls.
+const options = { asyncFunctions: { "tools.sleep": () => {} } };
 
-// Process 1: start the script, suspend it at its first idle point.
+// Process 1: start the script; at its first idle point the first sleep is open.
 const sandbox = await Sandbox.create(options);
-const snapshot = await sandbox.start(SCRIPT, { ms: 1000 }, { filename: "sleep.js" }).suspend({ sources: false });
+const run = sandbox.begin(SCRIPT, { ms: 1000 }, { filename: "sleep.js" });
+const [call] = run.calls;                     // { id: 2, fn: "tools.sleep", args: [1000] }
+// The host's state of the call, its deadline, goes into the snapshot with it.
+const snapshot = run.snapshot({ states: { [call.id]: { due: Date.now() + 1000 } } });
 sandbox.dispose();
 
-// Process 2, any time later: continue it.
-const task = await Sandbox.resume(snapshot, options);
-await task.result;                           // ["first: slept 1000 ms", "second: slept 1000 ms"]
+// Process 2, any time later: load it and settle each sleep at its deadline.
+const again = await Sandbox.create(options);
+const loaded = again.loadSnapshot(snapshot);
+while (loaded.state === "idle" && loaded.calls.length > 0) {
+  const [c] = loaded.calls;                    // a loaded call has its state
+  await until(c.state?.due ?? Date.now() + c.args[0]);
+  loaded.settle(c.id, { ok: true, value: `slept ${c.args[0]} ms` });
+  await loaded.advance();                     // runs to the next idle point or the end
+}
+loaded.value;                                 // ["first: slept 1000 ms", "second: slept 1000 ms"]
 ```
 
-`until(due, signal)` is a `setTimeout` to the deadline that the signal cancels.
+`until(due)` is a `setTimeout` to the deadline.
 
-The sandbox does the bookkeeping: `start` runs the script and calls `tools.sleep` when
-the script does; `suspend()` waits for the next idle point, asks every open call for its
-state (the function's `save` hook, by default the call's `state`), writes the snapshot and
-stops the run, aborting the calls' signals (so process 1 exits at once instead of waiting
-for its timer). `Sandbox.resume` loads the snapshot into a new sandbox made with the same
-options and continues each open call with its function's `resume` hook and the saved
-state; the run goes on by itself, and `task.result` is its outcome. Calls the script makes
-after the load (the second sleep) are ordinary calls of `call`.
-
-A host function without a `resume` hook (`{ call }`) is called again after a load, which
-suits calls without side effects; a plain function, with no hooks at all, has its open
-call rejected, since the sandbox cannot know whether calling it again is safe. A host that
-wants to decide each call itself drives the run with the lower-level API instead
-(`begin`, `settle`, `advance`, `Run.snapshot({ states })`, `sandbox.loadSnapshot(bytes)`;
-see docs/host.md).
+The run never calls `tools.sleep` itself: `begin` runs the script to its first idle point
+and lists the open call in `run.calls`; the host answers it with `settle` whenever it
+likes, and `advance` runs on to the next idle point. While the run is idle, `snapshot()`
+writes it, with the host's states of its open calls. `loadSnapshot` continues it in a new
+sandbox made with the same options: the run is idle on the same open call, with the same
+id and the state the host gave it. Calls the script makes after the load (the second
+sleep) are new calls, without a state.
 
 ## What the output looks like
 
@@ -109,20 +95,20 @@ are what the host prints about the snapshot it wrote (`sandbox.describeSnapshot`
 ```
 host: starting sleep.js with ms = 1000
   [vm] first sleeps 1000 ms
-host: suspended the run into examples/sleep-snapshot/out/sleep.snapshot (2491 bytes) and dropped the sandbox; it holds:
+host: snapshotted the run into examples/sleep-snapshot/out/sleep.snapshot (2884 bytes) and dropped the sandbox; it holds:
   | types          1813 bytes
   | strings         291 bytes
   | builtins          9 bytes
   | intrinsics        1 bytes
   | host              7 bytes
-  | scripts          13 bytes
+  | scripts         406 bytes
   | functions        29 bytes
   | records         249 bytes
   | vm               72 bytes
   | 18 strings (272 bytes of text), 8 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
   | builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% %ArrayIteratorPrototype%.next Array.prototype.push Function.prototype Array.prototype %ArrayIteratorPrototype%
   | flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-  | script 0: sleep.js, parameters ms (source by hash 4c7bfb155608b5b3)
+  | script 0: sleep.js, parameters ms (399 bytes of source)
   | host values: console tools tools.sleep() (and 0 members)
   | host data: {"states":[[2,{"due":1795813233385}]],"fuelUsed":110}
   | function 0:1..139 (bytecode)
@@ -145,7 +131,7 @@ host: the run returned [ 'first: slept 1000 ms', 'second: slept 1000 ms' ]
 
 The first sandbox printed only `first sleeps`; the `[vm]` lines after `resuming` come from
 the second one, which never ran the start of the script. It takes two seconds in all: the
-resumed first sleep waits only for the rest of its deadline. With `--restart` the halves
+loaded first sleep waits only for the rest of its deadline. With `--restart` the halves
 are two node processes, and the snapshot travels as a file.
 
 ## What the snapshot holds
@@ -171,17 +157,14 @@ their fields once, which is most of the bytes of so small a snapshot):
 - the builtins the records refer to by their paths (`Array.prototype.push`), never their
   contents.
 
-What the snapshot does not hold is as important:
+The snapshot also holds the **script**'s text (the `scripts` section), which the loading
+sandbox compiles again. What it does not hold is as important:
 
-- the **script** itself: only its name and the hash of its text (`suspend({ sources:
-  false })`), which the loading sandbox finds among the scripts this process ran or asks
-  the `sources` option for (the default, `sources: true`, stores the text: a larger
-  snapshot that loads anywhere);
 - the **host's values**: `console`, the namespace `tools` and the function `tools.sleep`
   are named, and the loading sandbox's own objects of those names take their place, so a
   snapshot never carries a host's data (pi's tool list, say) and loads only where the host
   gives those names again;
-- the **timer**: the host's, which the `resume` hook starts again from the saved
+- the **timer**: the host's, which the second host starts again from the saved
   deadline. The host's data in the snapshot (`host data`) is the open call's state and the
   fuel the run used so far, which the loaded run goes on counting from.
 

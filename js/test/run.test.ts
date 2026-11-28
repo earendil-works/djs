@@ -70,11 +70,14 @@ test("a snapshotted run loads with the same open calls", async () => {
   assert.deepEqual(out.lines, ["after 1"]);
 });
 
-test("resume refuses a snapshot that names host functions the sandbox lacks", async () => {
+test("loadSnapshot refuses a snapshot that names host functions the sandbox lacks", async () => {
   const module = await loadModule();
   const first = new Sandbox({ module, console: capture().console, asyncFunctions: { sleep: () => 0 } });
   const snap = first.begin(BODY, { ms: 5 }).snapshot();
-  await assert.rejects(Sandbox.resume(snap, { module }), /no host value or function sleep/);
+  first.dispose();
+  const other = new Sandbox({ module });
+  assert.throws(() => other.loadSnapshot(snap), /no host value or function sleep/);
+  other.dispose();
 });
 
 test("begin names the script for stack traces", async () => {

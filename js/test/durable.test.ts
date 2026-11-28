@@ -92,9 +92,9 @@ test("a value named like a host function, namespace or global is a misuse", asyn
   assert.throws(() => new Sandbox({ module, values: { console: [] } }), misuse);
   assert.throws(() => new Sandbox({ module, functions: { f: () => 0 }, globals: { g: "f" }, values: { g: 1 } }), misuse);
   assert.throws(() => new Sandbox({ module, values: { f: () => 0 } }), /value f: /);
-  // A value is a host value like a namespace: bindings can name it.
-  const sb = new Sandbox({ module, values: { DATA: { a: 1 } }, bindings: { data: "DATA" } });
-  assert.deepEqual(sb.run("return [data === DATA, data.a]"), [true, 1]);
+  // A value is a host value like a namespace: a module can export it.
+  const sb = new Sandbox({ module, values: { DATA: { a: 1 } }, modules: (m) => (m === "data" ? { exports: { data: "DATA" } } : undefined) });
+  assert.deepEqual(sb.run(`import { data } from "data"; return [data === DATA, data.a]`), [true, 1]);
   sb.dispose();
 });
 
@@ -167,10 +167,11 @@ test("converting functions are host values: one per identity, named in snapshots
     console: quiet,
     jsonBoundary: true,
     asyncFunctions: { "tools.read": () => 0, "@mcp/github#search_issues": () => 0 },
-    bindings: { search_issues: "@mcp/github#search_issues" },
+    modules: (m) => (m === "@mcp/github" ? { exports: { search_issues: "@mcp/github#search_issues" } } : undefined),
   };
   const sb = new Sandbox(opts);
   const code = `
+    import { search_issues } from "@mcp/github";
     const read = tools.read, search = search_issues;
     const a = await read({ at: new Date(0) });
     const b = await search({ q: "snapshots", seen: new Set([1]) });
@@ -246,14 +247,13 @@ test("a host function's RunExit ends the run: no catch, no finally, no more scri
   sb.dispose();
 });
 
-test("RunExit through an async call: rejected by the function in a task, settled by the host", async () => {
+test("RunExit through an async call: rejected by the function in runAsync, settled by the host", async () => {
   const sb = new Sandbox({
     module: await loadModule(),
     console: quiet,
     asyncFunctions: { "tools.quit": () => Promise.reject(new RunExit("bye")), "tools.ask": () => 0 },
   });
-  const task = sb.start("let n = 0; try { await tools.quit(); } catch { n = 1; } return n;");
-  assert.equal(await task.result, "bye");
+  assert.equal(await sb.runAsync("let n = 0; try { await tools.quit(); } catch { n = 1; } return n;"), "bye");
   const run = sb.begin("try { await tools.ask(); } catch { return 'caught'; } return 'answered';");
   run.settle(run.calls[0].id, { ok: false, value: new RunExit() });
   await run.advance();

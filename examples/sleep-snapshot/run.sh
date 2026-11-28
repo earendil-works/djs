@@ -1,8 +1,8 @@
 #!/bin/sh
 # Runs the example on the release module (scripts/build-wasm.sh: the shipped build):
-#   examples/sleep-snapshot/run.sh [ms]             one process: suspend, drop the sandbox, resume
-#   examples/sleep-snapshot/run.sh --restart [ms]   two processes: the first suspends into
-#                                                   out/sleep.snapshot and exits, the second resumes
+#   examples/sleep-snapshot/run.sh [ms]             one process: snapshot, drop the sandbox, load
+#   examples/sleep-snapshot/run.sh --restart [ms]   two processes: the first snapshots into
+#                                                   out/sleep.snapshot and exits, the second loads it
 set -e
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"

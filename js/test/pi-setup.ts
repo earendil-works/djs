@@ -27,7 +27,7 @@ export function piOptions(module: WebAssembly.Module, out: string[], fuel = 1e9,
     frozenBuiltins: true,
     typescript: true,
     console: { log, info: log, warn: log, error: log, debug: log },
-    unhandledRejections: "collect",
+    unhandledRejections: "ignore",
     functions: {
       text: (v: unknown) => void out.push(`text ${typeof v === "string" ? v : JSON.stringify(v)}`),
       image: () => {},
@@ -60,7 +60,6 @@ export function answer(run: Run): void {
  * output, outcome and the snapshots' sizes.
  */
 export async function piRun(module: WebAssembly.Module, code: string, moves: boolean, fuel?: number, extra: Partial<SandboxOptions> = {}) {
-  let k = 0;
   const out: string[] = [];
   let sb = new Sandbox(piOptions(module, out, fuel, extra));
   let run = sb.begin(code, {}, { filename: "codemode.js", start: false });
@@ -70,8 +69,7 @@ export async function piRun(module: WebAssembly.Module, code: string, moves: boo
     await run.advance();
     while (run.state === "idle") {
       if (moves) {
-        // Every other one without the script's text: found by its hash.
-        const snap = run.snapshot({ sources: k++ % 2 === 0 });
+        const snap = run.snapshot();
         sizes.push(snap.length);
         hostText ||= new TextDecoder("latin1").decode(snap).includes("Does a thing");
         const used = run.fuelUsed;

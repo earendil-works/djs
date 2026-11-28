@@ -108,6 +108,7 @@ test("host functions", async () => {
         throw new TypeError("nope");
       },
       bad: () => () => 1,
+      twice: (x) => (x as number) * 2,
     },
   });
   assert.equal(sb.run("return add(2, 3) * 10"), 50);
@@ -121,7 +122,6 @@ test("host functions", async () => {
   // A result the wire format cannot carry becomes an error in the VM.
   assert.throws(() => sb.run("bad(); return 1"), /cannot encode a function/);
   // The sandbox is still usable after errors thrown in the VM.
-  sb.defineFunction("twice", (x) => (x as number) * 2);
   assert.equal(sb.run("return twice(21)"), 42);
   sb.dispose();
 });
@@ -356,11 +356,11 @@ test("unhandled rejections", async () => {
     (e: unknown) => e instanceof SandboxError && e.kind === "threw" && e.message === "Possibly unhandled promise rejection: TypeError: lost",
   );
   assert.equal(thrower.run("return 'usable'"), "usable");
-  const collector = await Sandbox.create({ unhandledRejections: "collect" });
-  collector.run("Promise.reject(3); Promise.reject('four')");
-  assert.deepEqual(collector.takeUnhandledRejections(), [3, "four"]);
-  assert.deepEqual(collector.takeUnhandledRejections(), []);
-  for (const s of [warn, thrower, collector]) s.dispose();
+  const c2 = collect();
+  const ignorer = await Sandbox.create({ unhandledRejections: "ignore", console: c2.console });
+  assert.equal(ignorer.run("Promise.reject(3); Promise.reject('four'); return 5"), 5);
+  assert.deepEqual(c2.lines, []);
+  for (const s of [warn, thrower, ignorer]) s.dispose();
 });
 
 test("syntax errors", async () => {
@@ -405,8 +405,8 @@ test("out of memory is a clean error", async () => {
 });
 
 test("fuel budget", async () => {
-  const sb = await Sandbox.create({ fuelSlice: 10_000, maxFuel: 200_000 });
-  sb.setGlobal("kept", 41);
+  const sb = await Sandbox.create({ fuelSlice: 10_000, maxFuel: 200_000, functions: { f: () => 1 } });
+  sb.run("globalThis.kept = 41");
   assert.throws(() => sb.run("for (;;) {}"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
   // The call was abandoned (vm_abort): the sandbox is usable, its globals intact.
   assert.equal(sb.run("return kept + 1"), 42);
@@ -414,7 +414,6 @@ test("fuel budget", async () => {
   assert.equal(sb.run("return 'again'"), "again");
   // A loop of sync host calls uses up the budget too: each call ends a slice early, and
   // the fuel is counted across them (D2702).
-  sb.defineFunction("f", () => 1);
   assert.throws(() => sb.run("for (;;) f()"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
   assert.equal(sb.run("return f() + 1"), 2);
   sb.dispose();
@@ -465,12 +464,12 @@ test("large host strings land in the heap in place when ASCII (D2551), others th
 
 test("slices of a long text reach the host and survive snapshots (D2542)", async () => {
   const text = Array.from({ length: 200 }, (_, i) => `line ${i} `.padEnd(60, "x")).join("\n");
-  const sb = await Sandbox.create({ asyncFunctions: { wait: () => 0 } });
   const seen: unknown[] = [];
-  sb.defineFunction("see", (v) => {
+  const see = (v: unknown) => {
     seen.push(v);
     return null;
-  });
+  };
+  const sb = await Sandbox.create({ functions: { see }, asyncFunctions: { wait: () => 0 } });
   sb.run(`globalThis.lines = text.split("\\n"); globalThis.doc = JSON.parse(json); see([lines[3], doc.a]);`, {
     text,
     json: JSON.stringify({ a: text.slice(0, 300), b: [1, 2] }),

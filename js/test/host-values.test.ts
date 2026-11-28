@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { type AsyncHostFunction, type ConsoleLike, loadModule, Opaque, type Run, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
+import { type ConsoleLike, loadModule, Opaque, type Run, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
 
 const quiet = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -187,10 +187,8 @@ test("namespaces are frozen and list their members in definition order", async (
       console: quiet,
       jsonBoundary,
       functions: { "tools.b": () => 1, "models.list": () => [] },
-      asyncFunctions: { "tools.a": () => 2, "tools.c": () => 3 },
+      asyncFunctions: { "tools.a": () => 2, "tools.c": () => 3, "tools.late": () => 4 },
     });
-    // Defined before the first script runs: still a member.
-    sb.defineFunction("tools.late", () => 4);
     const out = sb.run(`
       // (A codemode body is strict code: the writes throw.)
       const writes = [];
@@ -201,11 +199,6 @@ test("namespaces are frozen and list their members in definition order", async (
         Object.isFrozen(console), "extra" in models, writes];
     `);
     assert.deepEqual(out, [["b", "a", "c", "late"], ["log", "info", "warn", "error", "debug"], true, true, true, false, [true, true, true, true]]);
-    // A namespace is frozen once a script ran: no more members.
-    assert.throws(() => sb.defineFunction("tools.later", () => 5), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
-    // A new namespace is frozen before the next script.
-    sb.defineFunction("more.x", () => 6);
-    assert.deepEqual(sb.run("return [more.x(), Object.isFrozen(more)]"), [6, true]);
     sb.dispose();
   }
 });
@@ -216,8 +209,8 @@ test("frozen namespaces after a snapshot and load; a module namespace is frozen 
     module,
     console: quiet,
     frozenBuiltins: true,
-    asyncFunctions: { "tools.ask": () => 0, "tools.tell": () => 0 },
-    modules: (s) => (s === "@mcp/x" ? { exports: { one: {}, two: "tools.tell" } } : undefined),
+    asyncFunctions: { "tools.ask": () => 0, "tools.tell": () => 0, "@mcp/x#one": () => 0 },
+    modules: (s) => (s === "@mcp/x" ? { exports: { one: "@mcp/x#one", two: "tools.tell" } } : undefined),
   };
   const sb = new Sandbox(opts);
   const run = sb.begin(`
@@ -317,24 +310,23 @@ test("a loaded run ends when its result settles too", async () => {
   again.dispose();
 });
 
-test("runAsync and tasks end when the result settles and abort the open calls' signals", async () => {
+test("runAsync ends when the result settles; a late result changes nothing", async () => {
   const module = await loadModule();
-  const signals: AbortSignal[] = [];
   let release!: () => void;
   const hold = new Promise<void>((r) => (release = r));
-  const slow: AsyncHostFunction = {
-    async call() {
-      signals.push(this.signal);
-      await hold;
-      return "late";
-    },
+  let calls = 0;
+  const slow = async () => {
+    calls++;
+    await hold;
+    return "late";
   };
-  const sb = new Sandbox({ module, console: quiet, frozenBuiltins: true, asyncFunctions: { "tools.slow": slow } });
+  const sb = new Sandbox({ module, console: quiet, frozenBuiltins: true, asyncFunctions: { "tools.slow": slow, "tools.fast": () => 1 } });
+  // Ended before an idle point: the call is never made.
   assert.equal(await sb.runAsync("tools.slow(); return 'x'"), "x");
-  assert.deepEqual(signals.map((s) => s.aborted), [true]);
-  const task = sb.start("tools.slow(); await null; return 'y'");
-  assert.equal(await task.result, "y");
-  assert.deepEqual(signals.map((s) => s.aborted), [true, true]);
+  assert.equal(calls, 0);
+  // Made at the first idle point, still running when the result settles: dropped.
+  assert.equal(await sb.runAsync("tools.slow(); return 'y' + await tools.fast()"), "y1");
+  assert.equal(calls, 1);
   release();
   await hold;
   // The late results change nothing.

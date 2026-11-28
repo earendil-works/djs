@@ -44,15 +44,33 @@ import { never } from "parsed";
   assert.throws(() => leadingImports("import { a from 'x'"), /expecting/);
 });
 
-/** The test modules: a module with functions defined on first import, one naming the sandbox's own functions. */
+/** The test modules, naming the sandbox's functions (`host`). */
 function modules(seen: string[] = []): (spec: string) => HostModule | undefined {
+  const named = (spec: string, names: string[]) => Object.fromEntries(names.map((n) => [n, `${spec}#${n}`]));
   return (spec) => {
     seen.push(spec);
-    if (spec === "@mcp/github") return { exports: { search_issues: {}, get_issue: {}, default: {} } };
-    if (spec === "@mcp/linear") return { exports: { create_issue: {}, list: {} } };
-    if (spec === "local") return { exports: { read: "tools.read", now: { sync: true, fn: () => 7 } } };
+    if (spec === "@mcp/github") return { exports: named(spec, ["search_issues", "get_issue", "default"]) };
+    if (spec === "@mcp/linear") return { exports: named(spec, ["create_issue", "list"]) };
+    if (spec === "local") return { exports: { read: "tools.read", now: "local#now" } };
     if (spec === "tools") return { exports: { read: "tools.read" } };
     return undefined;
+  };
+}
+
+/** The host functions the modules export, and the modules. */
+function host(seen?: string[]): Partial<SandboxOptions> {
+  const f = () => 0;
+  return {
+    asyncFunctions: {
+      "tools.read": f,
+      "@mcp/github#search_issues": f,
+      "@mcp/github#get_issue": f,
+      "@mcp/github#default": f,
+      "@mcp/linear#create_issue": f,
+      "@mcp/linear#list": f,
+    },
+    functions: { "local#now": () => 7 },
+    modules: modules(seen),
   };
 }
 
@@ -61,8 +79,7 @@ test("imports bind host functions and namespaces; the resolver is asked once, la
   const sb = new Sandbox({
     module: await loadModule(),
     console: quiet,
-    asyncFunctions: { "tools.read": () => 0 },
-    modules: modules(seen),
+    ...host(seen),
   });
   const code = `
     import { search_issues, get_issue as get } from "@mcp/github";
@@ -87,7 +104,7 @@ test("imports bind host functions and namespaces; the resolver is asked once, la
 });
 
 test("an unknown module or export, a duplicate name or a misplaced import is a syntax error", async () => {
-  const sb = new Sandbox({ module: await loadModule(), console: quiet, modules: modules(), bindings: {}, asyncFunctions: { "tools.read": () => 0 } });
+  const sb = new Sandbox({ module: await loadModule(), console: quiet, ...host() });
   const syntax = (re: RegExp) => (e: unknown) => e instanceof SandboxError && e.kind === "syntax" && re.test(e.message);
   assert.throws(() => sb.begin(`import { a } from "@mcp/nope";`), syntax(/^SyntaxError: Cannot find module '@mcp\/nope' at 1:19$/));
   assert.throws(() => sb.begin(`\nimport { nope } from "@mcp/github";`), syntax(/does not provide an export named 'nope' at 2:10/));
@@ -106,7 +123,7 @@ test("an unknown module or export, a duplicate name or a misplaced import is a s
 });
 
 test("TypeScript bodies erase type-only imports", async () => {
-  const sb = new Sandbox({ module: await loadModule(), console: quiet, typescript: true, modules: modules() });
+  const sb = new Sandbox({ module: await loadModule(), console: quiet, typescript: true, ...host() });
   const code = `import type { Issue } from "@mcp/github";\nimport { type Other, list } from "@mcp/linear";\nconst n: number = 1;\nreturn [typeof list, n];`;
   assert.deepEqual(sb.run(code), ["function", 1]);
   sb.dispose();
@@ -129,27 +146,26 @@ return [made, search === search_issues, ns === linear, Object.keys(ns)];`;
     ["create_issue", "list"],
   ];
   const module = await loadModule();
-  for (const inline of [false, true]) {
+  {
     for (const json of [false, true]) {
       const opts = (): SandboxOptions => ({
         module,
         frozenBuiltins: true,
         console: quiet,
         jsonBoundary: json,
-        modules: modules(),
-        sources: (n) => (n === "imports.js" ? code : undefined),
+        ...host(),
       });
       for (let k = 0; k < 2; k++) {
-        const what = `sources ${inline} json ${json} at idle point ${k + 1}`;
+        const what = `json ${json} at idle point ${k + 1}`;
         const sb = new Sandbox(opts());
         const run = sb.begin(code, {}, { filename: "imports.js" });
         for (let i = 0; i < k; i++) {
           for (const c of run.calls) run.settle(c.id, { ok: true, value: answer(c.fn, c.args) });
           await run.advance();
         }
-        const snap = run.snapshot({ sources: inline });
+        const snap = run.snapshot();
         sb.dispose();
-        // A fresh sandbox has made none of the modules' values: the load makes them.
+        // A fresh sandbox has made none of the modules' namespaces: the load makes them.
         const again = new Sandbox(opts());
         const resumed = again.loadSnapshot(snap);
         await finish(resumed, answer);
@@ -163,7 +179,7 @@ return [made, search === search_issues, ns === linear, Object.keys(ns)];`;
 
 test("a snapshot that names a module the loading sandbox cannot resolve does not load", async () => {
   const code = `import { search_issues } from "@mcp/github"; return await search_issues();`;
-  const sb = new Sandbox({ module: await loadModule(), frozenBuiltins: true, console: quiet, modules: modules() });
+  const sb = new Sandbox({ module: await loadModule(), frozenBuiltins: true, console: quiet, ...host() });
   const snap = sb.begin(code).snapshot();
   sb.dispose();
   const without = new Sandbox({ module: await loadModule(), frozenBuiltins: true, console: quiet });

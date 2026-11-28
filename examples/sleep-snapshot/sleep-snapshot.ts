@@ -1,13 +1,13 @@
 // A host tool that sleeps on the host side, and a script that waits on it. While the sleep
-// is open the host suspends the run into a snapshot and continues it from the snapshot in
-// a new sandbox, here or in another process. See README.md.
+// is open the host snapshots the run and continues it from the snapshot in a new sandbox,
+// here or in another process. See README.md.
 //
 //   node examples/sleep-snapshot/sleep-snapshot.ts [both|start|resume] [ms]
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type AsyncHostFunction, Sandbox, type SandboxOptions } from "../../js/src/sandbox.ts";
+import { Sandbox, type SandboxOptions } from "../../js/src/sandbox.ts";
 
 export const SCRIPT = `
 async function step(label, ms) {
@@ -24,49 +24,51 @@ console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 
 return results;
 `;
 
-/** Resolves at `due` (ms since the epoch), unless `signal` aborts first. */
-function until(due: number, signal: AbortSignal): Promise<void> {
-  return new Promise((done) => {
-    const timer = setTimeout(done, Math.max(0, due - Date.now())); // a passed deadline: at once
-    signal.addEventListener("abort", () => clearTimeout(timer));
-  });
+/** Resolves at `due` (ms since the epoch); a passed deadline at once. */
+function until(due: number): Promise<void> {
+  return new Promise((done) => setTimeout(done, Math.max(0, due - Date.now())));
 }
 
-/** `tools.sleep(ms)`: the call's state is its deadline, so a resumed call sleeps only the rest. */
-const sleep = {
-  async call(ms) {
-    const due = Date.now() + Number(ms);
-    this.state = { due };
-    await until(due, this.signal);
-    return `slept ${ms} ms`;
-  },
-  async resume({ due }, call) {
-    await until(due, call.signal);
-    return `slept ${call.args[0]} ms`;
-  },
-} satisfies AsyncHostFunction<{ due: number }>;
-
+/** The sandbox: `tools.sleep` is an async host function the host settles itself. */
 export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)): SandboxOptions => ({
-  asyncFunctions: { "tools.sleep": sleep },
-  // The snapshot names the script it continues by its name and hash (`sources: false`
-  // below); `sources` gives it back to a process that did not run it (--restart's second).
-  sources: (name) => (name === "sleep.js" ? SCRIPT : undefined),
+  asyncFunctions: { "tools.sleep": () => {} },
   console: { log, info: log, warn: log, error: log },
 });
 
-/** Starts the script and suspends it at its first idle point: the first sleep is open. */
+/** A sleep's deadline, the host's state of the call, which a snapshot keeps. */
+type Sleep = { due: number };
+
+/** Starts the script and snapshots it at its first idle point: the first sleep is open. */
 export async function suspend(ms: number, opts = options()): Promise<{ snapshot: Uint8Array; described: string }> {
   const sandbox = await Sandbox.create(opts);
-  const snapshot = await sandbox.start(SCRIPT, { ms }, { filename: "sleep.js" }).suspend({ sources: false });
+  const run = sandbox.begin(SCRIPT, { ms }, { filename: "sleep.js" });
+  const states: Record<number, Sleep> = {};
+  for (const call of run.calls) states[call.id] = { due: Date.now() + Number(call.args[0]) };
+  const snapshot = run.snapshot({ states });
   const described = sandbox.describeSnapshot(snapshot);
   sandbox.dispose();
   return { snapshot, described };
 }
 
-/** Continues the run from its snapshot in a new sandbox, to its end. */
+/**
+ * Continues the run from its snapshot in a new sandbox, to its end: settles each sleep at
+ * its deadline (a loaded call's from its state, a new call's from its argument).
+ */
 export async function resume(snapshot: Uint8Array, opts = options()): Promise<unknown> {
-  const task = await Sandbox.resume(snapshot, opts);
-  return task.result.finally(() => task.sandbox.dispose());
+  const sandbox = await Sandbox.create(opts);
+  try {
+    const run = sandbox.loadSnapshot(snapshot);
+    while (run.state === "idle" && run.calls.length > 0) {
+      const [call] = run.calls;
+      await until((call.state as Sleep | undefined)?.due ?? Date.now() + Number(call.args[0]));
+      run.settle(call.id, { ok: true, value: `slept ${call.args[0]} ms` });
+      await run.advance();
+    }
+    if (run.state === "threw") throw run.error;
+    return run.value;
+  } finally {
+    sandbox.dispose();
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -77,7 +79,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const { snapshot, described } = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, snapshot);
-    console.log(`host: suspended the run into ${relative(".", file)} (${snapshot.length} bytes) and dropped the sandbox; it holds:`);
+    console.log(`host: snapshotted the run into ${relative(".", file)} (${snapshot.length} bytes) and dropped the sandbox; it holds:`);
     console.log(described.trimEnd().replace(/^/gm, "  | "));
   }
   if (mode !== "start") {

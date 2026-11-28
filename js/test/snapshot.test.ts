@@ -1,76 +1,62 @@
-// Snapshots of runs (D3700, D3720): `Run.snapshot`, `Sandbox.loadSnapshot`, tasks'
-// `suspend`/`checkpoint` and `Sandbox.resume`, with pi's code mode setup: namespaces with
+// Snapshots of runs (D3700, D3720): `Run.snapshot` and `Sandbox.loadSnapshot`, with pi's
+// code mode setup: namespaces with
 // aliases and `missingMember` Proxies, `values`, the JSON boundary's converting functions,
 // host modules, `RunExit` and the fuel budget across loads. The host's values are named in
 // a snapshot, never written; the loading sandbox has its own.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { type AsyncHostFunction, type HostCall, loadModule, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
+import { loadModule, Sandbox, SandboxError, type SandboxOptions } from "../src/sandbox.ts";
 import { answer, piOptions, piRun } from "./pi-setup.ts";
 
-test("a task suspended into a snapshot resumes through the hooks, ids and all", async () => {
+test("a loaded run goes on with the call ids and random numbers of the uninterrupted one", async () => {
   const module = await loadModule();
   const code = `const a = await sleep(1); log("a", a, Math.random()); const b = await sleep(2); log("b", b, Math.random()); return a + b;`;
-  const pending: { n: number; resolve(v: number): void }[] = [];
-  const resumed: [unknown, HostCall][] = [];
-  const calls: HostCall[] = [];
   const lines: string[] = [];
-  const sleep: AsyncHostFunction<{ n: number }> = {
-    call(n) {
-      calls.push(this);
-      this.state = { n: Number(n) };
-      return new Promise((resolve) => pending.push({ n: Number(n), resolve }));
-    },
-    resume(state, call) {
-      resumed.push([state, call]);
-      return Promise.resolve(state.n * 100);
-    },
-  };
-  const opts = { module, randomSeed: 7, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep } };
+  const opts = { module, randomSeed: 7, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep: () => 0 } };
   // The uninterrupted run's random numbers.
   const want: string[] = [];
   const plain = new Sandbox({ ...opts, functions: { log: (...a: unknown[]) => void want.push(a.join(" ")) }, asyncFunctions: { sleep: (n) => Number(n) * 100 } });
   await plain.runAsync(code);
   plain.dispose();
 
-  const task = new Sandbox(opts).start(code);
-  while (pending.length === 0) await new Promise((r) => setTimeout(r, 1));
-  const snapshot = await task.suspend();
-  await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
-  task.sandbox.dispose();
-  const again = await Sandbox.resume(snapshot, opts);
-  while (pending.length === 1) await new Promise((r) => setTimeout(r, 1));
+  const sb = new Sandbox(opts);
+  const run = sb.begin(code);
+  assert.deepEqual(run.calls.map((c) => [c.id, c.args]), [[1, [1]]]);
+  const snapshot = run.snapshot({ states: { 1: { n: 1 } } });
+  sb.dispose();
+  const again = new Sandbox(opts);
+  const loaded = again.loadSnapshot(snapshot);
+  assert.deepEqual(loaded.calls, [{ id: 1, fn: "sleep", args: [1], state: { n: 1 } }]);
+  loaded.settle(1, { ok: true, value: 100 });
+  await loaded.advance();
   // The next call has the id the uninterrupted run gives it: `log("a")`, a sync call, takes 2.
-  assert.deepEqual(calls.map((c) => [c.id, c.args]), [[1, [1]], [3, [2]]]);
-  pending[1].resolve(200);
-  assert.equal(await again.result, 300);
-  assert.deepEqual(resumed.map(([s, c]) => [s, c.id]), [[{ n: 1 }, 1]]);
+  assert.deepEqual(loaded.calls.map((c) => [c.id, c.args]), [[3, [2]]]);
+  loaded.settle(3, { ok: true, value: 200 });
+  await loaded.advance();
+  assert.equal(loaded.value, 300);
   // Math.random goes on with the same sequence.
   assert.deepEqual(lines, want);
-  again.sandbox.dispose();
+  again.dispose();
 });
 
-test("a snapshot without sources names its script by hash; describe tells what it holds", async () => {
+test("a snapshot stores its script; describe tells what it holds", async () => {
   const module = await loadModule();
   const code = `const a = await sleep(1);\nreturn a + 1;`;
-  const opts: SandboxOptions = { module, asyncFunctions: { sleep: { call: () => new Promise(() => {}), resume: () => 41 } } };
+  const opts: SandboxOptions = { module, asyncFunctions: { sleep: () => 0 } };
   const sb = new Sandbox(opts);
-  const run = sb.begin(code, {}, { filename: "job-7.js" });
-  const full = run.snapshot();
-  const bare = run.snapshot({ sources: false });
+  const snap = sb.begin(code, {}, { filename: "job-7.js" }).snapshot();
   sb.dispose();
-  assert.ok(bare.length < full.length, `${bare.length} < ${full.length}`);
-  const text = new TextDecoder("latin1").decode(full);
-  assert.ok(text.includes("return a + 1;"));
-  assert.ok(!new TextDecoder("latin1").decode(bare).includes("return a + 1;"));
-  // This process ran the script: it loads.
-  const task = await Sandbox.resume(bare, opts);
-  assert.equal(await task.result, 42);
-  assert.match(task.sandbox.describeSnapshot(bare), /records/);
-  assert.match(task.sandbox.describeSnapshot(bare), /job-7\.js/);
-  assert.throws(() => task.sandbox.describeSnapshot(new Uint8Array([1, 2, 3])), /not a snapshot/);
-  task.sandbox.dispose();
+  assert.ok(new TextDecoder("latin1").decode(snap).includes("return a + 1;"));
+  const again = new Sandbox(opts);
+  const run = again.loadSnapshot(snap);
+  run.settle(run.calls[0].id, { ok: true, value: 41 });
+  await run.advance();
+  assert.equal(run.value, 42);
+  assert.match(again.describeSnapshot(snap), /records/);
+  assert.match(again.describeSnapshot(snap), /job-7\.js/);
+  assert.throws(() => again.describeSnapshot(new Uint8Array([1, 2, 3])), /not a snapshot/);
+  again.dispose();
 });
 
 // ---- pi's code mode setup -------------------------------------------------------------
