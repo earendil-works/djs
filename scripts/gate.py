@@ -208,14 +208,10 @@ def jobs():
           group=tgt, build=True),
         J("build:core-tests", f"CARGO_TARGET_DIR=target/gate-core cargo test -p djs-core --lib --no-run --quiet"
           f" {cargo_json} > {G}/core-tests.json", group="target/gate-core", build=True),
-        # djs-abidrive drives djs-wasm natively with the dev wasm module's features: without
-        # `lazy`, whose builds give lazily compilable functions constant pools of their own,
-        # so their images differ from the eager module's (D3732).
+        # djs-abidrive drives djs-wasm natively (the native side of "native vs wasm images").
         J("build:difftest", f"CARGO_TARGET_DIR=target/gate-difftest cargo build -p djs-difftest --bin djs-difftest"
-          f" --quiet {cargo_json} > {G}/difftest.json && {exe} {G}/difftest.json djs-difftest"
-          f" && CARGO_TARGET_DIR=target/gate-difftest cargo build -p djs-difftest --bin djs-abidrive"
-          f" --no-default-features --features unicode --quiet {cargo_json} > {G}/abidrive.json"
-          f" && {exe} {G}/abidrive.json djs-abidrive",
+          f" --bin djs-abidrive --quiet {cargo_json} > {G}/difftest.json"
+          f" && {exe} {G}/difftest.json djs-difftest djs-abidrive",
           group="target/gate-difftest", build=True),
         J("build:test262", f"CARGO_TARGET_DIR=target/gate-test262 cargo build -p djs-test262 --quiet"
           f" {cargo_json} > {G}/test262.json && {exe} {G}/test262.json djs-test262",
@@ -243,7 +239,7 @@ def jobs():
           cls="rust", group="target/clippy"),
 
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
-        # with only `unicode` (no `lazy`, `snapshot` or `embed`), and the shipped wasm module
+        # with only `unicode` (no `snapshot` or `embed`), and the shipped wasm module
         # in release (with snapshots, D3600, and unchecked, D3100). Libraries only: the tests
         # build in the default combination.
         J("clippy (djs-core feature combinations)", "CARGO_TARGET_DIR=target/clippy-combos cargo clippy"
@@ -310,16 +306,13 @@ def jobs():
           cls="nodocs", needs=["build:core-tests"]),
 
         # --- The corpus (0016, 0072): ratchet, suspension and GC stress, heap images.
-        # Lazy functions (D2990) here and in test262's leg; the other legs run eager.
-        J("difftest", f"{G}/bin/djs-difftest --engine djs --lazy --ratchet --suspend-every 97 --gc-stress"
+        J("difftest", f"{G}/bin/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
           f" --determinism --quiet --no-diff --times {G}/times/difftest.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
         # 0301: logical snapshots (D3700, D3703) at every idle point of the corpus and of the
         # tests/snapshot programs, each alone and chained, continued like the uninterrupted run;
         # nothing refused. The negative control and the frame bytecode pin are in `test`.
-        # 0303: and again with lazy functions (D2990, D3721).
-        J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored"
-          f" && DJS_LAZY=1 DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
+        J("snapshots", f"DJS_SNAP=1 {tests} {G}/core-tests.json -- vm::snapshot::tests::snapshot_ --ignored",
           cls="rust", needs=["build:core-tests"]),
         # 0302: the corpus's snapshots continue by name in a build whose builtins list record
         # fields in another order and give state constants other values (D3712). It builds
@@ -333,16 +326,10 @@ def jobs():
         J("unsafe-heap difftest", f"{G}/bin/release/djs-difftest --engine djs --ratchet --suspend-every 97"
           f" --gc-stress --quiet --no-diff --times {G}/times/difftest-unsafe.tsv",
           cls="rust", needs=["build:unsafe-release"], summary=r"^(stress|ratchet):"),
-        # 0007: test262's active group against the ratchet, with lazy functions (D2990) and,
-        # alongside, eager as the shipped module runs.
-        J("test262", f"./scripts/fetch-test262.sh > /dev/null; e=$(mktemp); rc=0;"
-          f" {{ {G}/bin/djs-test262 run --engine djs --group active --quiet"
-          " --expected tests/test262/expected-failures.txt > \"$e\" 2>&1 && echo 0 >> \"$e\" || echo 1 >> \"$e\"; } &"
-          f" {G}/bin/djs-test262 run --engine djs --lazy --group active --quiet --slowest 10"
-          " --expected tests/test262/expected-failures.txt || rc=$?;"
-          " wait; echo 'eager:'; sed '$d' \"$e\"; erc=$(tail -n 1 \"$e\"); rm -f \"$e\";"
-          " [ \"$rc\" = 0 ] && [ \"$erc\" = 0 ]",
-          cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s |^eager:"),
+        # 0007: test262's active group against the ratchet.
+        J("test262", f"./scripts/fetch-test262.sh > /dev/null; {G}/bin/djs-test262 run --engine djs"
+          " --group active --quiet --slowest 10 --expected tests/test262/expected-failures.txt",
+          cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s "),
 
         # --- The shipped module: the size budget (D020).
         J("size budget", f"python3 scripts/size/budget.py {size_mod}", cls="rust", needs=["build:size"]),
@@ -359,13 +346,12 @@ def jobs():
         # to meet them. Without the tests that take seconds to minutes under stress
         # (tests/test262/gc-stress-skip.txt); ~3-6 min on 6 jobs, and a deadline keeps a
         # loaded machine within 20 min, still printing the summary.
-        J("test262 gc stress", f"./scripts/fetch-test262.sh > /dev/null && for m in '' --lazy; do"
-          f" echo \"mode: ${{m:-eager}}\"; {G}/bin/djs-test262 run --engine djs $m"
+        J("test262 gc stress", f"./scripts/fetch-test262.sh > /dev/null && {G}/bin/djs-test262 run --engine djs"
           " --group active --quiet --gc-stress --timeout 60 --deadline 600 --slowest 5"
           " --exclude-from tests/test262/gc-stress-skip.txt"
-          " --expected tests/test262/expected-failures.txt || exit 1; done",
+          " --expected tests/test262/expected-failures.txt",
           cls="rust", needs=["build:test262"], full_only=True,
-          summary=r"^mode:|^ratchet:|^\| active|^deadline:|^slowest:|^ +[0-9.]+s "),
+          summary=r"^ratchet:|^\| active|^deadline:|^slowest:|^ +[0-9.]+s "),
     ]
 
 
