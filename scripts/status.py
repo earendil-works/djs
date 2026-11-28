@@ -42,6 +42,10 @@ usage:
                                       the time and memory of passing it in and out, per end-to-end
                                       case the run time (medians); `engines` runs it too;
                                       --engines a,b as for `engines`
+  scripts/status.py traps [--engines a,b]
+                                      js/bench/engines/traps.ts once: per engine and runaway
+                                      case its outcome, error, cause, time, memory and whether
+                                      a fresh VM still runs (outcomes, not timings: one run)
   scripts/status.py all               size, speed, startup, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
@@ -430,6 +434,35 @@ def bridge(only=None):
     return new
 
 
+def traps(only=None):
+    """`traps/<engine>/<case>/{outcome,error,cause,ms,memory,rss,fresh}` from one run of
+    js/bench/engines/traps.ts, and `traps/load` (with `only`: `traps/<engine>/load`)."""
+    import json
+    f = os.path.join(ROOT, "work/scratch/status-engines/traps.json")
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    sel = ["--engines", only] if only else []
+    r = subprocess.run(["node", "js/bench/engines/traps.ts", "--json", f, *sel], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"status.py: js/bench/engines/traps.ts failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
+    print(r.stdout)
+    run = json.load(open(f))
+    slug = lambda name: re.sub(r"-$", "", re.sub(r"[^a-z0-9]+", "-", name.lower()))
+    new = {} if only else {"traps/load": round(run["load"], 1)}
+    for e in run["engines"]:
+        k = f"traps/{slug(e['name'])}"
+        if only:
+            new[f"{k}/load"] = round(run["load"], 1)
+        for c, x in e["cases"].items():
+            for m in ("outcome", "error", "cause"):
+                new[f"{k}/{c}/{m}"] = x[m] or "-"
+            new[f"{k}/{c}/ms"] = round(x["ms"], 1)
+            for m in ("memory", "rss"):
+                if x[m] is not None:
+                    new[f"{k}/{c}/{m}"] = int(x[m])
+            new[f"{k}/{c}/fresh"] = 1 if x["fresh"] else 0
+    return new
+
+
 def loaded(new, group):
     """`new` with `<group>/load`: the 1-minute load average when the measurement started
     (records are taken on a quiet machine, below ~4; D3500)."""
@@ -473,6 +506,9 @@ def main():
             save(rows, new, at)
     elif args[0] == "engines":
         save(rows, engines(only_engines(args)))
+    elif args[0] == "traps":
+        subprocess.run([os.path.join(ROOT, "scripts/bench-engines.sh"), "--setup"], cwd=ROOT, check=True)
+        save(rows, traps(only_engines(args)))
     elif args[0] == "ops":
         build()
         save(rows, ops())

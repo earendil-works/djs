@@ -32,8 +32,8 @@ export const CASES: { name: string; what: string; js: string; py: string }[] = [
   { name: "loop", what: "`for (;;) {}`", js: "for (;;) {}", py: "while True:\n    pass" },
   {
     name: "microtasks",
-    what: "a promise chain that schedules itself forever, while the run awaits a promise that never settles",
-    js: "const spin = () => Promise.resolve().then(spin);\nspin();\nawait new Promise(() => {});",
+    what: "a promise job that queues itself again forever, while the run awaits a promise that never settles",
+    js: "const spin = () => {\n  Promise.resolve().then(spin);\n};\nspin();\nawait new Promise(() => {});",
     py: "import asyncio\nasync def spin():\n    while True:\n        await asyncio.sleep(0)\nawait spin()",
   },
   {
@@ -122,8 +122,10 @@ export interface TrapResult {
    * outer kill; guard: the memory guard's kill.
    */
   outcome: string;
-  /** The error, as short as it can be said: `RangeError`, `interrupted`, `out of memory`. */
-  what: string;
+  /** The error's class (`RangeError`, `InternalError`, `RecursionError`; `null` for a thrown null), if it has one. */
+  error: string;
+  /** What ran out, from the message: time, memory, stack, length (a string's), depth (a nesting cap), or "". */
+  cause: string;
   /** The engine's message, for the notes. */
   detail: string;
   /** Until the run ended (or the process died or was killed). */
@@ -136,21 +138,18 @@ export interface TrapResult {
   fresh: boolean;
 }
 
-/** The kind of a message, briefly. */
-function what(msg: string): string {
-  const m = msg.replace(/^(caught |ERROR |threw: |fuel: |aborted: |memory: |trap: |error: |fatal-error: )+/, "");
-  const known: [RegExp, string][] = [
-    [/interrupted/i, "interrupted"],
-    [/aborted|abort/i, "aborted"],
-    [/timeout|timed out|TimeoutExceeded/i, "timeout"],
-    [/out of memory|MemoryError|memory limit/i, "out of memory"],
-    [/stack|recursion/i, "stack overflow"],
-    [/Invalid string length|string length|too long/i, "string too long"],
-    [/unreachable|out of bounds|wasm trap/i, "wasm trap"],
+/** A message's error class and what ran out (`TrapResult.error`, `cause`). */
+function classify(msg: string): { error: string; cause: string } {
+  const m = msg.replace(/^(caught |ERROR |wasm trap: |aborted: |fuel: |memory: |error: |fatal-error: )+/, "");
+  const causes: [RegExp, string][] = [
+    [/interrupted|aborted|timed out|time limit|timeout/i, "time"],
+    [/out of memory|MemoryError|memory limit/i, "memory"],
+    [/maximum depth/i, "depth"],
+    [/stack|recursion/i, "stack"],
+    [/string length|too long/i, "length"],
   ];
-  const name = /^([A-Za-z]*Error)\b/.exec(m)?.[1];
-  for (const [re, w] of known) if (re.test(m)) return name ? `${name}: ${w}` : w;
-  return name ?? m.slice(0, 40);
+  const error = m === "null" ? "null" : (/^([A-Za-z]*(Error|Exceeded))\b/.exec(m)?.[1] ?? "");
+  return { error, cause: causes.find(([re]) => re.test(m))?.[1] ?? "" };
 }
 
 function runChild(e: Engine, c: string): Promise<TrapResult> {
@@ -213,15 +212,15 @@ function runChild(e: Engine, c: string): Promise<TrapResult> {
           : /wasm trap|RuntimeError|unreachable|out of bounds/i.test(msg)
             ? "trap"
             : "stopped";
-        resolve({ outcome, what: outcome === "completed" || outcome === "unsettled" ? "" : what(msg), detail: msg.slice(0, 300), ms: end.ms, memory: end.memory, rss: end.rss, fresh: fresh === "ok" });
+        resolve({ outcome, ...(outcome === "completed" || outcome === "unsettled" ? { error: "", cause: "" } : classify(msg)), detail: msg.slice(0, 300), ms: end.ms, memory: end.memory, rss: end.rss, fresh: fresh === "ok" });
         return;
       }
       const tail = err.trim().split("\n").filter((l) => !/ExperimentalWarning|--trace-warnings/.test(l)).slice(-3).join(" | ");
       if (killed) {
-        resolve({ outcome: killed, what: "", detail: killed === "hang" ? `killed after ${KILL_MS / 1000} s` : `killed at ${(peak / 2 ** 30).toFixed(1)} GiB resident`, ms: elapsed, memory: null, rss: peak, fresh: false });
+        resolve({ outcome: killed, error: "", cause: "", detail: killed === "hang" ? `killed after ${KILL_MS / 1000} s` : `killed at ${(peak / 2 ** 30).toFixed(1)} GiB resident`, ms: elapsed, memory: null, rss: peak, fresh: false });
         return;
       }
-      resolve({ outcome: "crash", what: signal ?? `exit ${code}`, detail: tail.slice(0, 300), ms: elapsed, memory: null, rss: peak, fresh: false });
+      resolve({ outcome: "crash", error: "", cause: signal ?? `exit ${code}`, detail: tail.slice(0, 300), ms: elapsed, memory: null, rss: peak, fresh: false });
     });
   });
 }
@@ -249,7 +248,7 @@ async function main() {
       const x = await runChild(e, c);
       r.cases[c] = x;
       const mem = x.memory === null ? "" : ` ${(x.memory / 2 ** 20).toFixed(1)} MiB`;
-      console.log(`${e.name.padEnd(24)} ${c.padEnd(15)} ${x.outcome.padEnd(9)} ${(x.ms / 1000).toFixed(2).padStart(6)} s${mem}, rss +${((x.rss ?? 0) / 2 ** 20).toFixed(0)} MiB${x.fresh ? "" : ", no fresh VM"}  ${x.what}  ${x.detail.slice(0, 120).replace(/\n/g, " ")}`);
+      console.log(`${e.name.padEnd(24)} ${c.padEnd(15)} ${x.outcome.padEnd(9)} ${(x.ms / 1000).toFixed(2).padStart(6)} s${mem}, rss +${((x.rss ?? 0) / 2 ** 20).toFixed(0)} MiB${x.fresh ? "" : ", no fresh VM"}  ${x.error} ${x.cause}  ${x.detail.slice(0, 120).replace(/\n/g, " ")}`);
     }
     results.push(r);
   }

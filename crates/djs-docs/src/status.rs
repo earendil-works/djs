@@ -408,9 +408,10 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "bridge-in" | "bridge-out" | "bridge-rate" | "bridge-memory" | "bridge-e2e" => {
             bridge(st, what)
         }
+        "traps" | "traps-memory" => traps(st, what),
         _ => Err(format!(
             "gen:status {what}: expected conformance, speed, size, inventory, recorded, \
-             engines-size|startup|run|memory|ops or bridge-in|out|rate|memory|e2e"
+             engines-size|startup|run|memory|ops, bridge-in|out|rate|memory|e2e or traps[-memory]"
         )),
     }
 }
@@ -547,7 +548,7 @@ fn size(st: &Status) -> Result<String, String> {
 
 /// The engines of the benchmarks page (js/bench/engines, `scripts/status.py engines`): key,
 /// column label.
-const ENGINES: [(&str, &str); 7] = [
+const ENGINES: [(&str, &str); 8] = [
     ("djs", "djs"),
     ("quickjs-wasi", "quickjs-wasi"),
     ("quickjs", "QuickJS"),
@@ -555,7 +556,31 @@ const ENGINES: [(&str, &str); 7] = [
     ("quickjs-emscripten", "quickjs-emscripten"),
     ("quickjs-emscripten-ng", "quickjs-emscripten (NG)"),
     ("monty", "monty"),
+    ("psychoscript", "Psychoscript"),
 ];
+
+/// Whether an engine is a wasm module. Psychoscript is JavaScript run by the host's own
+/// engine: no wasm module to ship (its code is all "glue"), no linear memory.
+fn is_wasm(e: &str) -> bool {
+    e != "psychoscript"
+}
+
+/// The load of engines recorded apart from the rest (`status.py engines --engines`, which
+/// writes `<prefix>/<engine>/load`): ` (Psychoscript: 5.2)`, or nothing.
+fn apart_loads(st: &Status, prefix: &str) -> String {
+    let apart: Vec<String> = ENGINES
+        .iter()
+        .filter_map(|(e, label)| {
+            st.num(&format!("{prefix}/{e}/load"))
+                .map(|l| format!("{label}: {l:.1}"))
+        })
+        .collect();
+    if apart.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", apart.join(", "))
+    }
+}
 /// The codemode workload set (tests/bench/codemode), in the page's order.
 const WORKLOADS: [&str; 9] = [
     "sequential",
@@ -653,6 +678,10 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
             for (e, label) in ENGINES {
                 let k = |m: &str| format!("engines/{e}/{m}");
                 let glue = get(k("glue-gzip"))?;
+                if !is_wasm(e) {
+                    let _ = writeln!(s, "| {label} | none | | | {} |", kb(glue));
+                    continue;
+                }
                 let _ = writeln!(
                     s,
                     "| {label} | {} | {} | {} | {} |",
@@ -666,7 +695,14 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
                     }
                 );
             }
-            (s, "Module bytes as shipped; gzip -9, brotli quality 11")
+            let raw = get("engines/psychoscript/glue-bytes".into())?;
+            let brotli = get("engines/psychoscript/glue-brotli".into())?;
+            let note = format!(
+                "Module bytes as shipped; gzip -9, brotli quality 11. Psychoscript has no wasm: its column of JS is all of its code, its package's modules and acorn's as published ({} raw, {} with brotli)",
+                kb(raw),
+                kb(brotli)
+            );
+            (s, note)
         }
         "engines-startup" => {
             let mut s = String::from(
@@ -674,17 +710,21 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
             );
             for (e, label) in ENGINES {
                 let k = |m: &str| format!("engines/{e}/{m}");
+                let idle = if is_wasm(e) {
+                    mib(get(k("idle-memory"))?)
+                } else {
+                    "n/a".to_string()
+                };
                 let _ = writeln!(
                     s,
-                    "| {label} | {} | {} | {} |",
+                    "| {label} | {} | {} | {idle} |",
                     ms(get(k("compile-ms"))?),
                     ms(get(k("startup-ms"))?),
-                    mib(get(k("idle-memory"))?)
                 );
             }
             (
                 s,
-                "Compile: the module, once per process. New VM: a new instance and VM, ready to evaluate (median). Memory: linear memory",
+                "Compile: the module, once per process (Psychoscript: importing its JavaScript). New VM: a new instance and VM, ready to evaluate (median; Psychoscript: a `Runtime`, which builds the realm in each run). Memory: linear memory (Psychoscript has none: it lives in the host's heap)".to_string(),
             )
         }
         "engines-run" | "engines-memory" => {
@@ -695,6 +735,10 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
                 let _ = write!(s, "| {w} |");
                 let mut row = [0.0f64; ENGINES.len()];
                 for (i, (e, _)) in ENGINES.iter().enumerate() {
+                    if !run && !is_wasm(e) {
+                        s.push_str(" n/a |");
+                        continue;
+                    }
                     row[i] = get(format!(
                         "engines/{e}/{w}/{}",
                         if run { "run-ms" } else { "memory" }
@@ -707,16 +751,20 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
                 s.push('\n');
             }
             s.push_str("| relative to djs |");
-            for l in logs {
-                let _ = write!(s, " {:.2}× |", (l / WORKLOADS.len() as f64).exp());
+            for (i, l) in logs.iter().enumerate() {
+                if !run && !is_wasm(ENGINES[i].0) {
+                    s.push_str(" n/a |");
+                } else {
+                    let _ = write!(s, " {:.2}× |", (l / WORKLOADS.len() as f64).exp());
+                }
             }
             s.push('\n');
             (
                 s,
                 if run {
-                    "Milliseconds per run (median), in a warm process; the last row is the geometric mean of each engine's time over djs's"
+                    "Milliseconds per run (median), in a warm process; the last row is the geometric mean of each engine's time over djs's".to_string()
                 } else {
-                    "Linear memory after the run, MiB; the last row is the geometric mean of each engine's over djs's"
+                    "Linear memory after the run, MiB; the last row is the geometric mean of each engine's over djs's; Psychoscript has no linear memory".to_string()
                 },
             )
         }
@@ -736,15 +784,20 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
             }
             (
                 s,
-                "Milliseconds per loop of the operation (js/bench/engines/ops.ts), the setup's time subtracted; QuickJS: the faster of the two latest releases",
+                "Milliseconds per loop of the operation (js/bench/engines/ops.ts), the setup's time subtracted; QuickJS: the faster of the two latest releases".to_string(),
             )
         }
     };
     let load = st.num(load_key).unwrap_or(f64::NAN);
+    let apart = if what == "engines-ops" {
+        String::new()
+    } else {
+        apart_loads(st, "engines")
+    };
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     s.push('\n');
     s += &wrap(
-        &format!("{note}; {}, load {load:.1}.", provenance(st, &keys)),
+        &format!("{note}; {}, load {load:.1}{apart}.", provenance(st, &keys)),
         "",
         "",
     );
@@ -772,9 +825,14 @@ const BRIDGE_CASES: [(&str, &str); 3] = [
     ("calls-1000", "1,000 small calls"),
 ];
 
-/// A bridge time: three significant digits, down to microseconds.
+/// A bridge time: three significant digits, down to microseconds. Zero is a difference of
+/// two whole runs below what they can resolve (Psychoscript's strings, which do not cross).
 fn bridge_ms(v: f64) -> String {
-    crate::chart::short(v)
+    if v <= 0.0 {
+        "~0".to_string()
+    } else {
+        crate::chart::short(v)
+    }
 }
 
 /// `gen:status bridge-*`: the benchmarks page's tables of passing data through the bridge.
@@ -827,25 +885,32 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
                         None => s.push_str(" fails |"),
                     }
                 }
-                if row.iter().all(Option::is_some) {
+                // The wasm engines' rows: Psychoscript's times are differences of whole runs,
+                // zero for strings, and get no mean.
+                let wasm = |i: usize| is_wasm(ENGINES[i].0);
+                if (0..ENGINES.len()).all(|i| !wasm(i) || row[i].is_some()) {
                     n += 1;
-                    for i in 0..ENGINES.len() {
+                    for i in (0..ENGINES.len()).filter(|&i| wasm(i)) {
                         logs[i] += (row[i].unwrap() / row[0].unwrap()).ln();
                     }
                 }
                 s.push('\n');
             }
             s.push_str("| relative to djs | |");
-            for l in logs {
-                let _ = write!(s, " {:.1}× |", (l / n.max(1) as f64).exp());
+            for (i, l) in logs.iter().enumerate() {
+                if is_wasm(ENGINES[i].0) {
+                    let _ = write!(s, " {:.1}× |", (l / n.max(1) as f64).exp());
+                } else {
+                    s.push_str(" n/a |");
+                }
             }
             s.push('\n');
             (
                 s,
                 if dir == "in" {
-                    "Milliseconds per value put into a fresh VM (median), each engine's best path; the last row is the geometric mean of each engine's time over djs's"
+                    "Milliseconds per value put into a fresh VM (median), each engine's best path (Psychoscript: a run that takes the value from a host function, less the same run without it); the last row is the geometric mean of each engine's time over djs's"
                 } else {
-                    "Milliseconds per value read out of a VM (median), each engine's best path; the last row is the geometric mean of each engine's time over djs's"
+                    "Milliseconds per value read out of a VM (median), each engine's best path (Psychoscript: a run that returns the value, less the run that only takes it in); the last row is the geometric mean of each engine's time over djs's"
                 },
             )
         }
@@ -870,7 +935,12 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
                     let bytes = get(format!("engines/bridge/payload/{p}/bytes"))?;
                     for dir in ["in", "out"] {
                         let ms = get(format!("engines/bridge/{e}/{p}/{dir}-ms"))?;
-                        let _ = write!(s, " {} |", thousands((bytes / 1e3 / ms).round() as usize));
+                        if ms <= 0.0 {
+                            s.push_str(" no copy |");
+                        } else {
+                            let _ =
+                                write!(s, " {} |", thousands((bytes / 1e3 / ms).round() as usize));
+                        }
                     }
                 }
                 s.push('\n');
@@ -884,6 +954,10 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
             let mib = |v: f64| format!("{:.1}", v / 1048576.0);
             for (e, label) in ENGINES {
                 let k = |m: &str| format!("engines/bridge/{e}/{m}");
+                if !is_wasm(e) {
+                    let _ = writeln!(s, "| {label} | n/a | n/a | n/a | n/a | n/a |");
+                    continue;
+                }
                 let _ = writeln!(
                     s,
                     "| {label} | {} | {} | {} | {} | {} |",
@@ -896,7 +970,7 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
             }
             (
                 s,
-                "Linear memory, MiB: of a fresh VM, after putting the value in, and after reading it back out",
+                "Linear memory, MiB: of a fresh VM, after putting the value in, and after reading it back out (Psychoscript has none)",
             )
         }
         _ => {
@@ -919,10 +993,123 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
         }
     };
     let load = st.num("engines/bridge/load").unwrap_or(f64::NAN);
+    let apart = apart_loads(st, "engines/bridge");
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     s.push('\n');
     s += &wrap(
-        &format!("{note}; {}, load {load:.1}.", provenance(st, &keys)),
+        &format!("{note}; {}, load {load:.1}{apart}.", provenance(st, &keys)),
+        "",
+        "",
+    );
+    Ok(s)
+}
+
+/// The cases of js/bench/engines/traps.ts, in the page's order: key, label.
+const TRAP_CASES: [(&str, &str); 9] = [
+    ("loop", "endless loop"),
+    ("microtasks", "endless promise jobs"),
+    ("grow", "growing an array"),
+    ("huge", "a 1 GiB string"),
+    ("double", "a doubling string"),
+    ("recursion", "unbounded recursion"),
+    ("json-parse", "`JSON.parse`, 10⁶ deep"),
+    ("json-stringify", "`JSON.stringify`, 10⁵ deep"),
+    ("regex", "`/(a+)+$/` backtracking"),
+];
+
+/// A trap case's time: two decimals below a tenth of a second.
+fn trap_secs(ms: f64) -> String {
+    if ms < 100.0 {
+        format!("{:.2} s", ms / 1000.0)
+    } else {
+        format!("{:.1} s", ms / 1000.0)
+    }
+}
+
+/// `gen:status traps` and `traps-memory`: the runaway scripts' outcomes per case and engine,
+/// and the memory each took.
+fn traps(st: &Status, what: &str) -> Result<String, String> {
+    let mut keys: Vec<String> = vec!["traps/load".into()];
+    let mut get = |k: String| -> Result<String, String> {
+        let v = st.get(&k).map(|v| v.0.clone()).ok_or_else(|| {
+            format!(
+                "gen:status {what}: no {k} in tests/scores/status.tsv (scripts/status.py traps)"
+            )
+        })?;
+        keys.push(k);
+        Ok(v)
+    };
+    let mut s = String::from("| case |");
+    for (e, label) in ENGINES {
+        if what == "traps-memory" && !is_wasm(e) {
+            let _ = write!(s, " {label}, host RSS |");
+        } else {
+            let _ = write!(s, " {label} |");
+        }
+    }
+    s.push_str("\n| --- |");
+    s.push_str(&" --- |".repeat(ENGINES.len()));
+    s.push('\n');
+    for (c, label) in TRAP_CASES {
+        let _ = write!(s, "| {label} |");
+        for (e, _) in ENGINES {
+            let k = |m: &str| format!("traps/{e}/{c}/{m}");
+            let outcome = get(k("outcome"))?;
+            let gone = matches!(outcome.as_str(), "crash" | "hang" | "guard");
+            let cell = if what == "traps-memory" {
+                // The process is gone: its last memory is not the run's.
+                let m = if gone {
+                    None
+                } else if is_wasm(e) {
+                    st.num(&k("memory"))
+                } else {
+                    st.num(&k("rss"))
+                };
+                m.map_or("-".to_string(), |v| format!("{:.1}", v / 1048576.0))
+            } else {
+                let error = get(k("error"))?;
+                let cause = get(k("cause"))?;
+                let ms: f64 = get(k("ms"))?.parse().unwrap_or(f64::NAN);
+                let fresh = get(k("fresh"))? == "1";
+                let because = if cause == "-" {
+                    String::new()
+                } else {
+                    format!(" ({cause})")
+                };
+                let t = trap_secs(ms);
+                let mut cell = match outcome.as_str() {
+                    "completed" => format!("completed, {t}"),
+                    "caught" if error == "null" => format!("caught `null`, {t}"),
+                    "caught" if error == "-" => format!("caught{because}, {t}"),
+                    "caught" => format!("caught {error}{because}, {t}"),
+                    "stopped" => format!("stopped{because}, {t}"),
+                    "unsettled" => format!("no result, {t}"),
+                    "trap" => format!("wasm trap{because}, {t}"),
+                    "crash" => format!("host crash ({cause})"),
+                    "hang" => format!("hangs, killed at {}", trap_secs(ms)),
+                    "guard" => "killed by the memory guard".to_string(),
+                    o => o.to_string(),
+                };
+                if !fresh && !gone {
+                    cell.push_str(", no fresh VM");
+                }
+                cell
+            };
+            let _ = write!(s, " {cell} |");
+        }
+        s.push('\n');
+    }
+    let note = if what == "traps-memory" {
+        "MiB: linear memory after the run (Psychoscript: the growth of the host process's peak resident size during it); - where the process was killed"
+    } else {
+        "What ended each run and when, under a 1 s time budget and a 64 MiB heap cap, by each engine's own mechanisms; caught: the script caught the error; stopped: the engine ended the run, the script could not catch it"
+    };
+    let load = st.num("traps/load").unwrap_or(f64::NAN);
+    let apart = apart_loads(st, "traps");
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    s.push('\n');
+    s += &wrap(
+        &format!("{note}; {}, load {load:.1}{apart}.", provenance(st, &keys)),
         "",
         "",
     );
@@ -930,8 +1117,8 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
 }
 
 /// Each engine's palette color in the charts (chart.rs), in `ENGINES` order: djs blue,
-/// the QuickJS builds warm colors and teal, monty green.
-const ENGINE_COLORS: [usize; 7] = [0, 3, 1, 2, 5, 6, 4];
+/// the QuickJS builds warm colors and teal, monty green, Psychoscript the next.
+const ENGINE_COLORS: [usize; 8] = [0, 3, 1, 2, 5, 6, 4, 7];
 
 /// A generated chart: its file under docs/guide, its alt text (the figure's caption) and
 /// the SVG.
@@ -960,10 +1147,16 @@ pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
         .zip(ENGINE_COLORS)
         .map(|((_, l), c)| (*l, c))
         .collect();
+    // Psychoscript has no wasm module and no linear memory: no bar (the chart says "none").
     let per_engine = |m: &str, scale: f64| -> Result<Vec<Option<f64>>, String> {
         ENGINES
             .iter()
-            .map(|(e, _)| get(format!("engines/{e}/{m}")).map(|v| Some(v / scale)))
+            .map(|(e, _)| {
+                if !is_wasm(e) && (m.starts_with("wasm-") || m == "idle-memory") {
+                    return Ok(None);
+                }
+                get(format!("engines/{e}/{m}")).map(|v| Some(v / scale))
+            })
             .collect()
     };
     let (alt, svg) = match what {
@@ -1035,6 +1228,8 @@ pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
                         .map(|(e, _)| {
                             if run {
                                 get(format!("engines/{e}/{w}/run-ms")).map(Some)
+                            } else if !is_wasm(e) {
+                                Ok(None)
                             } else {
                                 get(format!("engines/{e}/{w}/memory")).map(|v| Some(v / 1048576.0))
                             }
@@ -1089,7 +1284,10 @@ pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
                 .map(|(p, _)| {
                     ENGINES
                         .iter()
-                        .map(|(e, _)| st.num(&format!("engines/bridge/{e}/{p}/{dir}-ms")))
+                        .map(|(e, _)| {
+                            st.num(&format!("engines/bridge/{e}/{p}/{dir}-ms"))
+                                .filter(|v| *v > 0.0)
+                        })
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
@@ -1206,6 +1404,8 @@ mod tests {
                 "wasm-gzip",
                 "wasm-brotli",
                 "glue-gzip",
+                "glue-bytes",
+                "glue-brotli",
                 "compile-ms",
                 "startup-ms",
                 "idle-memory",
@@ -1230,6 +1430,20 @@ mod tests {
                 }
             }
         }
+        rec += "traps/load\t3.0\tabc\t2026-11-06\n";
+        for (e, _) in ENGINES {
+            for (c, _) in TRAP_CASES {
+                let (o, err, cause) = if c == "regex" && e == "psychoscript" {
+                    ("hang", "-", "-")
+                } else {
+                    ("caught", "RangeError", "stack")
+                };
+                rec += &format!(
+                    "traps/{e}/{c}/outcome\t{o}\tabc\t2026-11-06\ntraps/{e}/{c}/error\t{err}\tabc\t2026-11-06\ntraps/{e}/{c}/cause\t{cause}\tabc\t2026-11-06\ntraps/{e}/{c}/ms\t20\tabc\t2026-11-06\ntraps/{e}/{c}/rss\t2097152\tabc\t2026-11-06\ntraps/{e}/{c}/memory\t1048576\tabc\t2026-11-06\ntraps/{e}/{c}/fresh\t1\tabc\t2026-11-06\n"
+                );
+            }
+        }
+        rec += "engines/psychoscript/load\t5.5\tabc\t2026-11-06\n";
         for (e, _) in ENGINES {
             rec += &format!("engines/bridge/{e}/idle-memory\t1048576\tabc\t2026-11-06\n");
             for (c, _) in BRIDGE_CASES {
@@ -1255,8 +1469,22 @@ mod tests {
         assert!(run.contains("| heavy | 2.00 |"), "{run}");
         assert!(run.contains("| relative to djs | 1.00× |"), "{run}");
         assert!(
-            run.contains("measured at abc, 2026-11-06, load 2.5."),
+            run.contains("measured at abc, 2026-11-06, load 2.5 (Psychoscript:"),
             "{run}"
+        );
+        let t = generate(&st, "traps", false).unwrap();
+        assert!(
+            t.contains("| unbounded recursion | caught RangeError (stack), 0.02 s |"),
+            "{t}"
+        );
+        assert!(t.contains(" hangs, killed at 0.02 s |"), "{t}");
+        let t = generate(&st, "traps-memory", false).unwrap();
+        assert!(t.contains("| Psychoscript, host RSS |"), "{t}");
+        assert!(t.contains("| endless loop | 1.0 |"), "{t}");
+        assert!(
+            generate(&st, "engines-memory", false)
+                .unwrap()
+                .contains(" n/a |")
         );
         assert!(
             generate(&st, "engines-size", false)
