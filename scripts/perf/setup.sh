@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # setup.sh: the builds the perf tools use, in $DJS_PERF_DIR (default work/scratch/perf):
-# native release with LTO and one codegen unit (stable layout, D1620) plus its dSYM and a
-# full disassembly (all.s, for trace_report.py), and the wasm profile build as it ships
+# native release with LTO and one codegen unit (stable layout, D1620) plus its dSYM, and
+# the wasm profile build as it ships
 # (unchecked arena access, D3100) with the name section (STRIP=debuginfo keeps names;
 # strip=false conflicts with lld's reloc compression).
 set -euo pipefail
@@ -15,6 +15,4 @@ CARGO_TARGET_DIR="$out/target" CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEA
 CARGO_TARGET_DIR="$out/target" CARGO_PROFILE_WASM_STRIP=debuginfo \
   scripts/with-wasm-env.sh cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm --features unsafe-heap
 dsymutil "$out/target/release/djs" -o "$out/djs.dSYM"
-"$(xcrun --find llvm-objdump)" -d --no-show-raw-insn "$out/target/release/djs" | grep -E "^\s*1[0-9a-f]+:" > "$out/all.s"
-wasm-objdump -d "$out/target/wasm32-unknown-unknown/wasm/djs_wasm.wasm" > "$out/wasm.dis" 2>/dev/null || true
 echo "native: $out/target/release/djs; wasm: $out/target/wasm32-unknown-unknown/wasm/djs_wasm.wasm"

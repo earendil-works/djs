@@ -2,7 +2,7 @@
 //! `cargo run -p djs-prelude --example base-families [-- --tsv] [--touched DIR]`.
 //!
 //! `--touched DIR`: files of base offsets a run touched, one per case (written by the
-//! instrumented build of scripts/size/patches/touch.py): per family, how many cases touch
+//! instrumented build of 0143's touch patch, in git history): per family, how many cases touch
 //! it, and what a lazy realm would materialize per case.
 //!
 //! Every cell of the base image gets one owner, a builtin *family* (the builtins/*.ts file
