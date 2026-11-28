@@ -27,15 +27,17 @@ function lib() {
     import("./djs/layout.generated.js"),
     WebAssembly.compileStreaming(fetch(new URL("./djs/djs_wasm.wasm", import.meta.url))),
     import("./djs/abi.js"),
-  ]).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => ({
-    Sandbox,
-    module,
+  ]).then(([{ Sandbox }, { LAYOUT }, module, { djsExports }]) => {
     // The instance's operations by name (the module has one export, `djs`) serve the
     // Bytecode tab.
-    ops: (disasmExports = djsExports(module)),
-    kindNames: Object.fromEntries(Object.entries(LAYOUT.cells).map(([n, c]) => [c.kind, n])),
-    classNames: Object.fromEntries(Object.entries(LAYOUT.objectClasses).map(([n, c]) => [c, n])),
-  }));
+    disasmExports = djsExports(module);
+    return {
+      Sandbox,
+      module,
+      kindNames: Object.fromEntries(Object.entries(LAYOUT.cells).map(([n, c]) => [c.kind, n])),
+      classNames: Object.fromEntries(Object.entries(LAYOUT.objectClasses).map(([n, c]) => [c, n])),
+    };
+  });
   return libPromise;
 }
 
