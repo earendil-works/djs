@@ -490,8 +490,8 @@ Not armed: the rest of the corpus, e2e and test262, whose cases change builtins 
 ## Images (D3641)
 
 Images do not persist runs (snapshots do, below; D2700, D3700) and never leave the process
-that made them: the base image every VM is copied from, a native host's snapshots, the
-stress and determinism checks. A VM image carries the engine build hash (`vm::BUILD_HASH`,
+that made them: the base image every VM is copied from, a native host's images of its
+setup, the stress and determinism checks. A VM image carries the engine build hash (`vm::BUILD_HASH`,
 `Roots::BUILD`) and loads only into that build (`LoadError::OtherBuild`), so a change of
 what an image means needs no bump of anything. `vm::tests::images_load_only_into_their_build`
 checks the refusal.

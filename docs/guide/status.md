@@ -57,9 +57,9 @@ Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 
 <!-- gen:status size -->
 `djs_wasm.wasm`, the one module djs ships, is 1,161 KB (498 KB gzip, 418 KB brotli): 986
-KB of code, 79 KB of data, and the base image (the initialized realm with all
-builtins, 191 KB) coded to 45 KB in a custom section. Module sizes measured at
-0f27ab975f, 2026-11-28.
+KB of code, 79 KB of data, and the base image (the initialized realm with all builtins,
+191 KB) coded to 45 KB in a custom section. Module sizes measured at 0f27ab975f,
+2026-11-28.
 <!-- /gen -->
 
 ## The engine in numbers

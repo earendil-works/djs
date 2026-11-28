@@ -179,7 +179,7 @@ with them.
 | `iter_next_loc` | 167 | Loc, Target | 7 | 0 → 1 | Call | `-> r`: `iter_next` of the iterator in local `loc` and its `next` in `loc + 1` (a loop's or pattern's temporaries): one instruction for for-of's step. |
 | `iter_check_object` | 168 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError if `v` is not an object (iterator results). |
 | `iterator_close` | 169 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
-| `for_in_start` | 170 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
+| `for_in_start` | 170 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a copy of the enumerable keys) |
 | `for_in_next` | 171 | – | 1 | 1 → 3 | Access | `it -> it key done` |
 | `ctor_result` | 172 | – | 1 | 1 → 1 | Basic | `v -> r`: `return v` in a base class constructor: `v` if it is an object, else the frame's `this` (the constructor's code returns its own result). |
 | `check_this` | 173 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized (`undefined`, before `super()`). |

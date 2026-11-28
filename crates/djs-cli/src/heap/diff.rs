@@ -1,6 +1,6 @@
 //! The image against its reference image (the base, or pi's prelude image): which cells
 //! are the reference's own (unchanged, in place or moved), changed, new or gone. That is
-//! what a snapshot compressed against the reference costs (D2260).
+//! what an image compressed against the reference costs (D2260).
 //!
 //! Cells have no identity but their offset, and a collection slides them, so the two
 //! graphs are matched structurally: a breadth-first walk from both roots cells pairs the

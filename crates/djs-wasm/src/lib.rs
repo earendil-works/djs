@@ -569,7 +569,7 @@ pub extern "C" fn djs_build_hash() -> u32 {
 }
 
 /// The address of the base image (D1321, decoded at the first use, D2252) in this
-/// module's memory, read-only. Hosts compress snapshots against it (D2260): it is the
+/// module's memory, read-only. Hosts compress images against it (D2260): it is the
 /// image every `vm_new` starts from, and the build hash fixes its bytes. Valid until the
 /// next `vm_new`, which takes the bytes as its arena (D2060): a host that keeps the base
 /// reads it first (a later call decodes it again, from a coded base the host hands over

@@ -624,7 +624,8 @@ impl Vm {
     /// Reseeds `Math.random` (see `VmOptions::random_seed`). The state lives in the
     /// heap, so a snapshot continues the same sequence. The key of the VM's string hash
     /// follows the seed (D2433): changing it rehashes the VM's own atoms and Map/Set
-    /// tables, which costs time and, against a reference image, snapshot size.
+    /// tables, which costs time and the size of an image compressed against a reference
+    /// image.
     pub fn set_random_seed(&mut self, seed: u64) {
         crate::builtins::number::set_seed(&mut self.heap, seed);
     }

@@ -115,7 +115,7 @@ djs/
     djs-difftest/   the differential corpus runner and the djs-abidrive driver.
     djs-bench/      benchmarks: component, engine track, wasm size.
     djs-docs/       the guide's generator and checker (docs/guide, D2100).
-    djs-embed/      the native embedding crate for Rust hosts (D3170, D3184): snapshots,
+    djs-embed/      the native embedding crate for Rust hosts (D3170, D3184): images,
                     instances, typed host functions, plain data in and out, budgets, ES
                     modules; no djs-core type in its API.
     djs-libm/       libm 0.2.16's functions djs-core uses, copied (D3174, D3215).
@@ -627,7 +627,7 @@ a deterministic mode, re-runs from recorded results and journals (D3746).
 
 Rust hosts embed djs natively through `crates/djs-embed` (first user: Gondolin's daemon,
 which runs JS network hooks in-process). It wraps the same `Vm` behind an API of its own:
-a `Snapshot` is the image of a VM after the host's setup (host functions, plain-data
+an `Image` is the image of a VM after the host's setup (host functions, plain-data
 globals, scripts and ES modules, with the module graph evaluated), `Send + Sync`; an
 `Instance` is a VM copied from it (`reset` copies it back into the same arena buffer,
 D3182). Calls are stepped by the host: sync host calls park the VM, async ones are listed
@@ -679,7 +679,7 @@ images are the in-process mechanism (D2700).
 - **Images:** an image is the arena bytes after a compacting GC; the roots and the
   engine build hash (D1320, D1330, D1750) live in the arena's root cell, and an image loads
   only into that build (D3641). Images are used for the base image every VM is copied
-  from, native hosts' snapshots of their setup and the stress and determinism checks. The
+  from, native hosts' images of their setup and the stress and determinism checks. The
   tools and stress modes verify every image they load (D1056); the wasm module checks only
   the header and the build hash, since its images come from its own process (D2700).
   Everything is little-endian, which matches wasm and the usual native targets.
