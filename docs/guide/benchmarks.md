@@ -105,9 +105,12 @@ What a host ships: the wasm module, and the JavaScript some builds need around i
 | quickjs-emscripten | 503 KB | 231 KB | 199 KB | 8 KB |
 | quickjs-emscripten (NG) | 529 KB | 247 KB | 212 KB | 8 KB |
 | monty | 24,593 KB | 7,628 KB | 4,804 KB | 55 KB |
+| Psychoscript | none | | | 303 KB |
 
-Module bytes as shipped; gzip -9, brotli quality 11; measured at c81310b606, 2026-11-21;
-d0bc2eef16, 2026-11-21, load 3.1.
+Module bytes as shipped; gzip -9, brotli quality 11. Psychoscript has no wasm: its
+column of JS is all of its code, its package's modules and acorn's as published (1,199
+KB raw, 254 KB with brotli); measured at c81310b606, 2026-11-21; d0bc2eef16, 2026-11-21;
+e78e71dd08, 2026-11-28, load 3.1 (Psychoscript: 3.5).
 <!-- /gen -->
 
 djs's module is the largest of the JavaScript engines: it carries the TypeScript front
@@ -134,9 +137,13 @@ A host that gives every call a fresh VM pays this on every call.
 | quickjs-emscripten | 1.15 | 0.24 | 16.0 |
 | quickjs-emscripten (NG) | 6.82 | 0.28 | 16.0 |
 | monty | 31.7 | 0.56 | 3.9 |
+| Psychoscript | 18.0 | 0.00 | n/a |
 
-Compile: the module, once per process. New VM: a new instance and VM, ready to evaluate
-(median). Memory: linear memory; measured at d0bc2eef16, 2026-11-21, load 3.1.
+Compile: the module, once per process (Psychoscript: importing its JavaScript). New VM:
+a new instance and VM, ready to evaluate (median; Psychoscript: a `Runtime`, which
+builds the realm in each run). Memory: linear memory (Psychoscript has none: it lives in
+the host's heap); measured at d0bc2eef16, 2026-11-21; e78e71dd08, 2026-11-28, load 3.1
+(Psychoscript: 3.5).
 <!-- /gen -->
 
 A new djs VM is ready in <!--n engines/djs/startup-ms .2-->0.07<!--/n--> ms, against
@@ -156,21 +163,22 @@ parsing and compiling the body, the tool calls through the bridge, and the scrip
 <!-- gen:status engines-run -->
 ![Run time per workload and engine, in ms on a logarithmic scale](gen/chart-engines-run.svg)
 
-| workload | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| sequential | 0.38 | 0.37 | 0.37 | 0.38 | 0.41 | 0.37 | 0.61 |
-| fanout | 0.84 | 1.57 | 1.22 | 1.13 | 1.78 | 1.65 | 1.43 |
-| media | 0.20 | 0.47 | 0.91 | 0.43 | 1.49 | 0.98 | 0.81 |
-| inspect | 0.24 | 0.23 | 0.20 | 0.19 | 0.29 | 0.31 | 0.65 |
-| loop | 0.70 | 2.60 | 0.83 | 2.10 | 1.11 | 4.38 | 1.66 |
-| text | 1.24 | 1.65 | 1.49 | 1.44 | 1.90 | 2.39 | 2.90 |
-| json | 1.39 | 2.12 | 1.79 | 1.88 | 2.65 | 2.74 | 3.54 |
-| ts | 1.75 | 2.31 | 1.97 | 2.10 | 2.94 | 2.99 | 2.74 |
-| heavy | 8.87 | 15.6 | 15.0 | 16.3 | 19.0 | 29.4 | 11.9 |
-| relative to djs | 1.00× | 1.60× | 1.38× | 1.42× | 1.90× | 2.27× | 2.12× |
+| workload | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sequential | 0.38 | 0.37 | 0.37 | 0.38 | 0.41 | 0.37 | 0.61 | 0.63 |
+| fanout | 0.84 | 1.57 | 1.22 | 1.13 | 1.78 | 1.65 | 1.43 | 0.98 |
+| media | 0.20 | 0.47 | 0.91 | 0.43 | 1.49 | 0.98 | 0.81 | 0.45 |
+| inspect | 0.24 | 0.23 | 0.20 | 0.19 | 0.29 | 0.31 | 0.65 | 0.45 |
+| loop | 0.70 | 2.60 | 0.83 | 2.10 | 1.11 | 4.38 | 1.66 | 0.74 |
+| text | 1.24 | 1.65 | 1.49 | 1.44 | 1.90 | 2.39 | 2.90 | 1.71 |
+| json | 1.39 | 2.12 | 1.79 | 1.88 | 2.65 | 2.74 | 3.54 | 2.32 |
+| ts | 1.75 | 2.31 | 1.97 | 2.10 | 2.94 | 2.99 | 2.74 | 3.17 |
+| heavy | 8.87 | 15.6 | 15.0 | 16.3 | 19.0 | 29.4 | 11.9 | 20.1 |
+| relative to djs | 1.00× | 1.60× | 1.38× | 1.42× | 1.90× | 2.27× | 2.12× | 1.62× |
 
 Milliseconds per run (median), in a warm process; the last row is the geometric mean of
-each engine's time over djs's; measured at d0bc2eef16, 2026-11-21, load 3.1.
+each engine's time over djs's; measured at d0bc2eef16, 2026-11-21; e78e71dd08,
+2026-11-28, load 3.1 (Psychoscript: 3.5).
 <!-- /gen -->
 
 djs has the lowest time over the set, and the largest leads where a body moves data:
@@ -195,21 +203,22 @@ shrink.
 <!-- gen:status engines-memory -->
 ![Linear memory after the run per workload and engine, in MiB on a logarithmic scale](gen/chart-engines-memory.svg)
 
-| workload | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| sequential | 0.5 | 1.4 | 0.4 | 0.4 | 16.0 | 16.0 | 5.1 |
-| fanout | 1.4 | 2.5 | 1.6 | 1.6 | 16.0 | 16.0 | 5.6 |
-| media | 0.8 | 2.1 | 1.1 | 1.1 | 16.0 | 16.0 | 5.5 |
-| inspect | 0.4 | 1.3 | 0.4 | 0.4 | 16.0 | 16.0 | 5.1 |
-| loop | 0.6 | 1.5 | 0.5 | 0.6 | 16.0 | 16.0 | 5.1 |
-| text | 0.9 | 1.6 | 0.6 | 0.7 | 16.0 | 16.0 | 7.1 |
-| json | 1.2 | 2.2 | 1.1 | 1.3 | 16.0 | 16.0 | 5.9 |
-| ts | 1.3 | 2.2 | 1.1 | 1.2 | 16.0 | 16.0 | 5.8 |
-| heavy | 3.9 | 3.4 | 2.4 | 2.4 | 16.0 | 16.0 | 7.2 |
-| relative to djs | 1.00× | 1.99× | 0.89× | 0.94× | 16.45× | 16.45× | 5.92× |
+| workload | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sequential | 0.5 | 1.4 | 0.4 | 0.4 | 16.0 | 16.0 | 5.1 | n/a |
+| fanout | 1.4 | 2.5 | 1.6 | 1.6 | 16.0 | 16.0 | 5.6 | n/a |
+| media | 0.8 | 2.1 | 1.1 | 1.1 | 16.0 | 16.0 | 5.5 | n/a |
+| inspect | 0.4 | 1.3 | 0.4 | 0.4 | 16.0 | 16.0 | 5.1 | n/a |
+| loop | 0.6 | 1.5 | 0.5 | 0.6 | 16.0 | 16.0 | 5.1 | n/a |
+| text | 0.9 | 1.6 | 0.6 | 0.7 | 16.0 | 16.0 | 7.1 | n/a |
+| json | 1.2 | 2.2 | 1.1 | 1.3 | 16.0 | 16.0 | 5.9 | n/a |
+| ts | 1.3 | 2.2 | 1.1 | 1.2 | 16.0 | 16.0 | 5.8 | n/a |
+| heavy | 3.9 | 3.4 | 2.4 | 2.4 | 16.0 | 16.0 | 7.2 | n/a |
+| relative to djs | 1.00× | 1.99× | 0.89× | 0.94× | 16.45× | 16.45× | 5.92× | n/a |
 
 Linear memory after the run, MiB; the last row is the geometric mean of each engine's
-over djs's; measured at d0bc2eef16, 2026-11-21, load 3.1.
+over djs's; Psychoscript has no linear memory; measured at d0bc2eef16, 2026-11-21, load
+3.1 (Psychoscript: 3.5).
 <!-- /gen -->
 
 Over the set djs needs about a tenth more memory than the QuickJS releases built here,
@@ -320,24 +329,26 @@ a sample.
 <!-- gen:status bridge-in -->
 ![Putting a value into the VM, per payload and engine, in ms on a logarithmic scale](gen/chart-bridge-in.svg)
 
-| payload | size | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| call arguments | 102 B | 0.002 | 0.002 | 0.001 | 0.001 | 0.003 | 0.003 | 0.025 |
-| JSON, 1 KB | 1 KB | 0.006 | 0.009 | 0.008 | 0.008 | 0.015 | 0.022 | 0.053 |
-| JSON, 100 KB | 100 KB | 0.317 | 0.763 | 0.645 | 0.699 | 1.09 | 1.17 | 0.828 |
-| JSON, 1 MB | 1,000 KB | 3.14 | 7.35 | 6.4 | 6.95 | 11 | 11.9 | 7.86 |
-| JSON, 10 MB | 10,000 KB | 31.5 | 81.6 | 72.6 | 78.4 | 118 | 128 | 98.4 |
-| ASCII, 1 MB | 1,000 KB | 0.141 | 0.413 | 0.382 | 0.387 | 3.7 | 3.71 | 2.26 |
-| ASCII, 10 MB | 10,000 KB | 1.21 | 4.19 | 3.79 | 3.84 | 36.6 | 37 | 23.8 |
-| non-ASCII, 1 MB | 1,000 KB | 1.96 | 5.04 | 2.67 | 3.27 | 5.41 | 6.16 | 2.31 |
-| 100k numbers | 1,076 KB | 1.01 | 3.45 | 8.82 | 19.5 | 8.43 | 13.8 | 6.54 |
-| bytes, 1 MiB | 1,049 KB | 0.232 | 0.14 | 0.134 | 0.148 | 0.084 | 0.088 | 0.089 |
-| nested 100 deep | 4 KB | 0.02 | 0.036 | 0.029 | 0.032 | 0.051 | 0.053 | 0.088 |
-| relative to djs | | 1.0× | 2.0× | 1.8× | 2.0× | 3.8× | 4.2× | 4.2× |
+| payload | size | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| call arguments | 102 B | 0.002 | 0.002 | 0.001 | 0.001 | 0.003 | 0.003 | 0.025 | 0.001 |
+| JSON, 1 KB | 1 KB | 0.006 | 0.009 | 0.008 | 0.008 | 0.015 | 0.022 | 0.053 | 0.006 |
+| JSON, 100 KB | 100 KB | 0.317 | 0.763 | 0.645 | 0.699 | 1.09 | 1.17 | 0.828 | 0.413 |
+| JSON, 1 MB | 1,000 KB | 3.14 | 7.35 | 6.4 | 6.95 | 11 | 11.9 | 7.86 | 4.69 |
+| JSON, 10 MB | 10,000 KB | 31.5 | 81.6 | 72.6 | 78.4 | 118 | 128 | 98.4 | 54.9 |
+| ASCII, 1 MB | 1,000 KB | 0.141 | 0.413 | 0.382 | 0.387 | 3.7 | 3.71 | 2.26 | no copy |
+| ASCII, 10 MB | 10,000 KB | 1.21 | 4.19 | 3.79 | 3.84 | 36.6 | 37 | 23.8 | no copy |
+| non-ASCII, 1 MB | 1,000 KB | 1.96 | 5.04 | 2.67 | 3.27 | 5.41 | 6.16 | 2.31 | no copy |
+| 100k numbers | 1,076 KB | 1.01 | 3.45 | 8.82 | 19.5 | 8.43 | 13.8 | 6.54 | 2.92 |
+| bytes, 1 MiB | 1,049 KB | 0.232 | 0.14 | 0.134 | 0.148 | 0.084 | 0.088 | 0.089 | 0.026 |
+| nested 100 deep | 4 KB | 0.02 | 0.036 | 0.029 | 0.032 | 0.051 | 0.053 | 0.088 | fails |
+| relative to djs | | 1.0× | 2.0× | 1.8× | 2.0× | 3.8× | 4.2× | 4.2× | n/a |
 
-Milliseconds per value put into a fresh VM (median), each engine's best path; the last
-row is the geometric mean of each engine's time over djs's; measured at d0bc2eef16,
-2026-11-21, load 3.3.
+Milliseconds per value put into a fresh VM (median), each engine's best path
+(Psychoscript: a run that takes the value from a host function, less the same run
+without it); the last row is the geometric mean of each engine's time over djs's;
+measured at d0bc2eef16, 2026-11-21; e78e71dd08, 2026-11-28, load 3.3 (Psychoscript:
+4.2).
 <!-- /gen -->
 
 djs takes JSON-like values in about half the time of the fastest QuickJS path: a 1 MB
@@ -361,24 +372,25 @@ encodes them to UTF-8 in JavaScript, byte by byte.
 <!-- gen:status bridge-out -->
 ![Reading a value out of the VM, per payload and engine, in ms on a logarithmic scale](gen/chart-bridge-out.svg)
 
-| payload | size | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| call arguments | 102 B | 0.001 | 0.004 | 0.002 | 0.002 | 0.004 | 0.005 | 0.022 |
-| JSON, 1 KB | 1 KB | 0.003 | 0.017 | 0.011 | 0.015 | 0.036 | 0.044 | 0.027 |
-| JSON, 100 KB | 100 KB | 0.128 | 1.31 | 0.901 | 1.21 | 2.76 | 3.4 | 0.531 |
-| JSON, 1 MB | 1,000 KB | 1.24 | 12.6 | 8.58 | 12.1 | 28.8 | 35 | 5.21 |
-| JSON, 10 MB | 10,000 KB | 13.3 | 128 | 90.4 | 123 | 287 | 354 | 52.5 |
-| ASCII, 1 MB | 1,000 KB | 0.075 | 1.2 | 0.322 | 0.265 | 0.675 | 0.909 | 0.216 |
-| ASCII, 10 MB | 10,000 KB | 0.146 | 11.5 | 2.64 | 2.65 | 6.47 | 8.94 | 1.4 |
-| non-ASCII, 1 MB | 1,000 KB | 0.124 | 2.58 | 1.76 | 1.72 | 2.01 | 2.27 | 0.814 |
-| 100k numbers | 1,076 KB | 0.459 | 8.07 | 17.9 | 19.5 | 52.8 | 101 | 8.83 |
-| bytes, 1 MiB | 1,049 KB | 0.073 | 0.033 | 0.03 | 0.03 | 0.092 | 0.095 | 0.201 |
-| nested 100 deep | 4 KB | 0.011 | 0.077 | 0.059 | 0.07 | 0.18 | 0.233 | 0.053 |
-| relative to djs | | 1.0× | 9.1× | 5.8× | 6.6× | 15.3× | 19.4× | 6.4× |
+| payload | size | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| call arguments | 102 B | 0.001 | 0.004 | 0.002 | 0.002 | 0.004 | 0.005 | 0.022 | 0.001 |
+| JSON, 1 KB | 1 KB | 0.003 | 0.017 | 0.011 | 0.015 | 0.036 | 0.044 | 0.027 | 0.004 |
+| JSON, 100 KB | 100 KB | 0.128 | 1.31 | 0.901 | 1.21 | 2.76 | 3.4 | 0.531 | 0.217 |
+| JSON, 1 MB | 1,000 KB | 1.24 | 12.6 | 8.58 | 12.1 | 28.8 | 35 | 5.21 | 1.22 |
+| JSON, 10 MB | 10,000 KB | 13.3 | 128 | 90.4 | 123 | 287 | 354 | 52.5 | 32.9 |
+| ASCII, 1 MB | 1,000 KB | 0.075 | 1.2 | 0.322 | 0.265 | 0.675 | 0.909 | 0.216 | no copy |
+| ASCII, 10 MB | 10,000 KB | 0.146 | 11.5 | 2.64 | 2.65 | 6.47 | 8.94 | 1.4 | no copy |
+| non-ASCII, 1 MB | 1,000 KB | 0.124 | 2.58 | 1.76 | 1.72 | 2.01 | 2.27 | 0.814 | no copy |
+| 100k numbers | 1,076 KB | 0.459 | 8.07 | 17.9 | 19.5 | 52.8 | 101 | 8.83 | 0.893 |
+| bytes, 1 MiB | 1,049 KB | 0.073 | 0.033 | 0.03 | 0.03 | 0.092 | 0.095 | 0.201 | 0.282 |
+| nested 100 deep | 4 KB | 0.011 | 0.077 | 0.059 | 0.07 | 0.18 | 0.233 | 0.053 | fails |
+| relative to djs | | 1.0× | 9.1× | 5.8× | 6.6× | 15.3× | 19.4× | 6.4× | n/a |
 
-Milliseconds per value read out of a VM (median), each engine's best path; the last row
-is the geometric mean of each engine's time over djs's; measured at d0bc2eef16,
-2026-11-21, load 3.3.
+Milliseconds per value read out of a VM (median), each engine's best path (Psychoscript:
+a run that returns the value, less the run that only takes it in); the last row is the
+geometric mean of each engine's time over djs's; measured at d0bc2eef16, 2026-11-21;
+e78e71dd08, 2026-11-28, load 3.3 (Psychoscript: 4.2).
 <!-- /gen -->
 
 Reading out is where the designs differ most. djs's reader decodes the value straight out
@@ -403,9 +415,10 @@ millisecond more than reading the bytes in place by a pointer.
 | quickjs-emscripten | 91 | 35 | 85 | 35 | 273 | 1,546 | 185 | 498 | 12,424 | 11,361 |
 | quickjs-emscripten (NG) | 84 | 29 | 78 | 28 | 270 | 1,118 | 162 | 441 | 11,970 | 11,049 |
 | monty | 127 | 192 | 102 | 190 | 420 | 7,127 | 432 | 1,229 | 11,782 | 5,230 |
+| Psychoscript | 213 | 819 | 182 | 304 | no copy | no copy | no copy | no copy | 39,719 | 3,722 |
 
 MB per second: the payload's size over the median time; measured at d0bc2eef16,
-2026-11-21, load 3.3.
+2026-11-21; e78e71dd08, 2026-11-28, load 3.3 (Psychoscript: 4.2).
 <!-- /gen -->
 
 <!-- gen:status bridge-memory -->
@@ -418,9 +431,11 @@ MB per second: the payload's size over the median time; measured at d0bc2eef16,
 | quickjs-emscripten | 16.0 | 42.0 | 83.1 | 24.2 | 24.2 |
 | quickjs-emscripten (NG) | 16.0 | 50.4 | 83.1 | 24.2 | 24.2 |
 | monty | 5.0 | 82.6 | 108.6 | 14.5 | 32.6 |
+| Psychoscript | n/a | n/a | n/a | n/a | n/a |
 
 Linear memory, MiB: of a fresh VM, after putting the value in, and after reading it back
-out; measured at d0bc2eef16, 2026-11-21, load 3.3.
+out (Psychoscript has none); measured at d0bc2eef16, 2026-11-21, load 3.3 (Psychoscript:
+4.2).
 <!-- /gen -->
 
 The memory after putting a 10 MB value in is mostly the value itself in each engine's
@@ -441,14 +456,15 @@ with small arguments and results.
 <!-- gen:status bridge-e2e -->
 ![Whole runs that pass data through a tool, per engine, in ms on logarithmic scales](gen/chart-bridge-e2e.svg)
 
-| case | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| one field of 1 MB | 3.26 | 7.36 | 6.69 | 7.45 | 11.8 | 12.8 | 29.8 |
-| edit a 1 MB file | 0.37 | 1.7 | 4.04 | 5.56 | 11.8 | 11.8 | 2.89 |
-| 1,000 small calls | 3.22 | 3.05 | 1.69 | 2.05 | 5.28 | 5.6 | 20.1 |
+| case | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty | Psychoscript |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| one field of 1 MB | 3.26 | 7.36 | 6.69 | 7.45 | 11.8 | 12.8 | 29.8 | 5.6 |
+| edit a 1 MB file | 0.37 | 1.7 | 4.04 | 5.56 | 11.8 | 11.8 | 2.89 | 0.172 |
+| 1,000 small calls | 3.22 | 3.05 | 1.69 | 2.05 | 5.28 | 5.6 | 20.1 | 1.68 |
 
 Milliseconds per run in a fresh VM (median): compiling and running the script, its tool
-calls through each engine's host function; measured at d0bc2eef16, 2026-11-21, load 3.3.
+calls through each engine's host function; measured at d0bc2eef16, 2026-11-21;
+e78e71dd08, 2026-11-28, load 3.3 (Psychoscript: 4.2).
 <!-- /gen -->
 
 The case of a 1 MB result of which the script reads one field is decided by putting the

@@ -71,7 +71,9 @@ function wrap(e: Engine, body: string): string {
     const ind = body.replace(/^/gm, "    ");
     return `__r = "completed"\ntry:\n${ind}\nexcept Exception as e:\n    __r = "caught " + type(e).__name__ + ": " + str(e)[:200]\n__r`;
   }
-  return `try {\n${body}\nreturn "completed";\n} catch (e) {\nreturn "caught " + String(e).slice(0, 200);\n}`;
+  // Out of memory can leave no room for the message (Bellard's QuickJS then throws null and
+  // the concatenation fails again): the literal needs none.
+  return `try {\n${body}\nreturn "completed";\n} catch (e) {\ntry {\nreturn "caught " + String(e).slice(0, 200);\n} catch {\nreturn "caught (no memory left for its message)";\n}\n}`;
 }
 
 const engines = (): Engine[] => [...allJs(), monty(), psychoscript()];

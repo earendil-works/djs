@@ -370,7 +370,7 @@ pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
 }
 
 /// `gen:status recorded`: the recorded measurements with where they were taken (but the
-/// engine comparison's, which the benchmarks page shows). Only
+/// engine comparison's and the runaway scripts', which the benchmarks page shows). Only
 /// a page that may name pi lists those whose key names pi (its tests, its benchmark,
 /// the pi-like workload), and it lists only those.
 fn recorded(st: &Status, pi: bool) -> String {
@@ -379,8 +379,9 @@ fn recorded(st: &Status, pi: bool) -> String {
             .any(|w| w == "pi")
     };
     let mut s = String::from("| measurement | value | measured at |\n| --- | ---: | --- |\n");
-    // The engine comparison's keys (a few hundred) are the benchmarks page's tables.
-    let listed = |k: &str| names_pi(k) == pi && !k.starts_with("engines/");
+    // The engine comparison's keys (a few hundred) and the traps' are the benchmarks page's tables.
+    let listed =
+        |k: &str| names_pi(k) == pi && !k.starts_with("engines/") && !k.starts_with("traps/");
     for (k, (v, c, d)) in st.recorded.iter().filter(|(k, _)| listed(k)) {
         let at = if c.len() == 4 && c.bytes().all(|b| b.is_ascii_digit()) {
             d.clone()
@@ -835,6 +836,12 @@ fn bridge_ms(v: f64) -> String {
     }
 }
 
+/// Whether payload `p` does not cross at all in engine `e`: Psychoscript's strings are the
+/// host's own, so what its bridge benchmark measures for them is the noise of two runs.
+fn shared(e: &str, p: &str) -> bool {
+    !is_wasm(e) && matches!(p, "text-1m" | "text-10m" | "unicode-1m")
+}
+
 /// `gen:status bridge-*`: the benchmarks page's tables of passing data through the bridge.
 fn bridge(st: &Status, what: &str) -> Result<String, String> {
     let mut keys: Vec<String> = vec!["engines/bridge/load".into()];
@@ -879,6 +886,7 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
                     // An engine that cannot take the payload has no number.
                     row[i] = get(format!("engines/bridge/{e}/{p}/{dir}-ms")).ok();
                     match row[i] {
+                        Some(_) if shared(e, p) => s.push_str(" no copy |"),
                         Some(v) => {
                             let _ = write!(s, " {} |", bridge_ms(v));
                         }
@@ -935,7 +943,7 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
                     let bytes = get(format!("engines/bridge/payload/{p}/bytes"))?;
                     for dir in ["in", "out"] {
                         let ms = get(format!("engines/bridge/{e}/{p}/{dir}-ms"))?;
-                        if ms <= 0.0 {
+                        if ms <= 0.0 || shared(e, p) {
                             s.push_str(" no copy |");
                         } else {
                             let _ =
@@ -1286,7 +1294,7 @@ pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
                         .iter()
                         .map(|(e, _)| {
                             st.num(&format!("engines/bridge/{e}/{p}/{dir}-ms"))
-                                .filter(|v| *v > 0.0)
+                                .filter(|v| *v > 0.0 && !shared(e, p))
                         })
                         .collect::<Vec<_>>()
                 })
