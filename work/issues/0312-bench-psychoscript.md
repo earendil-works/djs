@@ -1,6 +1,6 @@
 # 0312: Psychoscript in the engine benchmarks
 
-status: open
+status: in-progress
 agent: ppsycho
 branch: issue/0312-bench-psychoscript
 depends-on: -
