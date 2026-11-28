@@ -363,11 +363,9 @@ impl Inspection<'_> {
         for x in &mut b {
             x.param = params.contains(&x.name.as_str());
         }
+        // A body's parameters are not in its title: shown with its variables.
         for x in &mut bindings {
-            x.param = true;
-        }
-        if top {
-            bindings.clear();
+            x.param = !top;
         }
         bindings.extend(b);
         let captured: Vec<Binding> = f
@@ -525,8 +523,12 @@ impl Inspection<'_> {
                 .find(|b| Self::rec(b.value) == Some(r))
                 .map(|b| b.name.clone())
         };
-        for &v in held {
+        // A loop's iterator (and its `next` after it), then what is above them.
+        let mut lp = None;
+        let mut from = 0;
+        for (at, &v) in held.iter().enumerate() {
             let Some(r) = Self::rec(v) else { continue };
+            from = at + 2;
             if self.type_name(r) == "Object.ArrayIterator" {
                 let target = self.value(r, "target").unwrap_or(V::Imm(Value::UNDEFINED));
                 let over = named(target).unwrap_or_else(|| self.short(target));
@@ -536,16 +538,34 @@ impl Inspection<'_> {
                 });
                 let k = self.int(r, "index").unwrap_or(0);
                 let of = n.map_or_else(String::new, |n| format!(" of {n}"));
-                return Some(format!("inside a for…of loop over {over}, at item {k}{of}"));
+                lp = Some(format!("inside a for…of loop over {over}, at item {k}{of}"));
+                break;
             }
             if self.type_name(r).contains("Iterator") || self.type_name(r) == GENERATOR {
-                return Some(format!(
-                    "inside a loop over {}",
-                    named(v).unwrap_or_else(|| self.short(v))
-                ));
+                lp = Some(format!("inside a loop over {}", named(v).unwrap_or_else(|| self.short(v))));
+                break;
             }
         }
-        // The innermost call: the last callee on the stack.
+        if lp.is_none() {
+            from = 0;
+        }
+        let rest = held.get(from..).unwrap_or(&[]);
+        let call = self.call_in(rest, &named);
+        match (lp, call) {
+            (Some(l), Some(c)) => Some(format!("{l}, {c}")),
+            (Some(l), None) => Some(l),
+            (None, Some(c)) => Some(c),
+            (None, None) if rest.is_empty() => None,
+            (None, None) => {
+                let vs: Vec<String> = rest.iter().map(|&v| self.short(v)).collect();
+                Some(format!("halfway through an expression, holding {}", vs.join(", ")))
+            }
+        }
+    }
+
+    /// The innermost call the operand stack `held` is in the middle of: the last callee
+    /// on it, and the `this` after it.
+    fn call_in(&self, held: &[V], named: &dyn Fn(V) -> Option<String>) -> Option<String> {
         for (k, &v) in held.iter().enumerate().rev() {
             let method = match v {
                 V::Base(b, _) => Some(self.builtin(b)),
@@ -579,11 +599,7 @@ impl Inspection<'_> {
                 None => format!("halfway through a call of {short}(…)"),
             });
         }
-        let vs: Vec<String> = held.iter().map(|&v| self.short(v)).collect();
-        Some(format!(
-            "halfway through an expression, holding {}",
-            vs.join(", ")
-        ))
+        None
     }
 
     /// `v` as a short JavaScript literal (no ids, two levels deep).
@@ -627,7 +643,10 @@ impl Inspection<'_> {
                     _ => "async function",
                 }
             ),
-            "ValueArray" => format!("a list of {} values", self.list(V::Rec(r, true)).len()),
+            "ValueArray" => {
+                let n = self.list(V::Rec(r, true)).len();
+                format!("a list of {n} value{}", if n == 1 { "" } else { "s" })
+            }
             "HostCall" => format!("open call {}", self.int(r, "ID").unwrap_or(0)),
             FUNCTION => self.short(V::Rec(r, false)),
             BOX => String::from("a box (a variable shared with closures)"),
@@ -1320,13 +1339,18 @@ impl Inspection<'_> {
     /// details on indented `·` lines after it; then what a loading djs must have, the size
     /// in words, and the records as djs stores them.
     pub fn text(&self) -> String {
+        self.text_and_paths().0
+    }
+
+    /// The text, and where in it each record was first shown (`page.items`).
+    pub(super) fn text_and_paths(&self) -> (String, ById<String>) {
         let mut t = Text {
             i: self,
             js: Js::tracking(self),
             out: String::new(),
         };
         t.all();
-        t.out
+        (t.out, t.js.paths.take().unwrap_or_default())
     }
 }
 
@@ -1408,7 +1432,7 @@ impl Text<'_, '_> {
             self.line(b, &format!("not reached yet: {}", n.uninit.join(", ")));
         }
         if let Some(d) = &n.doing {
-            self.line(b, d);
+            self.wrap(b, d);
         }
         for d in &n.detail {
             self.wrap_prefixed(b, "· ", d);
@@ -1555,7 +1579,7 @@ impl Text<'_, '_> {
                 Some(p) if !p.is_empty() => p.clone(),
                 _ => i.roles.get(r as u32).map_or_else(
                     || i.held_as(r as u32),
-                    |s| s.split([':', ',']).next().unwrap_or("").to_string(),
+                    |s| s.split(':').next().unwrap_or("").to_string(),
                 ),
             };
             let known = if known.is_empty() {

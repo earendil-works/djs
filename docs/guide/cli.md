@@ -93,9 +93,12 @@ host functions named, not written.
   flags of `run`. A file that is not a snapshot, or one that does not load (a waiting
   function whose bytecode differs in this build, a host value the CLI does not have), is
   exit code 2 with `djs: cannot load FILE: ...`.
-- `djs describe file.snapshot` says what a snapshot holds: its sections and their sizes,
-  the scripts, the host values it names, the host's data, the functions it holds frames
-  of, and its records by kind.
+- `djs describe file.snapshot` says what a snapshot holds, readable first: each open
+  call and the activations waiting on it, with their source lines and their variables as
+  JavaScript values, up to the run's result; then what a loading djs must have (the code
+  of the stopped functions, builtins, host values), the size in words, and every record
+  as djs stores it. `djs describe --json file.snapshot` writes all of it as JSON, for
+  tools ([describing a snapshot](snapshots.md#describing-a-snapshot)).
 
 ### `debugger;` pauses
 

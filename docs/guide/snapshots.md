@@ -61,48 +61,88 @@ snapshot at that pause holds, here as the guide's build writes it:
 
 <!-- gen:snapshot -->
 ```text
-2663 bytes
-types          1772 bytes
-strings         172 bytes
-builtins          7 bytes
-intrinsics        1 bytes
-host              5 bytes
-scripts         370 bytes
-functions        29 bytes
-records         228 bytes
-vm               72 bytes
-15 strings (156 bytes of text), 6 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
-builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% Array.prototype Array.prototype.push Function.prototype
-flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-script 0: example.js (363 bytes of source)
-host values: console debugger() (and 0 members)
-host data: 
-function 0:0..151 (bytecode)
-function 0:0..363 (bytecode)
-       1 HostCall
-       2 Object.Array
-       2 Object.Function
-       2 Object.Generator
-       1 Object.Ordinary
-       3 Object.Promise
-       1 Patch.Global
-       1 Patch.GlobalLex
-       1 Patch.SymbolRegistry
-       7 ValueArray
+example.js, paused at debugger; (2.6 KB, 21 records)
+
+a pause at debugger; (open call 1): the run waits until it is continued
+  · open call 1 is record #6 (HostCall), its promise #8
+  fetchPage(n = 1) is stopped at `debugger;` (line 3)
+       3 |   debugger;            // a tool call would wait here
+         |   ^
+    page = { n: 1, items: [10, 11] }
+    · activation #10 (Object.Generator, awaiting) continues at pc 45; its frame #11
+    · its frame holds callee, this, 1 argument, 2 locals, nothing on the operand stack
+    · its promise #12
+  the body is waiting for fetchPage, at `await fetchPage(n)` (line 8), halfway through
+    pages.push(…)
+       8 |   pages.push(await fetchPage(n));
+         |              ^
+    fetchPage = function fetchPage, pages = [], n = 1, items = undefined
+    · activation #17 (Object.Generator, awaiting) continues at pc 32; its frame #18
+    · its frame holds callee, this, 0 arguments, 5 locals, operand stack
+        Array.prototype.push, #20
+    · its promise #3
+  the run's result is a promise that is still pending
+    · promise #3 (Object.Promise), pending
+
+on the global object: console, debugger()
+named, not stored (a loading djs must have them):
+  the code of fetchPage and the body: the same bytecode, since they are stopped halfway
+    (checked by hash)
+  builtins every djs has: Object.prototype, Promise.prototype, %AsyncFunctionPrototype%,
+    Array.prototype, Array.prototype.push, Function.prototype
+  from the host: console, debugger()
+  · fetchPage is example.js 0..151, bytecode hash 1e85731ee0e5eed7
+  · the body is example.js 0..363, bytecode hash e12c4ee85db34661
+
+2.6 KB: 1.7 KB name the 11 kinds of data and their fields, so a later djs can read it;
+  370 bytes is the script's text, compiled again when the snapshot loads; 454 bytes is
+  the run's own data: 21 records and 12 strings; 49 bytes name what it refers to without
+  storing it: builtins, host values, functions.
+
+how djs stores it: 21 records, each a kind with named fields
+  #0 Patch.Global (17 B) the global object: props {console = console, debugger = debugger}
+  #1 Patch.GlobalLex (6 B) the global scope's let and const: (empty)
+  #2 Patch.SymbolRegistry (6 B) the Symbol.for registry: (empty)
+  #3 Object.Promise (10 B) the run's result: state pending
+  #4 ValueArray (2 B) rejections of the VM: (empty)
+  #5 ValueArray (4 B) hostCalls of the VM: VALUES [#6]
+  #6 HostCall (9 B) open call 1: ID 1, FN debugger, ARGS #7, PROMISE #8
+  #7 ValueArray (2 B) ARGS of #6: (empty)
+  #8 Object.Promise (11 B) the promise of debugger(): state pending, reactions #9
+  #9 ValueArray (7 B) reactions of #8: VALUES [undefined, #10, #10]
+  #10 Object.Generator (16 B) the activation of fetchPage(n = 1): state awaiting, frame #11, pc 45, hp…
+  #11 ValueArray (22 B) the frame of fetchPage(n = 1): VALUES [#13, undefined, 1, 0, 2, 29, 1, 0, unde…
+  #12 Object.Promise (11 B) the promise of fetchPage(n = 1): state pending, reactions #15
+  #13 Object.Function (8 B) function fetchPage: template code of fetchPage
+  #14 Object.Ordinary (16 B) page: props {n = 1, items = #16}
+  #15 ValueArray (7 B) reactions of #12: VALUES [undefined, #17, #17]
+  #16 Object.Array (12 B) page.items: elements [10, 11], length 2
+  #17 Object.Generator (16 B) the activation of the body: state awaiting, frame #18, pc 32, hp 2, prom…
+  #18 ValueArray (29 B) the frame of the body: VALUES [#19, undefined, 0, 0, 0, 0, 3, undefined, #17, …
+  #19 Object.Function (8 B) the body: template code of the body
+  #20 Object.Array (8 B) pages: length 0
+  bytes per section: types 1772, strings 154, builtins 7, intrinsics 1, host 5,
+    scripts 370, functions 29, records 228, vm 72
 ```
 <!-- /gen -->
 
-The snapshot holds the example's script, its text, which the loading sandbox compiles
-again. The two functions with frames are the
-body (bytes 0 to 363, the whole example) and `fetchPage` (0 to 151), each tied to its
-span of the script and its bytecode hash. The records are the run's state: the two
-suspended async functions (`Object.Generator`, with their frames in value arrays), the
-promises between them, the `pages` array and the `page` object with its `items`, the
-closures of the body and of `fetchPage`, the open host call of the pause, and the
-patches to the objects every VM has of its own ([below](#what-a-snapshot-contains)).
-`console` and `debugger` are the host's values, named. Most of the bytes of a snapshot
-this small are its record types: the names of the kinds and fields that let a later
-build read it.
+Read it from the top. The one open call is the pause itself. `fetchPage(1)` is stopped at
+its `debugger;` with its variable `page`; the body is waiting for it at `await
+fetchPage(n)`, halfway through `pages.push(...)`: what the body had evaluated of that
+call, the method and the array, sits on its operand stack and travels with it. The
+body's promise is the run's result, still pending. That chain, from the open call through
+each activation that awaits the one before to the run's result, is what a run that waits
+looks like; with `Promise.all` it fans in, and the text shows each open call's way up to
+where they meet.
+
+Then what the snapshot names instead of storing: the code of the two stopped functions,
+which a loading djs must compile to the same bytecode (their hashes), the builtins every
+djs has, and the host's `console` and `debugger`. Most of the bytes of a snapshot this
+small name the kinds of data and their fields, which lets a later djs read it; the run's
+own data is a few hundred bytes. The indented `·` lines and the record list at the end
+are how djs stores it: each object, promise, activation and frame a record with its kind
+and named fields (`#14 Object.Ordinary` is `page`), the frames as value arrays of callee,
+`this`, arguments, a header, the variables and the operand stack ([below](#what-a-snapshot-contains)).
 
 Each Continue resumes from the snapshot alone; nothing else of the run survives between
 the parts. A later snapshot grows with the run's data (one more page each), not with the
@@ -277,10 +317,25 @@ The run goes on; the host can snapshot it at a later idle point, when the value 
 ## Describing a snapshot
 
 `djs describe file.snapshot` (and, with the docs module,
-`sandbox.describeSnapshot(snapshot)`) describes one for people, as above: its size and
-sections, the scripts, the host values it names, the host's data (the open calls' states
-and the fuel used), the builtins and functions it refers to (those it holds frames of
-marked `bytecode`), and its records by kind.
+`sandbox.describeSnapshot(snapshot)`) describes one for people, as above. It leads with
+the run in JavaScript terms: each open call, the activation that awaits it with its
+source line, its parameters, variables and captured variables as JavaScript values, what
+the expression or loop it waits in is doing, and on up the await chain to the run's
+result; activations no open call leads to (a generator stopped at a `yield`) come after.
+Then what a loading djs must have, the size in words, and the storage layer: every record
+by id, kind, size and fields. Storage details stay on the indented `·` lines, so the
+first reading needs none of them. Local and parameter names and source positions are not
+in the snapshot: the describer compiles the stored script again, as a load does, and
+reads them from its debug information; a snapshot that names its script by hash shows
+its frames by their slots.
+
+`djs describe --json file.snapshot` (and `sandbox.inspectSnapshot(snapshot)`) gives the
+same as data, for tools and for this site's snapshot view: the sections with their byte
+ranges, the record types, strings, builtins, host values, the scripts with their text,
+the functions with their names, spans and hashes, every record with its fields by name,
+its byte range, what holds it, a label, a one-line note on what it is and a JavaScript
+rendering, the run as a tree of plain sentences with notes, and the sizes in words. Its
+`format` is the snapshot format's version, and its shape changes with the format.
 
 `sandbox.callSite(id)` says where the run waits on open call `id`: the file, line and
 column of the `await` of the innermost activation waiting on it, directly or through
@@ -302,13 +357,14 @@ this site and the command line's `--debugger` work this way. Without the option,
 ## Where to look
 
 - [`crates/djs-core/src/vm/snapshot/`](../../crates/djs-core/src/vm/snapshot/): snapshots. [`crates/djs-core/src/vm/snapshot/export.rs`](../../crates/djs-core/src/vm/snapshot/export.rs): the writer;
-  [`crates/djs-core/src/vm/snapshot/import.rs`](../../crates/djs-core/src/vm/snapshot/import.rs): the loader and `describe`;
+  [`crates/djs-core/src/vm/snapshot/import.rs`](../../crates/djs-core/src/vm/snapshot/import.rs): the loader;
+  [`crates/djs-core/src/vm/snapshot/inspect/`](../../crates/djs-core/src/vm/snapshot/inspect/): `describe` and the JSON, the run in JavaScript terms;
   [`crates/djs-core/src/vm/snapshot/check.rs`](../../crates/djs-core/src/vm/snapshot/check.rs): the checks on load;
   [`crates/djs-core/src/vm/snapshot/hash.rs`](../../crates/djs-core/src/vm/snapshot/hash.rs): the bytecode and interface hashes;
   [`crates/djs-core/src/vm/snapshot/schema.rs`](../../crates/djs-core/src/vm/snapshot/schema.rs): the slot names of every object class;
   [`crates/djs-core/src/vm/snapshot/wire.rs`](../../crates/djs-core/src/vm/snapshot/wire.rs): the encoding.
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `Run.snapshot`, `loadSnapshot`,
-  `describeSnapshot` and `callSite`.
+  `describeSnapshot`, `inspectSnapshot` and `callSite`.
 - [`tests/snapshot/`](../../tests/snapshot/): the programs the snapshot tests stop at
   every idle point, and the pinned bytecode hashes of the corpus's waiting functions.
 - [`examples/sleep-snapshot/`](../../examples/sleep-snapshot/): a complete host that

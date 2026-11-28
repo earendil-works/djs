@@ -32,7 +32,8 @@ test("examples/sleep-snapshot: snapshot while the tool sleeps, load, continue", 
     assert.deepEqual([i.scripts[0].name, i.scripts[0].params], ["sleep.js", ["ms"]]);
     assert.deepEqual(i.host.map((h) => h.name), ["console", "tools", "tools.sleep"]);
     assert.match(described, /step\(label = "first", ms = 50\) is waiting for tools\.sleep\(50\)/);
-    assert.match(described, /inside a for…of loop over \["first", "second"\], at item 1 of 2/);
+    const body = i.view.calls[0].children[0].children[0];
+    assert.equal(body.doing, 'inside a for…of loop over ["first", "second"], at item 1 of 2, halfway through results.push(…)');
   }
   const result = await resume(snapshot, options(log));
   assert.deepEqual(result, ["first: slept 50 ms", "second: slept 50 ms"]);

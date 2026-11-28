@@ -14869,3 +14869,41 @@ is "startup/base image size", renamed in tests/scores/bench.tsv too, so its seri
 on. Other senses of the word go as well: the compiler's expected disassembly files are
 listings (src/compiler/listings, `DJS_UPDATE_LISTINGS=1`), and for-in copies its keys.
 The decision log, work/ and the dated research notes in docs/ keep the word as they used it.
+
+## D3760: Inspecting a snapshot: the run in JavaScript terms, one model for text and JSON
+date: 2026-11-28 · by: pview2 · issue: 0310
+`snapshot::inspect(bytes)` (vm/snapshot/inspect/) reads a snapshot into one model that
+`describe` renders as text and `Inspection::json` as JSON (`djs describe [--json]`, the
+docs module's `djs_snapshot_describe` and new `djs_snapshot_inspect`, `Sandbox.
+describeSnapshot` and `inspectSnapshot`; ABI 15). The owner's rule: readable first. The
+model is a tree from the open host calls up the await chain (activations, `Promise.all`
+and its kin's element functions, `then` reactions, resolving functions) to the run's
+result, plus activations no call leads to; each node is a sentence in JavaScript terms
+("fetchPage(n = 1) is stopped at `debugger;` (line 3)", "the body is waiting for
+fetchPage, at `await fetchPage(n)` (line 8), halfway through pages.push(…)"), a one-line
+note on what it is and why the snapshot holds it, the source line, the variables as
+JavaScript literals, and the storage details (record ids, kinds, pcs, frame layout) as
+separate `detail` lines. "Halfway through" and "inside a for…of loop" are read off the
+operand stack and the construct temporaries (the innermost callee and its `this`; an
+ArrayIterator). Every record carries a label, a note (its role in the tree when it has
+one), a JavaScript rendering, a structured `view` with record references (so a page can
+show one object reached twice as one), where the text first showed it (`page.items`), its
+byte range and its holders. The sizes come in words (the kinds' names, the script's text,
+the run's data, the names of what it refers to). The text puts the readable part first,
+the details on indented `·` lines, then what a loading djs must have, the size, and every
+record as stored (the first 40). Limits: 3 levels, 8 items, about 72 characters per
+literal, strings at 48 characters, 16 open calls in full. The JSON's shape follows the
+snapshot format's version (`format`, D024): no compatibility with earlier shapes.
+Local, capture and parameter names and positions are not in a snapshot: the inspector
+compiles the stored scripts again in a heap of its own and matches functions by span (by
+interface hash when two share one; not by bytecode hash, which names builtins through a
+realm). For that, the compiler now appends the simple parameters' names to a function's
+`FuncInfo::NAMES` after the captures (outside both hashes; privileged code keeps none),
+so frames show `fetchPage(n = 1)`. A snapshot that stores its script by hash shows its
+frames by their slots. The exporter stores a literal string once (`str_lit` reuses an
+equal string: host names equal the global object's keys). `inspect` is a djs-core
+feature of its own (default on; on in djs-cli and djs-wasm's `docs`; code only, not in
+the build hash): compiled into the shipped module, though dead, its generic code shared
+with the loader (BTreeMap and BTreeSet instances) changed the loader's inlining and grew
+the module by 4.4 KB; for the same reason it keeps its sets and maps as lists. The
+shipped module grows by 181 bytes (102 gzipped): the parameter names and the string reuse.

@@ -112,55 +112,96 @@ leaves the file:
 
 ```
 $ djs describe examples/sleep-snapshot/out/sleep.snapshot
-types          1813 bytes
-strings         291 bytes
-builtins          9 bytes
-intrinsics        1 bytes
-host              7 bytes
-scripts         406 bytes
-functions        29 bytes
-records         249 bytes
-vm               70 bytes
-18 strings (272 bytes of text), 8 builtins, 0 intrinsics, 1 scripts, 2 functions, 21 records
-builtins: Object.prototype Promise.prototype %AsyncFunctionPrototype% %ArrayIteratorPrototype%.next Array.prototype.push Function.prototype Array.prototype %ArrayIteratorPrototype%
-flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-script 0: sleep.js, parameters ms (399 bytes of source)
-host values: console tools tools.sleep() (and 0 members)
-host data: {"states":[[2,{"due":1795813233385}]],"fuelUsed":110}
-function 0:1..139 (bytecode)
-function 0:0..399 (bytecode)
-       1 HostCall
-       2 Object.Array
-       1 Object.ArrayIterator
-       2 Object.Function
-       2 Object.Generator
-       3 Object.Promise
-       1 Patch.Global
-       1 Patch.GlobalLex
-       1 Patch.SymbolRegistry
-       7 ValueArray
+sleep.js, waiting for the host to answer 1 call (2.8 KB, 21 records)
+
+tools.sleep(1000) (open call 2): the run waits for the host's answer
+  · open call 2 is record #6 (HostCall), its promise #8
+  step(label = "first", ms = 1000) is waiting for tools.sleep(1000), at `await
+    tools.sleep(ms)` (line 4)
+       4 |   const r = await tools.sleep(ms);
+         |             ^
+    r = undefined
+    · activation #10 (Object.Generator, awaiting) continues at pc 46; its frame #11
+    · its frame holds callee, this, 2 arguments, 2 locals, nothing on the operand stack
+    · its promise #12
+  the body is waiting for step, at `await step(label, ms)` (line 10)
+      10 |   results.push(await step(label, ms));
+         |                ^
+    ms = 1000, step = function step, t0 = 1795872865118, results = [], label = "first"
+    inside a for…of loop over ["first", "second"], at item 1 of 2, halfway through
+      results.push(…)
+    · activation #15 (Object.Generator, awaiting) continues at pc 90; its frame #16
+    · its frame holds callee, this, 1 argument, 9 locals, operand stack #19,
+        %ArrayIteratorPrototype%.next, Array.prototype.push, #18
+    · its promise #3
+  the run's result is a promise that is still pending
+    · promise #3 (Object.Promise), pending
+
+on the global object: console, tools
+the host's own data of the run: {"states":[[2,{"due":1795872866121}]],"fuelUsed":110}
+named, not stored (a loading djs must have them):
+  the code of step and the body: the same bytecode, since they are stopped halfway
+    (checked by hash)
+  builtins every djs has: Object.prototype, Promise.prototype, %AsyncFunctionPrototype%,
+    %ArrayIteratorPrototype%.next, Array.prototype.push, Function.prototype,
+    Array.prototype, %ArrayIteratorPrototype%
+  from the host: console, tools, tools.sleep()
+  · step is sleep.js 1..139, bytecode hash e74cc8f7dd6ffe63
+  · the body is sleep.js 0..399, bytecode hash 9437879384c355d6
+
+2.8 KB: 1.8 KB name the 11 kinds of data and their fields, so a later djs can read it;
+  406 bytes is the script's text, compiled again when the snapshot loads; 598 bytes is
+  the run's own data: 21 records and 16 strings; 53 bytes name what it refers to without
+  storing it: builtins, host values, functions.
+
+how djs stores it: 21 records, each a kind with named fields
+  #0 Patch.Global (17 B) the global object: props {console = console, tools = tools}
+  #1 Patch.GlobalLex (6 B) the global scope's let and const: (empty)
+  #2 Patch.SymbolRegistry (6 B) the Symbol.for registry: (empty)
+  #3 Object.Promise (10 B) the run's result: state pending
+  #4 ValueArray (2 B) rejections of the VM: (empty)
+  #5 ValueArray (4 B) hostCalls of the VM: VALUES [#6]
+  #6 HostCall (10 B) open call 2: ID 2, FN tools.sleep, ARGS #7, THIS tools, PROMISE #8, FLAGS 1
+  #7 ValueArray (5 B) ARGS of #6: VALUES [1000]
+  #8 Object.Promise (11 B) the promise of tools.sleep(1000): state pending, reactions #9
+  #9 ValueArray (7 B) reactions of #8: VALUES [undefined, #10, #10]
+  #10 Object.Generator (16 B) the activation of step(label = "first", ms = 1000): state awaiting, fram…
+  #11 ValueArray (25 B) the frame of step(label = "first", ms = 1000): VALUES [#13, undefined, "first"…
+  #12 Object.Promise (11 B) the promise of step(label = "first", ms = 1000): state pending, reactions …
+  #13 Object.Function (8 B) function step: template code of step
+  #14 ValueArray (7 B) reactions of #12: VALUES [undefined, #15, #15]
+  #15 Object.Generator (17 B) the activation of the body: state awaiting, frame #16, pc 90, hp 3, prom…
+  #16 ValueArray (46 B) the frame of the body: VALUES [#17, undefined, 1000, 0, 0, 0, 1, 3, undefined,…
+  #17 Object.Function (8 B) the body: template code of the body
+  #18 Object.Array (8 B) results: length 0
+  #19 Object.ArrayIterator (12 B) an element of #16: target #20, index 1, kind 1
+  #20 Object.Array (12 B) target of #19: elements ["first", "second"], length 2
+  bytes per section: types 1813, strings 277, builtins 9, intrinsics 1, host 7,
+    scripts 406, functions 29, records 249, vm 72
 ```
 
 ## What the snapshot holds
 
-Read the description from the middle. The run's state is 21 **records**, one per object
-or internal cell the run can reach beyond what a fresh sandbox has, each written by its
-kind's name with its fields by name (the `types` section at the top lists the kinds and
-their fields once, which is most of the bytes of so small a snapshot):
+Read the description from the top: it tells the run in JavaScript terms first and puts
+how djs stores each part on the indented `·` lines and in the record list at the end.
+The run's state is 21 **records**, one per object or internal cell the run can reach
+beyond what a fresh sandbox has, each written by its kind's name with its fields by name
+(the snapshot lists the kinds and their fields once, which is most of the bytes of so
+small a snapshot):
 
-- two **Generator** records, the suspended activations of `step("first", 1000)` and of the
-  script's body, each with its frame (the stopped function's registers and operand stack,
-  `results.push` and `results` among them) and the instruction it stopped at;
-- the functions they stopped in, `function 0:1..139` (`step`) and `function 0:0..399` (the
-  body), named by their place in the script and checked by their bytecode: the loading
-  sandbox compiles the script again, finds each function by its place, and refuses the
-  snapshot if its bytecode differs, since a frame's registers and its instruction only
-  mean the same in the same code;
-- the for-of loop's **ArrayIterator** over `["first", "second"]`, at the second element;
-- the **HostCall**: the open call 2 (call 1 was the first `console.log`), its function by
-  the host's name, `tools.sleep`, its arguments, and the promise the script awaits;
+- the **open call** 2 (call 1 was the first `console.log`), `tools.sleep(1000)`, its
+  function by the host's name, its arguments, and the promise the script awaits;
+- the two suspended activations (`Object.Generator`), `step("first", 1000)` waiting for
+  that call and the body waiting for `step`, each with its frame: its arguments, its
+  variables, and its operand stack, where the body keeps what it had evaluated of
+  `results.push(...)` and the for-of loop's iterator over `["first", "second"]`;
+- the functions they stopped in, `step` (`sleep.js 1..139`) and the body (`0..399`), named
+  by their place in the script and checked by their bytecode: the loading sandbox compiles
+  the script again, finds each function by its place, and refuses the snapshot if its
+  bytecode differs, since a frame's registers and its instruction only mean the same in
+  the same code;
 - the **Patch** records: what the global object, the global lexical scope and the
-  `Symbol.for` registry have beyond a fresh sandbox's (here nothing);
+  `Symbol.for` registry have beyond a fresh sandbox's;
 - the builtins the records refer to by their paths (`Array.prototype.push`), never their
   contents.
 
@@ -172,7 +213,7 @@ sandbox compiles again. What it does not hold is as important:
   snapshot never carries a host's data (pi's tool list, say) and loads only where the host
   gives those names again;
 - the **timer**: the host's, which the second host starts again from the saved
-  deadline. The host's data in the snapshot (`host data`) is the open call's state and the
+  deadline. The host's data in the snapshot ("the host's own data of the run") is the open call's state and the
   fuel the run used so far, which the loaded run goes on counting from.
 
 The VM's clock is the host's too: `Date.now()` in the script reads the time the host sets

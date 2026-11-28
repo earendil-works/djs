@@ -491,14 +491,18 @@ again. What the options and methods do:
 - A snapshot cannot hold a `WeakRef` or a `FinalizationRegistry`, nor a run whose script
   changed a builtin object: snapshotting such a run throws a `misuse` error that names
   what it met, and the run goes on.
-- `sandbox.describeSnapshot(snapshot)` describes one for people: its sections and their
-  sizes, the scripts, the host values it names, the host's data (the open calls' states
-  and the fuel used), the functions it holds frames of, and its records by kind.
+- `sandbox.describeSnapshot(snapshot)` describes one for people: the run in JavaScript
+  terms (each open call, the activations waiting on it with their source lines and
+  variables, up to the run's result), what a loading djs must have, the size in words, and
+  the records as djs stores them. `sandbox.inspectSnapshot(snapshot)` returns the same as
+  data (`SnapshotInspection`: sections, types, strings, scripts, functions, records with
+  labels and notes, the run as a tree), as `djs describe --json` writes it
+  ([describing a snapshot](snapshots.md#describing-a-snapshot)).
 - `sandbox.callSite(id)` says where the run waits on open call `id`: `{ file, line,
   column }` of the `await` of the innermost activation waiting on it, directly or through
   `Promise.all` and the like, in the script the run started with, also after any number
   of loads. It returns `undefined` when nothing waits on the call.
-- Those two are tools for people and need the docs module
+- Those three are tools for people and need the docs module
   ([the module builds](host.md#the-module-builds)); with the shipped module they throw a
   `misuse` error. `djs describe file.snapshot` describes a snapshot file.
 

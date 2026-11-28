@@ -309,33 +309,54 @@ named by its span and bytecode hash:
 
 <!-- gen:snapshot -->
 ```text
-2416 bytes
-types          1813 bytes
-strings         191 bytes
-builtins          7 bytes
-intrinsics        1 bytes
-host              5 bytes
-scripts         151 bytes
-functions        15 bytes
-records         154 bytes
-vm               72 bytes
-16 strings (174 bytes of text), 6 builtins, 0 intrinsics, 1 scripts, 1 functions, 15 records
-builtins: Object.prototype Promise.prototype %ArrayIteratorPrototype%.next Function.prototype %ArrayIteratorPrototype% Array.prototype
-flags and constants: Object BigInt Symbol PromiseStates PromiseFlags GeneratorStates GeneratorKinds
-script 0: example.js (144 bytes of source)
-host values: console debugger() (and 0 members)
-host data: 
-function 0:0..144 (bytecode)
-       1 HostCall
-       1 Object.Array
-       1 Object.ArrayIterator
-       1 Object.Function
-       1 Object.Generator
-       2 Object.Promise
-       1 Patch.Global
-       1 Patch.GlobalLex
-       1 Patch.SymbolRegistry
-       5 ValueArray
+example.js, paused at debugger; (2.3 KB, 15 records)
+
+a pause at debugger; (open call 2): the run waits until it is continued
+  · open call 2 is record #6 (HostCall), its promise #8
+  the body is stopped at `debugger;` (line 5), inside a for…of loop over ["fuel",
+    "frames", "arena"], at item 1 of 3
+       5 |   debugger;
+         |   ^
+    total = 4, word = "fuel"
+    · activation #10 (Object.Generator, awaiting) continues at pc 89; its frame #11
+    · its frame holds callee, this, 0 arguments, 7 locals, operand stack #13,
+        %ArrayIteratorPrototype%.next
+    · its promise #3
+  the run's result is a promise that is still pending
+    · promise #3 (Object.Promise), pending
+
+on the global object: console, debugger()
+named, not stored (a loading djs must have them):
+  the code of the body: the same bytecode, since it is stopped halfway (checked by hash)
+  builtins every djs has: Object.prototype, Promise.prototype,
+    %ArrayIteratorPrototype%.next, Function.prototype, %ArrayIteratorPrototype%,
+    Array.prototype
+  from the host: console, debugger()
+  · the body is example.js 0..144, bytecode hash b0f85de53f2c7757
+
+2.3 KB: 1.8 KB name the 11 kinds of data and their fields, so a later djs can read it;
+  151 bytes is the script's text, compiled again when the snapshot loads; 399 bytes is
+  the run's own data: 15 records and 13 strings; 35 bytes name what it refers to without
+  storing it: builtins, host values, functions.
+
+how djs stores it: 15 records, each a kind with named fields
+  #0 Patch.Global (17 B) the global object: props {console = console, debugger = debugger}
+  #1 Patch.GlobalLex (6 B) the global scope's let and const: (empty)
+  #2 Patch.SymbolRegistry (6 B) the Symbol.for registry: (empty)
+  #3 Object.Promise (10 B) the run's result: state pending
+  #4 ValueArray (2 B) rejections of the VM: (empty)
+  #5 ValueArray (4 B) hostCalls of the VM: VALUES [#6]
+  #6 HostCall (9 B) open call 2: ID 2, FN debugger, ARGS #7, PROMISE #8
+  #7 ValueArray (2 B) ARGS of #6: (empty)
+  #8 Object.Promise (11 B) the promise of debugger(): state pending, reactions #9
+  #9 ValueArray (7 B) reactions of #8: VALUES [undefined, #10, #10]
+  #10 Object.Generator (17 B) the activation of the body: state awaiting, frame #11, pc 89, hp 2, prom…
+  #11 ValueArray (28 B) the frame of the body: VALUES [#12, undefined, 0, 0, 0, 0, 3, undefined, #10, …
+  #12 Object.Function (8 B) the body: template code of the body
+  #13 Object.ArrayIterator (12 B) an element of #11: target #14, index 1, kind 1
+  #14 Object.Array (14 B) target of #13: elements ["fuel", "frames", "arena"], length 3
+  bytes per section: types 1813, strings 173, builtins 7, intrinsics 1, host 5,
+    scripts 151, functions 15, records 154, vm 72
 ```
 <!-- /gen -->
 

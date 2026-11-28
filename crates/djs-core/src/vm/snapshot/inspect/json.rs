@@ -289,13 +289,14 @@ impl Inspection<'_> {
         j.fin();
         j.key("records");
         j.open('[');
+        let (_, paths) = self.text_and_paths();
         for (k, (t, fs)) in self.snap.records.iter().enumerate() {
             self.jrecord(
                 &mut j,
                 *t,
                 fs,
                 self.spans[k],
-                Some((k as u32, &self.held_by[k])),
+                Some((k as u32, &self.held_by[k], &paths)),
             );
         }
         j.close(']');
@@ -854,15 +855,24 @@ impl Inspection<'_> {
         t: u32,
         fs: &[F],
         span: (usize, usize),
-        held: Option<(u32, &Vec<u32>)>,
+        held: Option<(u32, &Vec<u32>, &ById<String>)>,
     ) {
         let ty = &self.snap.types[t as usize];
         j.open('{');
         self.kv_str(j, "type", &ty.name);
         self.kv_num(j, "start", span.0);
         self.kv_num(j, "end", span.1);
-        if let Some((r, _)) = held {
+        if let Some((r, _, paths)) = held {
             self.kv_str(j, "label", &self.label(r));
+            // Where the text first showed it (`page.items`), else what holds it.
+            let known = match paths.get(r) {
+                Some(p) if !p.is_empty() => p.clone(),
+                _ => self
+                    .roles
+                    .get(r)
+                    .map_or_else(|| self.held_as(r), |s| s.split(':').next().unwrap_or("").into()),
+            };
+            self.kv_str(j, "known", &known);
             self.kv_str(j, "note", &self.note(r));
             self.kv_str(j, "js", &Js::new(self).js(V::Rec(r, false), 2, ""));
             j.key("view");
@@ -878,7 +888,7 @@ impl Inspection<'_> {
         }
         j.close('}');
         j.fin();
-        if let Some((_, h)) = held {
+        if let Some((_, h, _)) = held {
             j.key("heldBy");
             j.open('[');
             for &r in h {
