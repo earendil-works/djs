@@ -151,7 +151,7 @@ $T list --paths --group direct-eval      # each test with the rule that grouped 
 $T run                                   # active + later with qjs (the default engine)
 $T run built-ins/Array --failures        # a path prefix, with one-line failure reasons
 $T run --engine djs --clusters           # djs in-process; failures grouped by reason
-$T run --engine djs --lazy --group active --expected tests/test262/expected-failures.txt  # the gate
+$T run --engine djs --group active --expected tests/test262/expected-failures.txt  # the gate
 $T run 'language/**/S11*.js' -j 4        # globs: * within a segment, ** across
 $T run --group skip language/statements/with  # run a skipped group explicitly
 
@@ -273,7 +273,7 @@ $D --update-ratchet                  # rewrite tests/corpus/expected-failures.tx
 scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
-$D --engine djs --lazy --ratchet --suspend-every 97 --gc-stress --determinism
+$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism
                                      # what the gate runs (--suspend-every 97 also runs 1009)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 $D --engine djs --idle-points codemode   # the idle points per case (the total always prints)
@@ -290,10 +290,6 @@ every case a second (third) time; a transcript that differs from the plain djs r
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
-`--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest uses
-it (native embedders can turn lazy functions on; the wasm modules compile eagerly, D3732), its test262 leg runs the active
-group both lazy and eager (in parallel), the other legs (unsafe-heap) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
-(D2991).
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash
 (the graph alone, computed by a copying collection of a copy; D1720, D1725, D2040). The e2e
@@ -511,9 +507,7 @@ tested in four places:
   point alone and all of them chained; every run must continue like the uninterrupted one,
   and nothing may be refused. `DJS_SNAP_MEASURE=1 DJS_SNAP_OUT=file DJS_SNAP_DIR=dir` adds
   sizes and times per idle point (with the image beside them) and writes
-  the snapshots; `snapshot_import_dir` (`DJS_SNAP_IMPORT=dir`) loads another build's. The
-  leg runs both again with `DJS_LAZY=1`, VMs that compile functions at their first call, as
-  a native embedder's can (D3721).
+  the snapshots; `snapshot_import_dir` (`DJS_SNAP_IMPORT=dir`) loads another build's.
 - **Hosts' runs** (D3720, D3722): `vm::snapshot::host_tests` (in `test`: host values and
   functions by name, other function ids in the loading host, named handles, refusals);
   js/test/snapshot.test.ts (the Sandbox API with pi's code mode setup, js/test/pi-setup.ts)
@@ -682,8 +676,7 @@ leg", and entries unused for 14 days are pruned on every run. `scripts/gate.sh
 
 `scripts/gate.sh --full` reads no cache and also runs the **full-only** legs, checks too
 slow for every merge:
-- **test262 under GC stress** (D3440): the active group, eager and with lazy functions,
-  collecting at every safepoint (`djs-test262 run --gc-stress`) in the debug build, where
+- **test262 under GC stress** (D3440): the active group, collecting at every safepoint (`djs-test262 run --gc-stress`) in the debug build, where
   the heap checks its invariants at each collection (the builtin prefix's, D3290). The
   regular legs collect too rarely to meet them: this run found an unlatched write to a
   builtin within minutes that every other leg missed. The tests that take seconds to
