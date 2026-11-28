@@ -40,7 +40,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 12;
+pub const ABI_VERSION: u32 = 13;
 
 /// `vm_run` results.
 pub mod status {
@@ -1629,11 +1629,10 @@ fn put_bytes(out: &mut Vec<u8>, b: &[u8]) {
     out.extend_from_slice(b);
 }
 
-/// A logical snapshot of idle VM `vm` (D3700) in the out buffer: its length, or -1 with
-/// the reasons it was refused in the out buffer. staging[0..len]: the flags (bit 0: store
-/// the sources; bit 1: a host's run, D3720), then for a host's run its functions (count,
-/// then id and identity each), its values (count, then handle and name each), the handles
-/// it holds for the run (count, then handle and name each) and its data.
+/// A logical snapshot of the host's run in idle VM `vm` (D3700, D3720) in the out buffer,
+/// with the scripts' texts: its length, or -1 with the reasons it was refused in the out
+/// buffer. staging[0..len]: the host's functions (count, then id and identity each), its
+/// values (count, then handle and name each) and its data.
 pub extern "C" fn vm_snapshot(vm: u32, len: usize) -> i32 {
     use djs_core::vm::snapshot::{HostNames, SnapshotOptions};
     with(|s| {
@@ -1642,27 +1641,19 @@ pub extern "C" fn vm_snapshot(vm: u32, len: usize) -> i32 {
             buf: &staging[..len],
             at: 0,
         };
-        let flags = w.u32();
-        let host = (flags & 2 != 0).then(|| {
-            let mut host = HostNames::default();
-            for _ in 0..w.u32() {
-                let id = w.u32();
-                host.functions.push((id, String::from(w.text())));
-            }
-            for _ in 0..w.u32() {
-                let v = slot.value(w.u32());
-                host.values.push((String::from(w.text()), v));
-            }
-            for _ in 0..w.u32() {
-                let v = slot.value(w.u32());
-                host.handles.push((String::from(w.text()), v));
-            }
-            host.data = String::from(w.text());
-            host
-        });
+        let mut host = HostNames::default();
+        for _ in 0..w.u32() {
+            let id = w.u32();
+            host.functions.push((id, String::from(w.text())));
+        }
+        for _ in 0..w.u32() {
+            let v = slot.value(w.u32());
+            host.values.push((String::from(w.text()), v));
+        }
+        host.data = String::from(w.text());
         let opts = SnapshotOptions {
-            sources: flags & 1 != 0,
-            host,
+            sources: true,
+            host: Some(host),
         };
         let vmo = slot.vm.options();
         let r = with_snap_base(vmo, |b| {
@@ -1682,12 +1673,10 @@ pub extern "C" fn vm_snapshot(vm: u32, len: usize) -> i32 {
 }
 
 /// Loads the snapshot of a host's run (D3720) into `vm`, a fresh VM of the host's.
-/// staging[0..len]: the snapshot (length and bytes), the candidate sources (count, then
-/// each), the host functions (count, then id, handle and identity each) and the host
-/// values (count, then handle and name each). Returns 0, the out buffer holding the
-/// handles the host held (count, then handle and name each), the open calls (count, then
-/// each id) and the host's data; or 1 with the reasons in the out buffer (the VM may have
-/// changed: free it).
+/// staging[0..len]: the snapshot (length and bytes), the host functions (count, then id,
+/// handle and identity each) and the host values (count, then handle and name each).
+/// Returns 0, the out buffer holding the open calls (count, then each id) and the host's
+/// data; or 1 with the reasons in the out buffer (the VM may have changed: free it).
 pub extern "C" fn vm_load_snapshot(vm: u32, len: usize) -> u32 {
     use djs_core::vm::snapshot::HostValues;
     let staging = with(|s| s.staging[..len].to_vec());
@@ -1696,7 +1685,6 @@ pub extern "C" fn vm_load_snapshot(vm: u32, len: usize) -> u32 {
         at: 0,
     };
     let bytes = w.bytes();
-    let sources: Vec<&[u8]> = (0..w.u32()).map(|_| w.bytes()).collect();
     let mut functions = Vec::new();
     let mut values = Vec::new();
     let r = with(|s| {
@@ -1717,19 +1705,16 @@ pub extern "C" fn vm_load_snapshot(vm: u32, len: usize) -> u32 {
         let vmo = slot.vm.options();
         with_snap_base(vmo, |b| {
             slot.vm
-                .load_snapshot(b, bytes, &sources, &host)
+                .load_snapshot(b, bytes, &[], &host)
                 .map_err(|e| e.0.join("\n"))
         })
         .and_then(|r| r)
     });
     with(|s| match r {
         Ok(l) => {
+            // (A snapshot of a host's run made here holds no handles of the host's: a
+            // native host's can, and they are freed with the VM.)
             let mut out = Vec::new();
-            put_u32(&mut out, l.handles.len() as u32);
-            for (n, h) in &l.handles {
-                put_u32(&mut out, h.index() + 1);
-                put_bytes(&mut out, n.as_bytes());
-            }
             put_u32(&mut out, l.calls.len() as u32);
             for c in &l.calls {
                 put_u32(&mut out, *c);
@@ -1746,17 +1731,19 @@ pub extern "C" fn vm_load_snapshot(vm: u32, len: usize) -> u32 {
 }
 
 /// What loading the snapshot in staging[0..len] needs from the host (`snapshot::needs`):
-/// 0 and in the out buffer the scripts stored by hash only (count, then each name) and the
-/// host values and functions it names (count, then each name); or 1 with the reason.
+/// 0 and in the out buffer the host values and functions it names (count, then each
+/// name); or 1 with the reason (also for a snapshot that stores a script by hash only).
 pub extern "C" fn djs_snapshot_needs(len: usize) -> u32 {
     with(|s| match djs_core::vm::snapshot::needs(&s.staging[..len]) {
+        Ok(n) if !n.sources.is_empty() => {
+            s.set_out(b"the snapshot stores a script by hash only, without its text");
+            1
+        }
         Ok(n) => {
             let mut out = Vec::new();
-            for list in [&n.sources, &n.host] {
-                put_u32(&mut out, list.len() as u32);
-                for x in list {
-                    put_bytes(&mut out, x.as_bytes());
-                }
+            put_u32(&mut out, n.host.len() as u32);
+            for x in &n.host {
+                put_bytes(&mut out, x.as_bytes());
             }
             s.set_out(&out);
             0
