@@ -42,21 +42,20 @@ const sb = await Sandbox.create({
   functions: { readFile: (p) => fs.readFileSync(p as string, "utf8") },
   asyncFunctions: { fetchJson: (url) => fetch(url as string).then((r) => r.json()) },
   // globals: { readFile: "readFile", fetchJson: "fetchJson", console: "console" }, // the default
-  // bindings: { myTool: "@sdk/our-stuff#myTool" }, // body parameters bound to host functions
+  // modules: (spec) => ({ exports: { myTool: "@sdk/our-stuff#myTool" } }), // imports of bodies
   console: myConsole,            // receives console.log/info/warn/error; default: console
   memoryLimit: 64 << 20,         // heap cap in bytes; default 4 GiB (see below)
   fuelSlice: 1_000_000,          // fuel per vm_run, i.e. how often the host gets control
   maxFuel: 1e9,                  // per run; default unlimited
   now: Date.now,                 // the VM's clock (ms), a function or a fixed time; default Date.now
   timeZoneOffset: 0,             // minutes east of UTC; default: the host's current offset
-  unhandledRejections: "warn",   // or "throw", or "collect" (sb.takeUnhandledRejections())
+  unhandledRejections: "warn",   // or "throw", or "ignore"
   randomSeed: 42n,               // Math.random's 64-bit seed; default: from crypto.getRandomValues
   frozenBuiltins: false,         // builtins behave as frozen, with the override fix (D2304)
   deterministic: { startedAt, seed }, // repeatable runs (D1680): see below
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
-const task = sb.start(code, params);                            // a task: suspend() into a snapshot while it waits
 const run = sb.begin(code, params);                             // a run the host drives; run.snapshot() while idle
 sb.dispose();
 ```
@@ -65,8 +64,8 @@ sb.dispose();
   `WebAssembly.Module`. Every sandbox gets its own instance and VM (`new WebAssembly.Instance`,
   about 30 µs), so a trap in one cannot affect another.
 - `new Sandbox(opts)` is the synchronous form. It needs `opts.module`, or a finished
-  `loadModule()` of the default location. `Sandbox.create` / `Sandbox.resume` load the
-  module first.
+  `loadModule()` of the default location. `Sandbox.create` loads the module first.
+  Everything a sandbox defines comes from its options (D3745).
 - `run(code, params)` compiles `code` as a codemode async function body. The `params` are
   its parameters, sent in through the wire format. `return` gives the result, read out
   through the reader. Objects come back as plain JS objects. Values without a host form
@@ -76,29 +75,26 @@ sb.dispose();
   the wire format). A thrown host error is thrown in the VM at the call, as an Error of the
   same kind (TypeError, RangeError, otherwise Error) with the same message. A return value
   the wire format cannot carry (a function, a cycle) becomes such an error too.
-- **Identities and bindings (D2970, D2972).** `functions` and `asyncFunctions` are keyed
+- **Identities (D2970).** `functions` and `asyncFunctions` are keyed
   by the function's identity, any string (`readFile`, `tools.read`,
   `@sdk/our-stuff#myTool`): calls, journals, `run.calls` and snapshots name the function by
   it, and the sandbox makes one function object per identity. An identity `ns.member` of
   two identifiers also makes the function member `member` of the namespace object `ns`
-  (identity `ns`). Where scripts find them is separate: `globals` maps global names to
-  identities of functions or namespaces, and `bindings` maps parameter names to them,
-  which every codemode body gets after the run's `params` (`bindings: { myTool:
-  "@sdk/our-stuff#myTool", sdk: "sdk" }`: the script calls `myTool("x")` and
-  `sdk.fetch(u)`; the stand-in for imports). Without `globals`, one written rule:
-  `console`, every namespace and every function whose identity is an identifier are
-  globals of their own names, so `{ "tools.read": f }` makes the global `tools`; other
-  identities are bound nowhere. A run parameter with a binding's name, or a binding or
-  global to an identity the sandbox lacks, is a `misuse` error.
+  (identity `ns`), frozen once the sandbox has its members. Where scripts find them is
+  separate: `globals` maps global names to identities of functions or namespaces, and
+  `modules` lets bodies import them (D3597, exports name identities). Without `globals`,
+  one written rule: `console`, every namespace and every function whose identity is an
+  identifier are globals of their own names, so `{ "tools.read": f }` makes the global
+  `tools`; other identities are bound nowhere. A global to an identity the sandbox lacks
+  is a `misuse` error.
 - `functions` are *sync* host functions: a call parks the VM until it returns. `run` needs
   them to return synchronously (a promise is a TypeError in the VM); `runAsync` awaits a
   promise while the VM stays parked at the call.
-- `asyncFunctions` are *async* host functions (D1374), plain functions or `{ call, save,
-  resume }` with hooks for snapshots (below): a call returns a promise in the VM
+- `asyncFunctions` are *async* host functions (D1374): a call returns a promise in the VM
   at once and the script goes on, so several calls are outstanding together (`Promise.all`
-  over tools). `runAsync` starts each call as soon as `vm_run` returns, and when only
-  pending calls are left (IDLE) awaits whichever settles first, passes its result back and
-  runs on. The function may return a value or a promise (`run` accepts only values). A
+  over tools). `run` and `runAsync` are loops over a host-driven run (below, D3745): at
+  each idle point they call the async host functions the script called, settle each call
+  with its result (`runAsync`: when its promise settles, awaiting the first) and run on. The function may return a value or a promise (`run` accepts only values). A
   rejection or a thrown error rejects the VM promise with an Error of the same kind.
   Results are macrotasks (D1670): the VM applies one only when its job queue is empty,
   oldest first, and drains the queue before the next, so the output does not depend on
@@ -118,15 +114,10 @@ sb.dispose();
   is empty (after the run, after each async result, and whenever it waits on async host
   calls), as qjs reports them. `unhandledRejections: "warn"` (default) calls `console.warn("Possibly unhandled
   promise rejection:", "TypeError: x")`; `"throw"` fails the run with a `threw` error
-  `Possibly unhandled promise rejection: TypeError: x`; `"collect"` keeps the reasons (host
-  values) for `takeUnhandledRejections()`. A rejected result promise is the run's error,
-  not an unhandled rejection.
+  `Possibly unhandled promise rejection: TypeError: x`; `"ignore"` drops them. A rejected
+  result promise is the run's error, not an unhandled rejection.
 - A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
   that can never settle is a `threw` error.
-- `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
-  add functions and globals between runs; the functions are bound by the written rule
-  above (a dotted name, `tools.read`, as a property of the global namespace object
-  `tools`, D2632).
 - Errors are `SandboxError` with a `kind`:
   - `threw`: an uncaught exception in the VM. `message` is the display form (`TypeError: x`);
     `value` is the value as read.
@@ -155,61 +146,6 @@ sb.dispose();
   A host `collect()` at exactly that point can then fail for lack of to-space; collect
   when the VM is idle or done instead.
 
-### Tasks: suspending a run into a snapshot (D2770, D2771, D3720)
-
-`runAsync` returns only at the end. A task is the same run, driven by the sandbox, that
-can be suspended into a snapshot (D3700) while it waits on async host calls and
-continued from it later, in another sandbox or process (examples/sleep-snapshot shows
-all of it):
-
-```ts
-const sleep: AsyncHostFunction<{ due: number }> = {
-  async call(ms) { const due = Date.now() + Number(ms); this.state = { due }; await until(due, this.signal); },
-  save: (call) => call.state,                     // the default: the call's state, JSON data
-  async resume({ due }, call) { await until(due, call.signal); }, // after a load
-};
-const opts = { asyncFunctions: { "tools.sleep": sleep } };
-const task = (await Sandbox.create(opts)).start(code, params, { filename: "task.js" });
-task.calls;                                 // the open calls: { id, fn, args, startedAt, state, signal }
-const snap = await task.suspend();          // at the next idle point: save() per call, snapshot, stop
-const again = await Sandbox.resume(snap, opts); // any time later, any process
-await again.result;
-```
-
-- `start` runs the body like `runAsync` (the first step at once: a compile error throws)
-  and calls the async host functions as the script calls them. `task.result` is the
-  outcome; it rejects with a SandboxError (`threw`, `fuel`, ...).
-- `suspend()` waits for the next idle point with no result left to deliver, takes each
-  open call's state (its function's `save(call)`, by default `call.state`; JSON data) and
-  writes the run as a snapshot, the states with their calls (the host's data). The task
-  stops: the calls' `signal`s abort, their late results are dropped, and `result` rejects
-  with kind `suspended` (counted as handled). A snapshot that is refused (a `WeakRef`,
-  written builtins, D3290), a `save` that throws or a state that is not JSON rejects the
-  `suspend` only, and the task goes on. `checkpoint()` snapshots the same way and goes
-  on. Both reject if the run ends first. `{ sources: false }` stores the scripts' hashes
-  instead of their texts.
-- `Sandbox.resume(snap, opts)` makes a sandbox from `opts` (the same host functions, by
-  name), loads the snapshot and drives it as a task (`task.sandbox` is the new sandbox;
-  `sb.resume(snap)` does it in an existing fresh one). Each open call continues by its
-  function's hooks: `resume(state, call)` with the saved state; `call` again for a
-  function without `resume`; a plain function's call is rejected (an Error naming the
-  function), since the sandbox cannot know whether calling it again is safe.
-- **Snapshots** (D3700, D3720; the guide's persistence.md): the run's records by kind and
-  field names, builtins by registry path, functions by (script, span) with a bytecode
-  hash for those with frames, compiled again on load. The sandbox's own values are named,
-  not written: host functions by identity, namespaces (with `aliases` and
-  `missingMember`), `values`, host modules' namespaces and the JSON boundary's converting
-  functions; the loading sandbox must give the same names, and a missing one is a
-  `misuse` error before anything loads (`djs_snapshot_needs`). Scripts stored by hash are
-  found among this process's scripts or through the `sources` option. A refused load
-  leaves the sandbox unusable. `describeSnapshot(snap)` describes one; `callSite(id)`
-  says where the run waits on an open call (`vm_call_site`, D3054).
-- The hooks see a `HostCall`: `id`, `fn`, `args`, `startedAt` (this sandbox's
-  `Date.now()` when it started or resumed the call), `state` (set it any time; a resumed
-  call starts with its saved state, so it is saved again by default) and `signal`
-  (aborted when the task is suspended or the sandbox disposed). It is `this` of `call`.
-- One task or run at a time per sandbox; `dispose()` ends a task in progress (`misuse`).
-
 ### Host-driven runs (D2630, D2633–D2635)
 
 A host that wants to decide every call itself drives the run instead:
@@ -235,15 +171,28 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
   states, and `fuelUsed` goes on from the snapshot's. What the host does with the calls
   (deliver a recorded result, issue the call again, reject it) is its own policy; no
   hooks run.
-- `run`, `runAsync`, `replay` and tasks are this loop with the host's part built in (D2634): they
-  call each async host function as soon as the script calls it, pass results back before
-  every fuel slice, and wait at idle points. `begin(code, params, { journal })` records a
-  host-driven run (its `settle`s in order, a check at every idle point), and `replay` runs
-  that journal like a `runAsync` one. A snapshot leaves the VM as it was, so a recorded
-  run can be snapshotted and still replays.
+- `run`, `runAsync` and `replay` are this loop with the host's part built in (D3745).
+  `begin(code, params, { journal })` records a host-driven run (its results in order, a
+  check at every idle point), and `replay` checks a re-run against that journal. A
+  snapshot leaves the VM as it was, so a recorded run can be snapshotted and still
+  replays.
+- **Snapshots** (D3700, D3720; the guide's persistence.md): the run's records by kind and
+  field names, builtins by registry path, functions by (script, span) with a bytecode
+  hash for those with frames, scripts with their texts, compiled again on load. The
+  sandbox's own values are named, not written: host functions by identity, namespaces
+  (with `aliases` and `missingMember`), `values`, host modules' namespaces and the JSON
+  boundary's converting functions; the loading sandbox must give the same names, and a
+  missing one is a `misuse` error before anything loads (`djs_snapshot_needs`). A refused
+  load leaves the sandbox unusable. `describeSnapshot(snap)` describes one; `callSite(id)`
+  says where the run waits on an open call (`vm_call_site`, D3054).
+- **Re-runs** (D3745): in a deterministic sandbox `run.deliveries` lists the results the
+  run applied (call id, function, arguments, outcome, clock), and `begin(code, params, {
+  deliveries })` runs the script again to where the run was after them, checking each
+  call (`diverged` at the first difference): the fallback when a newer build refuses a
+  snapshot.
 
-**One module (D3600, D3730).** djs ships one module, and it has snapshots (cargo feature
-`snapshot`): `scripts/build-wasm.sh` builds it, and every host, the ones that persist runs
+**One module (D3600, D3730).** djs ships one module, and it has snapshots:
+`scripts/build-wasm.sh` builds it, and every host, the ones that persist runs
 and the ones that never do, loads the same file. It links a 128 KiB stack, since snapshot loads compile the scripts inside one
 operation (D3733). The Sandbox needs that module.
 
@@ -269,9 +218,9 @@ A journal is an array of plain entries (JSON-serializable when the host's values
 
 | entry | records |
 | --- | --- |
-| `{ type: "run", engine, code, params, hash }` | the start: the engine build (`djs_build_hash`), the code and parameters, the VM's canonical hash before the run |
+| `{ type: "run", engine, code, params, filename?, hash }` | the start: the engine build (`djs_build_hash`), the code, parameters and script name, the VM's canonical hash before the run |
 | `{ type: "sync", fn, args, ok, value }` | a sync host function's call and outcome (`value` of an error: `{ name, message }`). Console output is not journaled |
-| `{ type: "async", callId, fn, args, ok, value, now }` | an async host function's result, in delivery order, with the clock it carried |
+| `{ type: "async", callId, fn, args, ok, value, now }` | an async host function's result, in the order the run applied them, with the clock it carried |
 | `{ type: "check", delivered, issued, hash }` | the VM was idle after `delivered` results, having made `issued` host calls, with this canonical hash |
 | `{ type: "end", ok, value, delivered, issued, hash }` | the outcome (`ok` false: the error's display text) and the final counts and hash |
 
@@ -365,9 +314,9 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_outcome(vm) -> h` | the entry call's outcome while no frame is active, also at IDLE (a function the host called while async calls are pending); any number of times; out[0] = 1 if it threw; 0 if none (D2650) |
-| `vm_snapshot(vm, len) -> n/-1` | (feature `snapshot`) a snapshot of idle VM `vm` (D3700) in out, its length; -1: refused, the reasons in out. staging[0..len]: the flags (bit 0: store the sources; bit 1: a host's run, D3720), then for a host's run its functions (count, then id and identity each), its values (count, then handle and name each), the handles it holds for the run (count, then handle and name each) and its data |
-| `vm_load_snapshot(vm, len) -> 0/1` | loads the snapshot of a host's run into `vm`, a fresh VM of the host's. staging: the snapshot (length and bytes), the candidate sources (count, then each), the host functions (count, then id, handle and identity each) and the host values (count, then handle and name each). 0: out holds the handles the host held (count, then handle and name each), the open calls' ids and the host's data; 1: the reasons in out, and the VM is to be freed |
-| `djs_snapshot_needs(len) -> 0/1` | what loading the snapshot in staging needs: the scripts stored by hash only and the host values and functions it names (`snapshot::needs`) |
+| `vm_snapshot(vm, len) -> n/-1` | a snapshot of the host's run in idle VM `vm` (D3700, D3720), with the scripts' texts, in out, its length; -1: refused, the reasons in out. staging[0..len]: its functions (count, then id and identity each), its values (count, then handle and name each) and its data |
+| `vm_load_snapshot(vm, len) -> 0/1` | loads the snapshot of a host's run into `vm`, a fresh VM of the host's. staging: the snapshot (length and bytes), the host functions (count, then id, handle and identity each) and the host values (count, then handle and name each). 0: out holds the open calls' ids and the host's data; 1: the reasons in out, and the VM is to be freed |
+| `djs_snapshot_needs(len) -> 0/1` | what loading the snapshot in staging needs: the host values and functions it names (`snapshot::needs`); 1 for a snapshot that stores a script by hash only |
 | `djs_snapshot_describe(len) -> 0/1` | the snapshot in staging described for people (`snapshot::describe`) in out |
 | `vm_call_site(vm, id) -> len` | where the run waits on open call `id`: `line:col:file` in out, its length; 0 when nothing waits on it at a known position (D3054) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
