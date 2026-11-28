@@ -56,7 +56,7 @@ guide: docs/guide/cli.md, docs/guide/js-api.md, docs/guide/host.md, docs/guide/s
   testing.md (the unchecked leg).
 - Gate (D3753): "unsafe-heap difftest" runs `--ratchet` only. From the 0307 gate's times
   file: suspend-every 22.3 CPU-s, gc-stress 14.7, plain 1.1: about 37 CPU-s saved per
-  Rust gate. Checked: the release-less dev runner with `--ratchet` alone passes.
+  Rust gate. Checked with the dev runner: `--ratchet` alone passes.
 - Scripts deleted: scripts/wasm-areas-unnamed.py, wasm-leb-padding.py,
   scripts/size/patches/{nobounds,onepath,optsize,touch}.py, scripts/perf/{cpuprof.py,
   libsym.sh, trace.sh, trace.py, trace_report.py, wasm_arm.py, perelem.py, nobounds.py}
