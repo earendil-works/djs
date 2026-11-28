@@ -273,6 +273,12 @@ export interface OpenCall {
 export interface Settlement {
   ok: boolean;
   value: unknown;
+  /**
+   * In a deterministic sandbox: the clock the run sees from this result on, in ms (a
+   * recorded `Delivery.now`, for a host that re-runs or continues a run by hand). Default:
+   * the time of the `now` option; never before the run's clock.
+   */
+  now?: number;
 }
 
 /**
@@ -570,7 +576,7 @@ interface RunCore {
   step?: StepOptions;
   /** A step is running: settlements wait in `pending` until its next fuel slice. */
   busy: boolean;
-  pending: { call: OpenCall; ok: boolean; value: unknown }[];
+  pending: { call: OpenCall; ok: boolean; value: unknown; now?: number }[];
   /** Deterministic sandboxes: the results applied, in order. */
   deliveries: Delivery[];
 }
@@ -1309,8 +1315,8 @@ export class Sandbox {
     const call = core.open.get(id);
     if (call === undefined) throw new SandboxError("misuse", `no open call ${id}`);
     core.open.delete(id);
-    if (core.busy) core.pending.push({ call, ok: s.ok, value: s.value });
-    else this.deliver(core, call, s.ok, s.value);
+    if (core.busy) core.pending.push({ call, ok: s.ok, value: s.value, now: s.now });
+    else this.deliver(core, call, s.ok, s.value, s.now);
   }
 
   /**
@@ -1833,7 +1839,7 @@ export class Sandbox {
     for (;;) {
       // Results settled while this step ran (it awaited a sync host function's promise or
       // yielded): to the VM in the order they were settled.
-      for (const p of run.pending.splice(0)) this.deliver(run, p.call, p.ok, p.value);
+      for (const p of run.pending.splice(0)) this.deliver(run, p.call, p.ok, p.value, p.now);
       if (run.exit !== undefined) return this.exitRun(run);
       if (step.signal?.aborted) {
         const why = step.signal.reason;
@@ -2103,10 +2109,10 @@ export class Sandbox {
     return this.guard(() => {
       let clock: number | undefined;
       if (async && this.clock !== undefined) {
-        // Deterministic mode: the result's time (a replay's: the recorded one), applied
-        // when the VM takes the result (D1670).
+        // Deterministic mode: the result's time (a re-run's or replay's: the recorded one),
+        // applied when the VM takes the result (D1670).
         const { now } = this.opts;
-        this.clock = at ?? Math.max(this.clock, typeof now === "number" ? now : (now ?? Date.now)());
+        this.clock = Math.max(this.clock, at ?? (typeof now === "number" ? now : (now ?? Date.now)()));
         clock = this.clock;
         x.vm_resolve_host_call_at(vm, callId, ok ? 1 : 0, h, this.clock);
       } else {
