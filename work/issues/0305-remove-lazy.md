@@ -1,6 +1,6 @@
 # 0305: Remove lazy compilation and the dead code the dump removal left
 
-status: in-progress
+status: done
 agent: pclean
 branch: issue/0305-remove-lazy
 depends-on: -
@@ -36,12 +36,12 @@ image byte-identity checks (useful during development); frozen builtins; images 
 the lowering itself.
 
 ## Acceptance criteria
-- [ ] Nothing of lazy compilation left; gate legs and TESTING.md updated; gate CPU before and
-      after recorded.
-- [ ] The leftovers above removed; ABI renumbered as needed (no compatibility code, D3640).
-- [ ] Snapshots and the frame bytecode pin still pass (regenerate the pin only if the layout
-      of native builds changes, and say why).
-- [ ] Decisions recorded (superseding D2990-D2995, D3721's lazy part, D3732's caveat).
+- [x] Nothing of lazy compilation left; gate legs and TESTING.md updated; gate CPU before and
+      after recorded (after: in the merge report).
+- [x] The leftovers above removed (except the fast tier, D3741); ABI renumbered (ABI 12).
+- [x] Snapshots and the frame bytecode pin still pass (pin regenerated for one function:
+      native pools now laid out as the module's, D3740).
+- [x] Decisions recorded (D3740-D3744).
 
 ## Log
 - Gate CPU before (0304's gate, .worktrees/gate/target/gate-steps.tsv, CPU-s): test262 174.0,
@@ -74,7 +74,43 @@ the lowering itself.
   image of a run without the loop equal the loop's. Keeping raw-image equality (the 0282
   dead-slot bug was found by it) means keeping the tier; the alternative (compare canonical
   hashes there) weakens the test. Attempt saved in work/scratch/0305/.
+- ABI 12: `vm_new(limit, flags)` (no `live`), `vm_frozen_builtins` gone, the ops after it
+  renumbered; `Vm::from_base_reserved`, `Heap::start_capacity`/`restore_capacity`,
+  `capacity_target`, the `live` of `from_base_vec`/`new_vm_owned`, and
+  `Vm::set_math_random_seed` gone (`set_random_seed` is the one entry).
+- Registry without ids: registry.tsv is `kind\tpath`; `Registry::name_cells` gives paths;
+  djs-prelude's `registry` module/feature, `BASE_OFFSETS` and its build step gone; the CLI's
+  heap graph names prefix cells by `canonical_names`. scripts/harvest/members.py follows.
+- djs-wasm's `snapshot` feature merged (djs-wasm always enables djs-core's); build.rs always
+  links 128 KiB; build-wasm.sh and gate.py without the feature; guide host.md's stack
+  paragraph rewritten.
+- Lowering comments (completion.rs, temps.rs, parser.rs, Goal::AsyncBody) give the current
+  reason; stale doc comments (seal) fixed.
+- scripts/determinism: probe/, deep_search.py, sandbox_interleave.ts, js/async_interleave.js,
+  js/general.js deleted; README rewritten for what stays.
+- Checked: cargo test --workspace, clippy (workspace, combos, wasm32 release with docs),
+  js tests on the dev module, native-vs-wasm, DJS_SNAP snapshot legs, djs-docs check.
+- Guide pages updated: compiler.md, interpreter.md, testing.md, rust-api.md, builtins.md
+  (registry), host.md (stack), snapshots.md (vm_new), arena.md; status.md regenerated.
 
 ## Follow-ups
+- The elastic stack protocol (`djs_elastic_stack`, NEED_STACK, js/src/trap.ts's wrapper) may
+  be unneeded now that every module links 128 KiB, which covers the parser's full limits:
+  measure whether any compile still needs the larger block, and drop it if none does.
+- The heap analyzer's names come from `canonical_names` of the prefix; if an alias path is
+  wanted instead, it can read tests/builtins/registry.tsv again (no current need).
 
 ## Result
+Landed: lazy compilation deleted everywhere (feature, op, compiler/interpreter/VM/snapshot
+code, harness flags, gate dimension, bench row, research/0218); class-span recorder deleted;
+ABI 12 (`vm_new(limit, flags)`, no `vm_frozen_builtins`); `Vm::from_base_reserved` and
+`set_math_random_seed` gone; registry entries without ids (no base offsets, no `registry`
+feature); djs-wasm's `snapshot` feature merged (128 KiB stack always); determinism
+experiments deleted; lowering comments updated. Kept on purpose: the test-only fast tier
+(D3741: the general path is not an equal reference on raw images).
+
+What pi must change: nothing in packages/codemode/src/run.ts (it uses the Sandbox only, and
+`frozenBuiltins` stays); it needs the new module and js package together (ABI 12: a module
+and a Sandbox of different ABIs refuse each other). Snapshots made by earlier builds whose
+waiting function is h164-like top-level code with many constants may refuse (no
+compatibility, D3640).
