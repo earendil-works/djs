@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0305 | Remove lazy compilation and the dead code the dump removal left (then 0306-0308, same agent) | pclean | .worktrees/pclean |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
 | 0293 | Outlines: a file's declarations without its code (prototype on the branch; parked by the owner: MCP .d.ts comes from schemas in pi) | coordinator | parked, branch issue/0293-declarations |
 
@@ -19,38 +20,32 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| - | 0298 follow-ups: pre-sized cat! at the large joining sites (win back the +6% dump instructions); drop the factory's format-2 text (emit_group, ~2-3 KB raw); declined B items on record (free-names check -4.1, reread -4.2, TS stripping -2.2, inlining ~8-10 KB gz) | ready |
+| 0306 | One way to drive a run; determinism kept as the fallback for refused snapshots | 0305 |
+| 0307 | Shipped-module trims; legacy decorators go | 0306 |
+| 0308 | Docs and tooling cleanup after the dump removal | 0307 |
 | - | 0297 follow-ups: docs/host.md's measured tables use removed exports (re-measure); docs/decisions-index.md lacks D3640-D3645 (and later); test262 no-unicode/no-modules groups gone with test262-slim.toml (no leg builds the runner without those features) | ready |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
-| - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
 | - | Parked: EACH return in run_hot (0272, D3431: slows the loop); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | ready if wanted |
 | - | Next quiet re-record (load < 4): engines/ops/bridge records (0279 values kept in 0284), with the lengthened Object.entries/fromEntries ops case (work/scratch/0279/ops-entries.patch) | ready, needs a quiet machine |
 | - | Ratios vs QuickJS 2026 -O2 (slope.py --qjs2) are 15-35% stricter than vs quickjs-wasi: refresh the --qjs ratios quoted in D3530 and 0276-0282; remaining: startsWith 1.69, own/class getter 1.82/1.71, o.missing 1.70, typed-array length 1.48, number formatting 1.13-1.21 (0286 follow-ups) | ready |
 | - | GC nursery with a holder write barrier (D3294: heavy -13% memory; barrier-less version +5-9% CPU); test262 under gc-stress as a (nightly?) leg (0258 scratch patch) | owner (design) |
-| - | Flaky gate leg "pi tests (slim without lockdown)" (0260: failed once, passed on rerun); pi worker lifetime timing test at load ~50 (0256) | ready |
-| - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
-| - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
-| - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
 | - | status.py should record the commit of the measured engine sources, not HEAD (0223) | ready |
-| - | pi adapter fuel slice ~12,700 for QuickJS-equivalent interrupt budgets (0223; pi-side) | owner |
 | - | Data segment coded with lzrc (-5.8 KB gz, +3 ms first instance, every host must restore data): shelved (0225) | - |
 | - | Date regexp {n} analysis (~6% more compile instructions than 2026-11-01) (0224) | ready |
 | - | djs-bench size probe (tests/bench/size) fails in the shipped build env (E0152 duplicate lang item, likely build-std D3090): fix or drop; stress leg on the unchecked wasm module would need a matching native driver (0226) | ready |
 | - | First npm publish: confirm MIT copyright holder and homepage, create the `npm` GitHub environment with reviewers, trusted publishing or NPM_TOKEN, push tag v0.1.0 | owner |
-| - | pi slim/next 'exits promptly' timing tests (elapsed < 1000 ms) fail under very high load (~180): make them load-independent like 0211 did for the lifetime tests | ready |
 | - | Memory follow-ups (0234): survivor mark for big strings (format change), slice detach in minor GCs, base image 182 KB vs QuickJS ~130 KB realm, GC side tables vs dlmalloc's first segment, shadow stack/static data padding | ready |
 | - | Regexp follow-ups (0233): literal runs as one node (distinct-pattern compile 2x QuickJS), replace 1.14x | ready |
 | - | Per-op gaps vs best QuickJS (0229): trim 2.8, padStart/End 2.5, Object.entries+fromEntries 2.3, Math.floor 2.2, slice 1.9, sort cmp 1.9, Map.set 1.8, toFixed 1.8, toLowerCase/String(i) 1.7; wasm/* sizes in status.tsv stale (status.py size); compare monty snapshots on the page; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
 | - | Fuel follow-ups (0289): cached-hash Map/Set/atom lookups with long keys uncharged; owed work under GC stress not slice-exact; confirm the wall-clock table in wasm; split('') 20x tight loop per fuel (50 ns per piece) | ready |
 | - | No djs-core unit test checks builtin (native) frame names in traces; only the difftest errors cases caught a regression (0290) | ready |
 | - | new Error 30k vs 18.7k (CaptureStack converts frame names to Rust strings); derived class construct 1.2-1.6x (super_call opcode) (0236) | ready |
-| - | Embedding follow-ups (0240-0248): module code accepts HTML-like comments; the dumper knows no module records or TextCodec objects; host-function Throws have no stack; Step::Wait reports async calls only when the VM waits; import() loads are not fuel-metered; minor GCs walk the whole sealed snapshot region (12% of a 64 KiB body call; a card table would also let reset copy only what changed); non-ASCII TextEncoder.encode ~5x node; publishing djs-embed to crates.io needs builtins/gen and djs-libm sources inside the packaged crates | ready |
+| - | Embedding follow-ups (0240-0248): module code accepts HTML-like comments; host-function Throws have no stack; Step::Wait reports async calls only when the VM waits; import() loads are not fuel-metered; minor GCs walk the whole sealed snapshot region (12% of a 64 KiB body call; a card table would also let reset copy only what changed); non-ASCII TextEncoder.encode ~5x node; publishing djs-embed to crates.io needs builtins/gen and djs-libm sources inside the packaged crates | ready |
 | - | Bridge follow-ups (0238): Sandbox sync host call ~3 us vs ~1.7 us C embedding; Uint8Array in with one copy (like long ASCII strings); Math.max ratio 1.08 -> 1.79 vs QuickJS (noise or regression?); lazily read tool results (host buffer read on demand; ties to result buffers) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
-| - | Publish workflow: test (node 22) flaked on examples/sleep-dump "done after at least 40 ms" (two 20 ms sleeps measured just under 40 ms on CI; v0.2.0 run, passed on rerun): make it timer-tolerant | ready |
-| - | 0295 follow-ups: vm_define on a frozen object returns 0; DOMException run error message "Error" (2 vs 3 slots); tasks don't carry fuelUsed over a dump; pi's "stalled" case left to the host | ready |
-| - | 0294 follow-ups: bring the one module's size down (dumper ~335 KB gz: vm::dump ~720 KB raw code, smap/compile_cache +93 KB); re-record stale status.tsv rows (startup, heap, bounds, pi bench, dumps, engines, bridge) on a quiet machine; retire js/pi and the slim gate legs once pi is on host-driven runs; untrack scripts/__pycache__/*.pyc; v0.2.0 published 2026-11-23 (pi depends on it) | ready |
+| - | 0295 follow-ups: vm_define on a frozen object returns 0; DOMException run error message "Error" (2 vs 3 slots); pi's "stalled" case left to the host | ready |
+| - | 0294 follow-ups: re-record stale status.tsv rows (startup, heap, bounds, pi bench, engines, bridge) on a quiet machine; untrack scripts/__pycache__/*.pyc | ready |
 | - | Durable code mode follow-ups (0291/0292): import() of host modules (engine hook, size), read-only import bindings, imports after the first statement, StepOptions for runAsync/tasks, per-function JSON boundary | ready |
 | - | Snapshot follow-ups (0302-0304): positional class constants left (iterator kinds, RegExp/Proxy/TextCodec flags, typed array kinds, frame header, resource kinds, module trap ops); IteratorHelper slot 0 duplicates the header kind; the types section is most of a small snapshot (share the schema per build: owner/format); `djs resume --explain`; live.js browser test; a snapshot-cost table for engines.md and re-recorded engines/* numbers; corpus provenance comments + frame-pin regen; an elastic retry in the snapshot loader (-64 KiB per instance) | ready |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
