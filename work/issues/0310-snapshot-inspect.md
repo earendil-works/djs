@@ -1,6 +1,6 @@
 # 0310: Inspecting a snapshot: what suspended, as a tree
 
-status: open
+status: in-progress
 agent: pview2
 branch: issue/0310-snapshot-inspect
 depends-on: -
