@@ -1,6 +1,6 @@
 # 0307: Shipped-module trims; legacy decorators go
 
-status: open
+status: in-progress
 agent: pclean
 branch: issue/0307-shipped-trims
 depends-on: 0306
