@@ -542,7 +542,10 @@ impl Inspection<'_> {
                 break;
             }
             if self.type_name(r).contains("Iterator") || self.type_name(r) == GENERATOR {
-                lp = Some(format!("inside a loop over {}", named(v).unwrap_or_else(|| self.short(v))));
+                lp = Some(format!(
+                    "inside a loop over {}",
+                    named(v).unwrap_or_else(|| self.short(v))
+                ));
                 break;
             }
         }
@@ -558,7 +561,10 @@ impl Inspection<'_> {
             (None, None) if rest.is_empty() => None,
             (None, None) => {
                 let vs: Vec<String> = rest.iter().map(|&v| self.short(v)).collect();
-                Some(format!("halfway through an expression, holding {}", vs.join(", ")))
+                Some(format!(
+                    "halfway through an expression, holding {}",
+                    vs.join(", ")
+                ))
             }
         }
     }

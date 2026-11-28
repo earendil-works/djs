@@ -867,10 +867,10 @@ impl Inspection<'_> {
             // Where the text first showed it (`page.items`), else what holds it.
             let known = match paths.get(r) {
                 Some(p) if !p.is_empty() => p.clone(),
-                _ => self
-                    .roles
-                    .get(r)
-                    .map_or_else(|| self.held_as(r), |s| s.split(':').next().unwrap_or("").into()),
+                _ => self.roles.get(r).map_or_else(
+                    || self.held_as(r),
+                    |s| s.split(':').next().unwrap_or("").into(),
+                ),
             };
             self.kv_str(j, "known", &known);
             self.kv_str(j, "note", &self.note(r));

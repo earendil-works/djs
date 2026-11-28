@@ -1,6 +1,6 @@
 # 0310: Inspecting a snapshot: what suspended, as a tree
 
-status: in-progress
+status: done
 agent: pview2
 branch: issue/0310-snapshot-inspect
 depends-on: -
@@ -42,14 +42,55 @@ in plain words. The JSON carries per node a human label, a one-line explanation 
 rendering, then the record and byte details.
 
 ## Acceptance criteria
-- [ ] The model, text and JSON, pinned for the guide's fetchPage example and a richer one (a
+- [x] The model, text and JSON, pinned for the guide's fetchPage example and a richer one (a
       Map, closures in boxes, Promise.all over two open calls); limits on large runs.
-- [ ] `djs describe [--json]`; docs-module export and `inspectSnapshot`; the shipped module
-      unchanged in size (docs module only).
-- [ ] The guide's describe section and gen:snapshot show the tree; decisions recorded.
+- [x] `djs describe [--json]`; docs-module export and `inspectSnapshot`; the shipped module
+      unchanged in size (docs module only). (+181 bytes, 102 gzipped: the parameter names
+      and the string reuse, both in shared code; the inspector itself is not in it.)
+- [x] The guide's describe section and gen:snapshot show the tree; decisions recorded.
 
 ## Log
+- Read the prototype (work/scratch/snapshot-view). `Snap::parse` and its types are now
+  `pub(super)` for the inspector; the old `describe` (section sizes and record counts) is
+  gone.
+- Owner's steer mid-way: lead in JavaScript terms, explain each part in a sentence, keep
+  storage details one layer down, identity visible without ids, sizes in words. The model
+  became a tree of sentence nodes (`view`) with notes and `detail` lines, rendered by the
+  text and carried in the JSON; records got label, note, `js`, a structured `view` and
+  `known` (where the text first showed them). Told the coordinator: moderate growth, no
+  scope change.
+- The bytecode hash cannot be computed in the inspector's bare heap (it names builtins
+  through a realm): functions are matched by span, by interface hash when two share one.
+- Size: with the inspector in djs-core unconditionally the shipped module grew 4.4 KB
+  although the inspector is dead there: its BTreeMap/BTreeSet instances were shared with
+  the loader and changed its inlining. Now a feature `inspect` (default; djs-cli, djs-wasm
+  `docs`), not in the build hash, and lists instead of maps. Measured with
+  scripts/wasm-funcs.py against a worktree of main.
+- Parameter names: appended after the captures in `FuncInfo::NAMES` for simple
+  parameters (the cheapest of three forms measured: a loop with push).
+- Tests: inspect_tests.rs (pinned text for fetchPage and the rich example, limits, no
+  sources, activations no call leads to, every idle point of tests/snapshot/programs as
+  text and valid JSON); js snapshot and sleep-snapshot tests on the JSON; CLI test of
+  `describe --json`.
+- Guide pages updated: snapshots.md (the paragraphs after the example's snapshot, the
+  describing section, where to look), cli.md, js-api.md, host.md (the docs ops), and the
+  regenerated gen:snapshot regions of snapshots.md and suspension.md. Also
+  examples/sleep-snapshot/README.md (its describe output and the walk through it).
 
 ## Follow-ups
+- 0311 builds the docs page on the JSON (`view`, records' `view`/`known`/`note`, `sizes`).
+- `doing` reads the operand stack heuristically (innermost callee and `this`, an
+  ArrayIterator); other constructs (spread, template literals, for-in state) fall back to
+  "halfway through an expression, holding …".
+- Duplicate simple parameter names (`function f(a, a)`, sloppy) name the arguments in
+  declaration order of their bindings, which may be off by one there.
 
 ## Result
+`snapshot::inspect(bytes) -> Inspection` (feature `inspect`), `Inspection::text()` (=
+`describe`) and `Inspection::json()`. `djs describe [--json] FILE`; docs module
+`djs_snapshot_inspect`, `Sandbox.inspectSnapshot(bytes): SnapshotInspection` (ABI 15).
+The text leads with the run in JavaScript terms (open calls, the activations waiting on
+them with source lines, variables as literals, what they are halfway through, up to the
+run's result), then what a loading djs must have, the size in words, and the records as
+stored. Frames name their parameters (compiler debug info). Host names are stored once in
+the strings table. D3760.
