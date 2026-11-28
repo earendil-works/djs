@@ -1,6 +1,6 @@
 //! djs-wasm: the `wasm32-unknown-unknown` export layer over djs-core's [`Vm`]
 //! (ARCH "Execution API"). Only integer and pointer arguments; no wasm-bindgen. The ABI is
-//! documented in docs/host.md, and js/src/sandbox.ts is its client.
+//! documented in docs/guide/host.md, and js/src/sandbox.ts is its client.
 //!
 //! Data crosses the boundary through two buffers in linear memory: the *staging* buffer
 //! (host → wasm: sources, names, wire data, argument handles), sized with `djs_staging`,

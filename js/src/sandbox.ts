@@ -1,5 +1,6 @@
-// The Sandbox API: loads djs-wasm (docs/host.md) and runs code in a djs VM. Values go in
-// through the wire format (wire.ts) and come out through direct heap reads (reader.ts).
+// The Sandbox API (docs/guide/js-api.md): loads djs-wasm (docs/guide/host.md) and runs code
+// in a djs VM. Values go in through the wire format (wire.ts) and come out through direct
+// heap reads (reader.ts).
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
 import { elasticStack, trapText } from "./trap.ts";
@@ -197,7 +198,7 @@ export interface SandboxOptions {
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged" | "aborted";
 
 /**
- * One entry of a run's journal (D1730, docs/host.md "Journals"): everything a
+ * One entry of a run's journal (D1730, docs/guide/determinism.md): everything a
  * deterministic run took from outside, in order, plus checks. Values are host values
  * (JSON-serializable when the host's values are); a host error is `{ name, message }`.
  * - `run`: the start: the engine build, the code, the parameters, the script's name and
@@ -581,7 +582,7 @@ interface RunOps {
 type RunEnd = { state: "idle" } | { state: "done"; value: unknown; exited?: boolean } | { state: "threw"; error: SandboxError };
 
 /**
- * A run the host drives (docs/host.md "Host-driven runs"): `Sandbox.begin` starts a body,
+ * A run the host drives (docs/guide/js-api.md "Runs the host drives"): `Sandbox.begin` starts a body,
  * `advance` runs it to its next idle point, the host settles the open async calls in any
  * order, and while it is idle it can be snapshotted (`snapshot()`) and continued elsewhere
  * (`Sandbox.loadSnapshot`). The async host functions are never called by the run: `calls`

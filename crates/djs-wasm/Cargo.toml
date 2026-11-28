@@ -4,7 +4,7 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The wasm32 export layer over djs-core's Vm (docs/host.md)."
+description = "The wasm32 export layer over djs-core's Vm (docs/guide/host.md)."
 
 [lib]
 # No doctests (scripts/gate.py `targets` fails if one appears): none to compile (0197).

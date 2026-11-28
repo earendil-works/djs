@@ -124,7 +124,15 @@ The host's own memory is a different matter: if wasm memory cannot grow below th
 (the machine is out of memory, or the cap is larger than the host can back), the run
 stops with a `memory` error, `out of host memory`, which is not a JavaScript error and
 not deterministic. The sandbox stays usable. A host that wants out-of-memory to be
-deterministic chooses a cap it can always back.
+deterministic chooses a cap it can always back. In wasm32 that is about 1 GiB at most:
+a collection copies the live heap into a to-space as large as the heap, and the heap's
+buffer grows by doubling, so the address space needs about three times the cap, less
+when one instance holds several VMs.
+
+A run stopped out of fuel in the middle of a regular-expression match may hold the
+match's progress record beyond the cap (it does not count, and the match frees it when it
+goes on). A collection the host asks for at exactly that point can then fail for lack of
+to-space; a host collects when the VM is idle or done instead.
 
 ## Stack depth
 

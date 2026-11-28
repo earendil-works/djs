@@ -1,4 +1,4 @@
-// Host-driven runs (0179, docs/host.md "Host-driven runs"):
+// Host-driven runs (0179, docs/guide/js-api.md "Runs the host drives"):
 // `begin` runs to an idle point, the host settles the open async calls itself, `advance`
 // continues; `Sandbox.loadSnapshot` continues a run from a snapshot.
 
