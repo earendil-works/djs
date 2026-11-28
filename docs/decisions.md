@@ -14726,3 +14726,57 @@ date: 2026-11-28 · by: pclean · issue: 0305
 Every module build turned djs-wasm's `snapshot` feature on, so it is merged into the crate
 (djs-core's `snapshot` stays optional: djs-embed builds without it). With it goes D3733's
 64 KiB stack for modules without snapshots. Supersedes D3733's 64 KiB branch.
+
+## D3745: One driver: run and runAsync are loops over the host-driven run
+date: 2026-11-28 · by: pclean · issue: 0306
+pi drives every script as a host-driven run (`begin`, `settle`, `advance`, `snapshot`,
+`loadSnapshot`), so that is the Sandbox's one driver. `run` and `runAsync` are loops over
+it: at each idle point they call the async host functions the script called and settle
+each call with its result (`runAsync`: when its promise settles, awaiting the first); the
+`auto()` loop and the RunCore hooks (`onCall`, `beforeSlice`, D2634's results before every
+slice) go, so an async host function is now called at the next idle point, not when the
+script calls it. A settle while a step runs waits for the step's next fuel slice. Gone with
+it: Tasks (`start`, `Task.suspend`/`checkpoint`, `Sandbox.resume`, `sandbox.resume`, the
+`suspended` error kind) and the `AsyncHostFunction` hooks (`call`/`save`/`resume`,
+`HostCall`); `debugger` is an async host function the host settles like any other
+(`debugger: true`, or a function `run`/`runAsync` call). Also gone, each duplicating
+something kept: `bindings` (imports, D3597), `setGlobal`/`defineFunction`/
+`defineAsyncFunction` (everything comes from the options; namespaces freeze in the
+constructor, by defining their last member again with `DEFINE_FREEZE`), object-form module
+exports (`HostModuleFunction`: an export names an identity), and scripts by hash on the JS
+side (`sources`, `SnapshotOptions.sources`, the process-wide `ranScripts`: snapshots always
+store the texts). `unhandledRejections` is `"warn" | "throw" | "ignore"` (`collect` and
+`takeUnhandledRejections` go: pi read every reason and never took them). Supersedes D2771,
+D2972, D2634's hooks, the hook parts of D2770 and D3722, and D3722's `sources`.
+
+## D3746: Deterministic re-runs are the fallback for refused snapshots
+date: 2026-11-28 · by: pclean · issue: 0306
+A snapshot loads only into a build that compiles its waiting functions alike; when a newer
+build refuses one, a deterministic run is begun again from its script with the results it
+had. The VM already applies inbox results one at a time, each once the job queue is
+empty (D1670), so a run's trajectory depends only on the order of its results and their
+clocks, not on how the host grouped them into steps: a log of (call id, function,
+arguments, outcome, clock) per result is all a host needs. `Run.deliveries` is that log in
+deterministic sandboxes (since `begin` or `loadSnapshot`), and `begin(code, params, {
+deliveries })` applies it again, each delivery once its call is open and checked against
+it (function and arguments), one step each, and returns the run idle where the original
+was; a mismatch, a delivery for a call not made, or an end before the last delivery is a
+`diverged` SandboxError naming the first difference. `Settlement.now` lets a host settle
+with a recorded clock by hand. What "as side-effect free as possible" means at the engine
+level: no async host function runs during a re-run (results come from the log); sync host
+functions run as the script calls them, for the host to stub (output, stores); a journal's
+`replay` (D1730) runs none but `console`. Snapshots of deterministic runs carry the clock
+(host data and the realm's clock) and the random state, and load only into deterministic
+sandboxes (the strong weak references differ otherwise, D3720's refusal). Tested on the
+harvest corpus: a re-run to every idle point, on another fuel slice, has the original's
+output, calls, canonical hash and snapshot bytes there; a snapshot loaded in the middle and
+continued with the recorded results makes the same calls and output to the same end.
+
+## D3747: ABI 13: snapshot operations without host handles or hashed scripts
+date: 2026-11-28 · by: pclean · issue: 0306
+The Sandbox held no handles across a snapshot and always stores sources (D3745), so
+`vm_snapshot`'s staging is the host's functions, values and data (no flags word, no
+handles section; sources always stored), `vm_load_snapshot` takes no candidate sources and
+returns only the open calls and the data, and `djs_snapshot_needs` returns only the host
+names (a snapshot that stores a script by hash only is refused there). Native hosts keep
+`HostNames::handles` and hashed scripts through the Rust API (the CLI's REPL uses both).
