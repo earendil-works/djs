@@ -9,7 +9,9 @@
 // Per workload and engine: run time (set the tool answers, evaluate the program, drain the
 // jobs, read the result) and the linear memory after the run, medians over N fresh VMs
 // after a warm-up (a host process that has run the engine before: V8 has tiered its code
-// up). Every engine's result must be the string node computes.
+// up). Every engine's result must be the string node computes. Psychoscript is not wasm:
+// its "module" is its JavaScript (counted as glue), compile is importing it, and it has no
+// linear memory (null).
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { cpus, loadavg, platform, release } from "node:os";
@@ -17,7 +19,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { constants as Z, brotliCompressSync, gzipSync } from "node:zlib";
 import { record, stripBody } from "../../../tests/bench/codemode/tools.ts";
-import { allJs, bodyProgram, type Engine, monty } from "./engines.ts";
+import { allJs, bodyProgram, type Engine, monty, psychoscript } from "./engines.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const root = join(here, "../../..");
@@ -33,7 +35,7 @@ const WARM = quick ? 0 : 3;
 /** The workloads in the page's order: tests/bench/codemode/README.md. */
 export const WORKLOADS = ["sequential", "fanout", "media", "inspect", "loop", "text", "json", "ts", "heavy"];
 const workloads = opt("--workloads")?.split(",") ?? WORKLOADS;
-let engines: Engine[] = [...allJs(), monty()];
+let engines: Engine[] = [...allJs(), monty(), psychoscript()];
 if (opt("--engines")) {
   const want = opt("--engines")!.split(",");
   engines = engines.filter((e) => want.includes(e.name) || want.includes(slug(e.name)));
@@ -96,9 +98,9 @@ interface EngineResult {
   wasm: { bytes: number; gzip: number; brotli: number };
   glue: { bytes: number; gzip: number; brotli: number };
   compileMs: number;
-  idleMemory: number;
+  idleMemory: number | null;
   startupMs: number;
-  workloads: Record<string, { runMs: number; memory: number; ok: boolean } | undefined>;
+  workloads: Record<string, { runMs: number; memory: number | null; ok: boolean } | undefined>;
 }
 const results: EngineResult[] = [];
 const program = (e: Engine, w: Workload) => (e.language === "python" ? e.program(w.py) : e.program(e.typescript && w.ts ? w.source : w.js));
@@ -116,7 +118,7 @@ for (const e of engines) {
     const ts = w.ts && e.typescript;
     const src = program(e, w);
     const runs: number[] = [];
-    let memory = 0;
+    let memory: number | null = 0;
     let out = "";
     for (let i = 0; i < WARM + REPS; i++) {
       t = now();
@@ -124,7 +126,8 @@ for (const e of engines) {
       const t1 = now();
       out = await vm.run(src, w.data);
       const t2 = now();
-      memory = Math.max(memory, vm.memory());
+      const m = vm.memory();
+      memory = m === null ? null : Math.max(memory ?? 0, m);
       vm.dispose();
       if (i >= WARM) {
         starts.push(t1 - t);
@@ -143,7 +146,7 @@ for (const e of engines) {
 // ---- Report --------------------------------------------------------------------------------
 
 const kb = (n: number) => (n / 1024).toFixed(0);
-const mib = (n: number) => (n / 1048576).toFixed(1);
+const mib = (n: number | null) => (n === null ? "n/a" : (n / 1048576).toFixed(1));
 const ms = (x: number) => (x < 1 ? x.toFixed(3) : x.toFixed(2));
 let out = "\n| engine | wasm KiB | gzip | brotli | glue gzip | compile ms | idle MiB | startup ms |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n";
 for (const r of results)

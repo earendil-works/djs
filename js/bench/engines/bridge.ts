@@ -17,7 +17,7 @@
 
 import { writeFileSync } from "node:fs";
 import { cpus, loadavg, platform, release } from "node:os";
-import { allJs, type BridgeVm, type Engine, type Kind, monty } from "./engines.ts";
+import { allJs, type BridgeVm, type Engine, type Kind, monty, psychoscript } from "./engines.ts";
 
 const argv = process.argv.slice(2);
 const opt = (name: string) => {
@@ -194,7 +194,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(plain(a)) === JSON.strin
 
 // ---- Running -------------------------------------------------------------------------------
 
-let engines: Engine[] = [...allJs(), monty()];
+let engines: Engine[] = [...allJs(), monty(), psychoscript()];
 if (opt("--engines")) {
   const want = opt("--engines")!.split(",");
   engines = engines.filter((e) => want.includes(e.name) || want.includes(slug(e.name)));
@@ -203,13 +203,16 @@ function slug(name: string): string {
   return name.replace(/[^a-z0-9]+/gi, "-").replace(/-$/, "").toLowerCase();
 }
 
+/** A promise's value (psychoscript's runs), anything else as it is, without a microtask for the sync engines. */
+const settle = <T>(r: T): T | Promise<Awaited<T>> => (r instanceof Promise ? r : r);
+
 /** Operations per sample: enough that a sample of a small payload takes a while. */
 const opsPer = (bytes: number) => Math.max(1, Math.min(200, Math.ceil(200_000 / bytes)));
 
 interface Cell {
   ms: number;
-  /** Linear memory after the operation, in a fresh VM (after `in`, then after `out`). */
-  memory: number;
+  /** Linear memory after the operation, in a fresh VM (after `in`, then after `out`); null without one. */
+  memory: number | null;
   path: string;
 }
 interface PathResult {
@@ -219,7 +222,7 @@ interface PathResult {
 interface EngineResult {
   name: string;
   version: string;
-  idleMemory: number;
+  idleMemory: number | null;
   /** Per payload and direction, and per case, the best path's numbers. */
   payloads: Record<string, { in: Cell; out: Cell } | null>;
   e2e: Record<string, Cell>;
@@ -245,12 +248,12 @@ for (const e of engines) {
     for (const p of PAYLOADS) {
       // Correctness, and the memory of one operation each way.
       const vm = await vmFor();
-      let m1 = 0;
-      let m2 = 0;
+      let m1: number | null = 0;
+      let m2: number | null = 0;
       try {
-        vm.put(p.value, p.kind);
+        await settle(vm.put(p.value, p.kind));
         m1 = vm.memory();
-        const back = vm.get(p.kind);
+        const back = await settle(vm.get(p.kind));
         m2 = vm.memory();
         if (!same(back, p.value)) throw new Error("the value read back differs");
       } catch (err) {
@@ -264,6 +267,41 @@ for (const e of engines) {
       const n = opsPer(p.bytes);
       const ins: number[] = [];
       const outs: number[] = [];
+      const probe = await vmFor();
+      const overhead = probe.overhead !== undefined;
+      probe.dispose();
+      if (overhead) {
+        // Each operation is a whole run: every run timed alone, alternating with the run
+        // that leaves the operation out; the difference of the two medians. Never below 0.
+        const [ins0, outs0] = [[], []] as number[][];
+        const time = async (f: () => unknown) => {
+          const t = now();
+          await settle(f());
+          return now() - t;
+        };
+        const reps = Math.max(n, 5);
+        for (let i = 0; i < WARM + SAMPLES; i++) {
+          const vm = await vmFor();
+          for (let k = 0; k < reps; k++) {
+            const a = await time(() => vm.put(p.value, p.kind));
+            const b = await time(() => vm.overhead!.put());
+            const c = await time(() => vm.get(p.kind));
+            const d = await time(() => vm.overhead!.get());
+            if (i >= WARM) {
+              ins.push(a);
+              ins0.push(b);
+              outs.push(c);
+              outs0.push(d);
+            }
+          }
+          vm.dispose();
+        }
+        const inMs = Math.max(0, median(ins) - median(ins0));
+        const outMs = Math.max(0, median(outs) - median(outs0));
+        pr.payloads[p.name] = { in: { ms: inMs, memory: m1, path }, out: { ms: outMs, memory: m2, path } };
+        console.error(`${e.name} ${path} ${p.name}: in ${inMs.toFixed(3)} ms, out ${outMs.toFixed(3)} ms (runs of ${median(ins0).toFixed(3)} ms subtracted)`);
+        continue;
+      }
       for (let i = 0; i < WARM + SAMPLES; i++) {
         let vm = await vmFor();
         let t = now();
@@ -290,7 +328,7 @@ for (const e of engines) {
       for (let i = 0; i < WARM + SAMPLES; i++) {
         const vm = await vmFor();
         const t = now();
-        const out = vm.call(program, tool);
+        const out = await settle(vm.call(program, tool));
         const dt = now() - t;
         vm.dispose();
         if (String(out) !== EXPECTED[c.name]) throw new Error(`${e.name} (${path}) ${c.name}: ${String(out).slice(0, 100)}, expected ${EXPECTED[c.name]}`);

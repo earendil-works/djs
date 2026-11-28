@@ -1,7 +1,7 @@
 // The engines of the benchmarks page, behind one interface: a compiled module (loaded
 // once, as a host keeps it), `create` (a new instance and VM, isolated from every other),
 // `run` (set the tool answers, evaluate, drain the job queue, read the result string) and
-// the instance's linear memory. scripts/bench-engines.sh fetches and builds them into
+// the instance's linear memory (none for psychoscript, the one engine that is not wasm). scripts/bench-engines.sh fetches and builds them into
 // vendor/engines of the primary checkout (DJS_ENGINES overrides the directory).
 
 import { execFileSync } from "node:child_process";
@@ -22,8 +22,8 @@ export const PRELUDE_PY = readFileSync(join(here, "prelude.py"), "utf8");
 export interface Vm {
   /** Runs a program (`Engine.program`'s output) with `data` as the global `__DATA`; the result string. */
   run(program: string, data: string): string | Promise<string>;
-  /** Bytes of the instance's linear memory (wasm memory never shrinks: the high-water mark). */
-  memory(): number;
+  /** Bytes of the instance's linear memory (wasm memory never shrinks: the high-water mark); null without one. */
+  memory(): number | null;
   dispose(): void;
 }
 
@@ -35,13 +35,23 @@ export type Kind = "json" | "string" | "bytes";
  * host and the VM by the best path the engine's embedding offers.
  */
 export interface BridgeVm {
-  /** Puts a host value into the VM, as the global `__IN` (djs: a handle, as for a run's parameters and a tool's result). */
-  put(v: unknown, kind: Kind): void;
+  /**
+   * Puts a host value into the VM, as the global `__IN` (djs: a handle, as for a run's
+   * parameters and a tool's result). `put`, `get` and `call` are sync except in
+   * psychoscript, whose runs are promises: they are awaited only when they return one.
+   */
+  put(v: unknown, kind: Kind): void | Promise<void>;
   /** Reads the value `put` placed back into a host value. */
   get(kind: Kind): unknown;
   /** Runs `program` (`Engine.bridgeProgram`) with the sync host function `tool`; its result. */
   call(program: string, tool: (args: unknown) => unknown): unknown;
-  memory(): number;
+  /**
+   * For an engine whose `put` and `get` are each a whole run (psychoscript, which keeps no
+   * VM between runs): the rest of that run, timed the same way and subtracted. `put`: the
+   * same run with nothing crossing; `get`: a run that only puts the value in.
+   */
+  overhead?: { put(): unknown; get(): unknown };
+  memory(): number | null;
   dispose(): void;
 }
 
@@ -52,7 +62,7 @@ export interface Engine {
   language: "js" | "python";
   /** Whether it runs TypeScript itself (else the host strips the types first). */
   typescript: boolean;
-  /** The wasm files an embedder ships, and the JS glue around them. */
+  /** The wasm files an embedder ships, and the JS glue around them (psychoscript: none, and all its code). */
   files: string[];
   glue: string[];
   load(): Promise<void>;
@@ -610,6 +620,94 @@ export function monty(): Engine {
     ok(dispatch({ tag: "configure", val: { scriptName: "bench.py", typeCheck: false, typeCheckFormat: "concise", typeCheckColor: false } }));
     return { dispatch, ok, memories };
   }
+}
+
+// ---- psychoscript (a JavaScript interpreter written in JavaScript) ---------------------------
+
+/**
+ * Psychoscript: no wasm. Its compiler and bytecode VM are JavaScript that runs in the host's
+ * own engine, so `load` is importing the package, and there is no linear memory to measure.
+ * A VM is a `Runtime`: a fresh one per run, though its realm is built inside every
+ * `execute` anyway. It runs codemode bodies as given (top-level await and return); the tool
+ * answers go in as a binding, the run's result string comes back as its value.
+ */
+export function psychoscript(): Engine {
+  const pkg = join(NPM, "psychoscript");
+  let api: any;
+  const exec = async (rt: any, code: unknown, opts?: unknown) => {
+    const r = await rt.execute(code, opts);
+    if (!r.ok) throw new Error(`psychoscript: ${r.error.kind}: ${r.error.message}`);
+    return r.value;
+  };
+  return {
+    name: "psychoscript",
+    get version() {
+      return `psychoscript ${pkgVersion(pkg)} (npm; JavaScript, no wasm)`;
+    },
+    language: "js",
+    typescript: false,
+    files: [],
+    /** What its import loads: the package's modules and bytecode (its Effect API left out) and acorn's ES module. */
+    get glue() {
+      const dist = join(pkg, "dist");
+      const code = (readdirSync(dist, { recursive: true }) as string[]).filter((f) => /\.(js|json)$/.test(f) && !f.startsWith("effect/"));
+      return [...code.map((f) => join(dist, f)), join(NPM, "acorn/dist/acorn.mjs")];
+    },
+    async load() {
+      api = await import(pathToFileURL(join(pkg, "dist/index.js")).href);
+    },
+    create() {
+      const rt = api.Runtime.make({});
+      return {
+        run: async (program, data) => String(await exec(rt, program, { bindings: { __DATA: data } })),
+        memory: () => null,
+        dispose() {},
+      };
+    },
+    program: bodyProgram,
+    // A value crosses only as a host function's result (in) or a run's result (out), each
+    // copied; strings are the host's own and cross as they are. Every put and get is a
+    // whole run, whose rest `overhead` times. Bytes cannot cross out: they come out as
+    // base64 text, as its error message advises, and are decoded on the host.
+    bridge() {
+      let val: unknown;
+      let tool: (a: unknown) => unknown = () => undefined;
+      const { Host } = api;
+      const rt = api.Runtime.make({
+        globals: () => ({ get: Host.fn(() => val), none: Host.fn(() => undefined), tool: Host.fn(([a]: unknown[]) => tool(a)) }),
+      });
+      const compile = (src: string) => {
+        const c = rt.compile(src);
+        if (!c.ok) throw new Error(`psychoscript: ${c.error.message}`);
+        return c.compiled;
+      };
+      const none = compile("none(); return 0");
+      const put = compile("get(); return 0");
+      const get = compile("return get()");
+      const getBytes = compile("return get().toBase64()");
+      return {
+        async put(v) {
+          val = v;
+          await exec(rt, put);
+        },
+        async get(kind) {
+          if (kind === "bytes") return Uint8Array.from(Buffer.from((await exec(rt, getBytes)) as string, "base64"));
+          return exec(rt, get);
+        },
+        overhead: {
+          put: () => exec(rt, none),
+          get: () => exec(rt, put),
+        },
+        call(program, f) {
+          tool = f;
+          return exec(rt, program);
+        },
+        memory: () => null,
+        dispose() {},
+      };
+    },
+    bridgeProgram: (body) => body,
+  };
 }
 
 export function allJs(): Engine[] {
