@@ -1,6 +1,6 @@
 # 0309: One meaning per word: images and snapshots
 
-status: open
+status: in-progress
 agent: pname
 branch: issue/0309-names-images-snapshots
 depends-on: -
