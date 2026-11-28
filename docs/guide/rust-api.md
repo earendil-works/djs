@@ -10,20 +10,20 @@ change underneath it. Its crate documentation
 this page is the overview.
 
 > **In short.** The host compiles its setup (host functions, data, scripts and modules)
-> once into a snapshot, an image of a VM after that setup. Each call runs in an instance made from
-> the snapshot by copying the image, or in one reset to it. A call is stepped in slices:
+> once into an image of a VM after that setup. Each call runs in an instance made from
+> the image by copying it, or in one reset to it. A call is stepped in slices:
 > the host answers host calls, starts async work while the script waits, and gets the
 > settled value of the function's promise as typed data. Fuel, memory and a deadline
 > bound every call, and no script can catch them; every failure is one error type, and a
 > bug in the engine poisons only the instance it happened in.
 
-## Snapshots
+## Images
 
 Setup runs once. The builder defines the host functions the scripts may call and any
 plain-data globals, then runs the setup sources in order, each to completion:
 
 ```rust
-let snapshot = Snapshot::builder()
+let image = Image::builder()
     .host_fn(HostFn::sync(LOG, "log"))
     .host_fn(HostFn::asynchronous(READ_BODY, "readBody"))
     .global("config", Data::object([("allow", Data::from("example.com"))]))
@@ -36,7 +36,7 @@ A syntax error, a module that cannot be loaded or linked, or a top-level excepti
 the build, so a bad policy is rejected
 when it is loaded rather than on its first request. The builtins are frozen by default:
 a script cannot patch `Array.prototype` or `JSON` to influence the next call. The
-snapshot is the heap image of the VM at the end of setup: immutable, shared by reference
+image is the VM's heap at the end of setup: immutable, shared by reference
 counting, safe to use from any thread. It lives in memory only; building it again from
 the sources is how a host gets it back.
 
@@ -108,7 +108,7 @@ A policy can be an ES module that imports what the host provides and helpers of 
 own ([modules](language.md#modules) describes the language side):
 
 ```rust
-let snapshot = Snapshot::builder()
+let image = Image::builder()
     .module(
         SyntheticModule::new("@sdk/net")
             .host_fn(HostFn::sync(ALLOW_HOSTS, "allowHosts"))
@@ -118,13 +118,13 @@ let snapshot = Snapshot::builder()
     .source(Source::module("policy.js", policy))
     .build()?;
 
-let mut vm = snapshot.instantiate(Limits::default())?;
+let mut vm = image.instantiate(Limits::default())?;
 vm.start_export("policy.js", "onRequest", &[Value::Data(&request)])?;
 ```
 
 A **synthetic module** has no source: its exports are host functions, answered by id like
 any other, and plain data. Modules import it by its exact key. Every other import goes
-to the snapshot's **loader**, a trait with two calls, one that resolves a specifier
+to the image's **loader**, a trait with two calls, one that resolves a specifier
 against the importing module's key and one that returns a key's source, JavaScript,
 TypeScript or JSON. A JSON module is imported `with { type: "json" }` and has the parsed
 text as its default export: policy data in its own file. The crate's in-memory map is one: its keys are names such as
@@ -132,7 +132,7 @@ text as its default export: policy data in its own file. The crate's in-memory m
 The engine itself reads no files.
 
 Setup loads the module and everything it imports, links the graph (a missing export
-fails the build) and evaluates it, so the snapshot holds the evaluated graph and an
+fails the build) and evaluates it, so the image holds the evaluated graph and an
 instance starts with it, without running module code again. `start_export` and
 `call_export` call an exported function as `start` and `call` call a global one, and
 `export` reads an export's current value.
@@ -199,13 +199,13 @@ host can treat all of them alike, and fail closed:
 An instance that failed may hold half-updated globals; a host that reuses instances
 resets one after a failure. A bug in the engine shows as a panic, which the crate
 catches at every entry into the engine. It poisons that instance (drop it and make a new
-one) and nothing else: djs keeps no state outside the VM's own heap, so the snapshot and
+one) and nothing else: djs keeps no state outside the VM's own heap, so the image and
 every other instance are untouched. This relies on Rust's default unwinding panics; a
 program built to abort on panic ends instead.
 
 ## Threads
 
-A snapshot is shared across threads freely. An instance serves one call at a time and
+An image is shared across threads freely. An instance serves one call at a time and
 can move between threads, between calls or between steps of one call, which is what an
 async host does when a task resumes on another worker. Parallel calls take one instance
 each.
@@ -235,7 +235,7 @@ and no third-party crate.
 The engine is plain Rust with no C code and no target-specific build step, so it
 cross-compiles with nothing but a linker for the target, for example `zig cc` for
 static linux-musl binaries. The base image, the engine's realm with all builtins that
-every snapshot starts from, is made at build time on the build machine and embedded;
+every image of a setup starts from, is made at build time on the build machine and embedded;
 its format is the same on every target (little-endian cells, 32-bit offsets, the same
 math results), so a cross build embeds exactly the image the target would have made.
 [`scripts/cross-check.sh`](../../scripts/cross-check.sh) checks this: it builds a small
@@ -264,20 +264,20 @@ work (load average 30 to 70), the median per call was:
 | 64 KiB body read and searched | long-lived | 26 µs | 1,158 |
 
 The same allowlist as a native Rust closure takes 1 µs. Compiling the shim and a policy
-into a snapshot takes about 6 ms, and the snapshot is 237 KiB. Where the time goes:
+into an image takes about 6 ms, and the image is 237 KiB. Where the time goes:
 
 - **The script.** Running the policy and the shim is most of every call: about 60% of
   the empty policy (wrapper objects, private fields, the promise chain) and 75% of the
   header policy, at roughly 4 to 5 ns per unit of fuel. A policy written with plain
   loops costs less than one built on iterators and sorting.
-- **A fresh or reset instance** costs one copy of the snapshot, about 3 µs for this
-  one: the copy runs at memory speed, and a smaller setup makes a smaller snapshot. A
+- **A fresh or reset instance** costs one copy of the image, about 3 µs for this
+  one: the copy runs at memory speed, and a smaller setup makes a smaller image. A
   long-lived instance skips it.
 - **Values in and out** take well under a microsecond for a request head and its
   decision: no buffer in between, no JSON.
 - **Bytes and text** are one copy into the heap, plus a check for text. A long-lived
   instance that takes large bodies collects garbage every few calls, and each
-  collection reads all of the snapshot's memory.
+  collection reads all of the image's memory.
 
 ## Where to look
 

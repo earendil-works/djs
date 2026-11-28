@@ -4083,7 +4083,7 @@ impl<'h> Exec<'h> {
         Ok(true)
     }
 
-    /// `for_in_start`: a snapshot of the keys a for-in visits, in an internal
+    /// `for_in_start`: a copy of the keys a for-in visits, in an internal
     /// `ValueArray` `[object, next index, key0, key1, ...]` (only ever on the operand
     /// stack). Keys: the enumerable string keys of the object and then its prototypes, in
     /// [[OwnPropertyKeys]] order per object; a key seen once (enumerable or not) shadows
@@ -4139,7 +4139,7 @@ impl<'h> Exec<'h> {
         Ok(Value::internal(arr))
     }
 
-    /// `for_in_next`: the next snapshot key that is still present on the object or its
+    /// `for_in_next`: the next copied key that is still present on the object or its
     /// prototype chain (deleted keys are skipped), or `(undefined, true)` at the end.
     /// Infallible: a key no atom exists for cannot be a property (0278).
     pub(super) fn for_in_next(&mut self, it: Value) -> (Value, bool) {

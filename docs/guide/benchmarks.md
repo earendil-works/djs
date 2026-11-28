@@ -53,7 +53,7 @@ page gives wall-clock medians.
 | engine | what it is | how it is built here |
 | --- | --- | --- |
 | djs | this engine, the shipped module | [`scripts/build-wasm.sh`](../../scripts/build-wasm.sh) |
-| quickjs-wasi | QuickJS-NG for WASI with snapshot support, version 3.6.2 | the npm package's `quickjs.wasm` |
+| quickjs-wasi | QuickJS-NG for WASI, which can save and restore its memory, version 3.6.2 | the npm package's `quickjs.wasm` |
 | QuickJS | Bellard's QuickJS 2026-06-04, the latest release | wasi-sdk 34, `-O2`, a minimal embedding |
 | QuickJS-NG | QuickJS-NG 0.18.0, the latest release | the same: wasi-sdk 34, `-O2`, the same embedding |
 | quickjs-emscripten | the popular emscripten build, version 0.32.0, of Bellard's QuickJS 2025-09-13 | the npm variant `@jitl/quickjs-wasmfile-release-sync` |
@@ -143,7 +143,7 @@ A new djs VM is ready in <!--n engines/djs/startup-ms .2-->0.07<!--/n--> ms, aga
 <!--n engines/quickjs/startup-ms .2-->0.20<!--/n--> ms for QuickJS and
 <!--n engines/quickjs-ng/startup-ms .2-->0.26<!--/n--> ms for QuickJS-NG: the realm
 comes from the base image in the module, so creating a VM copies an image instead of
-running the code that builds every builtin (the [snapshots page](images.md) says
+running the code that builds every builtin (the [images page](images.md) says
 how). Its idle memory equals QuickJS-NG's and is one 64 KiB page above QuickJS's: the
 base image is larger than the heap a fresh QuickJS context allocates. The emscripten
 builds start at 16 MiB, emscripten's initial heap, whatever runs in them.

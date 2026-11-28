@@ -103,7 +103,7 @@
   <text class="small" x="679" y="237" text-anchor="middle">values the host holds</text>
 </g>
 <text class="title" x="485" y="282" text-anchor="middle">The arena: one byte array with all VM state, linked by u32 offsets</text>
-<text class="small" x="485" y="300" text-anchor="middle">a snapshot is a copy of these bytes</text>
+<text class="small" x="485" y="300" text-anchor="middle">an image is a copy of these bytes</text>
 
 <!-- Flows -->
 <path class="arrow" d="M168 84 C 200 84, 206 67, 234 67"/>

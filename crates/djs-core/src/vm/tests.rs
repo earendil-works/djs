@@ -775,7 +775,7 @@ fn garbage_is_collected_while_running() {
 
 #[test]
 fn image_while_parked() {
-    // Parked on a host call: snapshot, restore elsewhere, resolve there.
+    // Parked on a host call: image, restore elsewhere, resolve there.
     let mut vm = vm();
     let mut f = F::new();
     let console = vm.heap_mut().atom_str("console").unwrap();
@@ -1424,7 +1424,7 @@ fn from_base_needs_an_idle_vm_and_room() {
 }
 
 #[test]
-fn math_random_is_seeded_per_vm_and_survives_snapshots() {
+fn math_random_is_seeded_per_vm_and_survives_images() {
     let base = base_image();
     let seeded = |seed| VmOptions {
         random_seed: seed,
@@ -1440,7 +1440,7 @@ fn math_random_is_seeded_per_vm_and_survives_snapshots() {
     // Vm::new applies the seed too.
     let mut d = Vm::new(seeded(42)).unwrap();
     assert_eq!(first, eval(&mut d, draw));
-    // A snapshot continues the sequence instead of restarting it.
+    // A restored image continues the sequence instead of restarting it.
     let mut e = Vm::from_bytes(a.bytes().to_vec(), seeded(42)).unwrap();
     assert_eq!(eval(&mut a, draw), eval(&mut e, draw));
     let r = eval(&mut e, "const r = Math.random(); return r >= 0 && r < 1");
@@ -2519,7 +2519,7 @@ fn a_script_continues_after_out_of_memory() {
 #[test]
 fn the_out_of_memory_point_is_deterministic() {
     // How far the loop gets depends only on the script and the limit: not on the fuel
-    // slices, and not on snapshots taken in between (the GC threshold is in the image,
+    // slices, and not on images taken in between (the GC threshold is in the image,
     // D1601).
     let src = "const a = []; let n = 0;\n\
                try { for (;;) { a.push({ s: 'z'.repeat(300) + n }); n++; } }\n\

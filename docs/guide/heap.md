@@ -120,7 +120,7 @@ A codemode script typically reads a log or a file and cuts it up:
   units, and equal strings must have equal widths.
 
 On the log-splitting case the heap is 7.2 MiB with slices against 12.0 MiB with copies,
-and a snapshot of it 6.9 MiB against 11.7. A slice keeps its whole parent alive, so a
+and an image of it 6.9 MiB against 11.7. A slice keeps its whole parent alive, so a
 short piece could pin a huge text; [the collector](gc.md#slices-and-the-strings-they-keep)
 copies such slices out.
 

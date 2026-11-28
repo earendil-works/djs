@@ -1,4 +1,4 @@
-// for-in key snapshots (0278): only enumerable keys are read, shadowing by lower objects,
+// for-in copies the keys first (0278): only enumerable keys are read, shadowing by lower objects,
 // deletion during the loop, prototypes changed by the program.
 const out = [];
 const keys = (o) => { const r = []; for (const k in o) r.push(k); return r.join(","); };

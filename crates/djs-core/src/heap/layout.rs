@@ -9,7 +9,7 @@
 //! - a const [`CellLayout`] per kind and the table [`LAYOUTS`](super::cells::LAYOUTS) of
 //!   all of them, which is what the GC uses to trace cells, what the JS-side reader will be
 //!   generated from, and what [`LAYOUT_HASH`](super::cells::LAYOUT_HASH) (part of the
-//!   snapshot build hash) is computed from,
+//!   build hash) is computed from,
 //! - compile-time checks: fields start after the header, are naturally aligned, do not
 //!   overlap, and the tail starts after the fixed part.
 //!

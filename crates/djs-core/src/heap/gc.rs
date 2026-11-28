@@ -28,7 +28,7 @@
 //!
 //! The resulting layout is breadth-first from the roots, in slot order. That makes it a
 //! function of the object graph alone: collecting an already collected heap reproduces it
-//! byte for byte, which keeps snapshots deterministic.
+//! byte for byte, which keeps images deterministic.
 //!
 //! Almost nothing in the heap is keyed by arena offsets: the atom index is keyed by string
 //! content hashes, property indexes by atom ids, string hashes are content based. The
@@ -286,7 +286,7 @@ impl Heap {
             return Ok(GcStats { before, after });
         }
         // Slices whose parent only they kept get their own units now (D2542), and a second
-        // pass drops the parents: a snapshot right after a collection should not carry
+        // pass drops the parents: an image right after a collection should not carry
         // them. Without room a slice stays as it is.
         self.detach_slices(detach);
         if let Ok(c) = self.without_barrier(|h| h.mark_compact(base, true)) {

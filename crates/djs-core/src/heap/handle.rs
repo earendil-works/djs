@@ -8,7 +8,7 @@
 //!
 //! Free slots form a linked list through [`HandleSlot::NEXT`], so dropping and creating
 //! handles does not grow the table. Indexes stay stable for the lifetime of a handle,
-//! including across collections and snapshots.
+//! including across collections and images.
 
 use super::cells::{HANDLE_LIVE, HandleSlot, HandleTable, Roots};
 use super::layout::Ref;

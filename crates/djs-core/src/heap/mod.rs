@@ -12,7 +12,7 @@
 //!
 //! - References are `u32` arena offsets of a cell start; 0 is null. Cells are 8-aligned.
 //! - The arena is little-endian, contains no host pointers, and can be copied byte for byte
-//!   into a fresh [`Heap`] ([`Heap::from_bytes`]): that is the precursor of snapshots.
+//!   into a fresh [`Heap`] ([`Heap::from_bytes`]): that is an image.
 //! - Allocation never collects. It bumps, may fail with [`HeapError::OutOfMemory`], and
 //!   sets [`Heap::gc_pending`] once the heap has grown past its threshold. Rust locals
 //!   holding references stay valid until the next [`Heap::collect`], which the owner calls
@@ -346,8 +346,8 @@ impl Heap {
         heap
     }
 
-    /// Whether the out-of-memory reserve is open (`Roots::FLAGS`, so it survives
-    /// snapshots).
+    /// Whether the out-of-memory reserve is open (`Roots::FLAGS`, so an image keeps
+    /// it).
     pub fn memory_reserve_open(&self) -> bool {
         self.arena.len() >= Roots::LAYOUT.min_size
             && self.arena.get(0, Roots::FLAGS) & cells::ROOT_RESERVE_OPEN != 0
@@ -362,7 +362,7 @@ impl Heap {
         };
         self.arena.set_limit(limit);
         // A restored image keeps the threshold it had (the same collection points as
-        // without the snapshot), unless it is beyond what this cap allows.
+        // without the restore), unless it is beyond what this cap allows.
         let fresh = gc::next_threshold(self.arena.len(), self.base_end(), self.arena.limit());
         let stored = self.stored_gc_threshold();
         let t = if stored == 0 {

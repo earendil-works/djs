@@ -129,7 +129,7 @@ export function djs(wasm = process.env.DJS_WASM ?? join(root, "target/wasm32-unk
   };
 }
 
-// ---- quickjs-wasi (QuickJS-NG for WASI with snapshots) -------------------------------------
+// ---- quickjs-wasi (QuickJS-NG for WASI, which saves and restores its memory) ----------------
 
 export function quickjsWasi(): Engine {
   const pkg = join(NPM, "quickjs-wasi");

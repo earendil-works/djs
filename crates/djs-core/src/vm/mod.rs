@@ -93,7 +93,7 @@ pub struct VmOptions {
     pub prelude: bool,
     /// The seed of `Math.random` (ARCH "Nondeterminism": the host decides; 0 means the
     /// fixed default). Applied by `Vm::new` and after copying a base (`from_base`); a
-    /// restored snapshot (`from_bytes`) continues its own sequence.
+    /// restored image (`from_bytes`) continues its own sequence.
     pub random_seed: u64,
     /// WeakRef and FinalizationRegistry (D1680). Applied by `Vm::new` and `from_base`; a
     /// restored image keeps what it had (the mode is heap state).
@@ -262,7 +262,7 @@ impl Vm {
     }
 
     /// [`Vm::from_bytes`] for an image this process made (pi's prelude images, an
-    /// embedder's snapshot): only the header and the build hash are
+    /// embedder's image of its setup): only the header and the build hash are
     /// checked, not every cell. Images are not a persistence format (D2700): nothing
     /// loads one from outside the process, so nothing needs the verification there.
     pub fn from_bytes_trusted(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
@@ -274,7 +274,7 @@ impl Vm {
     /// [`Vm::from_bytes_trusted`] would restore it, but keeps the VM's options; the image
     /// is borrowed and copied into this VM's own arena buffer: one copy and, once the
     /// buffer is big enough, no allocation (D3182). For an embedder that resets a VM to
-    /// the same snapshot after every call (djs-embed). On an error the VM has no heap left
+    /// the same image after every call (djs-embed). On an error the VM has no heap left
     /// and must be dropped.
     #[cfg(feature = "embed")]
     pub fn reset_to(&mut self, image: &[u8]) -> Result<(), LoadError> {

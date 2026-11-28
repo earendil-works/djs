@@ -6,7 +6,7 @@
 //! - [`OPS`], one [`OpInfo`] per opcode: name, immediates, stack effect, cost, flags,
 //! - a typed emitter method per opcode on [`CodeBuf`](super::CodeBuf)
 //!   (`buf.get_loc(3)`, `buf.jump(label)`, ...),
-//! - [`OPS_HASH`], a hash of the whole table for the snapshot build hash.
+//! - [`OPS_HASH`], a hash of the whole table for the build hash.
 //!
 //! The decoder, the disassembler and the stack checker work from [`OPS`], so they need no
 //! per-opcode code.
@@ -716,7 +716,7 @@ ops! {
     IterCheckObject iter_check_object() pop 1 push 1 cost Basic flags THROWS;
     /// `iterator ->`: call `iterator.return()` if present.
     IteratorClose iterator_close() pop 1 push 0 cost Access flags THROWS | CALLS;
-    /// `obj -> for-in iterator` (a snapshot of the enumerable keys)
+    /// `obj -> for-in iterator` (a copy of the enumerable keys)
     ForInStart for_in_start() pop 1 push 1 cost Alloc flags THROWS | ALLOC;
     /// `it -> it key done`
     ForInNext for_in_next() pop 1 push 3 cost Access flags THROWS;
@@ -961,7 +961,7 @@ const _: () = {
 };
 
 /// Hash of the instruction table: names, immediates, stack effects, costs, flags and
-/// order. Part of the snapshot build hash (with the heap's `LAYOUT_HASH`, see
+/// order. Part of the build hash (with the heap's `LAYOUT_HASH`, see
 /// [`build_hash`]): bytecode is only valid for the table it was compiled with.
 pub const OPS_HASH: u32 = hash_ops(OPS, &OP_NAMES);
 
@@ -1024,7 +1024,7 @@ pub const fn hash_ops(ops: &[OpInfo], names: &[&str]) -> u32 {
 }
 
 /// Combines the heap layout hash and [`OPS_HASH`] into one build hash for heap images
-/// that contain bytecode (snapshots, P4).
+/// that contain bytecode.
 pub const fn build_hash(layout_hash: u32, ops_hash: u32) -> u32 {
     (layout_hash ^ ops_hash.rotate_left(16)).wrapping_mul(0x9E37_79B1) ^ ops_hash
 }

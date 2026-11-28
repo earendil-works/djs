@@ -1,6 +1,6 @@
-//! Compiler tests: disassembly snapshots (`snapshots/*.js` → `*.disasm`) and errors.
+//! Compiler tests: expected disassembly listings (`listings/*.js` → `*.disasm`) and errors.
 //!
-//! Regenerate the snapshots with `DJS_UPDATE_SNAPSHOTS=1 cargo test -p djs-core
+//! Regenerate the listings with `DJS_UPDATE_LISTINGS=1 cargo test -p djs-core
 //! compiler` and review the diff.
 
 extern crate std;
@@ -25,9 +25,9 @@ fn compile_src(heap: &mut Heap, src: &str) -> Result<Ref, CompileError> {
 }
 
 #[test]
-fn snapshots() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/compiler/snapshots");
-    let update = std::env::var_os("DJS_UPDATE_SNAPSHOTS").is_some();
+fn listings() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/compiler/listings");
+    let update = std::env::var_os("DJS_UPDATE_LISTINGS").is_some();
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -119,7 +119,7 @@ fn snapshots() {
     }
     assert!(
         failed.is_empty(),
-        "snapshot mismatch (DJS_UPDATE_SNAPSHOTS=1 to update):\n{}",
+        "listing mismatch (DJS_UPDATE_LISTINGS=1 to update):\n{}",
         failed.join("\n")
     );
 }

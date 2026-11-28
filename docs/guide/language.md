@@ -141,7 +141,7 @@ are ordinary frames, so they can wait on host calls, run out of fuel and continu
 error a module throws stays its result for later evaluations. Imports are live bindings
 (an importer sees the exporter's binding, not a copy), cycles work as the specification
 says, namespace objects behave as specified, and the module records live in the VM's heap,
-so a [snapshot](images.md) taken after evaluation carries the evaluated graph: a VM
+so an [image](images.md) taken after evaluation carries the evaluated graph: a VM
 made from it reads the same exports. The host reads a module's exports and namespace
 directly.
 
